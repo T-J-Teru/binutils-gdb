@@ -1,3 +1,7 @@
+2014-12-24  Joern Rennecke  <joern.rennecke@embecosm.com>
+
+	* scripttempl/avr.sc (SECTIONS): Add / KEEP '.fini6a'.
+
 2014-12-24  Alan Modra  <amodra@gmail.com>
 
 	* emultempl/elf32.em (gld${EMULATION_NAME}_after_open): Exclude
