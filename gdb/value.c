@@ -342,7 +342,9 @@ value_bytes_available (const struct value *value, int offset, int length)
 {
   gdb_assert (!value->lazy);
 
-  return !ranges_contain (value->unavailable, offset, length);
+  return !ranges_contain (value->unavailable,
+			  offset * TARGET_CHAR_BIT,
+			  length * TARGET_CHAR_BIT);
 }
 
 int
@@ -378,8 +380,11 @@ value_entirely_unavailable (struct value *value)
   return 0;
 }
 
-void
-mark_value_bytes_unavailable (struct value *value, int offset, int length)
+/* Insert into the vector pointed to by VECTORP the bit range starting of
+   OFFSET bits, and extending for the next LENGTH bits.  */
+
+static void
+insert_into_bit_range_vector (VEC(range_s) **vectorp, int offset, int length)
 {
   range_s newr;
   int i;
@@ -470,10 +475,10 @@ mark_value_bytes_unavailable (struct value *value, int offset, int length)
 
   */
 
-  i = VEC_lower_bound (range_s, value->unavailable, &newr, range_lessthan);
+  i = VEC_lower_bound (range_s, *vectorp, &newr, range_lessthan);
   if (i > 0)
     {
-      struct range *bef = VEC_index (range_s, value->unavailable, i - 1);
+      struct range *bef = VEC_index (range_s, *vectorp, i - 1);
 
       if (ranges_overlap (bef->offset, bef->length, offset, length))
 	{
@@ -494,18 +499,18 @@ mark_value_bytes_unavailable (struct value *value, int offset, int length)
       else
 	{
 	  /* #3 */
-	  VEC_safe_insert (range_s, value->unavailable, i, &newr);
+	  VEC_safe_insert (range_s, *vectorp, i, &newr);
 	}
     }
   else
     {
       /* #4 */
-      VEC_safe_insert (range_s, value->unavailable, i, &newr);
+      VEC_safe_insert (range_s, *vectorp, i, &newr);
     }
 
   /* Check whether the ranges following the one we've just added or
      touched can be folded in (#5 above).  */
-  if (i + 1 < VEC_length (range_s, value->unavailable))
+  if (i + 1 < VEC_length (range_s, *vectorp))
     {
       struct range *t;
       struct range *r;
@@ -513,11 +518,11 @@ mark_value_bytes_unavailable (struct value *value, int offset, int length)
       int next = i + 1;
 
       /* Get the range we just touched.  */
-      t = VEC_index (range_s, value->unavailable, i);
+      t = VEC_index (range_s, *vectorp, i);
       removed = 0;
 
       i = next;
-      for (; VEC_iterate (range_s, value->unavailable, i, r); i++)
+      for (; VEC_iterate (range_s, *vectorp, i, r); i++)
 	if (r->offset <= t->offset + t->length)
 	  {
 	    ULONGEST l, h;
@@ -539,8 +544,16 @@ mark_value_bytes_unavailable (struct value *value, int offset, int length)
 	  }
 
       if (removed != 0)
-	VEC_block_remove (range_s, value->unavailable, next, removed);
+	VEC_block_remove (range_s, *vectorp, next, removed);
     }
+}
+
+void
+mark_value_bytes_unavailable (struct value *value, int offset, int length)
+{
+  insert_into_bit_range_vector (&value->unavailable,
+				offset * TARGET_CHAR_BIT,
+				length * TARGET_CHAR_BIT);
 }
 
 /* Find the first range in RANGES that overlaps the range defined by
@@ -572,6 +585,12 @@ value_available_contents_eq (const struct value *val1, int offset1,
   /* See function description in value.h.  */
   gdb_assert (!val1->lazy && !val2->lazy);
 
+  /* The offsets and length parameters are all byte based, but we store the
+     unavailable data in a bit based list.  */
+  offset1 *= TARGET_CHAR_BIT;
+  offset2 *= TARGET_CHAR_BIT;
+  length *= TARGET_CHAR_BIT;
+
   while (length > 0)
     {
       range_s *r1, *r2;
@@ -585,9 +604,9 @@ value_available_contents_eq (const struct value *val1, int offset1,
 
       /* The usual case is for both values to be completely available.  */
       if (idx1 == -1 && idx2 == -1)
-	return (memcmp (val1->contents + offset1,
-			val2->contents + offset2,
-			length) == 0);
+	return (memcmp (val1->contents + (offset1 / TARGET_CHAR_BIT),
+			val2->contents + (offset2 / TARGET_CHAR_BIT),
+			(length / TARGET_CHAR_BIT)) == 0);
       /* The contents only match equal if the available set matches as
 	 well.  */
       else if (idx1 == -1 || idx2 == -1)
@@ -620,9 +639,9 @@ value_available_contents_eq (const struct value *val1, int offset1,
 	return 0;
 
       /* Compare the _available_ contents.  */
-      if (memcmp (val1->contents + offset1,
-		  val2->contents + offset2,
-		  l1) != 0)
+      if (memcmp (val1->contents + (offset1 / TARGET_CHAR_BIT),
+		  val2->contents + (offset2 / TARGET_CHAR_BIT),
+		  (l1 / TARGET_CHAR_BIT)) != 0)
 	return 0;
 
       length -= h1;
@@ -972,6 +991,7 @@ value_contents_copy_raw (struct value *dst, int dst_offset,
 {
   range_s *r;
   int i;
+  int src_bit_offset, dst_bit_offset, bit_length;
 
   /* A lazy DST would make that this copy operation useless, since as
      soon as DST's contents were un-lazied (by a later value_contents
@@ -990,16 +1010,19 @@ value_contents_copy_raw (struct value *dst, int dst_offset,
 	  length);
 
   /* Copy the meta-data, adjusted.  */
+  src_bit_offset = src_offset * TARGET_CHAR_BIT;
+  dst_bit_offset = dst_offset * TARGET_CHAR_BIT;
+  bit_length = length * TARGET_CHAR_BIT;
   for (i = 0; VEC_iterate (range_s, src->unavailable, i, r); i++)
     {
       ULONGEST h, l;
 
-      l = max (r->offset, src_offset);
-      h = min (r->offset + r->length, src_offset + length);
+      l = max (r->offset, src_bit_offset);
+      h = min (r->offset + r->length, src_bit_offset + bit_length);
 
       if (l < h)
-	mark_value_bytes_unavailable (dst,
-				      dst_offset + (l - src_offset),
+	insert_into_bit_range_vector (&dst->unavailable,
+				      dst_bit_offset + (l - src_bit_offset),
 				      h - l);
     }
 }
