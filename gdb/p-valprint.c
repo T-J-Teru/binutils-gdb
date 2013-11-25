@@ -754,7 +754,7 @@ pascal_object_print_value (struct type *type, const gdb_byte *valaddr,
 	{
 	  boffset = baseclass_offset (type, i, valaddr, offset, address, val);
 	}
-      if (ex.reason < 0 && ex.error == NOT_AVAILABLE_ERROR)
+      if (ex.reason < 0 && is_unavailable_error (ex.error))
 	skip = -1;
       else if (ex.reason < 0)
 	skip = 1;

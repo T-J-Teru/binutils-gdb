@@ -2564,7 +2564,7 @@ get_frame_language (void)
 	}
       if (ex.reason < 0)
 	{
-	  if (ex.error != NOT_AVAILABLE_ERROR)
+	  if (!is_unavailable_error (ex.error))
 	    throw_exception (ex);
 	}
       else

@@ -85,8 +85,8 @@ baseclass_offset (struct type *type, int index, const gdb_byte *valaddr,
 						address, val);
     }
 
-  if (ex.reason < 0 && ex.error == NOT_AVAILABLE_ERROR)
-    throw_error (NOT_AVAILABLE_ERROR,
+  if (ex.reason < 0 && is_unavailable_error (ex.error))
+    throw_error (ex.error,
 		 _("Cannot determine virtual baseclass offset "
 		   "of incomplete object"));
   else if (ex.reason < 0)

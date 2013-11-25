@@ -2251,7 +2251,7 @@ dwarf2_evaluate_loc_desc_full (struct type *type, struct frame_info *frame,
     }
   if (ex.reason < 0)
     {
-      if (ex.error == NOT_AVAILABLE_ERROR)
+      if (is_unavailable_error (ex.error))
 	{
 	  do_cleanups (old_chain);
 	  retval = allocate_value (type);

@@ -104,6 +104,10 @@ struct gdb_exception
   const char *message;
 };
 
+/* Return true for those errors relating to value unavailability.  */
+
+extern int is_unavailable_error (enum errors error);
+
 /* A pre-defined non-exception.  */
 extern const struct gdb_exception exception_none;
 

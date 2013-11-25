@@ -2347,7 +2347,7 @@ amd64_frame_cache (struct frame_info *this_frame, void **this_cache)
     {
       amd64_frame_cache_1 (this_frame, cache);
     }
-  if (ex.reason < 0 && ex.error != NOT_AVAILABLE_ERROR)
+  if (ex.reason < 0 && !is_unavailable_error (ex.error))
     throw_exception (ex);
 
   return cache;
@@ -2471,7 +2471,7 @@ amd64_sigtramp_frame_cache (struct frame_info *this_frame, void **this_cache)
 
       cache->base_p = 1;
     }
-  if (ex.reason < 0 && ex.error != NOT_AVAILABLE_ERROR)
+  if (ex.reason < 0 && !is_unavailable_error (ex.error))
     throw_exception (ex);
 
   *this_cache = cache;
@@ -2639,10 +2639,9 @@ amd64_epilogue_frame_cache (struct frame_info *this_frame, void **this_cache)
 
       /* The saved %eip will be at cache->base plus 8.  */
       cache->saved_regs[AMD64_RIP_REGNUM] = cache->base + 8;
-
       cache->base_p = 1;
     }
-  if (ex.reason < 0 && ex.error != NOT_AVAILABLE_ERROR)
+  if (ex.reason < 0 && !is_unavailable_error (ex.error))
     throw_exception (ex);
 
   return cache;

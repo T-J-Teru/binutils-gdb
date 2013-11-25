@@ -738,7 +738,7 @@ frame_unwind_pc_if_available (struct frame_info *this_frame, CORE_ADDR *pc)
 	    {
 	      pc = gdbarch_unwind_pc (prev_gdbarch, this_frame);
 	    }
-	  if (ex.reason < 0 && ex.error == NOT_AVAILABLE_ERROR)
+	  if (ex.reason < 0 && is_unavailable_error (ex.error))
 	    {
 	      this_frame->prev_pc.p = -1;
 
@@ -2101,7 +2101,7 @@ get_frame_pc_if_available (struct frame_info *frame, CORE_ADDR *pc)
     }
   if (ex.reason < 0)
     {
-      if (ex.error == NOT_AVAILABLE_ERROR)
+      if (is_unavailable_error (ex.error))
 	return 0;
       else
 	throw_exception (ex);
@@ -2182,7 +2182,7 @@ get_frame_address_in_block_if_available (struct frame_info *this_frame,
     {
       *pc = get_frame_address_in_block (this_frame);
     }
-  if (ex.reason < 0 && ex.error == NOT_AVAILABLE_ERROR)
+  if (ex.reason < 0 && is_unavailable_error (ex.error))
     return 0;
   else if (ex.reason < 0)
     throw_exception (ex);

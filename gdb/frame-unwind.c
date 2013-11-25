@@ -112,7 +112,7 @@ frame_unwind_find_by_frame (struct frame_info *this_frame, void **this_cache)
 	  res = entry->unwinder->sniffer (entry->unwinder, this_frame,
 					  this_cache);
 	}
-      if (ex.reason < 0 && ex.error == NOT_AVAILABLE_ERROR)
+      if (ex.reason < 0 && is_unavailable_error (ex.error))
 	{
 	  /* This usually means that not even the PC is available,
 	     thus most unwinders aren't able to determine if they're

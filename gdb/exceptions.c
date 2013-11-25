@@ -571,3 +571,11 @@ catch_command_errors_const (catch_command_errors_const_ftype *command,
     return 0;
   return 1;
 }
+
+/* Return true if this is an error indicating a value was unavailable.  */
+
+int
+is_unavailable_error (const enum errors error)
+{
+  return error == NOT_AVAILABLE_ERROR;
+}

@@ -1134,7 +1134,7 @@ dwarf2_frame_cache (struct frame_info *this_frame, void **this_cache)
     }
   if (ex.reason < 0)
     {
-      if (ex.error == NOT_AVAILABLE_ERROR)
+      if (is_unavailable_error (ex.error))
 	{
 	  cache->unavailable_retaddr = 1;
 	  do_cleanups (old_chain);
