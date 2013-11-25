@@ -5594,7 +5594,7 @@ insert_exception_resume_breakpoint (struct thread_info *tp,
       vsym = lookup_symbol (SYMBOL_LINKAGE_NAME (sym), b, VAR_DOMAIN, NULL);
       value = read_var_value (vsym, frame);
       /* If the value was optimized out, revert to the old behavior.  */
-      if (! value_optimized_out (value))
+      if (value_entirely_available (value))
 	{
 	  handler = value_as_address (value);
 

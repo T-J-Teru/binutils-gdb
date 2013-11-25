@@ -355,7 +355,7 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
       && SYMBOL_COMPUTED_OPS (sym)->read_variable_at_entry != NULL
       && print_entry_values != print_entry_values_no
       && (print_entry_values != print_entry_values_if_needed
-	  || !val || value_optimized_out (val)))
+	  || !val || !value_entirely_available (val)))
     {
       TRY_CATCH (except, RETURN_MASK_ERROR)
 	{
@@ -370,8 +370,7 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
 	  strcpy (entryval_error, except.message);
 	}
 
-      if (except.error == NO_ENTRY_VALUE_ERROR
-	  || (entryval && value_optimized_out (entryval)))
+      if (except.error == NO_ENTRY_VALUE_ERROR)
 	{
 	  entryval = NULL;
 	  entryval_error = NULL;
@@ -470,7 +469,7 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
       if (print_entry_values == print_entry_values_only
 	  || print_entry_values == print_entry_values_both
 	  || (print_entry_values == print_entry_values_preferred
-	      && (!val || value_optimized_out (val))))
+	      && (!val || !value_entirely_available (val))))
 	{
 	  entryval = allocate_optimized_out_value (SYMBOL_TYPE (sym));
 	  entryval_error = NULL;
@@ -479,7 +478,7 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
   if ((print_entry_values == print_entry_values_compact
        || print_entry_values == print_entry_values_if_needed
        || print_entry_values == print_entry_values_preferred)
-      && (!val || value_optimized_out (val)) && entryval != NULL)
+      && (!val || !value_entirely_available (val)) && entryval != NULL)
     {
       val = NULL;
       val_error = NULL;

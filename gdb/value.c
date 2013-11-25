@@ -3622,8 +3622,11 @@ value_fetch_lazy (struct value *val)
 			      user_reg_map_regnum_to_name (gdbarch, regnum));
 
 	  fprintf_unfiltered (gdb_stdlog, "->");
-	  if (value_optimized_out (new_val))
-	    fprintf_unfiltered (gdb_stdlog, " optimized out");
+	  if (!value_entirely_available (new_val))
+	    {
+	      fprintf_unfiltered (gdb_stdlog, " ");
+	      val_print_unavailability_reason (new_val, gdb_stdlog);
+	    }
 	  else
 	    {
 	      int i;

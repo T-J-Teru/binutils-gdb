@@ -44,6 +44,7 @@
 #include "inline-frame.h"
 #include "tracepoint.h"
 #include "hashtab.h"
+#include "valprint.h"
 
 static struct frame_info *get_prev_frame_1 (struct frame_info *this_frame);
 static struct frame_info *get_prev_frame_raw (struct frame_info *this_frame);
@@ -1052,8 +1053,11 @@ frame_unwind_register_value (struct frame_info *frame, int regnum)
   if (frame_debug)
     {
       fprintf_unfiltered (gdb_stdlog, "->");
-      if (value_optimized_out (value))
-	fprintf_unfiltered (gdb_stdlog, " optimized out");
+      if (!value_entirely_available (value))
+	{
+	  fprintf_unfiltered (gdb_stdlog, " ");
+	  val_print_unavailability_reason (value, gdb_stdlog);
+	}
       else
 	{
 	  if (VALUE_LVAL (value) == lval_register)

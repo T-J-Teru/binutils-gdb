@@ -6196,7 +6196,7 @@ mips_print_register (struct ui_file *file, struct frame_info *frame,
     }
 
   val = get_frame_register_value (frame, regnum);
-  if (value_optimized_out (val))
+  if (!value_entirely_available (val))
     {
       fprintf_filtered (file, "%s: [Invalid]",
 			gdbarch_register_name (gdbarch, regnum));
