@@ -379,15 +379,26 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
       if (print_entry_values == print_entry_values_compact
 	  || print_entry_values == print_entry_values_default)
 	{
-	  /* For MI do not try to use print_entry_values_compact for ARGP.  */
+	  /* For compact / default, display just the current value if the
+	     entry value is unknown.  */
+	  if (entryval && !value_entirely_available (entryval))
+	    {
+	      entryval = NULL;
+	      entryval_error = NULL;
+	    }
 
+	  /* For MI do not try to use print_entry_values_compact for ARGP.  */
 	  if (val && entryval && !ui_out_is_mi_like_p (current_uiout))
 	    {
 	      struct type *type = value_type (val);
 
-	      if (!value_optimized_out (val)
-		  && value_available_contents_eq (val, 0, entryval, 0,
-						  TYPE_LENGTH (type)))
+	      if (value_lazy (val))
+		value_fetch_lazy (val);
+	      if (value_lazy (entryval))
+		value_fetch_lazy (entryval);
+
+	      if (value_available_contents_eq (val, 0, entryval, 0,
+					       TYPE_LENGTH (type)))
 		{
 		  /* Initialize it just to avoid a GCC false warning.  */
 		  struct value *val_deref = NULL, *entryval_deref;
@@ -452,7 +463,9 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
 	}
     }
 
-  if (entryval == NULL)
+  if (entryval == NULL
+      || (entryval && print_entry_values == print_entry_values_preferred
+	  && !value_entirely_available (entryval)))
     {
       if (print_entry_values == print_entry_values_preferred)
 	{
@@ -469,7 +482,8 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
       if (print_entry_values == print_entry_values_only
 	  || print_entry_values == print_entry_values_both
 	  || (print_entry_values == print_entry_values_preferred
-	      && (!val || !value_entirely_available (val))))
+	      && (!val || !value_entirely_available (val))
+	      && !entryval))
 	{
 	  entryval = allocate_optimized_out_value (SYMBOL_TYPE (sym));
 	  entryval_error = NULL;

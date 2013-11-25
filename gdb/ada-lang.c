@@ -575,10 +575,7 @@ coerce_unspec_val_to_type (struct value *val, struct type *type)
       else
 	{
 	  result = allocate_value (type);
-	  memcpy (value_contents_raw (result), value_contents (val),
-		  TYPE_LENGTH (type));
-	  if (value_optimized_out (val))
-	    mark_value_bytes_optimized_out (result, 0, TYPE_LENGTH (type));
+	  value_contents_copy_raw (result, 0, val, 0, TYPE_LENGTH (type));
 	}
       set_value_component_location (result, val);
       set_value_bitsize (result, value_bitsize (val));

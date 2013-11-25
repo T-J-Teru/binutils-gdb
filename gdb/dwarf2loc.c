@@ -2309,8 +2309,11 @@ dwarf2_evaluate_loc_desc_full (struct type *type, struct frame_info *frame,
 	      error (_("Unable to access DWARF register number %d"),
 		     dwarf_regnum);
 	   retval = value_from_register (type, gdb_regnum, frame);
-	   if (value_optimized_out (retval))
+	   if (!value_entirely_available (retval))
 	     {
+	       struct value *srcval;
+	       int srclen;
+
 	       /* This means the register has undefined value / was
 		  not saved.  As we're computing the location of some
 		  variable etc. in the program, not a value for
@@ -2318,7 +2321,10 @@ dwarf2_evaluate_loc_desc_full (struct type *type, struct frame_info *frame,
 		  generic optimized out value instead, so that we show
 		  <optimized out> instead of <not saved>.  */
 	       do_cleanups (value_chain);
-	       retval = allocate_optimized_out_value (type);
+	       srcval = retval;
+	       srclen = TYPE_LENGTH (value_enclosing_type (srcval));
+	       retval = allocate_value (type);
+	       value_contents_copy_raw (retval, 0, srcval, 0, srclen);
 	     }
 	  }
 	  break;

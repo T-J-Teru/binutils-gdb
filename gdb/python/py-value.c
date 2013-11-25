@@ -674,7 +674,12 @@ valpy_get_is_optimized_out (PyObject *self, void *closure)
 
   TRY_CATCH (except, RETURN_MASK_ALL)
     {
-      opt = value_optimized_out (value);
+      if (!value_entirely_available (value))
+	{
+	  int unavailablep;
+
+	  value_availability_flags (value, &opt, &unavailablep);
+	}
     }
   GDB_PY_HANDLE_EXCEPTION (except);
 

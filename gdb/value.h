@@ -323,11 +323,6 @@ extern const gdb_byte *
 extern int value_fetch_lazy (struct value *val);
 extern int value_contents_equal (struct value *val1, struct value *val2);
 
-/* If nonzero, this is the value of a variable which does not actually
-   exist in the program, at least partially.  If the value is lazy,
-   this may fetch it now.  */
-extern int value_optimized_out (struct value *value);
-
 /* Mark VALUE's content bytes starting at OFFSET and extending for
    LENGTH bytes as optimized out.  */
 

@@ -2033,8 +2033,7 @@ default_print_one_register_info (struct ui_file *file,
   fputs_filtered (name, file);
   print_spaces_filtered (15 - strlen (name), file);
 
-  print_raw_format = (value_entirely_available (val)
-		      && !value_optimized_out (val));
+  print_raw_format = value_entirely_available (val);
 
   /* If virtual format is floating, print it that way, and in raw
      hex.  */

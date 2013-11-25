@@ -63,6 +63,16 @@ struct internal_function
   void *cookie;
 };
 
+/* Used to describe the different reasons part of a value
+   might not be available to gdb.  */
+
+enum unavailability_reason
+{
+  /* Leave value 0 as invalid.  */
+  bit_range_unavailable = 1,
+  bit_range_optimized_out = 2
+};
+
 /* Defines an [OFFSET, OFFSET + LENGTH) range.  */
 
 struct range
@@ -72,6 +82,9 @@ struct range
 
   /* Length of the range.  */
   int length;
+
+  /* The reason this range is unavailable.  */
+  enum unavailability_reason reason;
 };
 
 typedef struct range range_s;
@@ -196,15 +209,6 @@ struct value
      array element.  If you ever change the way lazy flag is set and
      reset, be sure to consider this use as well!  */
   unsigned int lazy : 1;
-
-  /* If nonzero, this is the value of a variable that does not
-     actually exist in the program.  If nonzero, and LVAL is
-     lval_register, this is a register ($pc, $sp, etc., never a
-     program variable) that has not been saved in the frame.  All
-     optimized-out values are treated pretty much the same, except
-     registers have a different string representation and related
-     error strings.  */
-  unsigned int optimized_out : 1;
 
   /* If value is a variable, is it initialized or not.  */
   unsigned int initialized : 1;
@@ -350,15 +354,7 @@ value_bits_available (const struct value *value, int offset, int length)
 {
   gdb_assert (!value->lazy);
 
-  if (ranges_contain (value->unavailable, offset, length))
-    return 0;
-  if (!value->optimized_out)
-    return 1;
-  if (value->lval != lval_computed
-      || !value->location.computed.funcs->check_validity)
-    return 0;
-  return value->location.computed.funcs->check_validity (value, offset,
-							 length);
+  return (!ranges_contain (value->unavailable, offset, length));
 }
 
 int
@@ -369,61 +365,81 @@ value_entirely_available (struct value *value)
   if (value->lazy)
     value_fetch_lazy (value);
 
-  if (VEC_empty (range_s, value->unavailable)
-      && !value->optimized_out)
-    return 1;
-  return 0;
+  return VEC_empty (range_s, value->unavailable);
 }
 
 int
 value_entirely_unavailable (struct value *value)
 {
+  struct range *r;
+  int i, expected_offset;
+
   /* We can only tell whether the whole value is available when we try
      to read it.  */
   if (value->lazy)
     value_fetch_lazy (value);
 
-  if (VEC_length (range_s, value->unavailable) == 1)
-    {
-      struct range *t = VEC_index (range_s, value->unavailable, 0);
+  /* Short cut the common case, no bits are marked unavailable.  */
+  if (VEC_empty (range_s, value->unavailable))
+    return 0;
 
-      if (t->offset == 0
-	  && t->length == TYPE_LENGTH (value_enclosing_type (value)))
-	return 1;
+  expected_offset = 0;
+  for (i = 0; VEC_iterate (range_s, value->unavailable, i, r); i++)
+    {
+      if (r->offset != expected_offset)
+        return 0; /* Not completely optimized out.  */
+
+      expected_offset += r->length;
     }
 
-  /* At least some of the value contents are NOT covered by the unavailable
-     vector, fall back to the optimized out heuristic.	*/
-  if (!value->optimized_out)
-    return 0;
-  if (value->lval != lval_computed
-      || !value->location.computed.funcs->check_any_valid)
+  /* We've now looked at every entry in the vector of unavailable bits
+     and not found any gaps.  If the EXPECTED_OFFSET is the same as the
+     type length then the whole value is no longer available.  */
+  if (expected_offset
+      >= TYPE_LENGTH (value_enclosing_type (value)) * TARGET_CHAR_BIT)
     return 1;
-  return !value->location.computed.funcs->check_any_valid (value);
+
+  /* There's a few bits available at the very end of the value.  */
+  return 0;
 }
 
 /* Insert into the vector pointed to by VECTORP the bit range starting of
    OFFSET bits, and extending for the next LENGTH bits.  */
 
 static void
-insert_into_bit_range_vector (VEC(range_s) **vectorp, int offset, int length)
+insert_into_bit_range_vector (VEC(range_s) **vectorp,
+			      int offset, int length,
+			      enum unavailability_reason reason)
 {
-  range_s newr;
-  int i;
+  gdb_assert (vectorp != NULL);
 
-  /* Insert the range sorted.  If there's overlap or the new range
-     would be contiguous with an existing range, merge.  */
+  do
+    {
+      int i;
+      range_s newr;
 
-  newr.offset = offset;
-  newr.length = length;
+      /* All the ranges of unavailable bits are stored in order of
+	 increasing offset within the value.  Contiguous or overlapping
+	 ranges with the same unavailability reason will be merged, while
+	 ranges with different unavailability reasons that overlap will
+	 result in one of the ranges being truncated to accommodate the
+	 other; no two ranges in the vector may overlap.  */
 
-  /* Do a binary search for the position the given range would be
-     inserted if we only considered the starting OFFSET of ranges.
-     Call that position I.  Since we also have LENGTH to care for
-     (this is a range afterall), we need to check if the _previous_
-     range overlaps the I range.  E.g., calling R the new range:
+      newr.offset = offset;
+      newr.length = length;
+      newr.reason = reason;
 
-       #1 - overlaps with previous
+      /* If we only consider the insertion of ranges with the same
+	 unavailability reason then the following logic is used to manges
+	 the ranges in the vector:
+
+	 Do a binary search for the position the given range would be
+	 inserted if we only considered the starting OFFSET of ranges.
+	 Call that position I.  Since we also have LENGTH to care for (this
+	 is a range afterall), we need to check if the _previous_ range
+	 overlaps the I range.  E.g., calling R the new range:
+
+	 #1 - overlaps with previous
 
 	   R
 	   |-...-|
@@ -432,15 +448,15 @@ insert_into_bit_range_vector (VEC(range_s) **vectorp, int offset, int length)
 
 	 I=1
 
-     In the case #1 above, the binary search would return `I=1',
-     meaning, this OFFSET should be inserted at position 1, and the
-     current position 1 should be pushed further (and become 2).  But,
-     note that `0' overlaps with R, so we want to merge them.
+	 In the case #1 above, the binary search would return `I=1',
+	 meaning, this OFFSET should be inserted at position 1, and the
+	 current position 1 should be pushed further (and become 2).  But,
+	 note that `0' overlaps with R, so we want to merge them.
 
-     A similar consideration needs to be taken if the new range would
-     be contiguous with the previous range:
+	 A similar consideration needs to be taken if the new range would
+	 be contiguous with the previous range:
 
-       #2 - contiguous with previous
+	 #2 - contiguous with previous
 
 	    R
 	    |-...-|
@@ -449,44 +465,44 @@ insert_into_bit_range_vector (VEC(range_s) **vectorp, int offset, int length)
 
 	 I=1
 
-     If there's no overlap with the previous range, as in:
+	 If there's no overlap with the previous range, as in:
 
-       #3 - not overlapping and not contiguous
+	 #3 - not overlapping and not contiguous
 
-	       R
-	       |-...-|
-	  |--|         |---|  |------| ... |--|
-	  0            1      2            N
+	      R
+	      |-...-|
+	 |--|         |---|  |------| ... |--|
+	 0            1      2            N
 
 	 I=1
 
-     or if I is 0:
+	 or if I is 0:
 
-       #4 - R is the range with lowest offset
+	 #4 - R is the range with lowest offset
 
-	  R
+	 R
 	 |-...-|
 	         |--|       |---|  |------| ... |--|
 	         0          1      2            N
 
 	 I=0
 
-     ... we just push the new range to I.
+	 ... we just push the new range to I.
 
-     All the 4 cases above need to consider that the new range may
-     also overlap several of the ranges that follow, or that R may be
-     contiguous with the following range, and merge.  E.g.,
+	 All the 4 cases above need to consider that the new range may
+	 also overlap several of the ranges that follow, or that R may be
+	 contiguous with the following range, and merge.  E.g.,
 
-       #5 - overlapping following ranges
+	 #5 - overlapping following ranges
 
-	  R
+	 R
 	 |------------------------|
 	         |--|       |---|  |------| ... |--|
 	         0          1      2            N
 
 	 I=0
 
-       or:
+	 or:
 
 	    R
 	    |-------|
@@ -495,79 +511,174 @@ insert_into_bit_range_vector (VEC(range_s) **vectorp, int offset, int length)
 
 	 I=1
 
-  */
+	 When we consider ranges with different availability reasons the
+	 following additional rules are used.
 
-  i = VEC_lower_bound (range_s, *vectorp, &newr, range_lessthan);
-  if (i > 0)
-    {
-      struct range *bef = VEC_index (range_s, *vectorp, i - 1);
+	 Each unavailability reason has a value, see the enum
+	 unavailability_reason.  The higher value reasons have greater
+	 precedence, they are considered a "better" reason to explain why
+	 some bits of a value are not available.
 
-      if (ranges_overlap (bef->offset, bef->length, offset, length))
+	 When two ranges overlap, as in case #1 above, the range with the
+	 lowest precedence is shortened, possibly to the point of
+	 non-existence, to accommodate the range with greater precedence.
+
+	 Two contiguous ranges, as in case #2 above will not be merged if
+	 they have different reasons.
+
+	 Case #3 and #4 above are unchanged.
+
+	 When inserting a range that overlaps many existing ranges, and in
+	 case #5 above, all overlapped ranges with a lower precedence
+	 reason will be deleted, effectively replaced by the new range.  A
+	 range of higher precedence will cause the newly inserted range to
+	 fragment around the existing, higher precedence range.
+      */
+
+      i = VEC_lower_bound (range_s, *vectorp, &newr, range_lessthan);
+      if (i > 0)
 	{
-	  /* #1 */
-	  ULONGEST l = min (bef->offset, offset);
-	  ULONGEST h = max (bef->offset + bef->length, offset + length);
+	  struct range *bef = VEC_index (range_s, *vectorp, i - 1);
 
-	  bef->offset = l;
-	  bef->length = h - l;
-	  i--;
-	}
-      else if (offset == bef->offset + bef->length)
-	{
-	  /* #2 */
-	  bef->length += length;
-	  i--;
+	  if (ranges_overlap (bef->offset, bef->length, offset, length))
+	    {
+	      /* #1 */
+	      if (bef->reason == reason)
+		{
+		  ULONGEST l = min (bef->offset, offset);
+		  ULONGEST h = max (bef->offset + bef->length, offset + length);
+
+		  bef->offset = l;
+		  bef->length = h - l;
+		  i--;
+		}
+	      else if (bef->reason < reason)
+		{
+		  /* Reduce the previous range.  */
+		  bef->length -= (bef->offset + bef->length) - offset;
+
+		  if (bef->length == 0)
+		    VEC_block_remove (range_s, *vectorp, (i - 1), 1);
+
+		  VEC_safe_insert (range_s, *vectorp, i, &newr);
+		}
+	      else
+		{
+		  /* Reduce the new range.  */
+		  if ((bef->offset + bef->length) >= offset + length)
+		    return; /* We're completely within previous range.  */
+
+		  newr.offset = bef->offset + bef->length;
+		  newr.length -= (bef->offset + bef->length) - newr.offset;
+
+		  VEC_safe_insert (range_s, *vectorp, i, &newr);
+		}
+	    }
+	  else if (offset == bef->offset + bef->length)
+	    {
+	      /* #2 */
+	      if (bef->reason == reason)
+		{
+		  bef->length += length;
+		  i--;
+		}
+	      else
+		VEC_safe_insert (range_s, *vectorp, i, &newr);
+	    }
+	  else
+	    {
+	      /* #3 */
+	      VEC_safe_insert (range_s, *vectorp, i, &newr);
+	    }
 	}
       else
 	{
-	  /* #3 */
+	  /* #4 */
 	  VEC_safe_insert (range_s, *vectorp, i, &newr);
 	}
+
+      /* Check whether the ranges following the one we've just added or
+	 touched can be folded in (#5 above).  */
+      if (i + 1 < VEC_length (range_s, *vectorp))
+	{
+	  struct range *t;
+	  struct range *r;
+	  int removed = 0;
+	  int next = i + 1;
+
+	  /* Get the range we just touched.  */
+	  t = VEC_index (range_s, *vectorp, i);
+	  removed = 0;
+
+	  i = next;
+	  for (; VEC_iterate (range_s, *vectorp, i, r); i++)
+	    if (r->offset <= t->offset + t->length
+		&& r->reason <= t->reason)
+	      {
+		ULONGEST h;
+
+		gdb_assert (t->offset <= r->offset);
+
+		if (r->offset + r->length >= t->offset + t->length)
+		  {
+		    if (r->reason == t->reason)
+		      {
+			t->length += ((r->offset + r->length)
+				      - (t->offset + t->length));
+			removed++;
+		      }
+		    else
+		      {
+			r->length = ((r->offset + r->length)
+				     - (t->offset + t->length));
+			r->offset = t->offset + t->length;
+		      }
+		  }
+		else
+		  {
+		    removed++;
+		  }
+	      }
+	    else
+	      {
+		/* If we couldn't merge this one, we won't be able to
+		   merge following ones either, since the ranges are
+		   always sorted by OFFSET.  */
+		break;
+	      }
+
+	  if (removed != 0)
+	    VEC_block_remove (range_s, *vectorp, next, removed);
+
+	  /* If the next range overlaps with the range we just touched, but has
+	     a more important reason then we need to skip over the existing
+	     range and create a new range on the other side.  */
+	  if (r && r->offset <= t->offset + t->length)
+	    {
+	      /* If the next one overlaps its reason should be greater than
+		 ours, otherwise we should have folded it in above.  */
+	      gdb_assert (r->reason > t->reason);
+
+	      if (r->offset + r->length >= t->offset + t->length)
+		{
+		  t->length -= (t->offset + t->length) - r->offset;
+		  return;
+		}
+
+	      offset = r->offset + r->length;
+	      length = (t->offset + t->length) - (r->offset + r->length);
+	      t->length = r->offset - t->offset;
+	    }
+	  else
+	    return; /* All inserted.  */
+	}
+      else
+	return; /* All inserted.  */
     }
-  else
-    {
-      /* #4 */
-      VEC_safe_insert (range_s, *vectorp, i, &newr);
-    }
+  while (length > 0);
 
-  /* Check whether the ranges following the one we've just added or
-     touched can be folded in (#5 above).  */
-  if (i + 1 < VEC_length (range_s, *vectorp))
-    {
-      struct range *t;
-      struct range *r;
-      int removed = 0;
-      int next = i + 1;
-
-      /* Get the range we just touched.  */
-      t = VEC_index (range_s, *vectorp, i);
-      removed = 0;
-
-      i = next;
-      for (; VEC_iterate (range_s, *vectorp, i, r); i++)
-	if (r->offset <= t->offset + t->length)
-	  {
-	    ULONGEST l, h;
-
-	    l = min (t->offset, r->offset);
-	    h = max (t->offset + t->length, r->offset + r->length);
-
-	    t->offset = l;
-	    t->length = h - l;
-
-	    removed++;
-	  }
-	else
-	  {
-	    /* If we couldn't merge this one, we won't be able to
-	       merge following ones either, since the ranges are
-	       always sorted by OFFSET.  */
-	    break;
-	  }
-
-      if (removed != 0)
-	VEC_block_remove (range_s, *vectorp, next, removed);
-    }
+  /* Should never get here.  */
+  internal_error (__FILE__, __LINE__, "error during vector insert");
 }
 
 void
@@ -582,7 +693,8 @@ mark_value_bits_unavailable (struct value *value, int offset, int length)
 {
   insert_into_bit_range_vector (&value->unavailable,
 				offset,
-				length);
+				length,
+				bit_range_unavailable);
 }
 
 void
@@ -590,8 +702,21 @@ value_availability_flags (const struct value *value,
 			  int *optimizedp,
 			  int *unavailablep)
 {
-  *optimizedp = value->optimized_out;
-  *unavailablep = !VEC_empty (range_s, value->unavailable);
+  int i;
+  struct range *r;
+
+  gdb_assert (!value->lazy);
+
+  *optimizedp = *unavailablep = 0;
+
+  /* Look through every entry in the unavailable vector.  */
+  for (i = 0; VEC_iterate (range_s, value->unavailable, i, r); i++)
+    {
+      if (r->reason == bit_range_optimized_out)
+        *optimizedp = 1;
+      else if (r->reason == bit_range_unavailable)
+        *unavailablep = 1;
+    }
 }
 
 /* Find the first range in RANGES that overlaps the range defined by
@@ -755,7 +880,6 @@ allocate_value_lazy (struct type *type)
   val->bitsize = 0;
   VALUE_REGNUM (val) = -1;
   val->lazy = 1;
-  val->optimized_out = 0;
   val->embedded_offset = 0;
   val->pointed_to_offset = 0;
   val->modifiable = 1;
@@ -971,22 +1095,20 @@ error_value_optimized_out (void)
 }
 
 static void
-require_not_optimized_out (const struct value *value)
-{
-  if (value->optimized_out)
-    {
-      if (value->lval == lval_register)
-	error (_("register has not been saved in frame"));
-      else
-	error_value_optimized_out ();
-    }
-}
-
-static void
 require_available (const struct value *value)
 {
   if (!VEC_empty (range_s, value->unavailable))
-    throw_error (NOT_AVAILABLE_ERROR, _("value is not available"));
+    {
+      int optimizedp, unavailablep;
+
+      value_availability_flags (value, &optimizedp, &unavailablep);
+      if (optimizedp && value->lval == lval_register)
+	throw_error (OPTIMIZED_OUT_ERROR, _("register has not been saved in frame"));
+      else if (optimizedp)
+	throw_error (OPTIMIZED_OUT_ERROR, _("value has been optimized out"));
+      else
+	throw_error (NOT_AVAILABLE_ERROR, _("value is not available"));
+    }
 }
 
 const gdb_byte *
@@ -1008,7 +1130,6 @@ const gdb_byte *
 value_contents_all (struct value *value)
 {
   const gdb_byte *result = value_contents_for_printing (value);
-  require_not_optimized_out (value);
   require_available (value);
   return result;
 }
@@ -1061,7 +1182,7 @@ value_contents_copy_raw (struct value *dst, int dst_offset,
       if (l < h)
 	insert_into_bit_range_vector (&dst->unavailable,
 				      dst_bit_offset + (l - src_bit_offset),
-				      h - l);
+				      h - l, r->reason);
     }
 }
 
@@ -1070,8 +1191,7 @@ value_contents_copy_raw (struct value *dst, int dst_offset,
    (all) contents, starting at DST_OFFSET.  If unavailable contents
    are being copied from SRC, the corresponding DST contents are
    marked unavailable accordingly.  DST must not be lazy.  If SRC is
-   lazy, it will be fetched now.  If SRC is not valid (is optimized
-   out), an error is thrown.
+   lazy, it will be fetched now.
 
    It is assumed the contents of DST in the [DST_OFFSET,
    DST_OFFSET+LENGTH) range are wholly available.  */
@@ -1080,8 +1200,6 @@ void
 value_contents_copy (struct value *dst, int dst_offset,
 		     struct value *src, int src_offset, int length)
 {
-  require_not_optimized_out (src);
-
   if (src->lazy)
     value_fetch_lazy (src);
 
@@ -1116,7 +1234,6 @@ const gdb_byte *
 value_contents (struct value *value)
 {
   const gdb_byte *result = value_contents_writeable (value);
-  require_not_optimized_out (value);
   require_available (value);
   return result;
 }
@@ -1148,17 +1265,6 @@ value_contents_equal (struct value *val1, struct value *val2)
 		  TYPE_LENGTH (type1)) == 0);
 }
 
-int
-value_optimized_out (struct value *value)
-{
-  /* We can only know if a value is optimized out once we have tried to
-     fetch it.  */
-  if (!value->optimized_out && value->lazy)
-    value_fetch_lazy (value);
-
-  return value->optimized_out;
-}
-
 /* Mark contents of VALUE as optimized out, starting at OFFSET bytes, and
    the following LENGTH bytes.  */
 
@@ -1174,13 +1280,11 @@ mark_value_bytes_optimized_out (struct value *value, int offset, int length)
    the following LENGTH bits.  */
 
 void
-mark_value_bits_optimized_out (struct value *value,
-			       int offset ATTRIBUTE_UNUSED,
-			       int length ATTRIBUTE_UNUSED)
+mark_value_bits_optimized_out (struct value *value, int offset, int length)
 {
-  /* For now just set the optimized out flag to indicate that part of the
-     value is optimized out, this will be expanded upon in later patches.  */
-  value->optimized_out = 1;
+  insert_into_bit_range_vector (&value->unavailable,
+				offset, length,
+				bit_range_optimized_out);
 }
 
 int
@@ -1488,7 +1592,6 @@ value_copy (struct value *arg)
   VALUE_FRAME_ID (val) = VALUE_FRAME_ID (arg);
   VALUE_REGNUM (val) = VALUE_REGNUM (arg);
   val->lazy = arg->lazy;
-  val->optimized_out = arg->optimized_out;
   val->embedded_offset = value_embedded_offset (arg);
   val->pointed_to_offset = arg->pointed_to_offset;
   val->modifiable = arg->modifiable;
@@ -2738,24 +2841,19 @@ value_primitive_field (struct value *arg1, int offset,
       int bitpos = TYPE_FIELD_BITPOS (arg_type, fieldno);
       int container_bitsize = TYPE_LENGTH (type) * 8;
 
-      if (arg1->optimized_out)
-	v = allocate_optimized_out_value (type);
+      v = allocate_value_lazy (type);
+      v->bitsize = TYPE_FIELD_BITSIZE (arg_type, fieldno);
+      if ((bitpos % container_bitsize) + v->bitsize <= container_bitsize
+	  && TYPE_LENGTH (type) <= (int) sizeof (LONGEST))
+	v->bitpos = bitpos % container_bitsize;
       else
-	{
-	  v = allocate_value_lazy (type);
-	  v->bitsize = TYPE_FIELD_BITSIZE (arg_type, fieldno);
-	  if ((bitpos % container_bitsize) + v->bitsize <= container_bitsize
-	      && TYPE_LENGTH (type) <= (int) sizeof (LONGEST))
-	    v->bitpos = bitpos % container_bitsize;
-	  else
-	    v->bitpos = bitpos % 8;
-	  v->offset = (value_embedded_offset (arg1)
-		       + offset
-		       + (bitpos - v->bitpos) / 8);
-	  set_value_parent (v, arg1);
-	  if (!value_lazy (arg1))
-	    value_fetch_lazy (v);
-	}
+	v->bitpos = bitpos % 8;
+      v->offset = (value_embedded_offset (arg1)
+		   + offset
+		   + (bitpos - v->bitpos) / 8);
+      set_value_parent (v, arg1);
+      if (!value_lazy (arg1))
+	value_fetch_lazy (v);
     }
   else if (fieldno < TYPE_N_BASECLASSES (arg_type))
     {
@@ -2768,37 +2866,29 @@ value_primitive_field (struct value *arg1, int offset,
       if (VALUE_LVAL (arg1) == lval_register && value_lazy (arg1))
 	value_fetch_lazy (arg1);
 
-      /* The optimized_out flag is only set correctly once a lazy value is
-         loaded, having just loaded some lazy values we should check the
-         optimized out case now.  */
-      if (arg1->optimized_out)
-	v = allocate_optimized_out_value (type);
+      /* We special case virtual inheritance here because this
+	 requires access to the contents, which we would rather avoid
+	 for references to ordinary fields of unavailable values.  */
+      if (BASETYPE_VIA_VIRTUAL (arg_type, fieldno))
+	boffset = baseclass_offset (arg_type, fieldno,
+				    value_contents (arg1),
+				    value_embedded_offset (arg1),
+				    value_address (arg1),
+				    arg1);
+      else
+	boffset = TYPE_FIELD_BITPOS (arg_type, fieldno) / 8;
+
+      if (value_lazy (arg1))
+	v = allocate_value_lazy (value_enclosing_type (arg1));
       else
 	{
-	  /* We special case virtual inheritance here because this
-	     requires access to the contents, which we would rather avoid
-	     for references to ordinary fields of unavailable values.  */
-	  if (BASETYPE_VIA_VIRTUAL (arg_type, fieldno))
-	    boffset = baseclass_offset (arg_type, fieldno,
-					value_contents (arg1),
-					value_embedded_offset (arg1),
-					value_address (arg1),
-					arg1);
-	  else
-	    boffset = TYPE_FIELD_BITPOS (arg_type, fieldno) / 8;
-
-	  if (value_lazy (arg1))
-	    v = allocate_value_lazy (value_enclosing_type (arg1));
-	  else
-	    {
-	      v = allocate_value (value_enclosing_type (arg1));
-	      value_contents_copy_raw (v, 0, arg1, 0,
-				       TYPE_LENGTH (value_enclosing_type (arg1)));
-	    }
-	  v->type = type;
-	  v->offset = value_offset (arg1);
-	  v->embedded_offset = offset + value_embedded_offset (arg1) + boffset;
+	  v = allocate_value (value_enclosing_type (arg1));
+	  value_contents_copy_raw (v, 0, arg1, 0,
+				   TYPE_LENGTH (value_enclosing_type (arg1)));
 	}
+      v->type = type;
+      v->offset = value_offset (arg1);
+      v->embedded_offset = offset + value_embedded_offset (arg1) + boffset;
     }
   else
     {
@@ -2812,9 +2902,7 @@ value_primitive_field (struct value *arg1, int offset,
       /* The optimized_out flag is only set correctly once a lazy value is
          loaded, having just loaded some lazy values we should check for
          the optimized out case now.  */
-      if (arg1->optimized_out)
-	v = allocate_optimized_out_value (type);
-      else if (value_lazy (arg1))
+      if (value_lazy (arg1))
 	v = allocate_value_lazy (type);
       else
 	{
@@ -3502,6 +3590,9 @@ value_fetch_lazy (struct value *val)
 {
   gdb_assert (value_lazy (val));
   allocate_value_contents (val);
+  /* Right now a value is either lazy, or fully fetched.  The availability
+     is only established as we try to fetch a value.  */
+  gdb_assert (VEC_empty (range_s, val->unavailable));
   if (value_bitsize (val))
     {
       /* To read a lazy bitfield, read the entire enclosing value.  This
@@ -3604,16 +3695,11 @@ value_fetch_lazy (struct value *val)
       if (value_lazy (new_val))
 	value_fetch_lazy (new_val);
 
-      /* If the register was not saved, mark it optimized out.  */
-      if (value_optimized_out (new_val))
-	mark_value_bytes_optimized_out (val, 0, TYPE_LENGTH (value_type (val)));
-      else
-	{
-	  set_value_lazy (val, 0);
-	  value_contents_copy (val, value_embedded_offset (val),
-			       new_val, value_embedded_offset (new_val),
-			       TYPE_LENGTH (type));
-	}
+      /* Copy the contents and any unavailability from NEW_VAL to VAL.  */
+      set_value_lazy (val, 0);
+      value_contents_copy (val, value_embedded_offset (val),
+			   new_val, value_embedded_offset (new_val),
+			   TYPE_LENGTH (type));
 
       if (frame_debug)
 	{
@@ -3666,11 +3752,6 @@ value_fetch_lazy (struct value *val)
   else if (VALUE_LVAL (val) == lval_computed
 	   && value_computed_funcs (val)->read != NULL)
     value_computed_funcs (val)->read (val);
-  /* Don't call value_optimized_out on val, doing so would result in a
-     recursive call back to value_fetch_lazy, instead check the
-     optimized_out flag directly.  */
-  else if (val->optimized_out)
-    /* Keep it optimized out.  */;
   else
     internal_error (__FILE__, __LINE__, _("Unexpected lazy value type."));
 
