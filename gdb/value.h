@@ -180,14 +180,6 @@ struct lval_funcs
      TOVAL is not considered as an lvalue.  */
   void (*write) (struct value *toval, struct value *fromval);
 
-  /* Check the validity of some bits in VALUE.  This should return 1
-     if all the bits starting at OFFSET and extending for LENGTH bits
-     are valid, or 0 if any bit is invalid.  */
-  int (*check_validity) (const struct value *value, int offset, int length);
-
-  /* Return 1 if any bit in VALUE is valid, 0 if they are all invalid.  */
-  int (*check_any_valid) (const struct value *value);
-
   /* If non-NULL, this is used to implement pointer indirection for
      this value.  This method may return NULL, in which case value_ind
      will fall back to ordinary indirection.  */

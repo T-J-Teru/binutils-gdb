@@ -1288,8 +1288,6 @@ static const struct lval_funcs entry_data_value_funcs =
 {
   NULL,	/* read */
   NULL,	/* write */
-  NULL,	/* check_validity */
-  NULL,	/* check_any_valid */
   NULL,	/* indirect */
   entry_data_value_coerce_ref,
   NULL,	/* check_synthetic_pointer */
@@ -2009,22 +2007,6 @@ check_pieced_value_bits (const struct value *value, int bit_offset,
   return validity;
 }
 
-static int
-check_pieced_value_validity (const struct value *value, int bit_offset,
-			     int bit_length)
-{
-  return check_pieced_value_bits (value, bit_offset, bit_length,
-				  DWARF_VALUE_MEMORY);
-}
-
-static int
-check_pieced_value_invalid (const struct value *value)
-{
-  return check_pieced_value_bits (value, 0,
-				  8 * TYPE_LENGTH (value_type (value)),
-				  DWARF_VALUE_OPTIMIZED_OUT);
-}
-
 /* An implementation of an lval_funcs method to see whether a value is
    a synthetic pointer.  */
 
@@ -2182,8 +2164,6 @@ free_pieced_value_closure (struct value *v)
 static const struct lval_funcs pieced_value_funcs = {
   read_pieced_value,
   write_pieced_value,
-  check_pieced_value_validity,
-  check_pieced_value_invalid,
   indirect_pieced_value,
   NULL,	/* coerce_ref */
   check_pieced_synthetic_pointer,
