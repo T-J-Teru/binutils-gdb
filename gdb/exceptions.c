@@ -577,5 +577,6 @@ catch_command_errors_const (catch_command_errors_const_ftype *command,
 int
 is_unavailable_error (const enum errors error)
 {
-  return error == NOT_AVAILABLE_ERROR;
+  return (error == NOT_AVAILABLE_ERROR
+	  || error == OPTIMIZED_OUT_ERROR);
 }

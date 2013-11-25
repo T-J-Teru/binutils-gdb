@@ -82,9 +82,9 @@ enum errors {
   /* Feature is not supported in this copy of GDB.  */
   UNSUPPORTED_ERROR,
 
-  /* Value not available.  E.g., a register was not collected in a
-     traceframe.  */
-  NOT_AVAILABLE_ERROR,
+  /* Value not available.  */
+  NOT_AVAILABLE_ERROR, /* Not collected, e.g. in a traceframe.  */
+  OPTIMIZED_OUT_ERROR, /* Optimized out by compiler or ABI.  */
 
   /* DW_OP_GNU_entry_value resolving failed.  */
   NO_ENTRY_VALUE_ERROR,

@@ -745,8 +745,11 @@ frame_unwind_pc_if_available (struct frame_info *this_frame, CORE_ADDR *pc)
 	      if (frame_debug)
 		fprintf_unfiltered (gdb_stdlog,
 				    "{ frame_unwind_pc (this_frame=%d)"
-				    " -> <unavailable> }\n",
-				    this_frame->level);
+				    " -> %s }\n",
+				    this_frame->level,
+				    (ex.error == NOT_AVAILABLE_ERROR
+				     ? "<unavailable>"
+				     : "<optimized out>"));
 	    }
 	  else if (ex.reason < 0)
 	    {
@@ -1005,7 +1008,8 @@ frame_unwind_register (struct frame_info *frame, int regnum, gdb_byte *buf)
 			 &lval, &addr, &realnum, buf);
 
   if (optimized)
-    error (_("Register %d was optimized out"), regnum);
+    throw_error (OPTIMIZED_OUT_ERROR,
+		 _("Register %d was optimized out"), regnum);
   if (unavailable)
     throw_error (NOT_AVAILABLE_ERROR,
 		 _("Register %d is not available"), regnum);
