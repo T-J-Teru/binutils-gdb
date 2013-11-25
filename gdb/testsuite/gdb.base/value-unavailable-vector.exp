@@ -1,0 +1,32 @@
+# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test the behaviour of the gdb value unavailable bits vector.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+gdb_test "maintenance value-vector-test (2,2,unavailable) (4,2,unavailable) (2,6,optimized-out)" \
+    "VECTOR: \\(2, 6, optimized-out\\)"
+
+gdb_test "maintenance value-vector-test ( 4, 2,unavailable) ( 8, 2,unavailable) (12, 2,unavailable) ( 2,11,optimized-out)" \
+    "VECTOR: \\(2, 11, optimized-out\\) \\(13, 1, unavailable\\)"
+
+gdb_test "maintenance value-vector-test ( 4, 2,unavailable) ( 8, 2,unavailable) (12, 2,optimized-out) ( 2,13,unavailable)" \
+    "VECTOR: \\(2, 10, unavailable\\) \\(12, 2, optimized-out\\) \\(14, 1, unavailable\\)"
+
+gdb_test "maintenance value-vector-test ( 4, 2,optimized-out) ( 8, 2,optimized-out) (12, 2,optimized-out) ( 2,13,unavailable)" \
+    "VECTOR: \\(2, 2, unavailable\\) \\(4, 2, optimized-out\\) \\(6, 2, unavailable\\) \\(8, 2, optimized-out\\) \\(10, 2, unavailable\\) \\(12, 2, optimized-out\\) \\(14, 1, unavailable\\)"

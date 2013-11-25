@@ -43,6 +43,7 @@
 #include "tracepoint.h"
 #include "cp-abi.h"
 #include "user-regs.h"
+#include "cli/cli-utils.h"
 
 /* Prototypes for exported functions.  */
 
@@ -3776,6 +3777,123 @@ isvoid_internal_fn (struct gdbarch *gdbarch,
   return value_from_longest (builtin_type (gdbarch)->builtin_int, ret);
 }
 
+/* Internal debugging function.	 Used to display a vector containing the
+   unavailable and optimized out information.  This is currently only used
+   by the maintenance command value-vector-test.  */
+
+static void
+vector_test_show (VEC(range_s) *vector)
+{
+  if (VEC_empty (range_s, vector))
+    printf_filtered ("VECTOR is empty.\n");
+  else
+    {
+      range_s *r;
+      int i;
+
+      printf_filtered ("VECTOR:");
+      for (i = 0; VEC_iterate (range_s, vector, i, r); i++)
+	{
+	  printf_filtered (" (%d, %d, %s)",
+			   r->offset, r->length,
+			   (r->reason == bit_range_optimized_out
+			    ? "optimized-out"
+			    : (r->reason == bit_range_unavailable
+			       ? "unavailable"
+			       : "unknown")));
+
+	  if (i > 0)
+	    {
+	      range_s *prev = VEC_index (range_s, vector, (i - 1));
+
+	      if (prev->offset + prev->length > r->offset)
+		internal_error (__FILE__, __LINE__,
+				"Inconsistent vector configuration: overlap");
+
+	      if (prev->offset + prev->length == r->offset
+		  && prev->reason == r->reason)
+		internal_error (__FILE__, __LINE__,
+				"Inconsistent vector configuration: unmerged");
+	    }
+	}
+      printf_filtered ("\n");
+    }
+}
+
+/* Parse vector entries of the form "(START, LENGTH, TYPE)", where START
+   and LENGTH are numbers, START >= 0 && LENGTH > 0.  The TYPE is a string
+   either "optimized-out", or "unavailable".  */
+
+static char *
+vector_test_parse_range (char *exp, range_s *rng)
+{
+  char *tmp;
+
+  gdb_assert (exp);
+  exp = skip_spaces (exp);
+
+  memset (rng, 0, sizeof (*rng));
+
+  if (*exp != '(')
+    error ("Invalid range specification in `%s'", exp);
+  exp++;
+  /* Find the next "," character (error if non found).	*/
+  tmp = strchr (exp, ',');
+  if (!tmp)
+    error ("Missing `,' in `%s'", exp);
+  *tmp = '\0';
+  rng->offset = parse_and_eval_long (exp);
+  *tmp = ',';
+  exp = skip_spaces (tmp + 1);
+
+  tmp = strchr (exp, ',');
+  if (!tmp)
+    error ("Missing `,' in `%s'", exp);
+  *tmp = '\0';
+  rng->length = parse_and_eval_long (exp);
+  *tmp = ',';
+  exp = skip_spaces (tmp + 1);
+
+  tmp = strchr (exp, ')');
+  if (!tmp)
+    error ("Missing `)' in `%s'", exp);
+  *tmp = '\0';
+  if (strcasecmp (exp, "unavailable") == 0)
+    rng->reason = bit_range_unavailable;
+  else if (strcasecmp (exp, "optimized-out") == 0)
+    rng->reason = bit_range_optimized_out;
+  else
+    error ("unknown reason field in `%s'", exp);
+  *tmp = ')';
+  exp = skip_spaces (tmp + 1);
+
+  return exp;
+}
+
+/* Parse sequence of range descriptions from EXP into a vector then display
+   the resulting vector.  This allows us to test the vector construction
+   algorithm.  */
+
+static void
+vector_test_command (char *exp, int from_tty)
+{
+  VEC(range_s) *vector = NULL;
+
+  (void) from_tty;
+
+  while (exp && *exp != '\0')
+    {
+      range_s r;
+
+      exp = vector_test_parse_range (exp, &r);
+      insert_into_bit_range_vector (&vector, r.offset, r.length, r.reason);
+    }
+
+  vector_test_show (vector);
+  VEC_free (range_s, vector);
+}
+
+
 void
 _initialize_values (void)
 {
@@ -3814,4 +3932,8 @@ Check whether an expression is void.\n\
 Usage: $_isvoid (expression)\n\
 Return 1 if the expression is void, zero otherwise."),
 			 isvoid_internal_fn, NULL);
+
+  add_cmd ("value-vector-test", class_maintenance, vector_test_command,
+	   _("Allows for testing of internal gdb unavailability vector."),
+	   &maintenancelist);
 }
