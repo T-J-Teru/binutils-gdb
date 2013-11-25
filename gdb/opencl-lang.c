@@ -267,8 +267,8 @@ lval_func_check_validity (const struct value *v, int offset, int length)
       int comp_offset = (i == start) ? startrest : 0;
       int comp_length = (i == end) ? endrest : elsize;
 
-      if (!value_bits_valid (c->val, c->indices[i] * elsize + comp_offset,
-			     comp_length))
+      if (!value_bits_available (c->val, c->indices[i] * elsize + comp_offset,
+				 comp_length))
 	return 0;
     }
 
@@ -287,7 +287,7 @@ lval_func_check_any_valid (const struct value *v)
   int i;
 
   for (i = 0; i < c->n; i++)
-    if (value_bits_valid (c->val, c->indices[i] * elsize, elsize))
+    if (value_bits_available (c->val, c->indices[i] * elsize, elsize))
       return 1;
 
   return 0;

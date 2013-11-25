@@ -954,8 +954,10 @@ frame_register_unwind (struct frame_info *frame, int regnum,
 
   gdb_assert (value != NULL);
 
-  *optimizedp = value_optimized_out (value);
-  *unavailablep = !value_entirely_available (value);
+  if (!value_entirely_available (value))
+    value_availability_flags (value, optimizedp, unavailablep);
+  else
+    *optimizedp = *unavailablep = 0;
   *lvalp = VALUE_LVAL (value);
   *addrp = value_address (value);
   *realnump = VALUE_REGNUM (value);
@@ -1133,8 +1135,7 @@ read_frame_register_unsigned (struct frame_info *frame, int regnum,
 {
   struct value *regval = get_frame_register_value (frame, regnum);
 
-  if (!value_optimized_out (regval)
-      && value_entirely_available (regval))
+  if (value_entirely_available (regval))
     {
       struct gdbarch *gdbarch = get_frame_arch (frame);
       enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);

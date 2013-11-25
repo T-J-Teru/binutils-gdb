@@ -311,10 +311,17 @@ valprint_check_validity (struct ui_file *stream,
       && TYPE_CODE (type) != TYPE_CODE_STRUCT
       && TYPE_CODE (type) != TYPE_CODE_ARRAY)
     {
-      if (!value_bits_valid (val, TARGET_CHAR_BIT * embedded_offset,
-			     TARGET_CHAR_BIT * TYPE_LENGTH (type)))
+      if (!value_bits_available (val, TARGET_CHAR_BIT * embedded_offset,
+				 TARGET_CHAR_BIT * TYPE_LENGTH (type)))
+
 	{
-	  val_print_optimized_out (val, stream);
+	  int optimizedp, unavailablep;
+
+	  value_availability_flags (val, &optimizedp, &unavailablep);
+	  if (optimizedp)
+	    val_print_optimized_out (val, stream);
+	  else
+	    val_print_unavailable (stream);
 	  return 0;
 	}
 
@@ -322,12 +329,6 @@ valprint_check_validity (struct ui_file *stream,
 					TARGET_CHAR_BIT * TYPE_LENGTH (type)))
 	{
 	  fputs_filtered (_("<synthetic pointer>"), stream);
-	  return 0;
-	}
-
-      if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
-	{
-	  val_print_unavailable (stream);
 	  return 0;
 	}
     }
@@ -803,12 +804,20 @@ value_check_printable (struct value *val, struct ui_file *stream,
       return 0;
     }
 
-  if (value_entirely_optimized_out (val))
+  if (value_entirely_unavailable (val))
     {
       if (options->summary && !val_print_scalar_type_p (value_type (val)))
 	fprintf_filtered (stream, "...");
       else
-	val_print_optimized_out (val, stream);
+	{
+	  int optimizedp, unavailablep;
+
+	  value_availability_flags (val, &optimizedp, &unavailablep);
+	  if (optimizedp)
+	    val_print_optimized_out (val, stream);
+	  else
+	    val_print_unavailable (stream);
+	}
       return 0;
     }
 
@@ -967,11 +976,16 @@ val_print_scalar_formatted (struct type *type,
 
   /* A scalar object that does not have all bits available can't be
      printed, because all bits contribute to its representation.  */
-  if (!value_bits_valid (val, TARGET_CHAR_BIT * embedded_offset,
-			      TARGET_CHAR_BIT * TYPE_LENGTH (type)))
-    val_print_optimized_out (val, stream);
-  else if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
-    val_print_unavailable (stream);
+  if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
+    {
+      int optimizedp, unavailablep;
+
+      value_availability_flags (val, &optimizedp, &unavailablep);
+      if (optimizedp)
+	val_print_optimized_out (val, stream);
+      else
+	val_print_unavailable (stream);
+    }
   else
     print_scalar_formatted (valaddr + embedded_offset, type,
 			    options, size, stream);

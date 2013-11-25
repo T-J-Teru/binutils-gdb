@@ -340,10 +340,6 @@ extern void mark_value_bytes_optimized_out (struct value *value,
 extern void mark_value_bits_optimized_out (struct value *value,
 					   int offset, int length);
 
-/* Like value_optimized_out, but return false if any bit in the object
-   is valid.  */
-extern int value_entirely_optimized_out (const struct value *value);
-
 /* Set or return field indicating whether a variable is initialized or
    not, based on debugging information supplied by the compiler.
    1 = initialized; 0 = uninitialized.  */
@@ -422,13 +418,6 @@ extern struct value *coerce_ref (struct value *value);
 extern struct value *coerce_array (struct value *value);
 
 /* Given a value, determine whether the bits starting at OFFSET and
-   extending for LENGTH bits are valid.  This returns nonzero if all
-   bits in the given range are valid, zero if any bit is invalid.  */
-
-extern int value_bits_valid (const struct value *value,
-			     int offset, int length);
-
-/* Given a value, determine whether the bits starting at OFFSET and
    extending for LENGTH bits are a synthetic pointer.  */
 
 extern int value_bits_synthetic_pointer (const struct value *value,
@@ -442,8 +431,16 @@ extern int value_bits_synthetic_pointer (const struct value *value,
 extern int value_bytes_available (const struct value *value,
 				  int offset, int length);
 
-/* Like value_bytes_available, but return false if any byte in the
-   whole object is unavailable.  */
+/* Given a value, determine whether the bits starting at OFFSET and
+   extending for LENGTH bits are available.  This returns nonzero if all
+   bits in the given range are available, zero if any bit is unavailable.  */
+
+extern int value_bits_available (const struct value *value,
+				 int offset, int length);
+
+/* Return true if the entire contents of VALUE are available, if any part
+   of VALUE is not available then return false.	 */
+
 extern int value_entirely_available (struct value *value);
 
 /* Like value_entirely_available, but return false if any byte in the
@@ -455,6 +452,14 @@ extern int value_entirely_unavailable (struct value *value);
 
 extern void mark_value_bytes_unavailable (struct value *value,
 					  int offset, int length);
+
+/* Set contents of OPTIMIZEDP to nonzero if any part of VALUE is optimized
+   out, otherwise set to zero.	Set contents of UNAVAILABLEP to nonzero if
+   any part of VALUE is unavailable, otherwise set to zero.  */
+
+extern void value_availability_flags (const struct value *value,
+				     int *optimizedp,
+				     int *unavailablep);
 
 /* Compare LENGTH bytes of VAL1's contents starting at OFFSET1 with
    LENGTH bytes of VAL2's contents starting at OFFSET2.
