@@ -678,7 +678,11 @@ read_frame_register_value (struct value *value, struct frame_info *frame)
 
       if (value_optimized_out (regval))
 	{
-	  set_value_optimized_out (value, 1);
+	  /* If any one of the component registers is marked optimized out
+	     then we just mark the whole composite register as optimized
+	     out.  We could do better, but this style of composite register
+	     passing is not standard, and is only used on a few targets.  */
+	  mark_value_bytes_optimized_out (value, 0, TYPE_LENGTH (value_type (value)));
 	  break;
 	}
 
@@ -727,7 +731,7 @@ value_from_register (struct type *type, int regnum, struct frame_info *frame)
       if (!ok)
 	{
 	  if (optim)
-	    set_value_optimized_out (v, 1);
+	    mark_value_bytes_optimized_out (v, 0, TYPE_LENGTH (type));
 	  if (unavail)
 	    mark_value_bytes_unavailable (v, 0, TYPE_LENGTH (type));
 	}
