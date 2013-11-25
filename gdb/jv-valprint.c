@@ -394,15 +394,7 @@ java_print_value_fields (struct type *type, const gdb_byte *valaddr,
 		}
 	      else if (!value_bits_available (val, TYPE_FIELD_BITPOS (type, i),
 					      TYPE_FIELD_BITSIZE (type, i)))
-		{
-		  int optimizedp, unavailablep;
-
-		  value_availability_flags (val, &optimizedp, &unavailablep);
-		  if (optimizedp)
-		    val_print_optimized_out (val, stream);
-		  else
-		    val_print_unavailable (stream);
-		}
+		val_print_unavailability_reason (val, stream);
 	      else
 		{
 		  struct value_print_options opts;

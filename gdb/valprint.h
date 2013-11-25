@@ -167,6 +167,12 @@ extern void val_print_unavailable (struct ui_file *stream);
 
 extern void val_print_invalid_address (struct ui_file *stream);
 
+/* For VALUE call the most appropriate of val_print_optimized_out or
+   val_print_unavailable on STREAM.  */
+
+void val_print_unavailability_reason (const struct value *value,
+				      struct ui_file *stream);
+
 /* An instance of this is passed to generic_val_print and describes
    some language-specific ways to print things.  */
 
