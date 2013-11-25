@@ -573,9 +573,16 @@ insert_into_bit_range_vector (VEC(range_s) **vectorp, int offset, int length)
 void
 mark_value_bytes_unavailable (struct value *value, int offset, int length)
 {
+  mark_value_bits_unavailable (value, offset * TARGET_CHAR_BIT,
+			       length * TARGET_CHAR_BIT);
+}
+
+void
+mark_value_bits_unavailable (struct value *value, int offset, int length)
+{
   insert_into_bit_range_vector (&value->unavailable,
-				offset * TARGET_CHAR_BIT,
-				length * TARGET_CHAR_BIT);
+				offset,
+				length);
 }
 
 void

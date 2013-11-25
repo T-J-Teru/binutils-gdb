@@ -1707,9 +1707,9 @@ read_pieced_value (struct value *v)
 		    memset (buffer, 0, this_size);
 
 		    if (optim)
-		      mark_value_bytes_optimized_out (v, offset, this_size);
+		      mark_value_bits_optimized_out (v, offset, this_size_bits);
 		    if (unavail)
-		      mark_value_bytes_unavailable (v, offset, this_size);
+		      mark_value_bits_unavailable (v, offset, this_size_bits);
 		  }
 	      }
 	    else

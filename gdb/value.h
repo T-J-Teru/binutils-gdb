@@ -453,6 +453,12 @@ extern int value_entirely_unavailable (struct value *value);
 extern void mark_value_bytes_unavailable (struct value *value,
 					  int offset, int length);
 
+/* Mark VALUE's content bits starting at OFFSET and extending for
+   LENGTH bits as unavailable.	*/
+
+extern void mark_value_bits_unavailable (struct value *value,
+					 int offset, int length);
+
 /* Set contents of OPTIMIZEDP to nonzero if any part of VALUE is optimized
    out, otherwise set to zero.	Set contents of UNAVAILABLEP to nonzero if
    any part of VALUE is unavailable, otherwise set to zero.  */
