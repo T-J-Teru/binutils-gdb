@@ -17,8 +17,12 @@
 #include "p40/debug.h"
 #include "p40/P40_DLL.h"
 
+#ifdef __WIN32__
 #include <windows.h>
-
+#else
+#define BOOL int
+#define HANDLE void *
+#endif
 
 // Offsets for addresses of external functions within function address table:
 #define CB_GET_REGISTER_COUNT     0
@@ -101,6 +105,7 @@ void expand_environment(char* dst, const char* src, const size_t size)
 
 void load_dll(const char* arg_filename)
 {
+#ifdef __WIN32__
 	unload_dll();
 
 	if (arg_filename == NULL) return;
@@ -140,10 +145,12 @@ void load_dll(const char* arg_filename)
 		fprintf(stdout, "Unable to load library %s: %d\n", p_filename, GetLastError());
 	}
 	free(p_filename);
+#endif
 }
 
 void unload_dll(void)
 {
+#ifdef __WIN32__
 	if (dll_handle != NULL)
 	{
 		BOOL retFreeLibrary = FreeLibrary(dll_handle);
@@ -156,6 +163,7 @@ void unload_dll(void)
 			printf("Unable to unload dll: %d", GetLastError());
 		}
 	}
+#endif
 }
 
 

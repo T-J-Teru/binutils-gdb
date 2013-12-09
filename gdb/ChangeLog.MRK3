@@ -1,0 +1,11 @@
+2013-12-09  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* ChangeLog.MRK3: Created.
+	* mrk3-tdep.c (NUM_CPU_REGS, NUM_SFRS, NUM_REAL_REGS)
+	(NUM_PSEUDO_REGS, NUM_REGS): Created.
+	(MRK3_MAX_REGCOUNT): Deleted.
+	(mrk3_register_name): Rewritten to use explicit names.
+	(mrk3_register_type): Rewritten to use explicit types.
+	(mrk3_pseudo_register_read, mrk3_pseudo_register_write): Created.
+	(mrk3_gdbarch_init): Set gdbarch_num_regs from NUM_REAL_REGS,
+	define gdbarch_num_pseudo_regs and pseudo reg read/write funcs.

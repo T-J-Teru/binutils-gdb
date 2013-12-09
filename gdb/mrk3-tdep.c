@@ -52,17 +52,19 @@
 #undef XMALLOC
 #define XMALLOC(TYPE) ((TYPE*) xmalloc (sizeof (TYPE)))
 
+/* TODO. These should be done through XML */
+#define NUM_CPU_REGS 15
+#define NUM_SFRS 255
+#define NUM_REAL_REGS (NUM_CPU_REGS + NUM_SFRS)
+#define NUM_PSEUDO_REGS 17
+#define NUM_REGS (NUM_REAL_REGS + NUM_PSEUDO_REGS)
+
 // Define the breakpoint instruction which is inserted by
 // GDB into the target code. This must be exactly the same
 // as the simulator expects.
 // Per definition, a breakpoint instruction has 16 bits.
 // This should be sufficient for all purposes.
 static const uint16_t mrk3_sim_break_insn = 0xFFFF;
-
-//
-// The MRK3_MAX_REGCOUNT refers to the amount of registers that are handled 
-//
-#define MRK3_MAX_REGCOUNT	192
 
 /* Structure describing architecture specific types. */
 struct gdbarch_tdep
@@ -81,34 +83,904 @@ struct gdbarch_tdep
 
 /* Lookup the name of a register given it's number. */
 static const char * mrk3_register_name (struct gdbarch *gdbarch, int regnum) {
-	return Dll_GetRegisterName(regnum);
+  static char *regnames [NUM_REGS] = {
+    // CPU Registers
+    "R0",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "SP",
+    "PC",
+    "PSW",
+    "SSP",
+    "USP",
+    "R4e",
+    "R5e",
+    "R6e",
+
+    /* Special Function Registers.
+       TODO: This should be done through XML description. */
+    "CLK_CTRL1",
+    "OSC_TRIM",
+    "DIG_CTRL",
+    "ANA_VDDX_SET",
+    "ANA_CTRL",
+    "ANA_STAT",
+    "SENSORS_ENABLE",
+    "SENSORS_TEST",
+    "ANA_TESTMUX_CTRL",
+    "ANA_CTRL2",
+    "TRIM_TEMPL",
+    "TRIM_TEMPH",
+    "VSENS_TRIM",
+    "PAD_CTRL",
+    "TEST_PAD_CTRL",
+    "TEST_DIG",
+    NULL,
+    NULL,
+    "PATCH_CTRL",
+    "PATCH_STATUS",
+    "PATCHx_ADDRL",
+    NULL,
+    "PATCHx_ADDRH",
+    "PATCH_CTRL2",
+    "PATCH_ADDR_SEL",
+    NULL,
+    NULL,
+    NULL,
+    "HW_VERSION_INFO",
+    NULL,
+    NULL,
+    "PDC_COPRO_CFG",
+    "RSTEN0",
+    "RSTEN1",
+    "RSTEN2",
+    "SLEN0",
+    "SLEN1",
+    "SLEN2",
+    "HWSTAT1",
+    "SHIELD_RNR",
+    "HWSTAT0_0",
+    "HWSTAT0_1",
+    "RSTINTCTRL",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    "PKCC_X_PTR",
+    NULL,
+    "PKCC_Y_PTR",
+    NULL,
+    "PKCC_Z_PTR",
+    NULL,
+    "PKCC_R_PTR",
+    NULL,
+    "PKCC_COUNT",
+    "PKCC_CONST",
+    "PKCC_MODE",
+    "PKCC_STATUS",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    "CRYPTO_KEY0",
+    NULL,
+    "CRYPTO_KEY1",
+    NULL,
+    "CRYPTO_KEY2",
+    NULL,
+    "CRYPTO_KEY3",
+    NULL,
+    "CRYPTO_KEY4",
+    NULL,
+    "CRYPTO_KEY5",
+    NULL,
+    "CRYPTO_KEY6",
+    NULL,
+    "CRYPTO_KEY7",
+    NULL,
+    "CRYPTO_KEY8",
+    NULL,
+    "CRYPTO_KEY9",
+    NULL,
+    "CRYPTO_KEY10",
+    NULL,
+    "CRYPTO_KEY11",
+    NULL,
+    "CRYPTO_KEY12",
+    NULL,
+    "CRYPTO_KEY13",
+    NULL,
+    "CRYPTO_KEY14",
+    NULL,
+    "CRYPTO_KEY15",
+    NULL,
+    "CRYPTO_DAT0",
+    NULL,
+    "CRYPTO_DAT1",
+    NULL,
+    "CRYPTO_DAT2",
+    NULL,
+    "CRYPTO_DAT3",
+    NULL,
+    "CRYPTO_DAT4",
+    NULL,
+    "CRYPTO_DAT5",
+    NULL,
+    "CRYPTO_DAT6",
+    NULL,
+    "CRYPTO_DAT7",
+    NULL,
+    "CRYPTO_CTRL_L",
+    "CRYPTO_CTRL_H",
+    "CRYPTO_KEY_CS10_L",
+    "CRYPTO_KEY_CS10_H",
+    NULL,
+    NULL,
+    "CRYPTO_DUMMY_ROUNDS_L",
+    "DUMMY_ROUNDS_H",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    "MMU_SHCODEBASE",
+    NULL,
+    "MMU_SHCODESZ",
+    "TRIM_EEHV",
+    "MMU_UM_EVAL",
+    "MMU_SHCONSTSZ",
+    "MMU_EEPADDR",
+    NULL,
+    "MMU_EESCRATCHPAD_L",
+    NULL,
+    "MMU_EESCRATCHPAD_H",
+    NULL,
+    "MMU_WD_CTRL",
+    NULL,
+    "MMU_WD_CNTR",
+    NULL,
+    "CRC_CNTRL",
+    NULL,
+    "CRC_DATAL",
+    "CRC_DATAH",
+    "CRC_BYTE0",
+    "CRC_BYTE1",
+    "CRC_BYTE2",
+    "CRC_BYTE3",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    "UIRQ",
+    "UBUF",
+    "USREG",
+    "UCON",
+    "UMOD",
+    "UBR",
+    NULL,
+    "UWT",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    "RNGCTRL1",
+    NULL,
+    "TRNG",
+    "SW_PRNG",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    "MMU_TM_CTRL",
+    "MMU_FWAPPRAM",
+    "MMU_FWFRAM",
+    "MMU_FWKRAM",
+    "MMU_SMCODESZ",
+    "MMU_SMCONSTSZ",
+    "MMU_UMCODESZ",
+    "MMU_UMCONSTSZ",
+    "MMU_UMCODEBASE",
+    NULL,
+    "MMU_EESZ",
+    "MMU_SMPATCHES",
+    "MMU_UMPATCHES",
+    "MMU_EE_DATABASE",
+    "MMU_EEPROM_DATASIZE",
+    "MMU_SFRACCESS_CTRL",
+    "MMU_RAM_APW",
+    NULL,
+    "MMU_EEPROM_APW",
+    NULL,
+    "MMU_RAM_DPW",
+    NULL,
+    "MMU_EEPROM_DPW",
+    NULL,
+    "MMU_ACCESS_CTRL",
+    "MMU_CIPHER_CTRL",
+    "ECNTRL1",
+    "MMU_DM9BASE",
+    "ECNTRL2",
+    NULL,
+    "ECNTRL4",
+    NULL,
+
+    /* pseudo registers: */
+    "R0L",
+    "R1L",
+    "R2L",
+    "R3L",
+    "R0H",
+    "R1H",
+    "R2H",
+    "R3H",
+    "R4l",
+    "R5l",
+    "R6l",
+    "SYS",
+    "INT",
+    "ZERO",
+    "NEG",
+    "OVERFLOW",
+    "CARRY"
+  };
+
+  if (regnum < NUM_REGS)
+    return regnames[regnum];
+  else
+    {
+      /* Moan */
+      fprintf_unfiltered (gdb_stdlog,
+			  "mrk3_register_name: unknown register number %d.\n",
+			  regnum);
+      return "";
+    }
 }
 
 
 /* Return the GDB type object for the "standard" data type
-	 of data in register N.  */
+   of data in register N.
+
+   TODO. This should be done in XML. */
 static struct type *
 mrk3_register_type (struct gdbarch *gdbarch, int regnum)
 {
-	uint32_t size = Dll_GetRegisterSize(regnum);
-	if (size == 1) {
-		return builtin_type (gdbarch)->builtin_uint8;
-	}
-	else if (size == 2) {
-		return builtin_type (gdbarch)->builtin_uint16;
-	}
-	else if (size == 4) {
-		return builtin_type (gdbarch)->builtin_uint32;
-	}
-	else if (size == 0) {
-		return builtin_type (gdbarch)->builtin_int0;
-	}
-	else {
-		printf("mrk3_register_type: Error: unknown size for register number %d.\n", regnum);
-		return builtin_type (gdbarch)->builtin_uint16;
-	}
+  switch (regnum)
+    {
+      /* CPU registers */
+    case   0: return builtin_type (gdbarch)->builtin_uint16;	// R0
+    case   1: return builtin_type (gdbarch)->builtin_uint16;	// R1
+    case   2: return builtin_type (gdbarch)->builtin_uint16;	// R2
+    case   3: return builtin_type (gdbarch)->builtin_uint16;	// R3
+    case   4: return builtin_type (gdbarch)->builtin_uint16;	// R4
+    case   5: return builtin_type (gdbarch)->builtin_uint16;	// R5
+    case   6: return builtin_type (gdbarch)->builtin_uint16;	// R6
+    case   7: return builtin_type (gdbarch)->builtin_uint16;	// SP
+    case   8: return builtin_type (gdbarch)->builtin_uint16;	// PC
+    case   9: return builtin_type (gdbarch)->builtin_uint16;	// PSW
+    case  10: return builtin_type (gdbarch)->builtin_uint16;	// SSP
+    case  11: return builtin_type (gdbarch)->builtin_uint16;	// USP
+    case  12: return builtin_type (gdbarch)->builtin_uint16;	// R4e
+    case  13: return builtin_type (gdbarch)->builtin_uint16;	// R5e
+    case  14: return builtin_type (gdbarch)->builtin_uint16;	// R6e
+      /* Special Function Registers */
+    case  15: return builtin_type (gdbarch)->builtin_uint8;	// CLK_CTRL1
+    case  16: return builtin_type (gdbarch)->builtin_uint8;	// OSC_TRIM
+    case  17: return builtin_type (gdbarch)->builtin_uint8;	// DIG_CTRL
+    case  18: return builtin_type (gdbarch)->builtin_uint8;	// ANA_VDDX_SET
+    case  19: return builtin_type (gdbarch)->builtin_uint8;	// ANA_CTRL
+    case  20: return builtin_type (gdbarch)->builtin_uint8;	// ANA_STAT
+    case  21: return builtin_type (gdbarch)->builtin_uint8;	// SENSORS_ENABLE
+    case  22: return builtin_type (gdbarch)->builtin_uint8;	// SENSORS_TEST
+    case  23: return builtin_type (gdbarch)->builtin_uint8;	// ANA_TESTMUX_CTRL
+    case  24: return builtin_type (gdbarch)->builtin_uint8;	// ANA_CTRL2
+    case  25: return builtin_type (gdbarch)->builtin_uint8;	// TRIM_TEMPL
+    case  26: return builtin_type (gdbarch)->builtin_uint8;	// TRIM_TEMPH
+    case  27: return builtin_type (gdbarch)->builtin_uint8;	// VSENS_TRIM
+    case  28: return builtin_type (gdbarch)->builtin_uint8;	// PAD_CTRL
+    case  29: return builtin_type (gdbarch)->builtin_uint8;	// TEST_PAD_CTRL
+    case  30: return builtin_type (gdbarch)->builtin_uint8;	// TEST_DIG
+    case  31: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  32: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  33: return builtin_type (gdbarch)->builtin_uint8;	// PATCH_CTRL
+    case  34: return builtin_type (gdbarch)->builtin_uint8;	// PATCH_STATUS
+    case  35: return builtin_type (gdbarch)->builtin_uint16;	// PATCHx_ADDRL
+    case  36: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  37: return builtin_type (gdbarch)->builtin_uint8;	// PATCHx_ADDRH
+    case  38: return builtin_type (gdbarch)->builtin_uint8;	// PATCH_CTRL2
+    case  39: return builtin_type (gdbarch)->builtin_uint8;	// PATCH_ADDR_SEL
+    case  40: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  41: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  42: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  43: return builtin_type (gdbarch)->builtin_uint16;	// HW_VERSION_INFO
+    case  44: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  45: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  46: return builtin_type (gdbarch)->builtin_uint8;	// PDC_COPRO_CFG
+    case  47: return builtin_type (gdbarch)->builtin_uint8;	// RSTEN0
+    case  48: return builtin_type (gdbarch)->builtin_uint8;	// RSTEN1
+    case  49: return builtin_type (gdbarch)->builtin_uint8;	// RSTEN2
+    case  50: return builtin_type (gdbarch)->builtin_uint8;	// SLEN0
+    case  51: return builtin_type (gdbarch)->builtin_uint8;	// SLEN1
+    case  52: return builtin_type (gdbarch)->builtin_uint8;	// SLEN2
+    case  53: return builtin_type (gdbarch)->builtin_uint8;	// HWSTAT1
+    case  54: return builtin_type (gdbarch)->builtin_uint8;	// SHIELD_RNR
+    case  55: return builtin_type (gdbarch)->builtin_uint8;	// HWSTAT0_0
+    case  56: return builtin_type (gdbarch)->builtin_uint8;	// HWSTAT0_1
+    case  57: return builtin_type (gdbarch)->builtin_uint8;	// RSTINTCTRL
+    case  58: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  59: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  60: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  61: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  62: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  63: return builtin_type (gdbarch)->builtin_uint16;	// PKCC_X_PTR
+    case  64: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  65: return builtin_type (gdbarch)->builtin_uint16;	// PKCC_Y_PTR
+    case  66: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  67: return builtin_type (gdbarch)->builtin_uint16;	// PKCC_Z_PTR
+    case  68: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  69: return builtin_type (gdbarch)->builtin_uint16;	// PKCC_R_PTR
+    case  70: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  71: return builtin_type (gdbarch)->builtin_uint8;	// PKCC_COUNT
+    case  72: return builtin_type (gdbarch)->builtin_uint8;	// PKCC_CONST
+    case  73: return builtin_type (gdbarch)->builtin_uint8;	// PKCC_MODE
+    case  74: return builtin_type (gdbarch)->builtin_uint8;	// PKCC_STATUS
+    case  75: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  76: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  77: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  78: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  79: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY0
+    case  80: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  81: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY1
+    case  82: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  83: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY2
+    case  84: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  85: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY3
+    case  86: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  87: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY4
+    case  88: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  89: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY5
+    case  90: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  91: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY6
+    case  92: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  93: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY7
+    case  94: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  95: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY8
+    case  96: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  97: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY9
+    case  98: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case  99: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY10
+    case 100: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 101: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY11
+    case 102: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 103: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY12
+    case 104: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 105: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY13
+    case 106: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 107: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY14
+    case 108: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 109: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_KEY15
+    case 110: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 111: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT0
+    case 112: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 113: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT1
+    case 114: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 115: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT2
+    case 116: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 117: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT3
+    case 118: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 119: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT4
+    case 120: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 121: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT5
+    case 122: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 123: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT6
+    case 124: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 125: return builtin_type (gdbarch)->builtin_uint16;	// CRYPTO_DAT7
+    case 126: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 127: return builtin_type (gdbarch)->builtin_uint8;	// CRYPTO_CTRL_L
+    case 128: return builtin_type (gdbarch)->builtin_uint8;	// CRYPTO_CTRL_H
+    case 129: return builtin_type (gdbarch)->builtin_uint8;	// CRYPTO_KEY_CS10_L
+    case 130: return builtin_type (gdbarch)->builtin_uint8;	// CRYPTO_KEY_CS10_H
+    case 131: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 132: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 133: return builtin_type (gdbarch)->builtin_uint8;	// CRYPTO_DUMMY_ROUNDS_L
+    case 134: return builtin_type (gdbarch)->builtin_uint8;	// DUMMY_ROUNDS_H
+    case 135: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 136: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 137: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 138: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 139: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 140: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 141: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 142: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 143: return builtin_type (gdbarch)->builtin_uint16;	// MMU_SHCODEBASE
+    case 144: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 145: return builtin_type (gdbarch)->builtin_uint8;	// MMU_SHCODESZ
+    case 146: return builtin_type (gdbarch)->builtin_uint8;	// TRIM_EEHV
+    case 147: return builtin_type (gdbarch)->builtin_uint8;	// MMU_UM_EVAL
+    case 148: return builtin_type (gdbarch)->builtin_uint8;	// MMU_SHCONSTSZ
+    case 149: return builtin_type (gdbarch)->builtin_uint16;	// MMU_EEPADDR
+    case 150: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 151: return builtin_type (gdbarch)->builtin_uint16;	// MMU_EESCRATCHPAD_L
+    case 152: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 153: return builtin_type (gdbarch)->builtin_uint16;	// MMU_EESCRATCHPAD_H
+    case 154: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 155: return builtin_type (gdbarch)->builtin_uint16;	// MMU_WD_CTRL
+    case 156: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 157: return builtin_type (gdbarch)->builtin_uint16;	// MMU_WD_CNTR
+    case 158: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 159: return builtin_type (gdbarch)->builtin_uint8;	// CRC_CNTRL
+    case 160: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 161: return builtin_type (gdbarch)->builtin_uint8;	// CRC_DATAL
+    case 162: return builtin_type (gdbarch)->builtin_uint8;	// CRC_DATAH
+    case 163: return builtin_type (gdbarch)->builtin_uint8;	// CRC_BYTE0
+    case 164: return builtin_type (gdbarch)->builtin_uint8;	// CRC_BYTE1
+    case 165: return builtin_type (gdbarch)->builtin_uint8;	// CRC_BYTE2
+    case 166: return builtin_type (gdbarch)->builtin_uint8;	// CRC_BYTE3
+    case 167: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 168: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 169: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 170: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 171: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 172: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 173: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 174: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 175: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 176: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 177: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 178: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 179: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 180: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 181: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 182: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 183: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 184: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 185: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 186: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 187: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 188: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 189: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 190: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 191: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 192: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 193: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 194: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 195: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 196: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 197: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 198: return builtin_type (gdbarch)->builtin_uint8;	// UIRQ
+    case 199: return builtin_type (gdbarch)->builtin_uint8;	// UBUF
+    case 200: return builtin_type (gdbarch)->builtin_uint8;	// USREG
+    case 201: return builtin_type (gdbarch)->builtin_uint8;	// UCON
+    case 202: return builtin_type (gdbarch)->builtin_uint8;	// UMOD
+    case 203: return builtin_type (gdbarch)->builtin_uint16;	// UBR
+    case 204: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 205: return builtin_type (gdbarch)->builtin_uint16;	// UWT
+    case 206: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 207: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 208: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 209: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 210: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 211: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 212: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 213: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 214: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 215: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 216: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 217: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 218: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 219: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 220: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 221: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 222: return builtin_type (gdbarch)->builtin_uint8;	// RNGCTRL1
+    case 223: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 224: return builtin_type (gdbarch)->builtin_uint8;	// TRNG
+    case 225: return builtin_type (gdbarch)->builtin_uint8;	// SW_PRNG
+    case 226: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 227: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 228: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 229: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 230: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 231: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 232: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 233: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 234: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 235: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 236: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 237: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 238: return builtin_type (gdbarch)->builtin_uint8;	// MMU_TM_CTRL
+    case 239: return builtin_type (gdbarch)->builtin_uint8;	// MMU_FWAPPRAM
+    case 240: return builtin_type (gdbarch)->builtin_uint8;	// MMU_FWFRAM
+    case 241: return builtin_type (gdbarch)->builtin_uint8;	// MMU_FWKRAM
+    case 242: return builtin_type (gdbarch)->builtin_uint8;	// MMU_SMCODESZ
+    case 243: return builtin_type (gdbarch)->builtin_uint8;	// MMU_SMCONSTSZ
+    case 244: return builtin_type (gdbarch)->builtin_uint8;	// MMU_UMCODESZ
+    case 245: return builtin_type (gdbarch)->builtin_uint8;	// MMU_UMCONSTSZ
+    case 246: return builtin_type (gdbarch)->builtin_uint16;	// MMU_UMCODEBASE
+    case 247: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 248: return builtin_type (gdbarch)->builtin_uint8;	// MMU_EESZ
+    case 249: return builtin_type (gdbarch)->builtin_uint8;	// MMU_SMPATCHES
+    case 250: return builtin_type (gdbarch)->builtin_uint8;	// MMU_UMPATCHES
+    case 251: return builtin_type (gdbarch)->builtin_uint8;	// MMU_EE_DATABASE
+    case 252: return builtin_type (gdbarch)->builtin_uint8;	// MMU_EEPROM_DATASIZE
+    case 253: return builtin_type (gdbarch)->builtin_uint8;	// MMU_SFRACCESS_CTRL
+    case 254: return builtin_type (gdbarch)->builtin_uint16;	// MMU_RAM_APW
+    case 255: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 256: return builtin_type (gdbarch)->builtin_uint16;	// MMU_EEPROM_APW
+    case 257: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 258: return builtin_type (gdbarch)->builtin_uint16;	// MMU_RAM_DPW
+    case 259: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 260: return builtin_type (gdbarch)->builtin_uint16;	// MMU_EEPROM_DPW
+    case 261: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 262: return builtin_type (gdbarch)->builtin_uint8;	// MMU_ACCESS_CTRL
+    case 263: return builtin_type (gdbarch)->builtin_uint8;	// MMU_CIPHER_CTRL
+    case 264: return builtin_type (gdbarch)->builtin_uint8;	// ECNTRL1
+    case 265: return builtin_type (gdbarch)->builtin_uint8;	// MMU_DM9BASE
+    case 266: return builtin_type (gdbarch)->builtin_uint16;	// ECNTRL2
+    case 267: return builtin_type (gdbarch)->builtin_int0;	// NULL
+    case 268: return builtin_type (gdbarch)->builtin_uint16;	// ECNTRL4
+    case 269: return builtin_type (gdbarch)->builtin_int0;	// NULL
+      /* Pseudo registers */
+    case 270: return builtin_type (gdbarch)->builtin_uint8;	// R0L
+    case 271: return builtin_type (gdbarch)->builtin_uint8;	// R1L
+    case 272: return builtin_type (gdbarch)->builtin_uint8;	// R2L
+    case 273: return builtin_type (gdbarch)->builtin_uint8;	// R3L
+    case 274: return builtin_type (gdbarch)->builtin_uint8;	// R0H
+    case 275: return builtin_type (gdbarch)->builtin_uint8;	// R1H
+    case 276: return builtin_type (gdbarch)->builtin_uint8;	// R2H
+    case 277: return builtin_type (gdbarch)->builtin_uint8;	// R3H
+    case 278: return builtin_type (gdbarch)->builtin_uint32;	// R4l
+    case 279: return builtin_type (gdbarch)->builtin_uint32;	// R5l
+    case 280: return builtin_type (gdbarch)->builtin_uint32;	// R6l
+    case 281: return builtin_type (gdbarch)->builtin_uint8;	// SYS
+    case 282: return builtin_type (gdbarch)->builtin_uint8;	// INT
+    case 283: return builtin_type (gdbarch)->builtin_uint8;	// ZERO
+    case 284: return builtin_type (gdbarch)->builtin_uint8;	// NEG
+    case 285: return builtin_type (gdbarch)->builtin_uint8;	// OVERFLOW
+    case 286: return builtin_type (gdbarch)->builtin_uint8;	// CARRY
+    default:
+      // Moan
+      fprintf_unfiltered (gdb_stdlog,
+			  "mrk3_register_type: unknown register number %d.\n",
+			  regnum);
+      return builtin_type (gdbarch)->builtin_int0;
+    };
 }
 
+
+static void
+mrk3_pseudo_register_read (struct gdbarch *gdbarch,
+			   struct regcache *regcache,
+			   int cooked_regnum,
+			   gdb_byte *buf)
+{
+  gdb_byte raw_buf[8];
+  int  raw_regnum;
+
+  // R0L is based on R0
+  switch (cooked_regnum)
+    {
+    case 270:			// R0L
+    case 271:			// R1L
+    case 272:			// R2L
+    case 273:			// R3L
+      raw_regnum = cooked_regnum - 270;
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (buf, raw_buf + 1, 1);
+      else
+	memcpy (buf, raw_buf, 1);
+      return;
+
+    case 274:			// R0H
+    case 275:			// R1H
+    case 276:			// R2H
+    case 277:			// R3H
+      raw_regnum = cooked_regnum - 274;
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (buf, raw_buf, 1);
+      else
+	memcpy (buf, raw_buf + 1, 1);
+      return;
+
+    case 278:			// R4l
+    case 279:			// R5l
+    case 280:			// R6l
+      // LO reg
+      raw_regnum = cooked_regnum - 278 + 4;
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (buf, raw_buf + 2, 2);
+      else
+	memcpy (buf, raw_buf, 2);
+      // HI reg
+      raw_regnum = cooked_regnum - 278 + 12;
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (buf, raw_buf, 2);
+      else
+	memcpy (buf, raw_buf + 2, 2);
+      return;
+      
+    case 281:			// SYS
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	buf[0] = (raw_buf[0] & 0x80) >> 7;
+      else
+	buf[0] = (raw_buf[1] & 0x80) >> 7;
+      return;
+      
+    case 282:			// INT
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	buf[0] = (raw_buf[0] & 0x78) >> 3;
+      else
+	buf[0] = (raw_buf[1] & 0x78) >> 3;
+      return;
+      
+    case 283:			// ZERO
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	buf[0] = (raw_buf[1] & 0x08) >> 3;
+      else
+	buf[0] = (raw_buf[0] & 0x08) >> 3;
+      return;
+      
+    case 284:			// NEG
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	buf[0] = (raw_buf[1] & 0x08) >> 2;
+      else
+	buf[0] = (raw_buf[0] & 0x08) >> 2;
+      return;
+      
+    case 285:			// OVERFLOW
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	buf[0] = (raw_buf[1] & 0x08) >> 1;
+      else
+	buf[0] = (raw_buf[0] & 0x08) >> 1;
+      return;
+      
+    case 286:			// CARRY
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	buf[0] = (raw_buf[1] & 0x08) >> 0;
+      else
+	buf[0] = (raw_buf[0] & 0x08) >> 0;
+      return;
+      
+    default:
+          // Moan
+      fprintf_unfiltered (gdb_stdlog,
+			  "mrk3_pseudo_register_read: Not a pseudo reg %d.\n",
+			  cooked_regnum);
+      return;
+    }
+}
+
+
+static void
+mrk3_pseudo_register_write (struct gdbarch *gdbarch,
+			    struct regcache *regcache,
+			    int cooked_regnum,
+			    const gdb_byte *buf)
+{
+  gdb_byte raw_buf[8];
+  int  raw_regnum;
+
+  // R0L is based on R0
+  switch (cooked_regnum)
+    {
+    case 270:			// R0L
+    case 271:			// R1L
+    case 272:			// R2L
+    case 273:			// R3L
+      raw_regnum = cooked_regnum - 270;
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (raw_buf + 1, buf, 1);
+      else
+	memcpy (raw_buf, buf, 1);
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+
+    case 274:			// R0H
+    case 275:			// R1H
+    case 276:			// R2H
+    case 277:			// R3H
+      raw_regnum = cooked_regnum - 274;
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (raw_buf, buf, 1);
+      else
+	memcpy (raw_buf + 1, buf, 1);
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+
+    case 278:			// R4l
+    case 279:			// R5l
+    case 280:			// R6l
+      // LO reg
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (raw_buf + 2, buf, 2);
+      else
+	memcpy (raw_buf, buf, 2);
+      raw_regnum = cooked_regnum - 278 + 4;
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      // HI reg
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	memcpy (raw_buf, buf, 2);
+      else
+	memcpy (raw_buf + 2, buf, 2);
+      raw_regnum = cooked_regnum - 278 + 12;
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+      
+    case 281:			// SYS
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	{
+	  raw_buf[0] &= 0x7f;
+	  raw_buf[0] |= (buf[0] & 0x01) << 7;
+	}
+      else
+	{
+	  raw_buf[1] &= 0x7f;
+	  raw_buf[1] |= (buf[0] & 0x01) << 7;
+	}
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+      
+    case 282:			// INT
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	{
+	  raw_buf[0] &= 0x87;
+	  raw_buf[0] |= (buf[0] & 0x0f) << 3;
+	}
+      else
+	{
+	  raw_buf[1] &= 0x87;
+	  raw_buf[1] |= (buf[0] & 0x0f) << 3;
+	}
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+      
+    case 283:			// ZERO
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	{
+	  raw_buf[1] &= 0xf7;
+	  raw_buf[1] |= (buf[0] & 0x08) << 3;
+	}
+      else
+	{
+	  raw_buf[0] &= 0xf7;
+	  raw_buf[0] |= (buf[0] & 0x08) << 3;
+	}
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+      
+    case 284:			// NEG
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	{
+	  raw_buf[1] &= 0xfb;
+	  raw_buf[1] |= (buf[0] & 0x08) << 2;
+	}
+      else
+	{
+	  raw_buf[0] &= 0xfb;
+	  raw_buf[0] |= (buf[0] & 0x08) << 2;
+	}
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+      
+    case 285:			// OVERFLOW
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	{
+	  raw_buf[1] &= 0xfd;
+	  raw_buf[1] |= (buf[0] & 0x08) << 1;
+	}
+      else
+	{
+	  raw_buf[0] &= 0xfd;
+	  raw_buf[0] |= (buf[0] & 0x08) << 1;
+	}
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+      
+    case 286:			// CARRY
+      raw_regnum = 9;		// PSW
+      regcache_raw_read (regcache, raw_regnum, raw_buf);
+      if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
+	{
+	  raw_buf[1] &= 0xfe;
+	  raw_buf[1] |= (buf[0] & 0x08) << 0;
+	}
+      else
+	{
+	  raw_buf[0] &= 0xfe;
+	  raw_buf[0] |= (buf[0] & 0x08) << 0;
+	}
+      regcache_raw_write (regcache, raw_regnum, raw_buf);
+      return;
+      
+    default:
+          // Moan
+      fprintf_unfiltered (gdb_stdlog,
+			  "mrk3_pseudo_register_write: Not a pseudo reg %d.\n",
+			  cooked_regnum);  
+      return;
+    }
+}
 
 
 static int
@@ -665,7 +1537,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 	set_gdbarch_read_pc (gdbarch, mrk3_read_pc);
 	set_gdbarch_write_pc (gdbarch, mrk3_write_pc);
 */
-	set_gdbarch_num_regs (gdbarch, MRK3_MAX_REGCOUNT);
+	set_gdbarch_num_regs (gdbarch, NUM_REAL_REGS);
+	set_gdbarch_num_pseudo_regs (gdbarch, NUM_PSEUDO_REGS);
 
 	set_gdbarch_sp_regnum (gdbarch, mrk3_sim_reg_sp);
 	set_gdbarch_pc_regnum (gdbarch, mrk3_sim_reg_pc);
@@ -673,7 +1546,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 	set_gdbarch_register_name (gdbarch, mrk3_register_name);
 	set_gdbarch_register_type (gdbarch, mrk3_register_type);
 
-	set_gdbarch_num_pseudo_regs (gdbarch, 0);
+	set_gdbarch_pseudo_register_read (gdbarch, mrk3_pseudo_register_read);
+	set_gdbarch_pseudo_register_write (gdbarch, mrk3_pseudo_register_write);
 
 /* TODO: reading the stack and address to pointer conversion is not supported atm. */
 //  set_gdbarch_return_value (gdbarch, mrk3_return_value);

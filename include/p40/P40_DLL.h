@@ -1,6 +1,10 @@
 #ifndef P40_GDB_DLL_H
 #define P40_GDB_DLL_H
 
+#ifndef __WIN32__
+#define __cdecl
+#endif
+
 /*
 #ifdef __cplusplus
 	#include <cstdio>
