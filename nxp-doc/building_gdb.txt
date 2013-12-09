@@ -1,0 +1,92 @@
+
+Checking out
+----------------------------------
+
+The GDB sources use Unix line-end style (LF). However, DesignSync per
+default attempts to change the line endings to Windows line
+endings (CRLF). As the GDB environment relies on the files
+having LF as line ending, DesignSync must be forced to not modify
+them. The necessary setting can be found under
+
+    Tools->Options->General->Enable CR/LF Processing
+
+
+Building the GDB (the quick way)
+----------------------------------
+
+After checkout, the directory "msys" contains the build environment.
+After launching the "msys.bat" file an msys shell is opened. in the root
+directory a file named build-gdb.sh exists which automates the setup and
+build process. So by issuing the command
+
+    /build-gdb.sh
+
+all necessary steps for building the GDB should be performed.
+
+
+Building the GDB (the hard way)
+----------------------------------
+
+If problems occur using the build script, or if you want to know exactly
+what is going on, the necessary steps for building GDB are
+described below.
+
+1. Extract missing library files.
+  Due to restrictions on the DesignSync server, the build environment
+  lacks some object files. (They cannot be checked in due to
+  having .o as file extension.) They are gzipped
+  in /mingw/lib/objfiles.tgz to extract them use the commands
+
+    cd /mingw/lib
+    tar xfvz objfiles.tgz
+
+  This step is required only once before building GDB the first time.
+
+2. Build the P40_MMU.dll.
+  A separate project contains the MMU simulation dll. It is found in
+  Michael Gugganigs private domain and must be built with Visual Studio.
+  The location is
+
+    sync://grk1l020:9540/Projects/t508/Windows/ \
+    PrivateDomains/mig/develop/20_SIM/SIM.sln
+
+  Information from this dll is needed for the build process of GDB.
+
+3. Copy required p40 header files.
+  The required p40 header files are expected in the GDB source
+  tree under /src/gdb-7.1/include/p40. The following files are
+  required:
+
+ - P40_DLL.def
+      Contains a list of functions exported by the dll.
+ - P40_DLL.h
+      Describes the interface to the MMU.
+
+    In addition, the GNU linker needs to know which functions are exported
+    by the dll. Therefore, using the *.def file, an *.a file can be
+    created which is then included when linking GDB. This is done using a
+    dlltool executable which is part of MinGW/MSYS. The used command
+
+    In addition, the GNU linker needs to know which functions are exported
+    by the dll. Therefore, using the *.dll file and the *.def file,
+    an *.a file can be created which is then included when linking GDB.
+    This is done using a dlltool executable which is part of MinGW/MSYS.
+    The used command is
+
+    cd /src/gdb-7.1/include/p40/
+		dlltool.exe --input-def P40_DLL.def --output-lib P40_DLL.a
+
+4. Configure and build GDB.
+  GDB (like most linux tools) comes with an own configure script. It can be
+  started with the commands:
+
+    export LIBS="/src/gdb-7.1/include/p40/P40_DLL.a"
+    cd /src/gdb-7.1/
+    ./configure --target=mrk3 --enable-sim
+
+  Use the msys make for building GDB:
+
+    make
+
+  If everything was ok, the GDB executable is located
+  in /src/gdb-7.1/gdb/gdb.exe

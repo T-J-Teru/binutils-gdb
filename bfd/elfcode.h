@@ -516,7 +516,9 @@ elf_object_p (bfd *abfd)
      file).  */
 
   if (! elf_file_p (&x_ehdr)
-      || x_ehdr.e_ident[EI_VERSION] != EV_CURRENT
+// Revoved the ELF version check to be able to handle the
+// incompatible version number of the Target produced ELF.
+//      || x_ehdr.e_ident[EI_VERSION] != EV_CURRENT 
       || x_ehdr.e_ident[EI_CLASS] != ELFCLASS)
     goto got_wrong_format_error;
 

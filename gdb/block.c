@@ -26,6 +26,8 @@
 #include "addrmap.h"
 #include "gdbtypes.h"
 #include "exceptions.h"
+#include "include/p40/gdb_types.h"
+#include "include/p40/gdb_mem_map.h"
 
 /* This is used by struct block to store namespace-related info for
    C++ files, namely using declarations and the current namespace in
@@ -160,7 +162,13 @@ blockvector_for_pc_sect (CORE_ADDR pc, struct obj_section *section,
 			 struct block **pblock, struct symtab *symtab)
 {
   struct blockvector *bl;
-  struct block *b;
+
+
+	/* The pc value might contain mem_space information on mrk3.
+	   This information must be stripped, so that the pc matches the
+	   pc values in the symbol tables.  */
+  pc = mrk3_to_base_addr(pc);
+
 
   if (symtab == 0)		/* if no symtab specified by caller */
     {

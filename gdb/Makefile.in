@@ -554,6 +554,7 @@ ALL_TARGET_OBS = \
 	armnbsd-tdep.o armobsd-tdep.o \
 	arm-tdep.o arm-wince-tdep.o \
 	avr-tdep.o \
+	mrk3-tdep.o \
 	bfin-linux-tdep.o bfin-tdep.o \
 	cris-linux-tdep.o cris-tdep.o \
 	dicos-tdep.o \
@@ -1495,6 +1496,7 @@ ALLDEPFILES = \
 	arm-linux-nat.c arm-linux-tdep.c arm-symbian-tdep.c arm-tdep.c \
 	armnbsd-nat.c armbsd-tdep.c armnbsd-tdep.c armobsd-tdep.c \
 	avr-tdep.c \
+	mrk3-tdep.c \
 	bfin-linux-tdep.c bfin-tdep.c \
 	bsd-uthread.c bsd-kvm.c \
 	core-regset.c \

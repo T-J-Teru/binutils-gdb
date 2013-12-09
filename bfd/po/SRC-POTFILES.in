@@ -66,6 +66,7 @@ cpu-alpha.c
 cpu-arc.c
 cpu-arm.c
 cpu-avr.c
+cpu-mrk3.c
 cpu-bfin.c
 cpu-cr16.c
 cpu-cr16c.c
@@ -165,6 +166,7 @@ elf32-am33lin.c
 elf32-arc.c
 elf32-arm.c
 elf32-avr.c
+elf32-mrk3.c
 elf32-bfin.c
 elf32-cr16.c
 elf32-cr16c.c

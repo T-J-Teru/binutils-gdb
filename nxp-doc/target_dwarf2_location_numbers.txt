@@ -1,0 +1,62 @@
+
+Interpretation of Location Numbers for MRK3 Cpu:
+------------------------------------------------
+
+In Dwarf2, you specify just a number to identify a location. So these
+numbers do not restart from 0 for each different register or memory,
+but keep counting up instead.
+
+The algorithm we use for this is as follows:
+1. take the storages from file lib/isg/mrk3_regs.txt and sort
+alphabetically, first registers then memories
+2. number the locations in the resulting list
+
+For example, for mrk3 this becomes:
+Dwarf2 register id's:
+    AUSP = 0
+    PC = 1
+    PSW = 2
+    R0 = 3
+    R0H = 4
+    R0L = 5
+    R1 = 6
+    R1H = 7
+    R1L = 8
+    R2 = 9
+    R2H = 10
+    R2L = 11
+    R3 = 12
+    R3H = 13
+    R3L = 14
+    R4 = 15
+    R45 = 16
+    R46 = 18
+    R5 = 21
+    R6 = 22
+    R7 = 23
+    Rb = 24
+    RbH = 32
+    RbL = 36
+    Rw = 40
+    RwL = 47
+    RwLL = 51
+    c_flag = 53
+    i_lvl = 54
+    nz_flag = 55
+    o_flag = 56
+    res = 57
+    s_flag = 58
+Dwarf2 memory offsets:
+    DM = 59
+    DM12 = 65595
+    DM9 = 69691
+    DMw = 70203
+    DMw12 = 102971
+    DMw9 = 105019
+    PM = 105275
+    PMl = 170811
+    ULP = 203579
+
+
+( By email from Steven Van Rompaey [steven.van.rompaey@retarget.com]
+  on 2010-07-02 )

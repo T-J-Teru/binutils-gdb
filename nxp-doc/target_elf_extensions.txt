@@ -1,0 +1,209 @@
+
+Extensions and modifications to the ELF by Target:
+--------------------------------------------------
+
+In Elf files, the following target-specific sections and/or segments can be
+present:
+
+- Definitions for e_version:
+
+#define EV_NONE		0
+#define EV_CURRENT	1
+#define EV_LOC_STAGES	2 /* Location low/high PC stage  info */
+#define EV_LONG_LONG 	3 /* 64 bit addresses for dwarf2 direct location info
+			   * */
+#define EV_STACKPTR     4
+#define EV_EOL_TYPE     5
+
+- Target memory section: Section with sh_type = 0x70123456
+
+  This section contains information about the memory in which SHT_PROGBITS and
+  ST_NOBITS type sections must be loaded. This is needed when using the Chess
+  compiler and/or assembler because a processor modelled in the Chess/checkers
+  environment may have a program memory and one or more data memories.
+
+  Target memory section entry structure:
+
+    typedef struct {
+        Elf32_Word tm_h_ndx; // SHT_PROGBITS or SHT_NOBITS section header index
+        Elf32_Word tm_name;  // Offset in string-table of memory name
+    } Elf32_TctMem;
+
+  A string table is associated with the Target memory section using the sh_link
+  section header field of the Target memory section. The Elf32_TctMem section
+  entry tm_name field points to the name of the memory in which the section
+  specified as a section header index in the tm_h_ndx field must be loaded.
+
+- Target memory segment: Segment with p_type = 0x70123456
+
+  This segment contains information about the memory in which a PT_LOAD type
+  segment must be loaded. This is needed when using the Chess compiler and/or
+  assembler because a processor modelled in the Chess/checkers environment may
+  have a program memory and one or more data memories.
+
+  Target memory segment entry structure:
+
+    typedef struct {
+        Elf32_Word tm_h_ndx; // PT_LOAD segment header index
+        Elf32_Word tm_name;  // Offset in string-table of memory name
+    } Elf32_TctMem;
+
+
+  A single Target memory names string table will also be part of an Elf
+  executable. The references to the memory names are always made as offsets in
+  this Target memory names string table. The Elf32_TctMem segment entry tm_name
+  field points to the name of the memory in which the segment specified as a
+  segment header index in the tm_h_ndx field must be loaded.
+
+- Target memory names string table: Segment with p_type = 0x70123457
+
+  This segment is part of an Elf executable and contains a standard Elf string
+  table containing the names of the memories in which the different PT_LOAD
+  segments must be loaded. A Target memory segment is used to link segment
+  header indexes to memory names.
+
+- Target stack area segment: Segment with p_type = 0x70123458
+
+  This segment contains information about the stack area specified during
+  linking. It contains a single entry with this structure:
+
+    typedef struct {
+        Elf32_Word tm_a_lo; // Lowest stack value
+        Elf32_Word tm_a_hi; // Highest stack value
+        Elf32_Word tm_name; // Offset in string-table
+    } Elf32_TctStack;
+
+  The tm_a_lo and tm_a_high fields contain the lowest and highest valid stack
+  address. The tm_name contains an offset into the Target memory names string
+  table pointing to the stack memory name.
+
+- Target noinit area segment: Segment with p_type = 0x70123458
+
+  This segment contains information about the noinit area specified during
+  linking. It contains a single entry with this structure:
+
+    typedef struct {
+        Elf32_Word tm_a_lo; // Lowest noinit value
+        Elf32_Word tm_a_hi; // Highest noinit value
+        Elf32_Word tm_name; // Offset in string-table
+    } Elf32_TctNoinit;
+
+  The tm_a_lo and tm_a_high fields contain the lowest and highest valid stack
+  address. The tm_name contains an offset into the Target memory names string
+  table pointing to the stack memory name.
+
+- Target RTS info section: Section with sh_type = 0x70123459
+  Target RTS info segment: Segment with p_type = 0x70123459
+
+  This section/segment contains info about instruction being actual rts
+  instructions. Only present if processor has plain jump instructions with
+  property rts. It contains entries of type:
+
+    typedef struct {
+        Elf32_Addr  tr_se;  // Section or segment
+        Elf32_Word  tr_off; // Offset in section/segment
+        Elf32_Uchar tr_tp;  // call or rts
+        Elf32_Sword tr_stg; // Stage in which call/return address is known
+    } Elf32_TctRts;
+
+  The tr_se field contain index of the section/segment of which the rts info is
+  contained in this instance of the Elf32_TctRts struct. The tr_off field
+  contains the offset of the instruction in the section/segment pointed to by
+  the tr_se field for which this instance of the Elf32_TctRts struct has rts
+  info. The tr_tp field indicates if the instruction pointed to is a call, an
+  rts or a plain instruction. These defined are used to set this field:
+
+    #define RTST_NONE 0xaa
+    #define RTST_CALL 0xab
+    #define RTST_RTS  0xac
+
+  The tr_stg field indicates at which stage the instruction will execute the
+  specified control operation.
+
+- Target Hosted C-lib segments: Segment with p_type = 0x70123460
+
+  This segment contains information about the location of the function and data
+  structures needed to execute gosted C lib functions. The segment contains one
+  entry of this structure:
+
+    typedef struct {
+        Elf32_Word tm_sh_bp; // Breakpoint
+        Elf32_Word tm_sh_vars; // Interface struct
+    } Elf32_TctHostedClib;
+
+  The tm_sh_bp contains the address at which a hosted c-lib breakpoint must be
+  set. The tm_sh_vars member contains the address of the communication
+  structure to pass data between ISS and host.
+
+- Target specific Dwarf2 attributes:
+
+    DW_AT_TCT_pointer_memory          = 0x2500
+    DW_AT_TCT_stack_frame_size        = 0x2501
+    DW_AT_TCT_stack_frame_lifetime    = 0x2502
+    DW_AT_TCT_ref_symbol              = 0x2503
+    DW_AT_TCT_no_stack_frame_lifetime = 0x2504
+
+- Target EOL info section: Section with sh_type = 0x70123461
+  Target EOL info segment: Segment with p_type = 0x70123461
+
+  This section/segment contains info about instruction being end of hardware
+  do-loop instructions or tail call. It contains entries of type:
+
+    typedef struct {
+        Elf32_Addr    te_se;   // Section or segment
+        Elf32_Word    te_off;  // Offset in section/segment
+        unsigned char te_type; // Type (eol of tail call)
+    } Elf32_TctEol;
+
+  The te_se field contain index of the section/segment of which the eol/tail
+  call info is contained in this instance of the Elf32_TctEol struct. The te_off
+  field contains the offset of the instruction in the section/segment pointed to
+  by the te_se field for which this instance of the Elf32_TctEol struct has eol
+  info. The te_type field can be:
+
+      #define EOL_NONE 0
+      #define EOL_EOL 1
+      #define EOL_TAILCALL 2
+      #define EOL_DELAYSLOT 4
+      #define EOL_RETURNADDRESS 8
+      #define EOL_FUNCTIONSTART 16
+
+- Location lists are stored like this in .debug_loc sections:
+
+    begin_address (3 bytes)
+    begin_stage (4 bytes)   # Non standard, extra info used by ISS
+    end_address (3 bytes)
+    end_state (4 bytes)     # Non standard, extra info used by ISS
+    op_code (1 byte)
+
+    Depending on op_code:
+
+    - case DW_OP_bregx:
+
+      register id (unsigned LEB128)
+      offset (signed LEB128)
+
+    - case DW_OP_regx:
+
+      register id (unsigned LEB128)
+
+    - case DW_OP_addr:
+
+      address (unsigned LEB128)
+
+- Location expressions are stored like this in .debug_info sections:
+
+    op_code (1 byte)
+
+    Depending on op_code:
+
+    - case DW_OP_regx:
+
+      register id (unsigned LEB128)
+
+    - case DW_OP_addr:
+
+      address (unsigned LEB128)
+
+( By email from Steven Van Rompaey [steven.van.rompaey@retarget.com]
+  on 2010-06-14 )

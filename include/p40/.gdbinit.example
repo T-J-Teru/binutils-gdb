@@ -1,0 +1,30 @@
+# At first the file to read must be specified.
+# This must be done as first step because GDB uses the endianness
+# defined in the ELF file for reading the data.
+# Specifying the file might also be done on the command line
+# (this is done by most tools (e.g., Eclipse)). In this case, this
+# step can be omitted.
+# The specified file is used for execution in system mode.
+file P40_SystemMode_t508
+
+# After a file has been read, instruct GDB to use the instruction
+# set simulator. As the instruction set simulator runs on the host,
+# it uses little endian byte order. As this is different to the
+# ELF file, GDB must be forced to use little endian.
+target sim
+set endian little
+
+# Load the file given above to the system mode program memory
+# of the simulator.
+load
+
+# Load the specified file to the usr mode program memory of
+# the simulator.
+sim load_usr P40_EvalOS
+
+# Set breakpoints as desired (optional, can also be set by tools).
+break phMFPMain.c:108
+
+# Finally start executing the program on the instruction set
+# simulator (optional).
+# run

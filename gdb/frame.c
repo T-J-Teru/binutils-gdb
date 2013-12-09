@@ -46,6 +46,10 @@
 #include "hashtab.h"
 #include "valprint.h"
 
+/* mrk3 symbol switching support */
+#include "p40/gdb_registers.h"
+#include "p40/debug.h"
+
 static struct frame_info *get_prev_frame_1 (struct frame_info *this_frame);
 static struct frame_info *get_prev_frame_raw (struct frame_info *this_frame);
 static const char *frame_stop_reason_symbol_string (enum unwind_stop_reason reason);
@@ -825,6 +829,14 @@ int
 get_frame_func_if_available (struct frame_info *this_frame, CORE_ADDR *pc)
 {
   struct frame_info *next_frame = this_frame->next;
+  struct objfile* of = object_files;
+  uint32_t mem_space = 0;
+  uint16_t psw = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_psw);
+
+  // Load the symbol info for the mode the cpu is in.
+  if ( (psw >> 15) & 0x01 ) { mem_space = MRK3_MEM_SPACE_SYS; }
+  else { mem_space = Dll_GetUsrMemSpace(); }
+  mrk3_load_symbol_info(mem_space);
 
   if (!next_frame->prev_func.p)
     {

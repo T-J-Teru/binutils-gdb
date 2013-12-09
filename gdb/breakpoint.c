@@ -82,6 +82,9 @@
 #include "mi/mi-common.h"
 #include "python/python.h"
 
+/* mrk3 symbol switching support */
+#include "p40/debug.h"
+
 /* Enums for exception-handling support.  */
 enum exception_event_kind
 {
@@ -3924,6 +3927,21 @@ breakpoint_here_p (struct address_space *aspace, CORE_ADDR pc)
       if (bl->loc_type != bp_loc_software_breakpoint
 	  && bl->loc_type != bp_loc_hardware_breakpoint)
 	continue;
+
+	// By comparing with "mrk3_to_base_addr(bpt->address)", we ensure that we
+	// return a "breakpoint here" if the pc is at a mapped address, but the
+	// breakpoint was inserted using a full address.
+	// E.g., if the pc is at 0x0020 and the user has set a breakoint
+	// at 0x10000020 (which actually means pc = 0x0020 in SYS mode),
+	// the comparison returns true and it is assumed that the breakpoint
+	// has been hit.
+	// A side effect of this simplification is that, if the simulator
+	// actually stops at pc 0x0020 in USR mode, also a hit breakpoint
+	// is reported (although it was actually intended for the SYS mode).
+	// However, as the simulator usually does not stop aside from
+	// breakpoints, this should hardly occur and should be acceptable.
+	// For guaranteeing uniqueness, we would have to query the status
+	// of the mrk3.
 
       /* ALL_BP_LOCATIONS bp_location has BL->OWNER always non-NULL.  */
       if ((breakpoint_enabled (bl->owner)
@@ -8989,6 +9007,23 @@ add_location_to_breakpoint (struct breakpoint *b,
 static int
 bp_loc_is_permanent (struct bp_location *loc)
 {
+	/**
+	 * TODO: This is a mrk3-specific hack. The GDB can not use
+	 * target_read_memory for reading code memory and determine the state of
+	 * the breakpoint.
+	 * Due to the mapping of different program spaces, it actually would
+	 * read data memory. We have two options:
+	 *  - Remove the mapping from the breakpoint location. But how can
+	 *    we ensure in this case that the correct program space is loaded?
+	 *  - Assume we never have permanent breakpoints.
+	 * Solution 2 is fine and way easier to implement, so we are going for
+	 * it for now.
+	 * -- 2011-07-21 Stefan Krug
+	 */
+	return 0;
+
+// disbled original code of this function:
+#if 0
   int len;
   CORE_ADDR addr;
   const gdb_byte *bpoint;
@@ -9022,6 +9057,7 @@ bp_loc_is_permanent (struct bp_location *loc)
   do_cleanups (cleanup);
 
   return retval;
+#endif
 }
 
 /* Build a command list for the dprintf corresponding to the current
@@ -9903,6 +9939,16 @@ resolve_sal_pc (struct symtab_and_line *sal)
 	error (_("No line %d in file \"%s\"."),
 	       sal->line, symtab_to_filename_for_display (sal->symtab));
       sal->pc = pc;
+
+		{
+			// When setting a breakpoint we basically only have a source file name and a
+			// line number. We must get the cpu mode  from this information and set the
+			// breakpoint on the corresponding memory.
+			// This is specific to the mrk3.
+			char* base_name = basename(sal->symtab->objfile->name);
+			uint32_t mem_space = mrk3_get_memspace_from_objfile_name(base_name);
+			sal->pc = mrk3_to_mem_space(pc, mem_space);
+		}
 
       /* If this SAL corresponds to a breakpoint inserted using a line
          number, then skip the function prologue if necessary.  */

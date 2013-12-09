@@ -1,0 +1,35 @@
+
+GDB View of MRK3 Memory:
+-------------------------
+
+GDB is using a 32 bit address type for accessing simulator memory.
+This is required to allow access to the memory which is currently 
+not visible to the cpu (e.g., system mode memory in user mode).The 
+interpretation of the 32bit address format is described below.
+
+The most significant byte of the address is interpreted as follows.
+
+MSBit                                     LSBit
+  --------------------------------------------------
+  | MS3 | MS2 | MS1 | MS0 |  X  |  x  |  X  |  MT  |
+  --------------------------------------------------
+
+- The most significant nibble is used as memory space (MS) selector.
+  The information is required to differentiate memory spaces (e.g, user
+  mode and system mode memory). The following values are defined:
+    - 0: access the mapped memory based on the state of the cpu
+          This is used to enable the debugger of fetching variable
+          contents etc. from the memory with exact the same view on
+          the memory as the cpu has.
+    - 1: system mode memory
+    - 2: user mode memory
+
+- The least significant bit contains a memory type (MT) flag.
+  The flag is used to distinguish between code and data memory.
+  The following values are defined:
+    - 0: data memory.
+    - 1: code memory
+  The location of the flag was chosen to be able to easily distinguish
+  between data and code memory (when displaying	addresses with hex radix).
+
+The remaining three bytes of the GDB address are used as address bytes.

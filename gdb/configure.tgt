@@ -117,6 +117,11 @@ avr-*-*)
 	gdb_sim=../sim/avr/libsim.a
 	;;
 
+mrk3-*-*)
+	# Target: MRK3
+	gdb_target_obs="mrk3-tdep.o"
+	gdb_sim=../sim/mrk3/libsim.a
+
 bfin-*-*linux*)
 	# Target: Blackfin Linux
 	gdb_target_obs="bfin-tdep.o bfin-linux-tdep.o linux-tdep.o"

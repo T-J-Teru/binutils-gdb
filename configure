@@ -3642,6 +3642,9 @@ case "${target}" in
       noconfigdirs="$noconfigdirs target-newlib target-libgloss"
     fi
     ;;
+  mrk3-*-*)
+    noconfigdirs="$noconfigdirs target-libiberty target-libstdc++-v3 ${libgcj} target-libssp"
+    ;;
   c4x-*-* | tic4x-*-*)
     noconfigdirs="$noconfigdirs target-libgloss"
     ;;
