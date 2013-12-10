@@ -1,5 +1,47 @@
 2013-12-10  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	Revert out MRK3 specific changes in generic files to make merging
+	easier and give a clean baseline.
+
+	* block.c: Remove P40 headers.
+	(blockvector_for_pc_sect): Remove MRK3 specific code.
+	* breakpoint.c: Remove P40 headers.
+	(breakpoint_here_p, bp_loc_is_permanent, resolve_sal_pc): Remove
+	MRK3 specific code.
+	* configure.tgt: Correct layout.
+	* doc/gdbint.texinfo: Match to upstream (not NXP issue).
+	* dwarf2expr.c (execute_stack_op): Remove MRK3 specific code.
+	* dwarf2loc.c (find_location_expression): Remove MRK3 specific
+	code.
+	* dwarf2read.c (create_all_comp_units, add_partial_symbol)
+	(read_attribute_value, read_address, dwarf_decode_lines)
+	(var_decode_location, new_symbol, decode_locdesc): Remove MRK3
+	specific code.
+	(read_3byte_address_signed, read_3byte_address)
+	(add_line_info_trace): Delete MRK3 specific functions.
+	* elfread.c (elf_symtab_read): Remove MRK3 specific code.
+	* findvar.c (read_var_value): Likewise.
+	* frame.c: Remove P40 headers.
+	(get_frame_func, get_prev_frame_1, get_prev_frame): Remove MRK3
+	specific code.
+	* frame.h: Match to upstream (not NXP issue).
+	* gdb.1: Match to upstream (not NXP issue).
+	* mi/mi-cmd-stack.c (list_args_or_locals): Remove MRK3 specific
+	code.
+	* minsyms.c: Remove P40 headers.
+	(lookup_minimal_symbol_by_pc_name): Remove MRK3 specific code.
+	* remote-sim.c (gdbsim_load): Remove MRK3 specific code.
+	* symfile.c: Match to upstream (not NXP issue).
+	* symtab.c: Remove P40 headers.
+	(find_pc_sect_psymtab_closer, find_pc_sect_psymtab)
+	(find_pc_sect_psymbol, lookup_block_symbol, find_pc_sect_symtab)
+	(find_pc_sect_line, find_pc_line): Remove MRK3 specific code.
+	* target.h: Match to upstream (not NXP issue).
+	* value.c (unpack_long, unpack_bits_as_long, modify_field)
+	(pack_long): Remove MRK3 specific code.
+
+2013-12-10  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* breakpoint.c: #if 0 to remove mrk3 specific code.
 	* frame.c: Likewise.
 	* mrk3-tdep.c (mrk3_load_symbol_info): Disabled with #if 0.

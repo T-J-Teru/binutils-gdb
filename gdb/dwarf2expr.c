@@ -27,7 +27,6 @@
 #include "dwarf2.h"
 #include "dwarf2expr.h"
 #include "gdb_assert.h"
-#include "p40/debug.h"
 
 /* Local prototypes.  */
 

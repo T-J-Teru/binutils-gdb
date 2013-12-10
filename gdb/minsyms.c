@@ -51,8 +51,6 @@
 #include "cp-support.h"
 #include "language.h"
 #include "cli/cli-utils.h"
-#include "include/p40/gdb_types.h"
-#include "include/p40/gdb_mem_map.h"
 
 /* Accumulate the minimal symbols for each objfile in bunches of BUNCH_SIZE.
    At the end, copy them all into one newly allocated location on an objfile's
@@ -412,11 +410,6 @@ lookup_minimal_symbol_by_pc_name (CORE_ADDR pc, const char *name,
 
   unsigned int hash = msymbol_hash (name) % MINIMAL_SYMBOL_HASH_SIZE;
 
-	/* The pc value might contain mem_space information on mrk3.
-	   This information must be stripped, so that the pc matches the
-	   pc values in the symbol tables.  */
-  pc = mrk3_to_base_addr(pc);
-
   for (objfile = object_files;
        objfile != NULL;
        objfile = objfile->next)
@@ -500,14 +493,6 @@ lookup_minimal_symbol_by_pc_section_1 (CORE_ADDR pc,
   struct objfile *best_objfile = NULL;
   struct bound_minimal_symbol result;
   enum minimal_symbol_type want_type, other_type;
-
-	    /* The pc value might contain mem_space information on mrk3.
-       This information must be stripped, so that the pc matches the
-       pc values in the symbol tables. */
-  pc = mrk3_to_base_addr(pc) << 1;
-
-
-
 
   want_type = want_trampoline ? mst_solib_trampoline : mst_text;
   other_type = want_trampoline ? mst_text : mst_solib_trampoline;

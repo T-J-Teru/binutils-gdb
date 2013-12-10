@@ -76,7 +76,6 @@
 #include "gdb_assert.h"
 #include <sys/types.h>
 
-#include "p40/debug.h"
 
 typedef struct symbol *symbolp;
 DEF_VEC_P (symbolp);
@@ -6760,9 +6759,6 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
 	     used by GDB, but it comes in handy for debugging partial symbol
 	     table building.  */
 
-	  if (pdi->locdesc)
-	    addr = mrk3_map_dwarf2_data_addr(decode_locdesc (pdi->locdesc, cu));
-
 	  if (pdi->d.locdesc || pdi->has_type)
 	    add_psymbol_to_list (actual_name, strlen (actual_name),
 				 built_actual_name != NULL,
@@ -6779,7 +6775,6 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
 	      xfree (built_actual_name);
 	      return;
 	    }
-	  addr = mrk3_map_dwarf2_data_addr(decode_locdesc (pdi->locdesc, cu));
 
 	  /* prim_record_minimal_symbol (actual_name, addr + baseaddr,
 	     mst_file_data, objfile); */
@@ -15856,36 +15851,6 @@ read_8_bytes (bfd *abfd, const gdb_byte *buf)
   return bfd_get_64 (abfd, buf);
 }
 
-// TODO: MRK3 actually uses 3-byte addresses (at least in .debug_loc). Why?
-// For now a quick and dirty implementation should suffice.
-// (BIG_ENDIAN implementation, similar to libbfd.c::bfd_getb_signed_32())
-//   -- 2010-06-04, Stefan Krug
-#define COERCE32(x) (((bfd_signed_vma) (x) ^ 0x80000000) - 0x80000000)
-static bfd_signed_vma
-read_3byte_address_signed (const void *p)
-{
-  const bfd_byte *addr = (const bfd_byte *) p;
-  unsigned long v;
-
-  v = (unsigned long) addr[0] << 16;
-  v |= (unsigned long) addr[1] << 8;
-  v |= (unsigned long) addr[2];
-  return COERCE32 (v);
-}
-
-bfd_vma
-read_3byte_address (const void *p)
-{
-  const bfd_byte *addr = (const bfd_byte *) p;
-  unsigned long v;
-
-  v = (unsigned long) addr[0] << 16;
-  v |= (unsigned long) addr[1] << 8;
-  v |= (unsigned long) addr[2];
-  return v;
-}
-
-
 static CORE_ADDR
 read_address (bfd *abfd, const gdb_byte *buf, struct dwarf2_cu *cu,
 	      unsigned int *bytes_read)
@@ -15900,15 +15865,6 @@ read_address (bfd *abfd, const gdb_byte *buf, struct dwarf2_cu *cu,
 	case 2:
 	  retval = bfd_get_signed_16 (abfd, buf);
 	  break;
-
-  // TODO: MRK3 actually uses 3-byte addresses (at least in .debug_loc). Why?
-  // For now a quick and dirty implementation should suffice.
-  // (BIG_ENDIAN implementation, similar to libbfd.c::bfd_getb_signed_32())
-  //   -- 2010-06-04, Stefan Krug
-  case 3:
-    retval = read_3byte_address_signed (buf);
-    break;
-
 	case 4:
 	  retval = bfd_get_signed_32 (abfd, buf);
 	  break;
@@ -15928,15 +15884,6 @@ read_address (bfd *abfd, const gdb_byte *buf, struct dwarf2_cu *cu,
 	case 2:
 	  retval = bfd_get_16 (abfd, buf);
 	  break;
-
-  // TODO: MRK3 actually uses 3-byte addresses (at least in .debug_loc). Why?
-  // For now a quick and dirty implementation should suffice.
-  // (BIG_ENDIAN implementation, similar to libbfd.c::bfd_getb_signed_32())
-  //   -- 2010-06-04, Stefan Krug
-  case 3:
-    retval = read_3byte_address (buf);
-    break;
-
 	case 4:
 	  retval = bfd_get_32 (abfd, buf);
 	  break;

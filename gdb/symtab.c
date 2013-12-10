@@ -63,8 +63,6 @@
 
 #include "psymtab.h"
 #include "parser-defs.h"
-#include "include/p40/gdb_types.h"
-#include "include/p40/gdb_mem_map.h"
 
 /* Prototypes for local functions */
 
@@ -1025,11 +1023,6 @@ find_pc_sect_symtab_via_partial (CORE_ADDR pc, struct obj_section *section)
 {
   struct objfile *objfile;
   struct minimal_symbol *msymbol;
-
-	/* The pc value might contain mem_space information on mrk3.
-	   This information must be stripped, so that the pc matches the
-	   pc values in the symbol tables.  */
-  pc = mrk3_to_base_addr(pc);
 
   /* If we know that this is not a text address, return failure.  This is
      necessary because we loop based on texthigh and textlow, which do
