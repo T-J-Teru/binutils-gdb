@@ -513,13 +513,19 @@ elf_object_p (bfd *abfd)
      make use of.  The magic number must match, the address size ('class')
      and byte-swapping must match our XVEC entry, and it must have a
      section header table (FIXME: See comments re sections at top of this
-     file).  */
+     file).
 
+     The version check for MRK3 is not going to pass, due to its non-standard
+     ELF format. So we need to know the architecture already in order to only
+     make that check if we are not MRK3. Separate out this version check for
+     clarity. */
   if (! elf_file_p (&x_ehdr)
-// Revoved the ELF version check to be able to handle the
-// incompatible version number of the Target produced ELF.
-//      || x_ehdr.e_ident[EI_VERSION] != EV_CURRENT 
       || x_ehdr.e_ident[EI_CLASS] != ELFCLASS)
+    goto got_wrong_format_error;
+
+  ebd = get_elf_backend_data (abfd);
+  if ((x_ehdr.e_ident[EI_VERSION] != EV_CURRENT)
+      && (ebd->arch != bfd_arch_mrk3))
     goto got_wrong_format_error;
 
   /* Check that file's byte order matches xvec's */
@@ -572,7 +578,6 @@ elf_object_p (bfd *abfd)
   if (i_ehdrp->e_shoff == 0 && i_ehdrp->e_shnum != 0)
     goto got_wrong_format_error;
 
-  ebd = get_elf_backend_data (abfd);
   if (ebd->s->arch_size != ARCH_SIZE)
     goto got_wrong_format_error;
 

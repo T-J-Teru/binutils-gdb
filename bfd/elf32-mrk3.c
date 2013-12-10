@@ -103,26 +103,25 @@ mrk3_info_to_howto_rel (bfd *abfd ATTRIBUTE_UNUSED,
 }
 
 /* Set the right machine number for an MRK3 ELF file.  */
-/* static bfd_boolean
+static bfd_boolean
 mrk3_elf_object_p (bfd *abfd)
 {
-  // Set th machine to 0. (we have no officially assigned machine number.)
+  // Set the machine to 0. (we have no officially assigned machine number.)
   unsigned int mach = 0;
   return bfd_default_set_arch_mach (abfd, bfd_arch_arc, mach);
 }
-*/
 
 
-// #define TARGET_LITTLE_SYM   bfd_elf32_mrk3_vec
-// #define TARGET_LITTLE_NAME  "elf32-mrk3"
-#define TARGET_BIG_SYM      bfd_elf32_mrk3_vec
-#define TARGET_BIG_NAME     "elf32-mrk3"
+#define TARGET_LITTLE_SYM   bfd_elf32_mrk3_vec
+#define TARGET_LITTLE_NAME  "elf32-mrk3"
+// #define TARGET_BIG_SYM      bfd_elf32_mrk3_vec
+// #define TARGET_BIG_NAME     "elf32-mrk3"
 #define ELF_ARCH            bfd_arch_mrk3
 #define ELF_MACHINE_CODE    0
 #define ELF_MAXPAGESIZE     0x1000
 
 #define elf_info_to_howto                   0
 #define elf_info_to_howto_rel               mrk3_info_to_howto_rel
-// #define elf_backend_object_p                mrk3_elf_object_p
+#define elf_backend_object_p                mrk3_elf_object_p
 
 #include "elf32-target.h"
