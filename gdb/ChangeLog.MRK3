@@ -1,3 +1,20 @@
+2013-12-10  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* breakpoint.c: #if 0 to remove mrk3 specific code.
+	* frame.c: Likewise.
+	* mrk3-tdep.c (mrk3_load_symbol_info): Disabled with #if 0.
+	(mrk3_ui_memcpy, mrk3_get_mem_space): Created.
+	(mrk3_get_memspace_from_objfile_name): Disabled with #if 0.
+	(mrk3_breakpoint_from_pc): Rewritten to use mrk3_get_mem_space.
+	(mrk3_memory_insert_breakpoint, mrk3_memory_remove_breakpoint):
+	Disabled with #if 0.
+	(mrk3_analyze_prologue): Disable call to Dll_GetPrologueAnalysis
+	with #if 0.
+	(mrk3_address_class_type_flags_to_name): Disabled with #if 0.
+	(mrk3_gdbarch_init): Disable calls to
+	set_gdbarch_memory_insert_breakpoint and
+	set_gdbarch_memory_remove_breakpoint with #if 0.
+
 2013-12-09  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* ChangeLog.MRK3: Created.

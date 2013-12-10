@@ -32,11 +32,19 @@
 #include "p40/P40_DLL.h"
 
 int print_insn_mrk3 (bfd_vma addr, disassemble_info *info) {
-	uint32_t insn = 0;
-	uint32_t insn_len = 0;
-	char text[512] = {0};
+  uint32_t insn = 0;
+  uint32_t insn_len = 0;
+  char text[512] = {0};
 
-	insn_len  = Dll_PrintInsn(addr, text, sizeof(text) - 1);
-	(*info->fprintf_func) (info->stream, "%s", text);
-	return insn_len ;
+  /* Temporary kludge to deal with lack of client disassembler. */
+#if 0
+  insn_len  = Dll_PrintInsn(addr, text, sizeof(text) - 1);
+  (*info->fprintf_func) (info->stream, "%s", text);
+#else
+  insn_len  = 1;
+  (*info->fprintf_func) (info->stream, "dissassemble of address %08x\n",
+			       addr);
+#endif
+
+  return insn_len ;
 }

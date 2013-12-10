@@ -1,22 +1,25 @@
 /* Target-dependent code for the MRK3 CPU, for GDB. 
 
-	 Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-	 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+   2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2013 NXP Semiconductors Austria GmbH
 
-	 This file is part of GDB.
-
-	 This program is free software; you can redistribute it and/or modify
-	 it under the terms of the GNU General Public License as published by
-	 the Free Software Foundation; either version 3 of the License, or
-	 (at your option) any later version.
-
-	 This program is distributed in the hope that it will be useful,
-	 but WITHOUT ANY WARRANTY; without even the implied warranty of
-	 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	 GNU General Public License for more details.
-
-	 You should have received a copy of the GNU General Public License
-	 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+   Contributor Jeremy Bennett <jeremy.bennett@embecosm.com>
+   
+   This file is part of GDB.
+   
+   This program is free software; you can redistribute it and/or modify it
+   under the terms of the GNU General Public License as published by the Free
+   Software Foundation; either version 3 of the License, or (at your option)
+   any later version.
+   
+   This program is distributed in the hope that it will be useful, but WITHOUT
+   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+   more details.
+   
+   You should have received a copy of the GNU General Public License along
+   with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
 #include "frame.h"
@@ -32,6 +35,7 @@
 #include "regcache.h"
 #include "gdb_string.h"
 #include "dis-asm.h"
+#include "ui-file.h"
 
 // Required for symbol switch handling.
 #include "gdb/defs.h"
@@ -1169,54 +1173,103 @@ void mrk3_free_objfile_info(struct mrk3_objfile_info_t* of_info) {
 }
 
 
+#if 0
 void mrk3_load_symbol_info(const uint32_t mem_space) {
-	uint8_t mem_space_index = mrk3_mem_space_index(mem_space);
-	uint8_t n = 0;
-	struct objfile* of = object_files;
-	while (of != NULL) {
-		char* base_name = basename(of->name);
-		if ((mrk3_objfile_info[mem_space_index].name != NULL) &&
-					(strcmp(base_name, mrk3_objfile_info[mem_space_index].name) == 0)) {
-			objfile_to_front(of);
-			break;
-		}
-		of = of->next;
-	}
+  uint8_t mem_space_index = mrk3_mem_space_index(mem_space);
+  uint8_t n = 0;
+  struct objfile* of = object_files;
+  while (of != NULL) {
+    char* base_name = basename(of->name);
+    if ((mrk3_objfile_info[mem_space_index].name != NULL) &&
+	(strcmp(base_name, mrk3_objfile_info[mem_space_index].name) == 0)) {
+      objfile_to_front(of);
+      break;
+    }
+    of = of->next;
+  }
+}
+#endif
+
+/* Wrapper around memcpy to make it legal argument to ui_file_put */
+static void
+mrk3_ui_memcpy (void *dest, const char *buffer, long len)
+{
+  memcpy (dest, buffer, (size_t) len);
+  ((char *) dest)[len] = '\0';
 }
 
+
+/* Get the current memory space from the target.
+
+   TODO: Is RCmd the best way to do this? */
+static uint8_t
+mrk3_get_mem_space ()
+{
+  /* TODO: We can't tell if we have a valid target function here, because it
+     is set to a value static within target.c (tcomplain). So we'll need to
+     look at whether we have we have a valid value. A shame because we'll get
+     an error message. */
+  struct ui_file *mf = mem_fileopen ();
+  char buf[64];
+  target_rcmd ("getMemSpace", mf);
+  ui_file_put (mf, mrk3_ui_memcpy, buf);
+  /* Result is in mf->stream->buffer, of length mf->stream->length_buffer */
+  if (strlen (buf) == 0)
+    {
+      /* TODO: We are presumably not connected to a target. Should we warn? Or
+	 should we return a default? */
+      warning (_("Using default memory space since not connected to target."));
+      return  0;		/* Arbitrary default */
+    }
+  else
+    {
+      return (uint8_t) atoi (buf);
+    }
+}
+
+
+#if 0
 // When looking up symbols, switch priorities such that the
 // symbol file for the given memory space is preferred.
 uint32_t mrk3_get_memspace_from_objfile_name(const char* base_name) {
-	uint8_t n = 0;
-	if (base_name != NULL) {
-		for (n = 0; n < MRK3_MAX_OBJFILES; n++) {
-			if (mrk3_objfile_info[n].name != NULL) {
-				if (strcmp(base_name, mrk3_objfile_info[n].name) == 0) {
-					return mrk3_mem_space_from_mem_space_index(n);
-				}
-			}
-		}
-		printf("mrk3_get_memspace_from_objfile_name: Warning: No memspace found for objectfile \"%s\".\n", base_name);
-		return 0;
+  uint8_t n = 0;
+  if (base_name != NULL) {
+    for (n = 0; n < MRK3_MAX_OBJFILES; n++) {
+      if (mrk3_objfile_info[n].name != NULL) {
+	if (strcmp(base_name, mrk3_objfile_info[n].name) == 0) {
+	  return mrk3_mem_space_from_mem_space_index(n);
 	}
-	printf("mrk3_get_memspace_from_objfile_name: Error: No objectfile name specified.\n");
-	return 0;
+      }
+    }
+    printf("mrk3_get_memspace_from_objfile_name: Warning: No memspace found for objectfile \"%s\".\n", base_name);
+    return 0;
+  }
+  printf("mrk3_get_memspace_from_objfile_name: Error: No objectfile name specified.\n");
+  return 0;
 }
+#endif
 
 
 static const gdb_byte*
-mrk3_breakpoint_from_pc (struct gdbarch *gdbarch, CORE_ADDR * pcptr, int *lenptr)
+mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
+			 CORE_ADDR *pcptr,
+			 int *lenptr)
 {
-	CORE_ADDR addr = mrk3_pc_to_address(*pcptr);
+  CORE_ADDR addr = mrk3_pc_to_address (*pcptr);
 
-	// always use full addresses for breakpoints.
-	if (mrk3_is_map_addr(addr)) { addr = mrk3_to_mem_space(addr, Dll_GetMemSpace()); }
+  // always use full addresses for breakpoints.
+  if (mrk3_is_map_addr(addr))
+    {
+      addr = mrk3_to_mem_space(addr, mrk3_get_mem_space());
+    }
 
-	*pcptr = addr;
-	*lenptr = sizeof(mrk3_sim_break_insn);
-	return (gdb_byte*) &mrk3_sim_break_insn;
+  *pcptr = addr;
+  *lenptr = sizeof(mrk3_sim_break_insn);
+  return (gdb_byte*) &mrk3_sim_break_insn;
 }
 
+/* This is obsolete */
+#if 0
 static int
 mrk3_memory_insert_breakpoint (struct gdbarch *gdbarch,
 						 struct bp_target_info *bp_tgt)
@@ -1233,41 +1286,47 @@ mrk3_memory_remove_breakpoint (struct gdbarch *gdbarch,
 	Dll_RemoveBreakpoint(bp_tgt->placed_address);
 	return 0;
 }
+#endif
 
 static CORE_ADDR
 mrk3_pointer_to_address (struct gdbarch *gdbarch,
-						struct type *type, const gdb_byte *buf)
+			 struct type *type, const gdb_byte *buf)
 {
-	enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-	enum type_code target = TYPE_CODE (TYPE_TARGET_TYPE (type));
-	CORE_ADDR addr = extract_unsigned_integer (buf, TYPE_LENGTH (type), BFD_ENDIAN_LITTLE);
-switch(TYPE_INSTANCE_FLAGS(type))
-	{
-	case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
-		addr&=0xffff;
-		break;
-	default:
-		break;
-	}
-	return addr;
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  CORE_ADDR addr = extract_unsigned_integer (buf, TYPE_LENGTH (type),
+					     byte_order);
+  switch(TYPE_INSTANCE_FLAGS(type))
+    {
+    case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
+      addr &= 0xffff;
+      break;
+
+    default:
+      break;
+    }
+
+  return addr;
 }
 
 
 static void
 mrk3_address_to_pointer (struct gdbarch *gdbarch,
-						struct type *type, gdb_byte *buf, CORE_ADDR addr)
+			 struct type *type, gdb_byte *buf, CORE_ADDR addr)
 {
-	enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-switch(TYPE_INSTANCE_FLAGS(type))
-	{
-	case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
-		store_unsigned_integer (buf, TYPE_LENGTH (type), BFD_ENDIAN_LITTLE, addr & 0x0000FFFF);
-		break;
-	default:
-		store_unsigned_integer (buf, TYPE_LENGTH (type), BFD_ENDIAN_LITTLE, addr);
-		break;
-	}
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  switch(TYPE_INSTANCE_FLAGS(type))
+    {
+    case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
+      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order,
+			      addr & 0x0000FFFF);
+      break;
+
+    default:
+      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, addr);
+      break;
+    }
 }
+
 
 static void
 mrk3_register_to_value (struct frame_info *frame, int regnum, struct type *type, gdb_byte *buf)
@@ -1288,76 +1347,82 @@ mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 
 extern bool enable_system_mode_stack_traces;
 
+
 static void
 mrk3_analyze_prologue (struct gdbarch *arch,
-						CORE_ADDR start, CORE_ADDR limit,
-						struct frame_info *this_frame,
-						struct trad_frame_cache *frame_cache)
+		       CORE_ADDR start, CORE_ADDR limit,
+		       struct frame_info *this_frame,
+		       struct trad_frame_cache *frame_cache)
 {
-	uint32_t pc;
-	uint16_t sp;
-	uint16_t ssp;
-	uint16_t usp;
-	uint16_t psw;
-	uint16_t frame_base;
-	bool write_to_frame_cache;
+  uint32_t pc;
+  uint16_t sp;
+  uint16_t ssp;
+  uint16_t usp;
+  uint16_t psw;
+  uint16_t frame_base;
+  bool write_to_frame_cache;
 
-	// Initialize.
-	if (this_frame != NULL) {
-		pc = 0;
-		sp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_sp);
-		ssp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_ssp);
-		usp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_usp);
-		psw = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_psw);
-	}
-	else {
-		pc = 0;
-		psw = 0x8000;
-		sp = 0;
-		ssp = 0;
-		usp = 0;
-		// The mrk3 starts in system mode, so assume system mode here.
-		frame_base = sp;
-	}
+  /* Initialize. */
+  if (this_frame != NULL) {
+    pc = 0;
+    sp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_sp);
+    ssp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_ssp);
+    usp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_usp);
+    psw = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_psw);
+  }
+  else {
+    pc = 0;
+    psw = 0x8000;
+    sp = 0;
+    ssp = 0;
+    usp = 0;
+    /* The mrk3 starts in system mode, so assume system mode here. */
+    frame_base = sp;
+  }
 
+  /* For now miss out the target prologue analysis. */
+#if 0
+  Dll_GetPrologueAnalysis(start, limit, &pc, &psw, &ssp, &usp, &frame_base);
+#endif
 
-	Dll_GetPrologueAnalysis(start, limit, &pc, &psw, &ssp, &usp, &frame_base);
-	// After calling Dll_GetPrologueAnalysis, the parameters are actually
-	// the values of the outer frame (caller). We need to store them in
-	// the frame cache.
+  /* After calling Dll_GetPrologueAnalysis, the parameters are actually
+     the values of the outer frame (caller). We need to store them in
+     the frame cache.
 
-	// We need to check whether the caller was executed in SYS or USR
-	// contect. Based on this info, the caller sp is either ssp or usp.
-	write_to_frame_cache = true;
-	if (mrk3_is_sys_addr(pc))
-	{ 
-		sp = ssp; 
-		write_to_frame_cache = enable_system_mode_stack_traces;
-	}
-	else
-	{
-		sp = usp;
-	}
+     We need to check whether the caller was executed in SYS or USR
+     contect. Based on this info, the caller sp is either ssp or usp. */
+  write_to_frame_cache = true;
+  if (mrk3_is_sys_addr(pc))
+    { 
+      sp = ssp; 
+      write_to_frame_cache = enable_system_mode_stack_traces;
+    }
+  else
+    {
+      sp = usp;
+    }
 	
-	// Do write the stack info to the frame cache.
-	if (write_to_frame_cache)
-	{
-		// Save to frame cache.
-		//printf("---DEBUG--- saving to frame cache: pc 0x%x, psw: 0x%x, sp: 0x%x, ssp: 0x%x, usp: 0x%x, frame_base: 0x%x\n", 
-		//		pc, psw, sp, ssp, usp, frame_base);
-		trad_frame_set_this_base(frame_cache, frame_base);
-		trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_pc, pc);
-		trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_psw, psw);
-		trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_sp, sp);
-		trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_ssp, ssp);
-		trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_usp, usp);
-	}
-	else
-	{
-		// return an invalid frame.
-		trad_frame_set_id(frame_cache, null_frame_id);
-	}
+  //* Do write the stack info to the frame cache. */
+  if (write_to_frame_cache)
+    {
+      /* Save to frame cache.
+         printf("---DEBUG--- saving to frame cache: pc 0x%x, psw: 0x%x, "
+                "sp: 0x%x, ssp: 0x%x, usp: 0x%x, frame_base: 0x%x\n", 
+       		pc, psw, sp, ssp, usp, frame_base); */
+      trad_frame_set_this_base(frame_cache, frame_base);
+      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_pc, pc);
+      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_psw, psw);
+      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_sp, sp);
+      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_ssp, ssp);
+      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_usp, usp);
+    }
+  else
+    {
+      /* return an invalid frame. */
+      trad_frame_set_id(frame_cache, null_frame_id);
+    }
 }
+
 
 static struct trad_frame_cache *
 mrk3_analyze_frame_prologue (struct frame_info *this_frame,
@@ -1474,6 +1539,8 @@ int mrk3_address_class_type_flags (int byte_size,
     return 0;
 }
 
+/* This appears not to be used for now. */
+#if 0
 static char *
 mrk3_address_class_type_flags_to_name (int type_flags)
 {
@@ -1482,6 +1549,7 @@ mrk3_address_class_type_flags_to_name (int type_flags)
   else
     return 0;
 }
+#endif
 
 int
 mrk3_address_class_name_to_type_flags (char *name,
@@ -1565,8 +1633,10 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 	set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
 	set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
 
+#if 0
 	set_gdbarch_memory_insert_breakpoint (gdbarch, mrk3_memory_insert_breakpoint);
 	set_gdbarch_memory_remove_breakpoint (gdbarch, mrk3_memory_remove_breakpoint);
+#endif
 //	set_gdbarch_decr_pc_after_break (gdbarch, mrk3_sim_break_insn_pc_decrease);
 	set_gdbarch_breakpoint_from_pc (gdbarch, mrk3_breakpoint_from_pc);
 
