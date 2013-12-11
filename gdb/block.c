@@ -160,6 +160,7 @@ blockvector_for_pc_sect (CORE_ADDR pc, struct obj_section *section,
 			 struct block **pblock, struct symtab *symtab)
 {
   struct blockvector *bl;
+  struct block *b;
 
   if (symtab == 0)		/* if no symtab specified by caller */
     {

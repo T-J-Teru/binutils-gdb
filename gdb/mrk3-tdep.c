@@ -33,7 +33,6 @@
 #include "symfile.h"
 #include "arch-utils.h"
 #include "regcache.h"
-#include "gdb_string.h"
 #include "dis-asm.h"
 #include "ui-file.h"
 

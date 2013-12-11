@@ -3511,23 +3511,16 @@ locexpr_describe_location_piece (struct symbol *symbol, struct ui_file *stream,
      The operand represents the offset at which the variable is within
      the thread local storage.  */
 
-  if (dlbaton->size > 1 
-      && dlbaton->data[dlbaton->size - 1] == DW_OP_GNU_push_tls_address)
-    if (dlbaton->data[0] == DW_OP_addr)
-      {
-	struct objfile *objfile = dwarf2_per_cu_objfile (dlbaton->per_cu);
-	struct gdbarch *gdbarch = get_objfile_arch (objfile);
-	CORE_ADDR offset = dwarf2_read_address (gdbarch,
-						&dlbaton->data[1],
-						&dlbaton->data[dlbaton->size - 1],
-						addr_size);
-	fprintf_filtered (stream, 
-			  "a thread-local variable at offset %s in the "
-			  "thread-local storage for `%s'",
-			  paddress (gdbarch, offset), objfile->name);
-	return 1;
-      }
-  
+  else if (data + 1 + addr_size < end
+	   && (data[0] == DW_OP_addr
+	       || (addr_size == 4 && data[0] == DW_OP_const4u)
+	       || (addr_size == 8 && data[0] == DW_OP_const8u))
+	   && data[1 + addr_size] == DW_OP_GNU_push_tls_address
+	   && piece_end_p (data + 2 + addr_size, end))
+    {
+      ULONGEST offset;
+      offset = extract_unsigned_integer (data + 1, addr_size,
+					 gdbarch_byte_order (gdbarch));
 
       fprintf_filtered (stream, 
 			_("a thread-local variable at offset 0x%s "

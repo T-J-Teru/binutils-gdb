@@ -22,8 +22,8 @@
 	 MA 02110-1301, USA.  */
 
 
-#include <assert.h>
 #include "sysdep.h"
+#include <assert.h>
 #include "dis-asm.h"
 #include "opintl.h"
 #include "libiberty.h"
