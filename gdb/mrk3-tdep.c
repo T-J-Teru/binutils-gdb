@@ -243,7 +243,7 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
     case (R0_REGNUM + 6):
       return builtin_type (gdbarch)->builtin_uint16;
     case (PC_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return builtin_type (gdbarch)->builtin_uint32;
     case (PSW_REGNUM):
       return builtin_type (gdbarch)->builtin_uint16;
     case (SSP_REGNUM):

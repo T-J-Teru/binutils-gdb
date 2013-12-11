@@ -1,5 +1,9 @@
 2013-12-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_register_type): Make PC 32-bit.
+
+2013-12-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	Fix the worst of the merge wreckage for MRK3
 
 	* block.c: Make identical to upstream.
