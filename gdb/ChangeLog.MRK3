@@ -1,3 +1,23 @@
+2013-12-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	Make SP pseudo register and omit SFRs (for now)
+
+	* mrk3-tdep.c (R0_REGNUM, PC_REGNUM, PSW_REGNUM, SSP_REGNUM)
+	(USP_REGNUM, R4E_REGNUM, R5E_REGNUM, R6E_REGNUM, SFR_START)
+	(PSEUDO_START, SP_REGNUM, R0L_REGNUM, R1L_REGNUM, R2L_REGNUM)
+	(R3L_REGNUM, R0H_REGNUM, R1H_REGNUM, R2H_REGNUM, R3H_REGNUM)
+	(R4L_REGNUM, R5L_REGNUM, R6L_REGNUM, SYS_REGNUM, INT_REGNUM)
+	(ZERO_REGNUM, NEG_REGNUM, OVERFLOW_REGNUM, CARRY_REGNUM)
+	(PSEUDO_END): Defines for register numbers.
+	(NUM_CPU_REGS, NUM_SFRS, NUM_REAL_REGS, NUM_PSEUDO_REGS)
+	(NUM_REGS): Defined in terms of previous #defines.
+	(mrk3_ui_memcpy, mrk3_get_mem_space): Moved to start of source file.
+	(mrk3_register_name, mrk3_register_type): SP is now the first
+	pseudo-reg, SFRs removed.
+	(mrk3_pseudo_register_read, mrk3_pseudo_register_write): Add SP as
+	first pseudo-reg, rewrite to use #defined register numbers.
+	(mrk3_gdbarch_init): Use #defined values for SP and PC.
+
 2013-12-10  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	Revert out MRK3 specific changes in generic files to make merging
