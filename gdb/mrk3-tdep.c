@@ -933,7 +933,10 @@ mrk3_analyze_prologue (struct gdbarch *arch,
   if (mrk3_is_sys_addr(pc))
     { 
       sp = ssp; 
+      /* This is simulator specific. */
+#if 0
       write_to_frame_cache = enable_system_mode_stack_traces;
+#endif
     }
   else
     {
@@ -1110,6 +1113,11 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
 	struct gdbarch *gdbarch;
 	struct gdbarch_tdep *tdep;
+
+	/* This is a horrible temporary kludge to deal with the problem that
+	   the Target compiler generates a big-endian ELF file for a
+	   little-endian architecture. */
+	info.byte_order = BFD_ENDIAN_LITTLE;
 
 	/* Check to see if we've already built an appropriate architecture
 		 object for this executable.  */
