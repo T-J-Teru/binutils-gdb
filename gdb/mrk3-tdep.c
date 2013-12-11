@@ -1124,7 +1124,7 @@ mrk3_analyze_prologue (struct gdbarch *arch,
       sp = usp;
     }
 
-  /* * Do write the stack info to the frame cache. */ */
+  /* Do write the stack info to the frame cache. */
     if (write_to_frame_cache)
     {
       /* Save to frame cache.
