@@ -154,7 +154,7 @@ mrk3_get_mem_space ()
     }
   else
     {
-      return (uint8_t) atoi (buf);
+      return (uint8_t) strtol (buf, NULL, 16);
     }
 }
 
