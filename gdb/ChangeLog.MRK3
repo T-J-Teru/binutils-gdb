@@ -1,5 +1,9 @@
 2013-12-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* mrk3-tdep.c: Adjust all formatting to GNU C style.
+
+2013-12-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_analyze_prologue): Disable reference to
 	enable_system_mode_stack_traces (requires simulator linking).
 	(mrk3_gdbarch_init): Force endianness to be little before

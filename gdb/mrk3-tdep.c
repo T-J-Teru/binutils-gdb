@@ -37,7 +37,7 @@
 #include "dis-asm.h"
 #include "ui-file.h"
 
-// Required for symbol switch handling.
+/*  Required for symbol switch handling. */
 #include "gdb/defs.h"
 #include "gdb/gdbcore.h"
 #include "gdb/symfile.h"
@@ -46,7 +46,7 @@
 #include "gdb/progspace.h"
 #include "gdb/breakpoint.h"
 
-// Mrk3 specific headers.
+/*  Mrk3 specific headers. */
 #include "p40/gdb_types.h"
 #include "p40/gdb_mem_map.h"
 #include "p40/gdb_registers.h"
@@ -65,10 +65,11 @@
 #define R4E_REGNUM   11
 #define R5E_REGNUM   12
 #define R6E_REGNUM   13
+
 /* Useful register numbers - SFRs
-   TODO: For now we don't show the SFRs
-*/
+   TODO: For now we don't show the SFRs */
 #define SFR_START   (R6E_REGNUM + 1)
+
 /* Useful register numbers - pseudo registers */
 #define PSEUDO_START (SFR_START)
 #define SP_REGNUM       (PSEUDO_START +  0)
@@ -99,25 +100,25 @@
 #define NUM_REGS        (NUM_REAL_REGS + NUM_PSEUDO_REGS)
 
 
-// Define the breakpoint instruction which is inserted by
-// GDB into the target code. This must be exactly the same
-// as the simulator expects.
-// Per definition, a breakpoint instruction has 16 bits.
-// This should be sufficient for all purposes.
+/*  Define the breakpoint instruction which is inserted by */
+/*  GDB into the target code. This must be exactly the same */
+/*  as the simulator expects. */
+/*  Per definition, a breakpoint instruction has 16 bits. */
+/*  This should be sufficient for all purposes. */
 static const uint16_t mrk3_sim_break_insn = 0xFFFF;
 
 /* Structure describing architecture specific types. */
 struct gdbarch_tdep
 {
-	/* Number of bytes stored to the stack by call instructions. */
-	int call_length;
+  /* Number of bytes stored to the stack by call instructions. */
+  int call_length;
 
-	/* Type for void.  */
-	struct type *void_type;
-	/* Type for a function returning void.  */
-	struct type *func_void_type;
-	/* Type for a pointer to a function.  Used for the type of PC.  */
-	struct type *pc_type;
+  /* Type for void.  */
+  struct type *void_type;
+  /* Type for a function returning void.  */
+  struct type *func_void_type;
+  /* Type for a pointer to a function.  Used for the type of PC.  */
+  struct type *pc_type;
 };
 
 
@@ -148,9 +149,10 @@ mrk3_get_mem_space ()
   if (strlen (buf) == 0)
     {
       /* TODO: We are presumably not connected to a target. Should we warn? Or
-	 should we return a default? */
-      warning (_("Using default memory space since not connected to target."));
-      return  0;		/* Arbitrary default */
+         should we return a default? */
+      warning (_
+	       ("Using default memory space since not connected to target."));
+      return 0;			/* Arbitrary default */
     }
   else
     {
@@ -160,9 +162,11 @@ mrk3_get_mem_space ()
 
 
 /* Lookup the name of a register given it's number. */
-static const char * mrk3_register_name (struct gdbarch *gdbarch, int regnum) {
-  static char *regnames [NUM_REGS] = {
-    // CPU Registers
+static const char *
+mrk3_register_name (struct gdbarch *gdbarch, int regnum)
+{
+  static char *regnames[NUM_REGS] = {
+    /*  CPU Registers */
     "R0",
     "R1",
     "R2",
@@ -225,44 +229,76 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
   switch (regnum)
     {
       /* CPU registers */
-    case (R0_REGNUM + 0): return builtin_type (gdbarch)->builtin_uint16;
-    case (R0_REGNUM + 1): return builtin_type (gdbarch)->builtin_uint16;
-    case (R0_REGNUM + 2): return builtin_type (gdbarch)->builtin_uint16;
-    case (R0_REGNUM + 3): return builtin_type (gdbarch)->builtin_uint16;
-    case (R0_REGNUM + 4): return builtin_type (gdbarch)->builtin_uint16;
-    case (R0_REGNUM + 5): return builtin_type (gdbarch)->builtin_uint16;
-    case (R0_REGNUM + 6): return builtin_type (gdbarch)->builtin_uint16;
-    case (PC_REGNUM):     return builtin_type (gdbarch)->builtin_uint16;
-    case (PSW_REGNUM):    return builtin_type (gdbarch)->builtin_uint16;
-    case (SSP_REGNUM):    return builtin_type (gdbarch)->builtin_uint16;
-    case (USP_REGNUM):    return builtin_type (gdbarch)->builtin_uint16;
-    case (R4E_REGNUM):    return builtin_type (gdbarch)->builtin_uint16;
-    case (R5E_REGNUM):    return builtin_type (gdbarch)->builtin_uint16;
-    case (R6E_REGNUM):    return builtin_type (gdbarch)->builtin_uint16;
+    case (R0_REGNUM + 0):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R0_REGNUM + 1):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R0_REGNUM + 2):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R0_REGNUM + 3):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R0_REGNUM + 4):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R0_REGNUM + 5):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R0_REGNUM + 6):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (PC_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (PSW_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (SSP_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (USP_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R4E_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R5E_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R6E_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
 
       /* Special Function Registers  - TODO through XML */
 
       /* Pseudo registers */
-    case (SP_REGNUM):       return builtin_type (gdbarch)->builtin_uint16;
-    case (R0L_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R1L_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R2L_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R3L_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R0H_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R1H_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R2H_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R3H_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (R4L_REGNUM):      return builtin_type (gdbarch)->builtin_uint32;
-    case (R5L_REGNUM):      return builtin_type (gdbarch)->builtin_uint32;
-    case (R6L_REGNUM):      return builtin_type (gdbarch)->builtin_uint32;
-    case (SYS_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (INT_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (ZERO_REGNUM):     return builtin_type (gdbarch)->builtin_uint8;
-    case (NEG_REGNUM):      return builtin_type (gdbarch)->builtin_uint8;
-    case (OVERFLOW_REGNUM): return builtin_type (gdbarch)->builtin_uint8;
-    case (CARRY_REGNUM):    return builtin_type (gdbarch)->builtin_uint8;
+    case (SP_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (R0L_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R1L_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R2L_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R3L_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R0H_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R1H_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R2H_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R3H_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (R4L_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint32;
+    case (R5L_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint32;
+    case (R6L_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint32;
+    case (SYS_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (INT_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (ZERO_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (NEG_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (OVERFLOW_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
+    case (CARRY_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint8;
     default:
-      // Moan
+      /*  Moan */
       fprintf_unfiltered (gdb_stdlog,
 			  "mrk3_register_type: unknown register number %d.\n",
 			  regnum);
@@ -274,13 +310,12 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
 static void
 mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 			   struct regcache *regcache,
-			   int cooked_regnum,
-			   gdb_byte *buf)
+			   int cooked_regnum, gdb_byte * buf)
 {
   gdb_byte raw_buf[8];
-  int  raw_regnum;
+  int raw_regnum;
 
-  // R0L is based on R0
+  /*  R0L is based on R0 */
   switch (cooked_regnum)
     {
     case SP_REGNUM:
@@ -315,14 +350,14 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
     case R4L_REGNUM:
     case R5L_REGNUM:
     case R6L_REGNUM:
-      // LO reg
+      /*  LO reg */
       raw_regnum = cooked_regnum - R4L_REGNUM + R0_REGNUM + 4;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (buf, raw_buf + 2, 2);
       else
 	memcpy (buf, raw_buf, 2);
-      // HI reg
+      /*  HI reg */
       raw_regnum = cooked_regnum - R4L_REGNUM + R4E_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
@@ -330,7 +365,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else
 	memcpy (buf, raw_buf + 2, 2);
       return;
-      
+
     case SYS_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -339,7 +374,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else
 	buf[0] = (raw_buf[1] & 0x80) >> 7;
       return;
-      
+
     case INT_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -348,7 +383,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else
 	buf[0] = (raw_buf[1] & 0x78) >> 3;
       return;
-      
+
     case ZERO_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -357,7 +392,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else
 	buf[0] = (raw_buf[0] & 0x08) >> 3;
       return;
-      
+
     case NEG_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -366,7 +401,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else
 	buf[0] = (raw_buf[0] & 0x08) >> 2;
       return;
-      
+
     case OVERFLOW_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -375,7 +410,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else
 	buf[0] = (raw_buf[0] & 0x08) >> 1;
       return;
-      
+
     case CARRY_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -384,9 +419,9 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else
 	buf[0] = (raw_buf[0] & 0x08) >> 0;
       return;
-      
+
     default:
-          // Moan
+      /*  Moan */
       fprintf_unfiltered (gdb_stdlog,
 			  "mrk3_pseudo_register_read: Not a pseudo reg %d.\n",
 			  cooked_regnum);
@@ -398,13 +433,12 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 static void
 mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 			    struct regcache *regcache,
-			    int cooked_regnum,
-			    const gdb_byte *buf)
+			    int cooked_regnum, const gdb_byte * buf)
 {
   gdb_byte raw_buf[8];
-  int  raw_regnum;
+  int raw_regnum;
 
-  // R0L is based on R0
+  /*  R0L is based on R0 */
   switch (cooked_regnum)
     {
     case SP_REGNUM:
@@ -441,14 +475,14 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
     case R4L_REGNUM:
     case R5L_REGNUM:
     case R6L_REGNUM:
-      // LO reg
+      /*  LO reg */
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (raw_buf + 2, buf, 2);
       else
 	memcpy (raw_buf, buf, 2);
       raw_regnum = cooked_regnum - R4L_REGNUM + R0_REGNUM + 4;
       regcache_raw_write (regcache, raw_regnum, raw_buf);
-      // HI reg
+      /*  HI reg */
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (raw_buf, buf, 2);
       else
@@ -456,7 +490,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
       raw_regnum = cooked_regnum - R4L_REGNUM + R4E_REGNUM;
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
-      
+
     case SYS_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -472,7 +506,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
-      
+
     case INT_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -488,7 +522,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
-      
+
     case ZERO_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -504,7 +538,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
-      
+
     case NEG_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -520,7 +554,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
-      
+
     case OVERFLOW_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -536,7 +570,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
-      
+
     case CARRY_REGNUM:
       raw_regnum = PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
@@ -552,12 +586,12 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
-      
+
     default:
-          // Moan
+      /*  Moan */
       fprintf_unfiltered (gdb_stdlog,
 			  "mrk3_pseudo_register_write: Not a pseudo reg %d.\n",
-			  cooked_regnum);  
+			  cooked_regnum);
       return;
     }
 }
@@ -566,274 +600,418 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 static int
 mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
 {
-	// According to Target the following algorithm is used to determine
-	// dwarf2 locations:
-	//   1. take the storages from file lib/isg/mrk3_regs.txt and sort
-	//      alphabetically, first registers then memories
-	//   2. number the locations in the resulting list
-	//
-	// The following values are taken from a list from Target:
-	uint32_t regnr;
-	switch (dwarf2_regnr) {
-		case  0: regnr = 0; break;                       // AUSP (?)
-		case  1: regnr = mrk3_sim_reg_pc; break;         // PC
-		case  2: regnr = mrk3_sim_reg_pc; break;         // PC16
-		case  3: regnr = mrk3_sim_reg_pc; break;         // PCh
-		case  4: regnr = mrk3_sim_reg_psw; break;        // PSW
-		// case  5:                                      // PU (?)
+  /*  According to Target the following algorithm is used to determine */
+  /*  dwarf2 locations: */
+  /*    1. take the storages from file lib/isg/mrk3_regs.txt and sort */
+  /*       alphabetically, first registers then memories */
+  /*    2. number the locations in the resulting list */
+  /*  */
+  /*  The following values are taken from a list from Target: */
+  uint32_t regnr;
+  switch (dwarf2_regnr)
+    {
+    case 0:
+      regnr = 0;
+      break;			/*  AUSP (?) */
+    case 1:
+      regnr = mrk3_sim_reg_pc;
+      break;			/*  PC */
+    case 2:
+      regnr = mrk3_sim_reg_pc;
+      break;			/*  PC16 */
+    case 3:
+      regnr = mrk3_sim_reg_pc;
+      break;			/*  PCh */
+    case 4:
+      regnr = mrk3_sim_reg_psw;
+      break;			/*  PSW */
+      /*  case  5:                                      // PU (?) */
 
-		case  6: regnr = mrk3_sim_reg_r0; break;         // R0
-		case  7: regnr = mrk3_sim_reg_r1; break;         // R1
-		case  8: regnr = mrk3_sim_reg_r2; break;         // R2
-		case  9: regnr = mrk3_sim_reg_r3; break;         // R3
+    case 6:
+      regnr = mrk3_sim_reg_r0;
+      break;			/*  R0 */
+    case 7:
+      regnr = mrk3_sim_reg_r1;
+      break;			/*  R1 */
+    case 8:
+      regnr = mrk3_sim_reg_r2;
+      break;			/*  R2 */
+    case 9:
+      regnr = mrk3_sim_reg_r3;
+      break;			/*  R3 */
 
-														 // R46 is a virtual 48 bit register
-														 // having R4, R5 and R6 as real registers.
-		case 10: regnr = mrk3_sim_reg_r4; break;         // R46[0]
-		case 11: regnr = mrk3_sim_reg_r5; break;         // R46[1]
-		case 12: regnr = mrk3_sim_reg_r6; break;         // R46[2]
+      /*  R46 is a virtual 48 bit register */
+      /*  having R4, R5 and R6 as real registers. */
+    case 10:
+      regnr = mrk3_sim_reg_r4;
+      break;			/*  R46[0] */
+    case 11:
+      regnr = mrk3_sim_reg_r5;
+      break;			/*  R46[1] */
+    case 12:
+      regnr = mrk3_sim_reg_r6;
+      break;			/*  R46[2] */
 
-														 // R46e is a virtual 48 bit register
-														 // having R4e, R5e and R6e as real registers.
-		case 13: regnr = mrk3_sim_pseudo_reg_r4e; break; // R46e[0]
-		case 14: regnr = mrk3_sim_pseudo_reg_r5e; break; // R46e[1]
-		case 15: regnr = mrk3_sim_pseudo_reg_r6e; break; // R46e[2]
+      /*  R46e is a virtual 48 bit register */
+      /*  having R4e, R5e and R6e as real registers. */
+    case 13:
+      regnr = mrk3_sim_pseudo_reg_r4e;
+      break;			/*  R46e[0] */
+    case 14:
+      regnr = mrk3_sim_pseudo_reg_r5e;
+      break;			/*  R46e[1] */
+    case 15:
+      regnr = mrk3_sim_pseudo_reg_r6e;
+      break;			/*  R46e[2] */
 
-														 // R46L is a virtual 96 bit register
-														 // having R4l, R5l and R6l as real registers.
-		case 16: regnr = mrk3_sim_pseudo_reg_r4l; break; // R46e[0]
-		case 17: regnr = mrk3_sim_pseudo_reg_r5l; break; // R46e[1]
-		case 18: regnr = mrk3_sim_pseudo_reg_r6l; break; // R46e[2]
+      /*  R46L is a virtual 96 bit register */
+      /*  having R4l, R5l and R6l as real registers. */
+    case 16:
+      regnr = mrk3_sim_pseudo_reg_r4l;
+      break;			/*  R46e[0] */
+    case 17:
+      regnr = mrk3_sim_pseudo_reg_r5l;
+      break;			/*  R46e[1] */
+    case 18:
+      regnr = mrk3_sim_pseudo_reg_r6l;
+      break;			/*  R46e[2] */
 
-		case 19: regnr = mrk3_sim_reg_sp; break;         // R7
+    case 19:
+      regnr = mrk3_sim_reg_sp;
+      break;			/*  R7 */
 
-		// case 20:                                      // RO (?)
+      /*  case 20:                                      // RO (?) */
 
-														 // Rb is a virtual register, consisting of all
-														 // byte registers.
-		case 21: regnr = mrk3_sim_pseudo_reg_r0l; break; // Rb[0]
-		case 22: regnr = mrk3_sim_pseudo_reg_r1l; break; // Rb[1]
-		case 23: regnr = mrk3_sim_pseudo_reg_r2l; break; // Rb[2]
-		case 24: regnr = mrk3_sim_pseudo_reg_r3l; break; // Rb[3]
-		case 25: regnr = mrk3_sim_pseudo_reg_r0h; break; // Rb[4]
-		case 26: regnr = mrk3_sim_pseudo_reg_r1h; break; // Rb[5]
-		case 27: regnr = mrk3_sim_pseudo_reg_r2h; break; // Rb[6]
-		case 28: regnr = mrk3_sim_pseudo_reg_r3h; break; // Rb[7]
+      /*  Rb is a virtual register, consisting of all */
+      /*  byte registers. */
+    case 21:
+      regnr = mrk3_sim_pseudo_reg_r0l;
+      break;			/*  Rb[0] */
+    case 22:
+      regnr = mrk3_sim_pseudo_reg_r1l;
+      break;			/*  Rb[1] */
+    case 23:
+      regnr = mrk3_sim_pseudo_reg_r2l;
+      break;			/*  Rb[2] */
+    case 24:
+      regnr = mrk3_sim_pseudo_reg_r3l;
+      break;			/*  Rb[3] */
+    case 25:
+      regnr = mrk3_sim_pseudo_reg_r0h;
+      break;			/*  Rb[4] */
+    case 26:
+      regnr = mrk3_sim_pseudo_reg_r1h;
+      break;			/*  Rb[5] */
+    case 27:
+      regnr = mrk3_sim_pseudo_reg_r2h;
+      break;			/*  Rb[6] */
+    case 28:
+      regnr = mrk3_sim_pseudo_reg_r3h;
+      break;			/*  Rb[7] */
 
-														 // RbH is a virtual register, consisting of all
-														 // high byte registers.
-		case 29: regnr = mrk3_sim_pseudo_reg_r0h; break; // RbH[0]
-		case 30: regnr = mrk3_sim_pseudo_reg_r1h; break; // RbH[1]
-		case 31: regnr = mrk3_sim_pseudo_reg_r2h; break; // RbH[2]
-		case 32: regnr = mrk3_sim_pseudo_reg_r2h; break; // RbH[3]
+      /*  RbH is a virtual register, consisting of all */
+      /*  high byte registers. */
+    case 29:
+      regnr = mrk3_sim_pseudo_reg_r0h;
+      break;			/*  RbH[0] */
+    case 30:
+      regnr = mrk3_sim_pseudo_reg_r1h;
+      break;			/*  RbH[1] */
+    case 31:
+      regnr = mrk3_sim_pseudo_reg_r2h;
+      break;			/*  RbH[2] */
+    case 32:
+      regnr = mrk3_sim_pseudo_reg_r2h;
+      break;			/*  RbH[3] */
 
-														 // RbL is a virtual register, consisting of all
-														 // high byte registers.
-		case 33: regnr = mrk3_sim_pseudo_reg_r0l; break; // RbL[0]
-		case 34: regnr = mrk3_sim_pseudo_reg_r1l; break; // RbL[1]
-		case 35: regnr = mrk3_sim_pseudo_reg_r2l; break; // RbL[2]
-		case 36: regnr = mrk3_sim_pseudo_reg_r2l; break; // RbL[3]
+      /*  RbL is a virtual register, consisting of all */
+      /*  high byte registers. */
+    case 33:
+      regnr = mrk3_sim_pseudo_reg_r0l;
+      break;			/*  RbL[0] */
+    case 34:
+      regnr = mrk3_sim_pseudo_reg_r1l;
+      break;			/*  RbL[1] */
+    case 35:
+      regnr = mrk3_sim_pseudo_reg_r2l;
+      break;			/*  RbL[2] */
+    case 36:
+      regnr = mrk3_sim_pseudo_reg_r2l;
+      break;			/*  RbL[3] */
 
-														 // Rw is a virtual register, consisting of all
-														 // word registers.
-		case 37: regnr = mrk3_sim_reg_r0; break;         // Rw[0]
-		case 38: regnr = mrk3_sim_reg_r1; break;         // Rw[1]
-		case 39: regnr = mrk3_sim_reg_r2; break;         // Rw[2]
-		case 40: regnr = mrk3_sim_reg_r3; break;         // Rw[3]
-		case 41: regnr = mrk3_sim_reg_r4; break;         // Rw[4]
-		case 42: regnr = mrk3_sim_reg_r5; break;         // Rw[5]
-		case 43: regnr = mrk3_sim_reg_r6; break;         // Rw[6]
-		case 44: regnr = mrk3_sim_pseudo_reg_r4e; break; // Rw[7]
-		case 45: regnr = mrk3_sim_pseudo_reg_r5e; break; // Rw[8]
-		case 46: regnr = mrk3_sim_pseudo_reg_r6e; break; // Rw[9]
+      /*  Rw is a virtual register, consisting of all */
+      /*  word registers. */
+    case 37:
+      regnr = mrk3_sim_reg_r0;
+      break;			/*  Rw[0] */
+    case 38:
+      regnr = mrk3_sim_reg_r1;
+      break;			/*  Rw[1] */
+    case 39:
+      regnr = mrk3_sim_reg_r2;
+      break;			/*  Rw[2] */
+    case 40:
+      regnr = mrk3_sim_reg_r3;
+      break;			/*  Rw[3] */
+    case 41:
+      regnr = mrk3_sim_reg_r4;
+      break;			/*  Rw[4] */
+    case 42:
+      regnr = mrk3_sim_reg_r5;
+      break;			/*  Rw[5] */
+    case 43:
+      regnr = mrk3_sim_reg_r6;
+      break;			/*  Rw[6] */
+    case 44:
+      regnr = mrk3_sim_pseudo_reg_r4e;
+      break;			/*  Rw[7] */
+    case 45:
+      regnr = mrk3_sim_pseudo_reg_r5e;
+      break;			/*  Rw[8] */
+    case 46:
+      regnr = mrk3_sim_pseudo_reg_r6e;
+      break;			/*  Rw[9] */
 
-														 // RwL is probably a virtual register consisting
-														 // of all word registers.
-		case 47: regnr = mrk3_sim_reg_r0; break;         // RwL[0]
-		case 48: regnr = mrk3_sim_reg_r1; break;         // RwL[1]
-		case 49: regnr = mrk3_sim_reg_r2; break;         // RwL[2]
-		case 50: regnr = mrk3_sim_reg_r3; break;         // RwL[3]
+      /*  RwL is probably a virtual register consisting */
+      /*  of all word registers. */
+    case 47:
+      regnr = mrk3_sim_reg_r0;
+      break;			/*  RwL[0] */
+    case 48:
+      regnr = mrk3_sim_reg_r1;
+      break;			/*  RwL[1] */
+    case 49:
+      regnr = mrk3_sim_reg_r2;
+      break;			/*  RwL[2] */
+    case 50:
+      regnr = mrk3_sim_reg_r3;
+      break;			/*  RwL[3] */
 
-		case 51: regnr = mrk3_sim_pseudo_reg_c_flag; break;   // c flag
-		case 52: regnr = mrk3_sim_pseudo_reg_i_lvl; break;    // interrupt level
-		case 53: regnr = mrk3_sim_pseudo_reg_n_flag; break;   // n flag
-		case 54: regnr = mrk3_sim_pseudo_reg_z_flag; break;   // z flag (actually nz (?))
-		case 55: regnr = mrk3_sim_pseudo_reg_o_flag; break;   // o flag
-		case 56: regnr = 0; break;                            // res (?)
-		case 57: regnr = mrk3_sim_pseudo_reg_s_flag; break;   // s flag
-		case 58: regnr = 0; break;                            // tLSB (?)
-		case 59: regnr = mrk3_sim_pseudo_reg_z_flag; break;   // z flag
+    case 51:
+      regnr = mrk3_sim_pseudo_reg_c_flag;
+      break;			/*  c flag */
+    case 52:
+      regnr = mrk3_sim_pseudo_reg_i_lvl;
+      break;			/*  interrupt level */
+    case 53:
+      regnr = mrk3_sim_pseudo_reg_n_flag;
+      break;			/*  n flag */
+    case 54:
+      regnr = mrk3_sim_pseudo_reg_z_flag;
+      break;			/*  z flag (actually nz (?)) */
+    case 55:
+      regnr = mrk3_sim_pseudo_reg_o_flag;
+      break;			/*  o flag */
+    case 56:
+      regnr = 0;
+      break;			/*  res (?) */
+    case 57:
+      regnr = mrk3_sim_pseudo_reg_s_flag;
+      break;			/*  s flag */
+    case 58:
+      regnr = 0;
+      break;			/*  tLSB (?) */
+    case 59:
+      regnr = mrk3_sim_pseudo_reg_z_flag;
+      break;			/*  z flag */
 
-		default:
-			printf("mrk3_dwarf2_reg_to_regnum: Warning: unknown drwarf2 register number: %d\n", dwarf2_regnr);
-			regnr = mrk3_sim_reg_r0;
-	}
+    default:
+      printf
+	("mrk3_dwarf2_reg_to_regnum: Warning: unknown drwarf2 register number: %d\n",
+	 dwarf2_regnr);
+      regnr = mrk3_sim_reg_r0;
+    }
 
-	//printf("mrk3-tdep.c:mrk3_dwarf2_reg_to_regnum gdbarch->num_regs=%d dwarf2_regnr(%d) maps to (%d)\n",gdbarch_num_regs(gdbarch),dwarf2_regnr,regnr);
-	return regnr;
-	
-	//return Dll_Dwarf2RegToRegnum(dwarf2_regnr);
+  /* printf("mrk3-tdep.c:mrk3_dwarf2_reg_to_regnum gdbarch->num_regs=%d dwarf2_regnr(%d) maps to (%d)\n",gdbarch_num_regs(gdbarch),dwarf2_regnr,regnr); */
+  return regnr;
+
+  /* return Dll_Dwarf2RegToRegnum(dwarf2_regnr); */
 }
 
-uint32_t mrk3_map_dwarf2_data_addr(const ULONGEST dwarf2_addr)
+uint32_t
+mrk3_map_dwarf2_data_addr (const ULONGEST dwarf2_addr)
 {
-	#define TARGET_DWARF_OFFSET_DM     0x00000003CULL
-	#define TARGET_DWARF_OFFSET_DM12   0x00001003CULL
-	#define TARGET_DWARF_OFFSET_DM12w  0x00001103CULL
-	#define TARGET_DWARF_OFFSET_DM32   0x00001183CULL
-	#define TARGET_DWARF_OFFSET_DM32w  0x10001183CULL
-	#define TARGET_DWARF_OFFSET_DM9    0x18001183CULL
-	#define TARGET_DWARF_OFFSET_DM9w   0x180011A3CULL
-	#define TARGET_DWARF_OFFSET_DMw    0x180011C92ULL
-	#define TARGET_DWARF_OFFSET_PM     0x180019C92ULL
-	#define TARGET_DWARF_OFFSET_PM1    0x180029C92ULL
-	#define TARGET_DWARF_OFFSET_ULP    0x180031C92ULL
-	// Sorted offsets from low addr to high addr!
-	static const ULONGEST mem_offsets[] = {
-		TARGET_DWARF_OFFSET_DM,
-		TARGET_DWARF_OFFSET_DM12,
-		TARGET_DWARF_OFFSET_DM12w,
-		TARGET_DWARF_OFFSET_DM32,
-		TARGET_DWARF_OFFSET_DM32w,
-		TARGET_DWARF_OFFSET_DM9,
-		TARGET_DWARF_OFFSET_DM9w,
-		TARGET_DWARF_OFFSET_DMw,
-		TARGET_DWARF_OFFSET_PM,
-		TARGET_DWARF_OFFSET_PM1,
-		TARGET_DWARF_OFFSET_ULP };
-	static const size_t n_offsets = sizeof(mem_offsets) / sizeof(mem_offsets[0]);
+#define TARGET_DWARF_OFFSET_DM     0x00000003CULL
+#define TARGET_DWARF_OFFSET_DM12   0x00001003CULL
+#define TARGET_DWARF_OFFSET_DM12w  0x00001103CULL
+#define TARGET_DWARF_OFFSET_DM32   0x00001183CULL
+#define TARGET_DWARF_OFFSET_DM32w  0x10001183CULL
+#define TARGET_DWARF_OFFSET_DM9    0x18001183CULL
+#define TARGET_DWARF_OFFSET_DM9w   0x180011A3CULL
+#define TARGET_DWARF_OFFSET_DMw    0x180011C92ULL
+#define TARGET_DWARF_OFFSET_PM     0x180019C92ULL
+#define TARGET_DWARF_OFFSET_PM1    0x180029C92ULL
+#define TARGET_DWARF_OFFSET_ULP    0x180031C92ULL
+  /*  Sorted offsets from low addr to high addr! */
+  static const ULONGEST mem_offsets[] = {
+    TARGET_DWARF_OFFSET_DM,
+    TARGET_DWARF_OFFSET_DM12,
+    TARGET_DWARF_OFFSET_DM12w,
+    TARGET_DWARF_OFFSET_DM32,
+    TARGET_DWARF_OFFSET_DM32w,
+    TARGET_DWARF_OFFSET_DM9,
+    TARGET_DWARF_OFFSET_DM9w,
+    TARGET_DWARF_OFFSET_DMw,
+    TARGET_DWARF_OFFSET_PM,
+    TARGET_DWARF_OFFSET_PM1,
+    TARGET_DWARF_OFFSET_ULP
+  };
+  static const size_t n_offsets =
+    sizeof (mem_offsets) / sizeof (mem_offsets[0]);
 
-	int n;
-	for (n = n_offsets - 1; n >= 0; n--) {
-		if (dwarf2_addr >= mem_offsets[n]) 
-		{
-			uint32_t addr = (uint32_t) (dwarf2_addr - mem_offsets[n]);
-			//printf("mrk3-tdep.c:mrk3_map_dwarf2_data_addr dwarf2_addr=0x%llX minus mem_offset[%d]=0x%llX is addr=0x%lX\n",dwarf2_addr,n,mem_offsets[n],addr);			
-			return addr;
-		}
+  int n;
+  for (n = n_offsets - 1; n >= 0; n--)
+    {
+      if (dwarf2_addr >= mem_offsets[n])
+	{
+	  uint32_t addr = (uint32_t) (dwarf2_addr - mem_offsets[n]);
+	  /* printf("mrk3-tdep.c:mrk3_map_dwarf2_data_addr dwarf2_addr=0x%llX minus mem_offset[%d]=0x%llX is addr=0x%lX\n",dwarf2_addr,n,mem_offsets[n],addr);                      */
+	  return addr;
 	}
-	
-	return (uint32_t) dwarf2_addr;
+    }
 
-	//return Dll_Dwarf2AddrToAddr(dwarf2_addr);
+  return (uint32_t) dwarf2_addr;
+
+  /* return Dll_Dwarf2AddrToAddr(dwarf2_addr); */
 }
 
 
-// Save the full and base filename to an objfile info struct.
-void mrk3_save_objfile_name(struct mrk3_objfile_info_t* of_info, const char* filename) {
-	if (filename != NULL) {
-		char* base_name = basename(filename);
-		mrk3_free_objfile_info(of_info);
+/*  Save the full and base filename to an objfile info struct. */
+void
+mrk3_save_objfile_name (struct mrk3_objfile_info_t *of_info,
+			const char *filename)
+{
+  if (filename != NULL)
+    {
+      char *base_name = basename (filename);
+      mrk3_free_objfile_info (of_info);
 
-		of_info->full_name = malloc(strlen(filename) + 1);
-		strcpy(of_info->full_name, filename);
+      of_info->full_name = malloc (strlen (filename) + 1);
+      strcpy (of_info->full_name, filename);
 
-		of_info->name = malloc(strlen(base_name) + 1);
-		strcpy(of_info->name, base_name);
-	}
+      of_info->name = malloc (strlen (base_name) + 1);
+      strcpy (of_info->name, base_name);
+    }
 }
 
 
-// Free an objfile_info structure.
-void mrk3_free_objfile_info(struct mrk3_objfile_info_t* of_info) {
-	if (of_info->name != NULL) {
-		// Remove the old symbol file.
-		free(of_info->name);
-		of_info->name = NULL;
-	}
-	if (of_info->full_name != NULL) {
-		// Remove the old symbol file.
-		free(of_info->full_name);
-		of_info->full_name = NULL;
-	}
+/*  Free an objfile_info structure. */
+void
+mrk3_free_objfile_info (struct mrk3_objfile_info_t *of_info)
+{
+  if (of_info->name != NULL)
+    {
+      /*  Remove the old symbol file. */
+      free (of_info->name);
+      of_info->name = NULL;
+    }
+  if (of_info->full_name != NULL)
+    {
+      /*  Remove the old symbol file. */
+      free (of_info->full_name);
+      of_info->full_name = NULL;
+    }
 }
 
 
 #if 0
-void mrk3_load_symbol_info(const uint32_t mem_space) {
-  uint8_t mem_space_index = mrk3_mem_space_index(mem_space);
+void
+mrk3_load_symbol_info (const uint32_t mem_space)
+{
+  uint8_t mem_space_index = mrk3_mem_space_index (mem_space);
   uint8_t n = 0;
-  struct objfile* of = object_files;
-  while (of != NULL) {
-    char* base_name = basename(of->name);
-    if ((mrk3_objfile_info[mem_space_index].name != NULL) &&
-	(strcmp(base_name, mrk3_objfile_info[mem_space_index].name) == 0)) {
-      objfile_to_front(of);
-      break;
+  struct objfile *of = object_files;
+  while (of != NULL)
+    {
+      char *base_name = basename (of->name);
+      if ((mrk3_objfile_info[mem_space_index].name != NULL) &&
+	  (strcmp (base_name, mrk3_objfile_info[mem_space_index].name) == 0))
+	{
+	  objfile_to_front (of);
+	  break;
+	}
+      of = of->next;
     }
-    of = of->next;
-  }
 }
 #endif
 
 #if 0
-// When looking up symbols, switch priorities such that the
-// symbol file for the given memory space is preferred.
-uint32_t mrk3_get_memspace_from_objfile_name(const char* base_name) {
+/*  When looking up symbols, switch priorities such that the */
+/*  symbol file for the given memory space is preferred. */
+uint32_t
+mrk3_get_memspace_from_objfile_name (const char *base_name)
+{
   uint8_t n = 0;
-  if (base_name != NULL) {
-    for (n = 0; n < MRK3_MAX_OBJFILES; n++) {
-      if (mrk3_objfile_info[n].name != NULL) {
-	if (strcmp(base_name, mrk3_objfile_info[n].name) == 0) {
-	  return mrk3_mem_space_from_mem_space_index(n);
+  if (base_name != NULL)
+    {
+      for (n = 0; n < MRK3_MAX_OBJFILES; n++)
+	{
+	  if (mrk3_objfile_info[n].name != NULL)
+	    {
+	      if (strcmp (base_name, mrk3_objfile_info[n].name) == 0)
+		{
+		  return mrk3_mem_space_from_mem_space_index (n);
+		}
+	    }
 	}
-      }
+      printf
+	("mrk3_get_memspace_from_objfile_name: Warning: No memspace found for objectfile \"%s\".\n",
+	 base_name);
+      return 0;
     }
-    printf("mrk3_get_memspace_from_objfile_name: Warning: No memspace found for objectfile \"%s\".\n", base_name);
-    return 0;
-  }
-  printf("mrk3_get_memspace_from_objfile_name: Error: No objectfile name specified.\n");
+  printf
+    ("mrk3_get_memspace_from_objfile_name: Error: No objectfile name specified.\n");
   return 0;
 }
 #endif
 
 
-static const gdb_byte*
+static const gdb_byte *
 mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
-			 CORE_ADDR *pcptr,
-			 int *lenptr)
+			 CORE_ADDR * pcptr, int *lenptr)
 {
   CORE_ADDR addr = mrk3_pc_to_address (*pcptr);
 
-  // always use full addresses for breakpoints.
-  if (mrk3_is_map_addr(addr))
+  /*  always use full addresses for breakpoints. */
+  if (mrk3_is_map_addr (addr))
     {
-      addr = mrk3_to_mem_space(addr, mrk3_get_mem_space());
+      addr = mrk3_to_mem_space (addr, mrk3_get_mem_space ());
     }
 
   *pcptr = addr;
-  *lenptr = sizeof(mrk3_sim_break_insn);
-  return (gdb_byte*) &mrk3_sim_break_insn;
+  *lenptr = sizeof (mrk3_sim_break_insn);
+  return (gdb_byte *) & mrk3_sim_break_insn;
 }
 
 /* This is obsolete */
 #if 0
 static int
 mrk3_memory_insert_breakpoint (struct gdbarch *gdbarch,
-						 struct bp_target_info *bp_tgt)
+			       struct bp_target_info *bp_tgt)
 {
-	mrk3_breakpoint_from_pc(gdbarch, &(bp_tgt->placed_address), &(bp_tgt->placed_size));
-	Dll_InsertBreakpoint(bp_tgt->placed_address);
-	return 0;
+  mrk3_breakpoint_from_pc (gdbarch, &(bp_tgt->placed_address),
+			   &(bp_tgt->placed_size));
+  Dll_InsertBreakpoint (bp_tgt->placed_address);
+  return 0;
 }
 
 static int
 mrk3_memory_remove_breakpoint (struct gdbarch *gdbarch,
-						 struct bp_target_info *bp_tgt)
+			       struct bp_target_info *bp_tgt)
 {
-	Dll_RemoveBreakpoint(bp_tgt->placed_address);
-	return 0;
+  Dll_RemoveBreakpoint (bp_tgt->placed_address);
+  return 0;
 }
 #endif
 
 static CORE_ADDR
 mrk3_pointer_to_address (struct gdbarch *gdbarch,
-			 struct type *type, const gdb_byte *buf)
+			 struct type *type, const gdb_byte * buf)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   CORE_ADDR addr = extract_unsigned_integer (buf, TYPE_LENGTH (type),
 					     byte_order);
-  switch(TYPE_INSTANCE_FLAGS(type))
+  switch (TYPE_INSTANCE_FLAGS (type))
     {
     case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
       addr &= 0xffff;
@@ -849,10 +1027,10 @@ mrk3_pointer_to_address (struct gdbarch *gdbarch,
 
 static void
 mrk3_address_to_pointer (struct gdbarch *gdbarch,
-			 struct type *type, gdb_byte *buf, CORE_ADDR addr)
+			 struct type *type, gdb_byte * buf, CORE_ADDR addr)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  switch(TYPE_INSTANCE_FLAGS(type))
+  switch (TYPE_INSTANCE_FLAGS (type))
     {
     case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
       store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order,
@@ -867,20 +1045,21 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
 
 
 static void
-mrk3_register_to_value (struct frame_info *frame, int regnum, struct type *type, gdb_byte *buf)
+mrk3_register_to_value (struct frame_info *frame, int regnum,
+			struct type *type, gdb_byte * buf)
 {
-	//printf("mrk3-tdep.c:mrk3_register_to_value frame=%p, regnum=%d, type=%p(length=%d)\n",frame,regnum,type,type->length);	
-	frame_unwind_register(frame,regnum,buf);
+  /* printf("mrk3-tdep.c:mrk3_register_to_value frame=%p, regnum=%d, type=%p(length=%d)\n",frame,regnum,type,type->length);         */
+  frame_unwind_register (frame, regnum, buf);
 }
 
 
 static CORE_ADDR
 mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 {
-	// TODO: See alpha-tdep.c :: alpha_after_prologue
+  /*  TODO: See alpha-tdep.c :: alpha_after_prologue */
 
-	// Actually do not skip anything.
-	return pc;
+  /*  Actually do not skip anything. */
+  return pc;
 }
 
 extern bool enable_system_mode_stack_traces;
@@ -901,26 +1080,28 @@ mrk3_analyze_prologue (struct gdbarch *arch,
   bool write_to_frame_cache;
 
   /* Initialize. */
-  if (this_frame != NULL) {
-    pc = 0;
-    sp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_sp);
-    ssp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_ssp);
-    usp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_usp);
-    psw = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_psw);
-  }
-  else {
-    pc = 0;
-    psw = 0x8000;
-    sp = 0;
-    ssp = 0;
-    usp = 0;
-    /* The mrk3 starts in system mode, so assume system mode here. */
-    frame_base = sp;
-  }
+  if (this_frame != NULL)
+    {
+      pc = 0;
+      sp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_sp);
+      ssp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_ssp);
+      usp = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_usp);
+      psw = frame_unwind_register_unsigned (this_frame, mrk3_sim_reg_psw);
+    }
+  else
+    {
+      pc = 0;
+      psw = 0x8000;
+      sp = 0;
+      ssp = 0;
+      usp = 0;
+      /* The mrk3 starts in system mode, so assume system mode here. */
+      frame_base = sp;
+    }
 
   /* For now miss out the target prologue analysis. */
 #if 0
-  Dll_GetPrologueAnalysis(start, limit, &pc, &psw, &ssp, &usp, &frame_base);
+  Dll_GetPrologueAnalysis (start, limit, &pc, &psw, &ssp, &usp, &frame_base);
 #endif
 
   /* After calling Dll_GetPrologueAnalysis, the parameters are actually
@@ -930,9 +1111,9 @@ mrk3_analyze_prologue (struct gdbarch *arch,
      We need to check whether the caller was executed in SYS or USR
      contect. Based on this info, the caller sp is either ssp or usp. */
   write_to_frame_cache = true;
-  if (mrk3_is_sys_addr(pc))
-    { 
-      sp = ssp; 
+  if (mrk3_is_sys_addr (pc))
+    {
+      sp = ssp;
       /* This is simulator specific. */
 #if 0
       write_to_frame_cache = enable_system_mode_stack_traces;
@@ -942,137 +1123,143 @@ mrk3_analyze_prologue (struct gdbarch *arch,
     {
       sp = usp;
     }
-	
-  //* Do write the stack info to the frame cache. */
-  if (write_to_frame_cache)
+
+  /* * Do write the stack info to the frame cache. */ */
+    if (write_to_frame_cache)
     {
       /* Save to frame cache.
          printf("---DEBUG--- saving to frame cache: pc 0x%x, psw: 0x%x, "
-                "sp: 0x%x, ssp: 0x%x, usp: 0x%x, frame_base: 0x%x\n", 
-       		pc, psw, sp, ssp, usp, frame_base); */
-      trad_frame_set_this_base(frame_cache, frame_base);
-      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_pc, pc);
-      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_psw, psw);
-      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_sp, sp);
-      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_ssp, ssp);
-      trad_frame_set_reg_value(frame_cache, mrk3_sim_reg_usp, usp);
+         "sp: 0x%x, ssp: 0x%x, usp: 0x%x, frame_base: 0x%x\n", 
+         pc, psw, sp, ssp, usp, frame_base); */
+      trad_frame_set_this_base (frame_cache, frame_base);
+      trad_frame_set_reg_value (frame_cache, mrk3_sim_reg_pc, pc);
+      trad_frame_set_reg_value (frame_cache, mrk3_sim_reg_psw, psw);
+      trad_frame_set_reg_value (frame_cache, mrk3_sim_reg_sp, sp);
+      trad_frame_set_reg_value (frame_cache, mrk3_sim_reg_ssp, ssp);
+      trad_frame_set_reg_value (frame_cache, mrk3_sim_reg_usp, usp);
     }
   else
     {
       /* return an invalid frame. */
-      trad_frame_set_id(frame_cache, null_frame_id);
+      trad_frame_set_id (frame_cache, null_frame_id);
     }
 }
 
 
 static struct trad_frame_cache *
 mrk3_analyze_frame_prologue (struct frame_info *this_frame,
-					 void **this_prologue_cache)
+			     void **this_prologue_cache)
 {
-	if (! *this_prologue_cache)
-		{
-			CORE_ADDR func_start;
-			CORE_ADDR stop_addr;
+  if (!*this_prologue_cache)
+    {
+      CORE_ADDR func_start;
+      CORE_ADDR stop_addr;
 
-			*this_prologue_cache = trad_frame_cache_zalloc(this_frame);
-			func_start = get_frame_func (this_frame);
-			stop_addr = get_frame_pc (this_frame);
+      *this_prologue_cache = trad_frame_cache_zalloc (this_frame);
+      func_start = get_frame_func (this_frame);
+      stop_addr = get_frame_pc (this_frame);
 
 
-			/* If we couldn't find any function containing the PC, then
-				 just initialize the prologue cache, but don't do anything.  */
-			if (! func_start)
-				stop_addr = func_start;
+      /* If we couldn't find any function containing the PC, then
+         just initialize the prologue cache, but don't do anything.  */
+      if (!func_start)
+	stop_addr = func_start;
 
-			mrk3_analyze_prologue (get_frame_arch (this_frame),
-					 func_start, stop_addr, this_frame, *this_prologue_cache);
-		}
+      mrk3_analyze_prologue (get_frame_arch (this_frame),
+			     func_start, stop_addr, this_frame,
+			     *this_prologue_cache);
+    }
 
-	return *this_prologue_cache;
+  return *this_prologue_cache;
 }
 
 static CORE_ADDR
 mrk3_frame_base_address (struct frame_info *this_frame,
-								void **this_prologue_cache)
+			 void **this_prologue_cache)
 {
-	struct trad_frame_cache *frame_cache
-		= mrk3_analyze_frame_prologue (this_frame, this_prologue_cache);
-	return trad_frame_get_this_base(frame_cache);
-	}
+  struct trad_frame_cache *frame_cache
+    = mrk3_analyze_frame_prologue (this_frame, this_prologue_cache);
+  return trad_frame_get_this_base (frame_cache);
+}
 
 
 static void
 mrk3_frame_this_id (struct frame_info *this_frame,
-				void **this_prologue_cache, struct frame_id *this_id)
+		    void **this_prologue_cache, struct frame_id *this_id)
 {
-	CORE_ADDR base = mrk3_frame_base_address (this_frame, this_prologue_cache);
-	if (base) {
-		*this_id = frame_id_build(base, get_frame_func (this_frame));
-	}
-	/* Otherwise, leave it unset, and that will terminate the backtrace.  */
+  CORE_ADDR base = mrk3_frame_base_address (this_frame, this_prologue_cache);
+  if (base)
+    {
+      *this_id = frame_id_build (base, get_frame_func (this_frame));
+    }
+  /* Otherwise, leave it unset, and that will terminate the backtrace.  */
 }
 
 
 static struct value *
 mrk3_frame_prev_register (struct frame_info *this_frame,
-			 void **this_prologue_cache, int regnum)
+			  void **this_prologue_cache, int regnum)
 {
-	struct trad_frame_cache *frame_cache = *this_prologue_cache;
-	if (frame_cache == NULL) {
-		return frame_unwind_got_constant (this_frame, regnum, 0);
-	}
-	else {
-		return trad_frame_get_register(frame_cache, this_frame, regnum);
-	}
+  struct trad_frame_cache *frame_cache = *this_prologue_cache;
+  if (frame_cache == NULL)
+    {
+      return frame_unwind_got_constant (this_frame, regnum, 0);
+    }
+  else
+    {
+      return trad_frame_get_register (frame_cache, this_frame, regnum);
+    }
 }
 
 
 static const struct frame_unwind mrk3_frame_unwind = {
-	NORMAL_FRAME,
-	mrk3_frame_this_id,
-	mrk3_frame_prev_register,
-	NULL,
-	default_frame_sniffer
+  NORMAL_FRAME,
+  mrk3_frame_this_id,
+  mrk3_frame_prev_register,
+  NULL,
+  default_frame_sniffer
 };
 
 
 static const struct frame_base mrk3_frame_base = {
-	&mrk3_frame_unwind,
-	mrk3_frame_base_address,
-	mrk3_frame_base_address,
-	mrk3_frame_base_address
+  &mrk3_frame_unwind,
+  mrk3_frame_base_address,
+  mrk3_frame_base_address,
+  mrk3_frame_base_address
 };
 
 
 static CORE_ADDR
 mrk3_unwind_pc (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
-	ULONGEST pc;
-	pc = frame_unwind_register_unsigned (next_frame, mrk3_sim_reg_pc);
-	return gdbarch_addr_bits_remove (gdbarch, pc);
+  ULONGEST pc;
+  pc = frame_unwind_register_unsigned (next_frame, mrk3_sim_reg_pc);
+  return gdbarch_addr_bits_remove (gdbarch, pc);
 }
 
 static CORE_ADDR
 mrk3_unwind_sp (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
-	ULONGEST sp;
-	sp = frame_unwind_register_unsigned (next_frame, mrk3_sim_reg_sp);
-	return sp & 0xFFFF;
+  ULONGEST sp;
+  sp = frame_unwind_register_unsigned (next_frame, mrk3_sim_reg_sp);
+  return sp & 0xFFFF;
 }
 
-int mrk3_convert_register_p (struct gdbarch *gdbarch, int regnum,struct type *type)
+int
+mrk3_convert_register_p (struct gdbarch *gdbarch, int regnum,
+			 struct type *type)
 {
-	return mrk3_register_type(gdbarch,regnum)->length!=type->length;
+  return mrk3_register_type (gdbarch, regnum)->length != type->length;
 }
 
 CORE_ADDR
-mrk3_address_bits_remove (struct gdbarch *gdbarch, CORE_ADDR addr)
+mrk3_address_bits_remove (struct gdbarch * gdbarch, CORE_ADDR addr)
 {
-  return addr&0x0FFFFFFF;
+  return addr & 0x0FFFFFFF;
 }
 
-int mrk3_address_class_type_flags (int byte_size,
-                                   int dwarf2_addr_class)
+int
+mrk3_address_class_type_flags (int byte_size, int dwarf2_addr_class)
 {
   if (byte_size == 2)
     return TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1;
@@ -1093,8 +1280,7 @@ mrk3_address_class_type_flags_to_name (int type_flags)
 #endif
 
 int
-mrk3_address_class_name_to_type_flags (char *name,
-                                           int *type_flags_ptr)
+mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
 {
   if (strcmp (name, "short") == 0)
     {
@@ -1111,96 +1297,99 @@ mrk3_address_class_name_to_type_flags (char *name,
 static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
-	struct gdbarch *gdbarch;
-	struct gdbarch_tdep *tdep;
+  struct gdbarch *gdbarch;
+  struct gdbarch_tdep *tdep;
 
-	/* This is a horrible temporary kludge to deal with the problem that
-	   the Target compiler generates a big-endian ELF file for a
-	   little-endian architecture. */
-	info.byte_order = BFD_ENDIAN_LITTLE;
+  /* This is a horrible temporary kludge to deal with the problem that
+     the Target compiler generates a big-endian ELF file for a
+     little-endian architecture. */
+  info.byte_order = BFD_ENDIAN_LITTLE;
 
-	/* Check to see if we've already built an appropriate architecture
-		 object for this executable.  */
-	arches = gdbarch_list_lookup_by_info (arches, &info);
-	if (arches)
-		return arches->gdbarch;
+  /* Check to see if we've already built an appropriate architecture
+     object for this executable.  */
+  arches = gdbarch_list_lookup_by_info (arches, &info);
+  if (arches)
+    return arches->gdbarch;
 
-	/* Create a new architecture from the information provided. */
-	tdep = XMALLOC (struct gdbarch_tdep);
-	gdbarch = gdbarch_alloc (&info, tdep); // TODO: Can we use null for tdep? We do never use tdep anyways.
+  /* Create a new architecture from the information provided. */
+  tdep = XMALLOC (struct gdbarch_tdep);
+  gdbarch = gdbarch_alloc (&info, tdep);	/*  TODO: Can we use null for tdep? We do never use tdep anyways. */
 
-	//set_gdbarch_addr_bits_remove(gdbarch,mrk3_address_bits_remove);
+  /* set_gdbarch_addr_bits_remove(gdbarch,mrk3_address_bits_remove); */
 
-	set_gdbarch_address_class_type_flags(gdbarch,mrk3_address_class_type_flags);
-	set_gdbarch_short_bit (gdbarch, 1 * TARGET_CHAR_BIT);
-	set_gdbarch_int_bit (gdbarch, 2 * TARGET_CHAR_BIT);
-	set_gdbarch_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-	set_gdbarch_long_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-	set_gdbarch_ptr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-	set_gdbarch_addr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_address_class_type_flags (gdbarch,
+					mrk3_address_class_type_flags);
+  set_gdbarch_short_bit (gdbarch, 1 * TARGET_CHAR_BIT);
+  set_gdbarch_int_bit (gdbarch, 2 * TARGET_CHAR_BIT);
+  set_gdbarch_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_long_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_ptr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_addr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
 
-	set_gdbarch_float_bit (gdbarch, 2 * TARGET_CHAR_BIT);
-	set_gdbarch_double_bit (gdbarch, 2 * TARGET_CHAR_BIT);
-	set_gdbarch_long_double_bit (gdbarch, 2 * TARGET_CHAR_BIT);
+  set_gdbarch_float_bit (gdbarch, 2 * TARGET_CHAR_BIT);
+  set_gdbarch_double_bit (gdbarch, 2 * TARGET_CHAR_BIT);
+  set_gdbarch_long_double_bit (gdbarch, 2 * TARGET_CHAR_BIT);
 
-	set_gdbarch_float_format (gdbarch, floatformats_ieee_single);
-	set_gdbarch_double_format (gdbarch, floatformats_ieee_single);
-	set_gdbarch_long_double_format (gdbarch, floatformats_ieee_single);
+  set_gdbarch_float_format (gdbarch, floatformats_ieee_single);
+  set_gdbarch_double_format (gdbarch, floatformats_ieee_single);
+  set_gdbarch_long_double_format (gdbarch, floatformats_ieee_single);
 
 /*
 	set_gdbarch_read_pc (gdbarch, mrk3_read_pc);
 	set_gdbarch_write_pc (gdbarch, mrk3_write_pc);
 */
-	set_gdbarch_num_regs (gdbarch, NUM_REAL_REGS);
-	set_gdbarch_num_pseudo_regs (gdbarch, NUM_PSEUDO_REGS);
+  set_gdbarch_num_regs (gdbarch, NUM_REAL_REGS);
+  set_gdbarch_num_pseudo_regs (gdbarch, NUM_PSEUDO_REGS);
 
-	set_gdbarch_sp_regnum (gdbarch, SP_REGNUM);
-	set_gdbarch_pc_regnum (gdbarch, PC_REGNUM);
+  set_gdbarch_sp_regnum (gdbarch, SP_REGNUM);
+  set_gdbarch_pc_regnum (gdbarch, PC_REGNUM);
 
-	set_gdbarch_register_name (gdbarch, mrk3_register_name);
-	set_gdbarch_register_type (gdbarch, mrk3_register_type);
+  set_gdbarch_register_name (gdbarch, mrk3_register_name);
+  set_gdbarch_register_type (gdbarch, mrk3_register_type);
 
-	set_gdbarch_pseudo_register_read (gdbarch, mrk3_pseudo_register_read);
-	set_gdbarch_pseudo_register_write (gdbarch, mrk3_pseudo_register_write);
+  set_gdbarch_pseudo_register_read (gdbarch, mrk3_pseudo_register_read);
+  set_gdbarch_pseudo_register_write (gdbarch, mrk3_pseudo_register_write);
 
 /* TODO: reading the stack and address to pointer conversion is not supported atm. */
-//  set_gdbarch_return_value (gdbarch, mrk3_return_value);
-	set_gdbarch_print_insn (gdbarch, print_insn_mrk3);
+/*   set_gdbarch_return_value (gdbarch, mrk3_return_value); */
+  set_gdbarch_print_insn (gdbarch, print_insn_mrk3);
 
-//  set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call);
-	set_gdbarch_dwarf2_reg_to_regnum (gdbarch, mrk3_dwarf2_reg_to_regnum);
+/*   set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call); */
+  set_gdbarch_dwarf2_reg_to_regnum (gdbarch, mrk3_dwarf2_reg_to_regnum);
 
-	set_gdbarch_address_to_pointer (gdbarch, mrk3_address_to_pointer);
-	set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
-	// IMPORTANT - We need to be able to convert register contents to different length
-	// gdb default will use 1:1 which is false in case we have a 16 bit register and need 32 bit values
-	set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p);
-	set_gdbarch_register_to_value (gdbarch, mrk3_register_to_value);
-	set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
-	set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
+  set_gdbarch_address_to_pointer (gdbarch, mrk3_address_to_pointer);
+  set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
+  /*  IMPORTANT - We need to be able to convert register contents to different length */
+  /*  gdb default will use 1:1 which is false in case we have a 16 bit register and need 32 bit values */
+  set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p);
+  set_gdbarch_register_to_value (gdbarch, mrk3_register_to_value);
+  set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
+  set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
 
 #if 0
-	set_gdbarch_memory_insert_breakpoint (gdbarch, mrk3_memory_insert_breakpoint);
-	set_gdbarch_memory_remove_breakpoint (gdbarch, mrk3_memory_remove_breakpoint);
+  set_gdbarch_memory_insert_breakpoint (gdbarch,
+					mrk3_memory_insert_breakpoint);
+  set_gdbarch_memory_remove_breakpoint (gdbarch,
+					mrk3_memory_remove_breakpoint);
 #endif
-//	set_gdbarch_decr_pc_after_break (gdbarch, mrk3_sim_break_insn_pc_decrease);
-	set_gdbarch_breakpoint_from_pc (gdbarch, mrk3_breakpoint_from_pc);
+/*       set_gdbarch_decr_pc_after_break (gdbarch, mrk3_sim_break_insn_pc_decrease); */
+  set_gdbarch_breakpoint_from_pc (gdbarch, mrk3_breakpoint_from_pc);
 
-	frame_unwind_append_unwinder (gdbarch, &mrk3_frame_unwind);
-	frame_base_set_default (gdbarch, &mrk3_frame_base);
+  frame_unwind_append_unwinder (gdbarch, &mrk3_frame_unwind);
+  frame_base_set_default (gdbarch, &mrk3_frame_base);
 
-//  set_gdbarch_dummy_id (gdbarch, avr_dummy_id);
+/*   set_gdbarch_dummy_id (gdbarch, avr_dummy_id); */
 
-	set_gdbarch_unwind_pc (gdbarch, mrk3_unwind_pc);
-	set_gdbarch_unwind_sp (gdbarch, mrk3_unwind_sp);
+  set_gdbarch_unwind_pc (gdbarch, mrk3_unwind_pc);
+  set_gdbarch_unwind_sp (gdbarch, mrk3_unwind_sp);
 
-	return gdbarch;
+  return gdbarch;
 }
 
-extern initialize_file_ftype _initialize_mrk3_tdep; /* -Wmissing-prototypes */
+extern initialize_file_ftype _initialize_mrk3_tdep;	/* -Wmissing-prototypes */
 
 void
 _initialize_mrk3_tdep (void)
 {
-	register_gdbarch_init (bfd_arch_mrk3, mrk3_gdbarch_init);
+  register_gdbarch_init (bfd_arch_mrk3, mrk3_gdbarch_init);
 }
