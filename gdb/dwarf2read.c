@@ -76,7 +76,6 @@
 #include "gdb_assert.h"
 #include <sys/types.h>
 
-
 typedef struct symbol *symbolp;
 DEF_VEC_P (symbolp);
 
@@ -6775,7 +6774,6 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
 	      xfree (built_actual_name);
 	      return;
 	    }
-
 	  /* prim_record_minimal_symbol (actual_name, addr + baseaddr,
 	     mst_file_data, objfile); */
 	  add_psymbol_to_list (actual_name, strlen (actual_name),

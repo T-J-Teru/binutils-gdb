@@ -1,3 +1,12 @@
+2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	Fix minor diffs with upstream
+
+	* breakpoint.c: Minor changes to match upstream.
+	* doc/stabs.texinfo: Minor changes to match upstream.
+	* dwarf2read.c: Minor changes to match upstream.
+	* frame.c: Minor changes to match upstream.
+
 2013-12-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_register_type): Make PC 32-bit.

@@ -82,7 +82,6 @@
 #include "mi/mi-common.h"
 #include "python/python.h"
 
-
 /* Enums for exception-handling support.  */
 enum exception_event_kind
 {
@@ -3930,7 +3929,6 @@ breakpoint_here_p (struct address_space *aspace, CORE_ADDR pc)
       if ((breakpoint_enabled (bl->owner)
 	   || bl->owner->enable_state == bp_permanent)
 	  && breakpoint_location_address_match (bl, aspace, pc))
-
 	{
 	  if (overlay_debugging 
 	      && section_is_overlay (bl->section)
