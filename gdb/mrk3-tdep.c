@@ -165,7 +165,7 @@ mrk3_get_mem_space (void)
      an error message. */
   struct ui_file *mf = mem_fileopen ();
   char buf[64];
-  target_rcmd ("getMemSpace", mf);
+  target_rcmd ("SilentGetMemSpace", mf);
   ui_file_put (mf, mrk3_ui_memcpy, buf);
   /* Result is in mf->stream->buffer, of length mf->stream->length_buffer */
   if (strlen (buf) == 0)
@@ -180,7 +180,12 @@ mrk3_get_mem_space (void)
     {
       /* The value is returned as a 32 bit value, with the result in the top 8
 	 bits. */
-      return (uint8_t) (strtol (buf, NULL, 16) >> 24) & MRK3_MEM_SPACE_MASK;
+      long unsigned int res = strtol (buf, NULL, 16);
+      if (mrk3_debug)
+	fprintf_unfiltered (gdb_stdlog,
+			    "mrk3-tdep.c: buf \"%s\", mem space 0x%08lx\n.",
+			    buf, res);
+      return (uint8_t) (res >> 24) & MRK3_MEM_SPACE_MASK;
     }
 }
 
@@ -197,7 +202,7 @@ mrk3_get_mem_type (void)
      an error message. */
   struct ui_file *mf = mem_fileopen ();
   char buf[64];
-  target_rcmd ("getMemSpace", mf);
+  target_rcmd ("SilentGetMemSpace", mf);
   ui_file_put (mf, mrk3_ui_memcpy, buf);
   /* Result is in mf->stream->buffer, of length mf->stream->length_buffer */
   if (strlen (buf) == 0)
@@ -212,7 +217,12 @@ mrk3_get_mem_type (void)
     {
       /* The value is returned as a 32 bit value, with the result in the top 8
 	 bits. */
-      return (uint8_t) (strtol (buf, NULL, 16) >> 24) & MRK3_MEM_TYPE_MASK;
+      long unsigned int res = strtol (buf, NULL, 16);
+      if (mrk3_debug)
+	fprintf_unfiltered (gdb_stdlog,
+			    "mrk3-tdep.c: buf \"%s\", mem type 0x%08lx\n.", buf,
+			    res);
+      return (uint8_t) (res >> 24) & MRK3_MEM_TYPE_MASK;
     }
 }
 
@@ -285,9 +295,7 @@ mrk3_register_name (struct gdbarch *gdbarch, int regnum)
   else
     {
       /* Moan */
-      fprintf_unfiltered (gdb_stdlog,
-			  "mrk3_register_name: unknown register number %d.\n",
-			  regnum);
+      warning (_("mrk3_register_name: unknown register number %d.\n"), regnum);
       return "";
     }
 }
@@ -373,9 +381,7 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
       return builtin_type (gdbarch)->builtin_uint8;
     default:
       /*  Moan */
-      fprintf_unfiltered (gdb_stdlog,
-			  "mrk3_register_type: unknown register number %d.\n",
-			  regnum);
+      warning (_("mrk3_register_type: unknown register number %d.\n"), regnum);
       return builtin_type (gdbarch)->builtin_int0;
     };
 }
@@ -502,9 +508,8 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 
     default:
       /*  Moan */
-      fprintf_unfiltered (gdb_stdlog,
-			  "mrk3_pseudo_register_read: Not a pseudo reg %d.\n",
-			  cooked_regnum);
+      warning (_("mrk3_pseudo_register_read: Not a pseudo reg %d.\n"),
+	       cooked_regnum);
       return REG_UNKNOWN;
     }
 }
@@ -675,9 +680,8 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 
     default:
       /*  Moan */
-      fprintf_unfiltered (gdb_stdlog,
-			  "mrk3_pseudo_register_write: Not a pseudo reg %d.\n",
-			  cooked_regnum);
+      warning (_("mrk3_pseudo_register_write: Not a pseudo reg %d.\n"),
+	       cooked_regnum);
       return;
     }
 }
@@ -902,13 +906,15 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
       break;			/*  z flag */
 
     default:
-      printf
-	("mrk3_dwarf2_reg_to_regnum: Warning: unknown drwarf2 register number: %d\n",
-	 dwarf2_regnr);
+      warning (_("mrk3_dwarf2_reg_to_regnum: unknown drwarf2 regnum: %d."),
+	       dwarf2_regnr);
       regnr = MRK3_R0_REGNUM;
     }
 
-  /* printf("mrk3-tdep.c:mrk3_dwarf2_reg_to_regnum gdbarch->num_regs=%d dwarf2_regnr(%d) maps to (%d)\n",gdbarch_num_regs(gdbarch),dwarf2_regnr,regnr); */
+  if (mrk3_debug)
+    fprintf_unfiltered (gdb_stdlog, "mrk3-tdep.c: gdbarch->num_regs=%d "
+			"dwarf2_regnr(%d) maps to (%d)\n", 
+			gdbarch_num_regs( gdbarch), dwarf2_regnr, regnr);
   return regnr;
 
   /* return Dll_Dwarf2RegToRegnum(dwarf2_regnr); */
@@ -1201,7 +1207,7 @@ mrk3_frame_cache (struct frame_info *this_frame,
 {
   if (mrk3_debug)
     fprintf_unfiltered (gdb_stdlog,
-			"mrk3_frame_cache, this_cache = 0x%p\n", *this_cache);
+			"mrk3-tdep.c: frame_cache = 0x%p\n", *this_cache);
 
   if (!*this_cache)
     {

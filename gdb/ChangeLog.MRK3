@@ -1,5 +1,15 @@
 2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_get_mem_space, mrk3_get_mem_type): Use silent
+	remote command, better debug message.
+	(mrk3_register_name, mrk3_register_type)
+	(mrk3_pseudo_register_read, mrk3_pseudo_register_write)
+	(mrk3_dwarf2_reg_to_regnum): Use warning instead of
+	fprintf_unfiltered for warning messages.
+	(mrk3_frame_cache): Add debug message.
+
+2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	Fix broken stack frame analysis.
 
 	* mrk3-tdep.c: Disable all p40 headers. Rename this_prologue_cache
