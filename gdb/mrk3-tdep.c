@@ -1073,6 +1073,11 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
   addr |= topbits << 24;
 
   *pcptr = addr;
+
+  if (mrk3_debug)
+    fprintf_unfiltered (gdb_stdlog, "mrk3-tdep.c: breakpoint at %s.",
+			print_core_address (gdbarch, addr));
+
   *lenptr = sizeof (mrk3_sim_break_insn);
   return (gdb_byte *) & mrk3_sim_break_insn;
 }
