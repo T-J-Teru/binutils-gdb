@@ -1,5 +1,44 @@
 2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	Fix broken stack frame analysis.
+
+	* mrk3-tdep.c: Disable all p40 headers. Rename this_prologue_cache
+	to this_cache throughout for brevity, use locally defined regnums
+	throughout, prefix regnum #defines with MRK3 to avoid name clashing
+	(MRK3_MEM_SPACE_MASK, MRK3_MEM_SPACE_SYS, MRK3_MEM_SPACE_APP1)
+	(MRK3_MEM_SPACE_APP2, MRK3_MEM_TYPE_MASK, MRK3_MEM_TYPE_DATA)
+	(MRK3_MEM_TYPE_CODE): Define.
+	(struct mrk3_objfile_info_t, mrk3_debug): Define.
+	(mrk3_get_mem_space): Correct prototype declaration, clearer
+	warning, and return new defined mem space flag.
+	(mrk3_get_mem_type, mrk3_is_sys_mem_space, mrk3_is_usr_mem_space):
+	Created.
+	(mrk3_pseudo_register_read): New return type, use new memory space
+	type functions.
+	(mrk3_pseudo_register_write): Use new memory space type functions.
+	(mrk3_dwarf2_reg_to_regnum): Use locally defined constants.
+	(mrk3_map_dwarf2_data_addr, mrk3_free_objfile_info)
+	(mrk3_save_objfile_name): Disable.
+	(mrk3_breakpoint_from_pc): Make address manipulation explicit.
+	(enable_system_mode_stack_traces): Extern declaration deleted.
+	(mrk3_analyze_prologue): Simplified arguments and analysis, with
+	no unwinding and setting the frame ID.
+	(mrk3_analyze_frame_prologue): Renamed to mrk3_frame_cache for
+	consistency with other architectures.
+	(mrk3_frame_cache): Renamed from mrk3_analyze_frame_prologue, Use
+	simplified mrk3_analyze_frame_prologue.
+	(mrk3_frame_prev_register): Always analyse frame, even if null.
+	(mrk3_frame_unwind, mrk3_frame_base): Use named fields to avoid
+	embarrassment when struct changes.
+	(mrk3_address_bits_remove, mrk3_address_class_type_flags)
+	(mrk3_address_class_name_to_type_flags): Disabled.
+	(mrk3_dump_tdep): Created.
+	(_initialize_mrk3_tdep): Replace obsolete register_gdbarch_init
+	with gdbarch_register and use of target depedency dumper, add new
+	"set/show debug arc" commands.
+
+2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	Fix minor diffs with upstream
 
 	* breakpoint.c: Minor changes to match upstream.

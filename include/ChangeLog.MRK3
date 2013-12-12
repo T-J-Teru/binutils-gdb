@@ -1,3 +1,8 @@
 2013-12-09  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* p40/gdb_register.h (mrk3_sim_reg): Make SP first pseudo reg,
+	rather than raw reg.
+
+2013-12-09  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* p40/P40_DLL.h: Make more friendly for non-Windows.

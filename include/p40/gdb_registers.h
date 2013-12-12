@@ -11,13 +11,13 @@ enum mrk3_sim_reg {
 	mrk3_sim_reg_r4,
 	mrk3_sim_reg_r5,
 	mrk3_sim_reg_r6,
-	mrk3_sim_reg_sp,
 	mrk3_sim_reg_pc,
 	mrk3_sim_reg_psw,
 	mrk3_sim_reg_ssp,
 	mrk3_sim_reg_usp,
 
-// Enumerate all pseudo registers.
+	// Enumerate all pseudo registers.
+	mrk3_sim_reg_sp,
 	mrk3_sim_pseudo_reg_r0l,
 	mrk3_sim_pseudo_reg_r1l,
 	mrk3_sim_pseudo_reg_r2l,
