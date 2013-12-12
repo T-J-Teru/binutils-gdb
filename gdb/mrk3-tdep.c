@@ -1068,8 +1068,8 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
 {
   CORE_ADDR addr = *pcptr & 0x00ffffff;		/* TODO: Do this properly */
 
-  /*  always use full addresses for breakpoints. */
-  CORE_ADDR topbits = mrk3_get_mem_space () | mrk3_get_mem_type ();
+  /*  always use full addresses for breakpoints, and it is code. */
+  CORE_ADDR topbits = mrk3_get_mem_space () | MRK3_MEM_TYPE_CODE;
   addr |= topbits << 24;
 
   *pcptr = addr;

@@ -1,5 +1,9 @@
 2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* mrk3-tdep.c (breakpoint_from_pc): Explicitly make code address.
+
+2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_get_mem_space, mrk3_get_mem_type): Use silent
 	remote command, better debug message.
 	(mrk3_register_name, mrk3_register_type)
