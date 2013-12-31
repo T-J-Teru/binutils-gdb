@@ -1,3 +1,14 @@
+2015-02-28  Nick Clifton  <nickc@redhat.com>
+
+	Cherry-pick commit bbad633 from upstream.
+	* objcopy.c (dump_sections): New list.
+	(command_line_switch): Add OPTION_DUMP_SECTION.
+	(copy_options): Add dump-section.
+	(copy_usage): Document new option.
+	(copy_object): Dump requested sections.
+	(copy_main): Handle --dump-section.
+	* doc/binutils.texi: Document --dump-section option.
+
 2015-02-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* readelf.c: Add 'elf/mrk3.h' include.
