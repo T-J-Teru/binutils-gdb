@@ -1,0 +1,6 @@
+2014-01-13  Simon Cook  <simon.cook@embecosm.com>
+
+	* Makefile.am: Add eelf32mrk3.c emulation source rule.
+	* Makefile.in: Regenerated.
+	* configure.tgt: Add mrk3-*-*.
+	* emulparams/elf32mrk3.sh: Added, based on elf32epiphany.sh.
