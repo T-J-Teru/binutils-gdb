@@ -1,5 +1,11 @@
 2014-01-14  Simon Cook  <simon.cook@embecosm.com>
 
+	* elf32-mrk3.c (R_MRK3_CALL16, R_MRK3_max): Defined.
+	(elf_mrk3_howto_table): Add R_MRK3_CALL16 relocation.
+	(mrk3_info_to_howto): Adjust to use R_MRK3_max.
+
+2014-01-14  Simon Cook  <simon.cook@embecosm.com>
+
 	* elf32-mrk3.c (elf_mrk3_howto_table): Removed ARC references.
 	(mrk3_reloc_map): Likewise.
 
