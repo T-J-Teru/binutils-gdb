@@ -26,12 +26,12 @@
 #include "elf-bfd.h"
 #include "libiberty.h"
 
-#define R_ARC_NONE 0
+#define R_MRK3_NONE 0
 
 static reloc_howto_type elf_mrk3_howto_table[] =
 {
   /* This reloc does nothing.  */
-  HOWTO (R_ARC_NONE,		/* Type.  */
+  HOWTO (R_MRK3_NONE,		/* Type.  */
 	 0,			/* Rightshift.  */
 	 2,			/* Size (0 = byte, 1 = short, 2 = long).  */
 	 32,			/* Bitsize.  */
@@ -39,14 +39,14 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 0,			/* Bitpos.  */
 	 complain_overflow_bitfield, /* Complain_on_overflow.  */
 	 bfd_elf_generic_reloc,	/* Special_function.  */
-	 "R_ARC_NONE",		/* Name.  */
+	 "R_MRK3_NONE",		/* Name.  */
 	 TRUE,			/* Partial_inplace.  */
 	 0,			/* Src_mask.  */
 	 0,			/* Dst_mask.  */
 	 FALSE)		/* PCrel_offset.  */
 };
 
-/* Map BFD reloc types to ARC ELF reloc types.  */
+/* Map BFD reloc types to MRK3 ELF reloc types.  */
 
 struct mrk3_reloc_map
 {
@@ -56,7 +56,7 @@ struct mrk3_reloc_map
 
 static const struct mrk3_reloc_map mrk3_reloc_map[] =
 {
-  { BFD_RELOC_NONE, R_ARC_NONE, }
+  { BFD_RELOC_NONE, R_MRK3_NONE, }
 };
 
 static reloc_howto_type *
