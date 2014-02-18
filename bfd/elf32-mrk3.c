@@ -25,11 +25,7 @@
 #include "libbfd.h"
 #include "elf-bfd.h"
 #include "libiberty.h"
-
-/* FIXME: This list should eventually be moved into include/elf/mrk3.h */
-#define R_MRK3_NONE 0
-#define R_MRK3_CALL16 1
-#define R_MRK3_max 2
+#include "elf/mrk3.h"
 
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
 
@@ -50,19 +46,45 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 0,			/* Dst_mask.  */
 	 FALSE),		/* PCrel_offset.  */
   /* This relocation is for the target for a CALL instruction. */
-  HOWTO (R_MRK3_CALL16,   /* Type.  */
-   0,     /* Rightshift.  */
-   2,     /* Size (0 = byte, 1 = short, 2 = long).  */
-   32,      /* Bitsize.  */
-   FALSE,     /* PC_relative.  */
-   16,     /* Bitpos.  */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_CALL16",   /* Name.  */
-   TRUE,      /* Partial_inplace.  */
-   0xffff0000,     /* Src_mask.  */
-   0xffff0000,     /* Dst_mask.  */
-   FALSE),    /* PCrel_offset.  */
+  HOWTO (R_MRK3_CALL16,         /* Type.  */
+	 0,                     /* Rightshift.  */
+	 2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+	 32,                    /* Bitsize.  */
+	 FALSE,                 /* PC_relative.  */
+	 16,                    /* Bitpos.  */
+	 complain_overflow_bitfield, /* Complain_on_overflow.  */
+	 bfd_elf_generic_reloc, /* Special_function.  */
+	 "R_MRK3_CALL16",       /* Name.  */
+	 TRUE,                  /* Partial_inplace.  */
+	 0xffff0000,            /* Src_mask.  */
+	 0xffff0000,            /* Dst_mask.  */
+	 FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_8,              /* Type.  */
+	 0,                     /* Rightshift.  */
+	 0,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+	 8,                     /* Bitsize.  */
+	 FALSE,                 /* PC_relative.  */
+	 16,                    /* Bitpos.  */
+	 complain_overflow_bitfield, /* Complain_on_overflow.  */
+	 bfd_elf_generic_reloc, /* Special_function.  */
+	 "R_MRK3_8",            /* Name.  */
+	 TRUE,                  /* Partial_inplace.  */
+	 0xff,                  /* Src_mask.  */
+	 0xff,                  /* Dst_mask.  */
+	 FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_16,             /* Type.  */
+	 0,                     /* Rightshift.  */
+	 1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+	 16,                    /* Bitsize.  */
+	 FALSE,                 /* PC_relative.  */
+	 0,                     /* Bitpos.  */
+	 complain_overflow_bitfield, /* Complain_on_overflow.  */
+	 bfd_elf_generic_reloc, /* Special_function.  */
+	 "R_MRK3_16",           /* Name.  */
+	 TRUE,                  /* Partial_inplace.  */
+	 0xffff,                /* Src_mask.  */
+	 0xffff,                /* Dst_mask.  */
+	 FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */

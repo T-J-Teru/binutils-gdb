@@ -41,8 +41,8 @@
 #define E_MRK3_MACH_MRK351 51
 #define E_MRK3_MACH_MRK36 6
 
-/* Relocations.  */
-START_RELOC_NUMBERS (elf_mrk3_reloc_type)
+/* Target Relocations.  */
+/* START_RELOC_NUMBERS (elf_mrk3_reloc_type)
      RELOC_NUMBER (R_MRK3_NONE,			0)
      RELOC_NUMBER (R_MRK3_32,			1)
      RELOC_NUMBER (R_MRK3_7_PCREL,		2)
@@ -69,6 +69,14 @@ START_RELOC_NUMBERS (elf_mrk3_reloc_type)
      RELOC_NUMBER (R_MRK3_MS8_LDI_NEG,          23)
      RELOC_NUMBER (R_MRK3_LO8_LDI_GS,	       24)
      RELOC_NUMBER (R_MRK3_HI8_LDI_GS,	       25)
+     END_RELOC_NUMBERS (R_MRK3_max)*/
+
+/* Relocations.  */
+START_RELOC_NUMBERS (elf_mrk3_reloc_type)
+  RELOC_NUMBER (R_MRK3_NONE,   0)
+  RELOC_NUMBER (R_MRK3_CALL16, 1)
+  RELOC_NUMBER (R_MRK3_8,      2)
+  RELOC_NUMBER (R_MRK3_16,     3)
 END_RELOC_NUMBERS (R_MRK3_max)
 
 #endif /* _ELF_MRK3_H */

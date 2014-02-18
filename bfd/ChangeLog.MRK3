@@ -1,3 +1,8 @@
+2014-02-18  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf32-mrk3.c (R_MRK3_NONE, R_MRK3_CALL16, R_MRK3_max): Undefined.
+	(elf_mrk3_howto_table): Add R_MRK3_CALL8, R_MRK3_CALL16 relocations.
+
 2014-01-14  Simon Cook  <simon.cook@embecosm.com>
 
 	* elf32-mrk3.c (R_MRK3_CALL16, R_MRK3_max): Defined.
