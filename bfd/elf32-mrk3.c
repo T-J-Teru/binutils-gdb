@@ -153,13 +153,10 @@ mrk3_elf_object_p (bfd *abfd)
 }
 
 
-/* There is a rather horrible situation that the target compiler generates a
-   big-endian format ELF, even though it really is a little endian machine. So
-   we need to do this as big endian, and fix up elsewhere. */
-/* #define TARGET_LITTLE_SYM   bfd_elf32_mrk3_vec */
-/* #define TARGET_LITTLE_NAME  "elf32-mrk3" */
-#define TARGET_BIG_SYM      bfd_elf32_mrk3_vec
-#define TARGET_BIG_NAME     "elf32-mrk3"
+#define TARGET_LITTLE_SYM   bfd_elf32_mrk3_vec
+#define TARGET_LITTLE_NAME  "elf32-mrk3"
+/*#define TARGET_BIG_SYM      bfd_elf32_mrk3_vec*/
+/*#define TARGET_BIG_NAME     "elf32-mrk3"*/
 #define ELF_ARCH            bfd_arch_mrk3
 #define ELF_MACHINE_CODE    0
 #define ELF_MAXPAGESIZE     0x1000
