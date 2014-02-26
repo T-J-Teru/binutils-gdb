@@ -97,7 +97,9 @@ struct mrk3_reloc_map
 
 static const struct mrk3_reloc_map mrk3_reloc_map[] =
 {
-  { BFD_RELOC_NONE, R_MRK3_NONE, }
+  { BFD_RELOC_NONE, R_MRK3_NONE },
+  { BFD_RELOC_8,    R_MRK3_8 },
+  { BFD_RELOC_16,   R_MRK3_16 }
 };
 
 static reloc_howto_type *
