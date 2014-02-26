@@ -1,5 +1,10 @@
 2014-02-26  Simon Cook  <simon.cook@embecosm.com>
 
+	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_32 reloc.
+	(mrk3_reloc_map): Likewise.
+
+2014-02-26  Simon Cook  <simon.cook@embecosm.com>
+
 	* elf32-mrk3.c (mrk3_reloc_map): Add 8 and 16 bit relocs to table.
 
 2014-02-25  Simon Cook  <simon.cook@embecosm.com>
