@@ -1,5 +1,9 @@
 2014-02-26  Simon Cook  <simon.cook@embecosm.com>
 
+	* cpu-mrk3.c (bfd_mrk3_arch): Add default architecture fill function.
+
+2014-02-26  Simon Cook  <simon.cook@embecosm.com>
+
 	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_32 reloc.
 	(mrk3_reloc_map): Likewise.
 
