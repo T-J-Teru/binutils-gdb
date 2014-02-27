@@ -9015,7 +9015,7 @@ bp_loc_is_permanent (struct bp_location *loc)
   switch_to_program_space_and_thread (loc->pspace);
   make_show_memory_breakpoints_cleanup (0);
 
-  if (target_read_memory (loc->address, target_mem, len) == 0
+  if (target_read_memory (addr, target_mem, len) == 0
       && memcmp (target_mem, bpoint, len) == 0)
     retval = 1;
 
