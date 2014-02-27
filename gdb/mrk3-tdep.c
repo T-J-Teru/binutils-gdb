@@ -99,22 +99,22 @@
 #define NUM_REGS        (NUM_REAL_REGS + NUM_PSEUDO_REGS)
 
 /* Memory spaces. A total of 4 bits are allocated for this. */
-#define MRK3_MEM_SPACE_MASK 0xf0
-#define MRK3_MEM_SPACE_SYS  0x10
-#define MRK3_MEM_SPACE_APP1 0x20
-#define MRK3_MEM_SPACE_APP2 0x30
+#define MRK3_MEM_SPACE_MASK 0xf0000000
+#define MRK3_MEM_SPACE_SYS  0x10000000
+#define MRK3_MEM_SPACE_APP1 0x20000000
+#define MRK3_MEM_SPACE_APP2 0x30000000
 
 /* Memory types. One bit to indicate code or data. */
-#define MRK3_MEM_TYPE_MASK 0x01
-#define MRK3_MEM_TYPE_DATA 0x00
-#define MRK3_MEM_TYPE_CODE 0x01
+#define MRK3_MEM_TYPE_MASK 0x01000000
+#define MRK3_MEM_TYPE_DATA 0x00000000
+#define MRK3_MEM_TYPE_CODE 0x01000000
 
 /*  Define the breakpoint instruction which is inserted by */
 /*  GDB into the target code. This must be exactly the same */
 /*  as the simulator expects. */
 /*  Per definition, a breakpoint instruction has 16 bits. */
 /*  This should be sufficient for all purposes. */
-static const uint16_t mrk3_sim_break_insn = 0xFFFF;
+static const uint16_t mrk3_sim_break_insn = 0x0fc1;
 
 /* Structure describing architecture specific types. */
 struct gdbarch_tdep
@@ -156,7 +156,7 @@ mrk3_ui_memcpy (void *dest, const char *buffer, long len)
 /* Get the current memory space from the target.
 
    TODO: Is RCmd the best way to do this? */
-static uint8_t
+static uint32_t
 mrk3_get_mem_space (void)
 {
   /* TODO: We can't tell if we have a valid target function here, because it
@@ -185,7 +185,7 @@ mrk3_get_mem_space (void)
 	fprintf_unfiltered (gdb_stdlog,
 			    "mrk3-tdep.c: buf \"%s\", mem space 0x%08lx\n.",
 			    buf, res);
-      return (uint8_t) (res >> 24) & MRK3_MEM_SPACE_MASK;
+      return (uint32_t) res & MRK3_MEM_SPACE_MASK;
     }
 }
 
@@ -193,7 +193,7 @@ mrk3_get_mem_space (void)
 /* Get the current memory type from the target.
 
    TODO: Is RCmd the best way to do this? */
-static uint8_t
+static uint32_t
 mrk3_get_mem_type (void)
 {
   /* TODO: We can't tell if we have a valid target function here, because it
@@ -222,7 +222,7 @@ mrk3_get_mem_type (void)
 	fprintf_unfiltered (gdb_stdlog,
 			    "mrk3-tdep.c: buf \"%s\", mem type 0x%08lx\n.", buf,
 			    res);
-      return (uint8_t) (res >> 24) & MRK3_MEM_TYPE_MASK;
+      return (uint32_t) res & MRK3_MEM_TYPE_MASK;
     }
 }
 
@@ -1070,7 +1070,7 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
 
   /*  always use full addresses for breakpoints, and it is code. */
   CORE_ADDR topbits = mrk3_get_mem_space () | MRK3_MEM_TYPE_CODE;
-  addr |= topbits << 24;
+  addr |= topbits;
 
   *pcptr = addr;
 
@@ -1103,42 +1103,124 @@ mrk3_memory_remove_breakpoint (struct gdbarch *gdbarch,
 }
 #endif
 
+
+/* Convert target pointer to GDB address.
+
+   GDB expects a single unified byte addressed memory. For Harvard
+   architectures, this means that addresses on the target need mapping. To
+   avoid confusion, GDB refers to "addresses" to mean the unified byte address
+   space used internally within GDB and "pointers" to refer to the values used
+   on the target (which need be neither unique, nor byte addressing).
+
+   This mapping is typically achieved by shifting to convert to/from word
+   addressing if required and adding high order bits to addresses to
+   distinguish multiple address spaces.
+
+   MRK3 is a Harvard architecture, with a word-addressed instruction space.,
+   so needs this mechanism.
+
+   However...
+
+   There is no mechanism (yet!) in Remote Serial Protocol to distinguish which
+   address space is being used. So we cannot make the transformation. We must
+   pass the higher order bits and leave it to the server.
+
+   We leave these functions in anticipation of future changes, and use them to
+   provide some validation. */
+
 static CORE_ADDR
 mrk3_pointer_to_address (struct gdbarch *gdbarch,
 			 struct type *type, const gdb_byte * buf)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  CORE_ADDR addr = extract_unsigned_integer (buf, TYPE_LENGTH (type),
-					     byte_order);
-  switch (TYPE_INSTANCE_FLAGS (type))
+  CORE_ADDR ptr = extract_unsigned_integer (buf, TYPE_LENGTH (type),
+					    byte_order);
+
+  /* Is it a code pointer?  */
+  if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
+      || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
+      || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type)))
     {
-    case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
-      addr &= 0xffff;
-      break;
+      /* Sanity check */
+      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
+	{
+	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
+		   hex_string (ptr));
+	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
+	}
 
-    default:
-      break;
+      if (mrk3_debug >= 2)
+	fprintf_unfiltered (gdb_stdlog,
+			    "mrk3_pointer_to_address: code pointer %s.\n",
+			    hex_string (ptr));
+
+      return ptr;
     }
+  else
+    {
+      /* Sanity check */
+      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
+	{
+	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
+		   hex_string (ptr));
+	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
+	}
 
-  return addr;
+      if (mrk3_debug >= 2)
+	fprintf_unfiltered (gdb_stdlog,
+			    "mrk3_pointer_to_address: data pointer %s.\n",
+			    hex_string (ptr));
+
+      return ptr;
+    }
 }
 
+
+/* Convert GDB address to target pointer.
+
+   see mrk3_pointer_to_address for a description. */
 
 static void
 mrk3_address_to_pointer (struct gdbarch *gdbarch,
 			 struct type *type, gdb_byte * buf, CORE_ADDR addr)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  switch (TYPE_INSTANCE_FLAGS (type))
-    {
-    case TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1:
-      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order,
-			      addr & 0x0000FFFF);
-      break;
 
-    default:
+  /* Is it a code address?  */
+  if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
+      || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD)
+    {
+      /* Sanity check */
+      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
+	{
+	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
+		   hex_string (addr));
+	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
+	}
+
+      if (mrk3_debug >= 2)
+	fprintf_unfiltered (gdb_stdlog,
+			    "mrk3_address_to_pointer: code address %s.\n",
+			    hex_string (addr));
+
       store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, addr);
-      break;
+    }
+  else
+    {
+      /* Sanity check */
+      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
+	{
+	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
+		   hex_string (addr));
+	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
+	}
+
+      if (mrk3_debug >= 2)
+	fprintf_unfiltered (gdb_stdlog,
+			    "mrk3_address_to_pointer: data address %s.\n",
+			    hex_string (addr));
+
+      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, addr);
     }
 }
 
@@ -1356,6 +1438,26 @@ mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
 #endif
 
 
+/* Temporary disassembler. 
+
+   We don't have a working LLVM disassembler. */
+static int
+mrk3_print_insn (bfd_vma addr,
+		 disassemble_info *info)
+{
+  uint16_t  insn16;
+  uint32_t  insn32;
+
+  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
+  read_memory (addr, (gdb_byte *) &insn16, sizeof (insn16));
+  read_memory (addr, (gdb_byte *) &insn32, sizeof (insn32));
+
+  (*info->fprintf_func) (info->stream, "%08x %04hx", insn32, insn16);
+  return sizeof (insn16);	/* Assume 16-bit instruction. */
+
+}	/* mrk3_print_insn () */
+
+
 /* Initialize the gdbarch structure for the mrk3. */
 static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
@@ -1413,9 +1515,14 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_pseudo_register_read (gdbarch, mrk3_pseudo_register_read);
   set_gdbarch_pseudo_register_write (gdbarch, mrk3_pseudo_register_write);
 
-/* TODO: reading the stack and address to pointer conversion is not supported atm. */
-/*   set_gdbarch_return_value (gdbarch, mrk3_return_value); */
-  set_gdbarch_print_insn (gdbarch, print_insn_mrk3);
+  /* @todo: reading the stack and address to pointer conversion is not
+     supported atm. */
+  /* set_gdbarch_return_value (gdbarch, mrk3_return_value); */
+  /* We don't currently have a proper disassembler, so we'll provide our own
+     locally. The real one should be in opcodes/mrk3-dis.c (part of
+     binutils). */
+  /* set_gdbarch_print_insn (gdbarch, print_insn_mrk3); */
+  set_gdbarch_print_insn (gdbarch, mrk3_print_insn);
 
 /*   set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call); */
   set_gdbarch_dwarf2_reg_to_regnum (gdbarch, mrk3_dwarf2_reg_to_regnum);
@@ -1441,7 +1548,7 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   frame_unwind_append_unwinder (gdbarch, &mrk3_frame_unwind);
   frame_base_set_default (gdbarch, &mrk3_frame_base);
 
-/*   set_gdbarch_dummy_id (gdbarch, avr_dummy_id); */
+/*   set_gdbarch_dummy_id (gdbarch, mrk3_dummy_id); */
 
   set_gdbarch_unwind_pc (gdbarch, mrk3_unwind_pc);
   set_gdbarch_unwind_sp (gdbarch, mrk3_unwind_sp);

@@ -1,3 +1,15 @@
+2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c: Define 32 bit flag constants for memory spaces and
+	types. Change breakpoint instruction value.
+	(mrk3_get_mem_space): Return 32-bit result.
+	(mrk3_get_mem_type): Likewise.
+	(mrk3_breakpoint_from_pc): No need to shift top bits
+	(mrk3_pointer_to_address): Just sanity check - no conversion.
+	(mrk3_address_to_pointer): Likeiwse.
+	(mrk3_print_insn): Created.
+	(mrk3_gdbarch_init): Use temporary disassembler function.
+
 2013-12-12  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (breakpoint_from_pc): Add debug message.
