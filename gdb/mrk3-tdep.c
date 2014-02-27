@@ -184,7 +184,7 @@ mrk3_get_mem_space (void)
       /* The value is returned as a 32 bit value, with the result in the top 8
 	 bits. */
       long unsigned int res = strtol (buf, NULL, 16);
-      if (mrk3_debug)
+      if (mrk3_debug >= 2)
 	fprintf_unfiltered (gdb_stdlog,
 			    "mrk3-tdep.c: buf \"%s\", mem space 0x%08lx\n.",
 			    buf, res);
@@ -1062,24 +1062,25 @@ mrk3_get_memspace_from_objfile_name (const char *base_name)
 #endif
 
 
-/* The pc addresses words, but the simulator addresses bytes.  Therefore, the
-   rom address must be multiplied by two.  The pc might also contain mem space
-   information. Strip it before multiplying. */
+/* The breakpoint will be set at a GDB address, but we need to convert it to a
+   target (word) code address  */
 static const gdb_byte *
 mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
 			 CORE_ADDR * pcptr, int *lenptr)
 {
-  CORE_ADDR addr = *pcptr & 0x00ffffff;		/* TODO: Do this properly */
+  CORE_ADDR addr = *pcptr & ~MRK3_MEM_MASK;
+  CORE_ADDR ptr  = addr / 2;
 
   /*  always use full addresses for breakpoints, and it is code. */
   CORE_ADDR topbits = mrk3_get_mem_space () | MRK3_MEM_TYPE_CODE;
   addr |= topbits;
+  ptr |= topbits;
 
-  *pcptr = addr;
+  *pcptr = ptr;
 
   if (mrk3_debug)
-    fprintf_unfiltered (gdb_stdlog, "mrk3-tdep.c: breakpoint at %s.",
-			print_core_address (gdbarch, addr));
+    fprintf_unfiltered (gdb_stdlog, "mrk3-tdep.c: breakpoint at %s.\n",
+			print_core_address (gdbarch, ptr));
 
   *lenptr = sizeof (mrk3_sim_break_insn);
   return (gdb_byte *) & mrk3_sim_break_insn;
@@ -1462,9 +1463,9 @@ mrk3_print_insn (bfd_vma addr,
   uint16_t  insn16;
   uint32_t  insn32;
 
-  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
-  read_memory (addr, (gdb_byte *) &insn16, sizeof (insn16));
-  read_memory (addr, (gdb_byte *) &insn32, sizeof (insn32));
+  CORE_ADDR ptr = ((addr & ~MRK3_MEM_TYPE_MASK) / 2) | MRK3_MEM_TYPE_CODE;
+  read_memory (ptr, (gdb_byte *) &insn16, sizeof (insn16));
+  read_memory (ptr, (gdb_byte *) &insn32, sizeof (insn32));
 
   (*info->fprintf_func) (info->stream, "%08x %04hx", insn32, insn16);
   return sizeof (insn16);	/* Assume 16-bit instruction. */

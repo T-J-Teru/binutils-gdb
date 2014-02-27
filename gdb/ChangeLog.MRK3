@@ -1,5 +1,12 @@
 2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_get_mem_space): Only trace for higher
+	debug value.
+	(mrk3_breakpoint_from_pc): Turn address into word pointer.
+	(mrk3_print_insn): Turn address into work pointer.
+
+2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* gdb/breakpoint.c (bp_loc_is_permanent): Use pointer returned by
 	gdbarch_breakpoint_from_pc for automatic memory restoration.
 
