@@ -1,3 +1,8 @@
+2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* elf32-mrk3.c: Reduce shift for R_MRK3_CALL16 by 1 to turn byte
+	address into word address.
+
 2014-02-26  Simon Cook  <simon.cook@embecosm.com>
 
 	* cpu-mrk3.c (bfd_mrk3_arch): Add default architecture fill function.

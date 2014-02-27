@@ -51,7 +51,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
 	 32,                    /* Bitsize.  */
 	 FALSE,                 /* PC_relative.  */
-	 16,                    /* Bitpos.  */
+	 15,                    /* Bitpos. Kludge to turn bytes into words */
 	 complain_overflow_bitfield, /* Complain_on_overflow.  */
 	 bfd_elf_generic_reloc, /* Special_function.  */
 	 "R_MRK3_CALL16",       /* Name.  */
