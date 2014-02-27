@@ -109,6 +109,9 @@
 #define MRK3_MEM_TYPE_DATA 0x00000000
 #define MRK3_MEM_TYPE_CODE 0x01000000
 
+/* General mask */
+#define MRK3_MEM_MASK 0xff000000
+
 /*  Define the breakpoint instruction which is inserted by */
 /*  GDB into the target code. This must be exactly the same */
 /*  as the simulator expects. */
@@ -1125,8 +1128,8 @@ mrk3_memory_remove_breakpoint (struct gdbarch *gdbarch,
    address space is being used. So we cannot make the transformation. We must
    pass the higher order bits and leave it to the server.
 
-   We leave these functions in anticipation of future changes, and use them to
-   provide some validation. */
+   However we do the byte <-> word conversion, because otherwise symbols go
+   'orribly wrong. We also do some validation of flags. */
 
 static CORE_ADDR
 mrk3_pointer_to_address (struct gdbarch *gdbarch,
@@ -1136,42 +1139,47 @@ mrk3_pointer_to_address (struct gdbarch *gdbarch,
   CORE_ADDR ptr = extract_unsigned_integer (buf, TYPE_LENGTH (type),
 					    byte_order);
 
-  /* Is it a code pointer?  */
   if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
       || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
       || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type)))
     {
+      /* Word -> byte for code. */
+      CORE_ADDR flags = ptr & MRK3_MEM_MASK;
+      CORE_ADDR addr  = ((ptr & ~MRK3_MEM_MASK) * 2) | flags;
+
       /* Sanity check */
-      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
+      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
 	{
 	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
-		   hex_string (ptr));
-	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
+		   hex_string (addr));
+	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
 	}
 
       if (mrk3_debug >= 2)
 	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_pointer_to_address: code pointer %s.\n",
-			    hex_string (ptr));
+			    "mrk3_pointer_to_address: code %s -> %s.\n",
+			    hex_string (ptr), hex_string (addr));
 
-      return ptr;
+      return addr;
     }
   else
     {
+      /* No change for data. */
+      CORE_ADDR addr = ptr;
+
       /* Sanity check */
-      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
+      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
 	{
 	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
-		   hex_string (ptr));
-	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
+		   hex_string (addr));
+	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
 	}
 
       if (mrk3_debug >= 2)
 	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_pointer_to_address: data pointer %s.\n",
-			    hex_string (ptr));
-
-      return ptr;
+			    "mrk3_pointer_to_address: data %s -> %s.\n",
+			    hex_string (ptr), hex_string (addr));
+      return addr;
     }
 }
 
@@ -1186,41 +1194,47 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
 
-  /* Is it a code address?  */
   if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
       || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD)
     {
+      /* Byte -> word for code. */
+      CORE_ADDR flags = addr & MRK3_MEM_MASK;
+      CORE_ADDR ptr   = ((addr & ~MRK3_MEM_MASK) / 2) | flags;
+
       /* Sanity check */
-      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
+      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
 	{
 	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
-		   hex_string (addr));
-	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
+		   hex_string (ptr));
+	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
 	}
 
       if (mrk3_debug >= 2)
 	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_address_to_pointer: code address %s.\n",
-			    hex_string (addr));
+			    "mrk3_address_to_pointer: code %s -> %s.\n",
+			    hex_string (addr), hex_string (ptr));
 
-      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, addr);
+      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, ptr);
     }
   else
     {
+      /* No change for data. */
+      CORE_ADDR ptr = addr;
+
       /* Sanity check */
-      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
+      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
 	{
 	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
-		   hex_string (addr));
-	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
+		   hex_string (ptr));
+	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
 	}
 
       if (mrk3_debug >= 2)
 	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_address_to_pointer: data address %s.\n",
-			    hex_string (addr));
+			    "mrk3_address_to_pointer: data %s -> %s.\n",
+			    hex_string (addr), hex_string (ptr));
 
-      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, addr);
+      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, ptr);
     }
 }
 

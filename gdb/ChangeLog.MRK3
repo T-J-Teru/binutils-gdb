@@ -1,5 +1,12 @@
 2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_pointer_to_address): Convert from word
+	addressed code pointers to byte addressed code addresses.
+	(mrk3_address_to_pointer): Convert from byte addressed code
+	addresses to word adressed code pointers.
+
+2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* mrk3-tdep.c: Define 32 bit flag constants for memory spaces and
 	types. Change breakpoint instruction value.
 	(mrk3_get_mem_space): Return 32-bit result.
