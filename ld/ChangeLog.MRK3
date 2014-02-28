@@ -1,3 +1,8 @@
+2014-02-28  Simon Cook  <simon.cook@embecosm.com>
+
+	* emulparams/elf32mrk3.sh: Use mrk3 linker script template.
+	* scripttempl/mrk3.sc: Add linker script template.
+
 2014-01-13  Simon Cook  <simon.cook@embecosm.com>
 
 	* Makefile.am: Add eelf32mrk3.c emulation source rule.
