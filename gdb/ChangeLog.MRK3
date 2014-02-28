@@ -1,5 +1,20 @@
 2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* gdb/mrk3-tdep.c (mrk3_get_mem_type): Deleted.
+	(mrk3_is_data_address): Created.
+	(mrk3_is_code_address): Created.
+	(mrk3_adjust_breakpoint_address): Deleted.
+	(mrk3_memory_insert_breakpoint): Deleted.
+	(mrk3_memory_remove_breakpoint): Deleted.
+	(mrk3_pointer_to_address): Use function to check if code/data address.
+	(mrk3_address_to_pointer): Likewise.
+	(mrk3_read_pc): Don't had memory space/type flags.
+	(mrk3_unwind_pc): Convert to byte code address
+	(mrk3_unwind_sp): Convert to data address.
+	(mrk3_gdbarch_init): Remove unused calls.
+
+2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	Work in progress to support breakpoints and word addresses
 	properly.
 

@@ -193,43 +193,6 @@ mrk3_get_mem_space (void)
 }
 
 
-/* Get the current memory type from the target.
-
-   TODO: Is RCmd the best way to do this? */
-static uint32_t
-mrk3_get_mem_type (void)
-{
-  /* TODO: We can't tell if we have a valid target function here, because it
-     is set to a value static within target.c (tcomplain). So we'll need to
-     look at whether we have we have a valid value. A shame because we'll get
-     an error message. */
-  struct ui_file *mf = mem_fileopen ();
-  char buf[64];
-  target_rcmd ("SilentGetMemSpace", mf);
-  ui_file_put (mf, mrk3_ui_memcpy, buf);
-  /* Result is in mf->stream->buffer, of length mf->stream->length_buffer */
-  if (strlen (buf) == 0)
-    {
-      /* TODO: We are presumably not connected to a target. Should we warn? Or
-         should we return a default? */
-      warning (_
-	       ("mrk3-tdep.c: using default memory type (code)."));
-      return MRK3_MEM_TYPE_CODE;
-    }
-  else
-    {
-      /* The value is returned as a 32 bit value, with the result in the top 8
-	 bits. */
-      long unsigned int res = strtol (buf, NULL, 16);
-      if (mrk3_debug)
-	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3-tdep.c: buf \"%s\", mem type 0x%08lx\n.", buf,
-			    res);
-      return (uint32_t) res & MRK3_MEM_TYPE_MASK;
-    }
-}
-
-
 /* Convenience function for the system memory space. */
 static int
 mrk3_is_sys_mem_space (void)
@@ -246,6 +209,24 @@ mrk3_is_usr_mem_space (void)
   uint8_t ms = mrk3_get_mem_space ();
   return (ms == MRK3_MEM_SPACE_APP1) || (ms == MRK3_MEM_SPACE_APP2);
 }
+
+
+/* Convenience function for the data memory type */
+static int
+mrk3_is_data_address (CORE_ADDR addr)
+{
+  return (addr & ~MRK3_MEM_TYPE_MASK) == MRK3_MEM_TYPE_DATA;
+
+}	/* mrk3_is_data_address () */
+
+
+/* Convenience function for the code memory type */
+static int
+mrk3_is_code_address (CORE_ADDR addr)
+{
+  return (addr & ~MRK3_MEM_TYPE_MASK) == MRK3_MEM_TYPE_CODE;
+
+}	/* mrk3_is_code_address () */
 
 
 /* Lookup the name of a register given it's number. */
@@ -1087,39 +1068,6 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
 }
 
 
-/* Adjust the breakpoint address. In our case, this means ensuring it has the
-   right flags set. */
-
-static CORE_ADDR
-mrk3_adjust_breakpoint_address (struct gdbarch *gdbarch, CORE_ADDR bpaddr)
-{
-  return  (bpaddr & ~MRK3_MEM_MASK) | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_CODE;
-
-}	/* mrk3_adjust_breakpoint_address () */
-
-
-/* This is obsolete */
-#if 0
-static int
-mrk3_memory_insert_breakpoint (struct gdbarch *gdbarch,
-			       struct bp_target_info *bp_tgt)
-{
-  mrk3_breakpoint_from_pc (gdbarch, &(bp_tgt->placed_address),
-			   &(bp_tgt->placed_size));
-  Dll_InsertBreakpoint (bp_tgt->placed_address);
-  return 0;
-}
-
-static int
-mrk3_memory_remove_breakpoint (struct gdbarch *gdbarch,
-			       struct bp_target_info *bp_tgt)
-{
-  Dll_RemoveBreakpoint (bp_tgt->placed_address);
-  return 0;
-}
-#endif
-
-
 /* Convert target pointer to GDB address.
 
    GDB expects a single unified byte addressed memory. For Harvard
@@ -1161,7 +1109,7 @@ mrk3_pointer_to_address (struct gdbarch *gdbarch,
       CORE_ADDR addr  = ((ptr & ~MRK3_MEM_MASK) * 2) | flags;
 
       /* Sanity check */
-      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
+      if (mrk3_is_code_address (addr))
 	{
 	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
 		   hex_string (addr));
@@ -1181,7 +1129,7 @@ mrk3_pointer_to_address (struct gdbarch *gdbarch,
       CORE_ADDR addr = ptr;
 
       /* Sanity check */
-      if ((addr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
+      if (mrk3_is_data_address (addr))
 	{
 	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
 		   hex_string (addr));
@@ -1215,7 +1163,7 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
       CORE_ADDR ptr   = ((addr & ~MRK3_MEM_MASK) / 2) | flags;
 
       /* Sanity check */
-      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_CODE)
+      if (mrk3_is_code_address (ptr))
 	{
 	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
 		   hex_string (ptr));
@@ -1235,7 +1183,7 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
       CORE_ADDR ptr = addr;
 
       /* Sanity check */
-      if ((ptr & MRK3_MEM_TYPE_MASK) != MRK3_MEM_TYPE_DATA)
+      if (mrk3_is_data_address (ptr))
 	{
 	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
 		   hex_string (ptr));
@@ -1262,7 +1210,10 @@ mrk3_addr_bits_remove (struct gdbarch *gdbarch, CORE_ADDR val)
 }	/* mrk3_addr_bits_remove () */
 
 
-/* Read PC, which is a word pointer, converting it to a GDB byte address. */
+/* Read PC, which is a word pointer, converting it to a byte pointer, BUT
+   DON'T ADD SPACE OR TYPE FLAGS!!! This seems only to be used for comparing
+   against symbol tables, which are all byte addresses, but don't have the
+   flags. */
 
 static CORE_ADDR
 mrk3_read_pc (struct regcache *regcache)
@@ -1271,7 +1222,7 @@ mrk3_read_pc (struct regcache *regcache)
   CORE_ADDR pcaddr;
 
   regcache_cooked_read_unsigned (regcache, MRK3_PC_REGNUM, &pcptr);
-  pcaddr = pcptr * 2 | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_CODE;
+  pcaddr = pcptr * 2;
 
   if (mrk3_debug >= 2)
     fprintf_unfiltered (gdb_stdlog, "mrk3_read_pc: %s read as %s.\n",
@@ -1440,20 +1391,29 @@ static const struct frame_base mrk3_frame_base = {
 };
 
 
+/* When unwinding the PC we turn into a byte address and add the flags for
+   code type. This is different from mrk3_read_pc, where we don't worry about
+   the flags. */
+
 static CORE_ADDR
 mrk3_unwind_pc (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
   ULONGEST pc;
   pc = frame_unwind_register_unsigned (next_frame, MRK3_PC_REGNUM);
+  pc = pc * 2 | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_CODE;
   return gdbarch_addr_bits_remove (gdbarch, pc);
 }
+
+
+/* When unwinding the PC we turn into a byte address and add the flags for
+   data type. */
 
 static CORE_ADDR
 mrk3_unwind_sp (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
   ULONGEST sp;
   sp = frame_unwind_register_unsigned (next_frame, MRK3_SP_REGNUM);
-  return sp & 0xFFFF;
+  return sp | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_DATA;
 }
 
 static int
@@ -1484,10 +1444,8 @@ mrk3_address_class_type_flags_to_name (int type_flags)
   else
     return 0;
 }
-#endif
 
 /* Not used, so disabled. */
-#if 0
 static int
 mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
 {
@@ -1599,16 +1557,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
   set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
 
-#if 0
-  set_gdbarch_memory_insert_breakpoint (gdbarch,
-					mrk3_memory_insert_breakpoint);
-  set_gdbarch_memory_remove_breakpoint (gdbarch,
-					mrk3_memory_remove_breakpoint);
-#endif
   set_gdbarch_decr_pc_after_break (gdbarch, 2);
   set_gdbarch_breakpoint_from_pc (gdbarch, mrk3_breakpoint_from_pc);
-  set_gdbarch_adjust_breakpoint_address (gdbarch,
-					 mrk3_adjust_breakpoint_address);
 
   frame_unwind_append_unwinder (gdbarch, &mrk3_frame_unwind);
   frame_base_set_default (gdbarch, &mrk3_frame_base);
