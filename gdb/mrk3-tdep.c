@@ -197,7 +197,7 @@ mrk3_get_mem_space (void)
 static int
 mrk3_is_sys_mem_space (void)
 {
-  uint8_t ms = mrk3_get_mem_space ();
+  uint32_t ms = mrk3_get_mem_space ();
   return ms == MRK3_MEM_SPACE_SYS;
 }
 
@@ -206,7 +206,7 @@ mrk3_is_sys_mem_space (void)
 static int
 mrk3_is_usr_mem_space (void)
 {
-  uint8_t ms = mrk3_get_mem_space ();
+  uint32_t ms = mrk3_get_mem_space ();
   return (ms == MRK3_MEM_SPACE_APP1) || (ms == MRK3_MEM_SPACE_APP2);
 }
 
@@ -388,7 +388,11 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       else if (mrk3_is_usr_mem_space ())
 	raw_regnum = MRK3_USP_REGNUM;
       else
-	error (_("mrk3-tdep.c: Attempt to read from non-existent mem space."));
+	{
+	  warning (_("mrk3-tdep.c: SP has non-existent mem space 0x%08x."),
+		   mrk3_get_mem_space ());
+	  raw_regnum = MRK3_SSP_REGNUM;
+	}
 
       regcache_raw_read (regcache, raw_regnum, buf);
       return REG_VALID;
@@ -1474,7 +1478,10 @@ mrk3_print_insn (bfd_vma addr,
   read_memory (ptr, (gdb_byte *) &insn16, sizeof (insn16));
   read_memory (ptr, (gdb_byte *) &insn32, sizeof (insn32));
 
-  (*info->fprintf_func) (info->stream, "%08x %04hx", insn32, insn16);
+  /* Because of the way we read things, we have to use a middle-endian
+     presentation of 32-bit instructions. */
+  (*info->fprintf_func) (info->stream, "%04x%04x %04hx", insn32 >> 16,
+			 insn32 &0xffff, insn16);
   return sizeof (insn16);	/* Assume 16-bit instruction. */
 
 }	/* mrk3_print_insn () */

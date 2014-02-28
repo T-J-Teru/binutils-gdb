@@ -1,6 +1,13 @@
 2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
-	* gdb/mrk3-tdep.c (mrk3_get_mem_type): Deleted.
+	* mrk3-tdep.c (mrk3_is_sys_mem_space): Use 32-bit temporary.
+	(mrk3_is_usr_mem_space): Likewise.
+	(mrk3_pseudo_register_read): Reduce SP memory space problem to warning.
+	(mrk3_print_insn): Use middle-endian 32-bit output.
+
+2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_get_mem_type): Deleted.
 	(mrk3_is_data_address): Created.
 	(mrk3_is_code_address): Created.
 	(mrk3_adjust_breakpoint_address): Deleted.
@@ -18,7 +25,7 @@
 	Work in progress to support breakpoints and word addresses
 	properly.
 
-	* gdb/mrk3-tdep.c (mrk3_adjust_breakpoint_address): Created.
+	* mrk3-tdep.c (mrk3_adjust_breakpoint_address): Created.
 	(mrk3_addr_bits_remove): Remove #if 0, rewrite and move in file.
 	(mrk3_read_pc): Created.
 	(mrk3_write_pc): Created.
@@ -34,7 +41,7 @@
 
 2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
-	* gdb/breakpoint.c (bp_loc_is_permanent): Use pointer returned by
+	* breakpoint.c (bp_loc_is_permanent): Use pointer returned by
 	gdbarch_breakpoint_from_pc for automatic memory restoration.
 
 2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
