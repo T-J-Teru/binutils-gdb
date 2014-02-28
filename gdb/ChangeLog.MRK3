@@ -1,3 +1,15 @@
+2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	Work in progress to support breakpoints and word addresses
+	properly.
+
+	* gdb/mrk3-tdep.c (mrk3_adjust_breakpoint_address): Created.
+	(mrk3_addr_bits_remove): Remove #if 0, rewrite and move in file.
+	(mrk3_read_pc): Created.
+	(mrk3_write_pc): Created.
+	(mrk3_gdbarch_init): Add mrk3_read_pc, mrk3_write_pc,
+	mrk3_addr_bits_remove and mrk3_adjust_breakpoint_address.
+
 2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_get_mem_space): Only trace for higher

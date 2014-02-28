@@ -1086,6 +1086,18 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
   return (gdb_byte *) & mrk3_sim_break_insn;
 }
 
+
+/* Adjust the breakpoint address. In our case, this means ensuring it has the
+   right flags set. */
+
+static CORE_ADDR
+mrk3_adjust_breakpoint_address (struct gdbarch *gdbarch, CORE_ADDR bpaddr)
+{
+  return  (bpaddr & ~MRK3_MEM_MASK) | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_CODE;
+
+}	/* mrk3_adjust_breakpoint_address () */
+
+
 /* This is obsolete */
 #if 0
 static int
@@ -1238,6 +1250,50 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
       store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, ptr);
     }
 }
+
+
+/* Remove useless bits from addresses. */
+
+static CORE_ADDR
+mrk3_addr_bits_remove (struct gdbarch *gdbarch, CORE_ADDR val)
+{
+  return val & ~MRK3_MEM_MASK;
+
+}	/* mrk3_addr_bits_remove () */
+
+
+/* Read PC, which is a word pointer, converting it to a GDB byte address. */
+
+static CORE_ADDR
+mrk3_read_pc (struct regcache *regcache)
+{
+  CORE_ADDR pcptr;
+  CORE_ADDR pcaddr;
+
+  regcache_cooked_read_unsigned (regcache, MRK3_PC_REGNUM, &pcptr);
+  pcaddr = pcptr * 2 | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_CODE;
+
+  if (mrk3_debug >= 2)
+    fprintf_unfiltered (gdb_stdlog, "mrk3_read_pc: %s read as %s.\n",
+			hex_string (pcptr), hex_string (pcaddr));
+  return pcaddr;
+
+}	/* mrk3_read_pc () */
+
+
+/* Write PC, which is a word pointer, with a value supplied as a GDB byte
+   address. */
+static void
+mrk3_write_pc (struct regcache *regcache, CORE_ADDR pcaddr)
+{
+  CORE_ADDR pcptr = (pcaddr & ~MRK3_MEM_MASK) / 2;
+  regcache_cooked_write_unsigned (regcache, MRK3_PC_REGNUM, pcptr);
+
+  if (mrk3_debug >= 2)
+    fprintf_unfiltered (gdb_stdlog, "mrk3_write_pc: %s written as %s.\n",
+			hex_string (pcaddr), hex_string (pcptr));
+
+}	/* mrk3_write_pc () */
 
 
 /* TODO. This has changed in the latest GDB, with more args. Need to
@@ -1407,14 +1463,6 @@ mrk3_convert_register_p (struct gdbarch *gdbarch, int regnum,
   return mrk3_register_type (gdbarch, regnum)->length != type->length;
 }
 
-/* Not used, so disabled. */
-#if 0
-static CORE_ADDR
-mrk3_address_bits_remove (struct gdbarch * gdbarch, CORE_ADDR addr)
-{
-  return addr & 0x0FFFFFFF;
-}
-#endif
 
 static int
 mrk3_address_class_type_flags (int byte_size, int dwarf2_addr_class)
@@ -1425,8 +1473,9 @@ mrk3_address_class_type_flags (int byte_size, int dwarf2_addr_class)
     return 0;
 }
 
-/* This appears not to be used for now. */
 #if 0
+/* This appears not to be used for now. */
+
 static char *
 mrk3_address_class_type_flags_to_name (int type_flags)
 {
@@ -1495,8 +1544,6 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   tdep = XMALLOC (struct gdbarch_tdep);
   gdbarch = gdbarch_alloc (&info, tdep);	/*  TODO: Can we use null for tdep? We do never use tdep anyways. */
 
-  /* set_gdbarch_addr_bits_remove(gdbarch,mrk3_address_bits_remove); */
-
   set_gdbarch_address_class_type_flags (gdbarch,
 					mrk3_address_class_type_flags);
   set_gdbarch_short_bit (gdbarch, 1 * TARGET_CHAR_BIT);
@@ -1514,10 +1561,9 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_double_format (gdbarch, floatformats_ieee_single);
   set_gdbarch_long_double_format (gdbarch, floatformats_ieee_single);
 
-/*
-	set_gdbarch_read_pc (gdbarch, mrk3_read_pc);
-	set_gdbarch_write_pc (gdbarch, mrk3_write_pc);
-*/
+  set_gdbarch_read_pc (gdbarch, mrk3_read_pc);
+  set_gdbarch_write_pc (gdbarch, mrk3_write_pc);
+
   set_gdbarch_num_regs (gdbarch, NUM_REAL_REGS);
   set_gdbarch_num_pseudo_regs (gdbarch, NUM_PSEUDO_REGS);
 
@@ -1544,6 +1590,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   set_gdbarch_address_to_pointer (gdbarch, mrk3_address_to_pointer);
   set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
+  set_gdbarch_addr_bits_remove (gdbarch, mrk3_addr_bits_remove);
+
   /*  IMPORTANT - We need to be able to convert register contents to different length */
   /*  gdb default will use 1:1 which is false in case we have a 16 bit register and need 32 bit values */
   set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p);
@@ -1557,8 +1605,10 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_memory_remove_breakpoint (gdbarch,
 					mrk3_memory_remove_breakpoint);
 #endif
-/*       set_gdbarch_decr_pc_after_break (gdbarch, mrk3_sim_break_insn_pc_decrease); */
+  set_gdbarch_decr_pc_after_break (gdbarch, 2);
   set_gdbarch_breakpoint_from_pc (gdbarch, mrk3_breakpoint_from_pc);
+  set_gdbarch_adjust_breakpoint_address (gdbarch,
+					 mrk3_adjust_breakpoint_address);
 
   frame_unwind_append_unwinder (gdbarch, &mrk3_frame_unwind);
   frame_base_set_default (gdbarch, &mrk3_frame_base);
