@@ -1,5 +1,18 @@
 2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* gdb/mrk3-tdep.c: Add super system memory space.
+	(mrk3_get_mem_space): Support super system memory space.
+	(mrk3_is_ssys_mem_space): Created.
+	(mrk3_register_name): Add SSSP.
+	(mrk3_register_type): Likewise.
+	(mrk3_pseudo_register_read): Likewise.
+	(mrk3_pseudo_register_write): Likewise.
+	(mrk3_analyze_prologue): Likewise.
+	(mrk3_unwind_pc): Use super system memory space.
+	(mrk3_unwind_sp): Likewise.
+
+2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_is_sys_mem_space): Use 32-bit temporary.
 	(mrk3_is_usr_mem_space): Likewise.
 	(mrk3_pseudo_register_read): Reduce SP memory space problem to warning.

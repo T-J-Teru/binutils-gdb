@@ -59,11 +59,12 @@
 #define MRK3_R0_REGNUM     0
 #define MRK3_PC_REGNUM     7
 #define MRK3_PSW_REGNUM    8
-#define MRK3_SSP_REGNUM    9
-#define MRK3_USP_REGNUM   10
-#define MRK3_R4E_REGNUM   11
-#define MRK3_R5E_REGNUM   12
-#define MRK3_R6E_REGNUM   13
+#define MRK3_SSSP_REGNUM   9
+#define MRK3_SSP_REGNUM   10
+#define MRK3_USP_REGNUM   11
+#define MRK3_R4E_REGNUM   12
+#define MRK3_R5E_REGNUM   13
+#define MRK3_R6E_REGNUM   14
 
 /* Useful register numbers - SFRs
    TODO: For now we don't show the SFRs */
@@ -103,6 +104,7 @@
 #define MRK3_MEM_SPACE_SYS  0x10000000
 #define MRK3_MEM_SPACE_APP1 0x20000000
 #define MRK3_MEM_SPACE_APP2 0x30000000
+#define MRK3_MEM_SPACE_SSYS 0x40000000
 
 /* Memory types. One bit to indicate code or data. */
 #define MRK3_MEM_TYPE_MASK 0x01000000
@@ -176,8 +178,8 @@ mrk3_get_mem_space (void)
       /* TODO: We are presumably not connected to a target. Should we warn? Or
          should we return a default? */
       warning (_
-	       ("mrk3-tdep.c: using default memory space (system)."));
-      return MRK3_MEM_SPACE_SYS;
+	       ("mrk3-tdep.c: using default memory space (super system)."));
+      return MRK3_MEM_SPACE_SSYS;
     }
   else
     {
@@ -190,6 +192,15 @@ mrk3_get_mem_space (void)
 			    buf, res);
       return (uint32_t) res & MRK3_MEM_SPACE_MASK;
     }
+}
+
+
+/* Convenience function for the super system memory space. */
+static int
+mrk3_is_ssys_mem_space (void)
+{
+  uint32_t ms = mrk3_get_mem_space ();
+  return ms == MRK3_MEM_SPACE_SSYS;
 }
 
 
@@ -244,6 +255,7 @@ mrk3_register_name (struct gdbarch *gdbarch, int regnum)
     "R6",
     "PC",
     "PSW",
+    "SSSP",
     "SSP",
     "USP",
     "R4e",
@@ -312,6 +324,8 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
     case (MRK3_PC_REGNUM):
       return builtin_type (gdbarch)->builtin_uint32;
     case (MRK3_PSW_REGNUM):
+      return builtin_type (gdbarch)->builtin_uint16;
+    case (MRK3_SSSP_REGNUM):
       return builtin_type (gdbarch)->builtin_uint16;
     case (MRK3_SSP_REGNUM):
       return builtin_type (gdbarch)->builtin_uint16;
@@ -383,15 +397,18 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
   switch (cooked_regnum)
     {
     case MRK3_SP_REGNUM:
+      warning ("memspace is 0x%08x.", mrk3_get_mem_space ());
+      if (mrk3_is_ssys_mem_space ())
+	raw_regnum = MRK3_SSSP_REGNUM;
       if (mrk3_is_sys_mem_space ())
 	raw_regnum = MRK3_SSP_REGNUM;
       else if (mrk3_is_usr_mem_space ())
 	raw_regnum = MRK3_USP_REGNUM;
       else
 	{
-	  warning (_("mrk3-tdep.c: SP has non-existent mem space 0x%08x."),
+	  warning (_("mrk3-tdep.c: invalid SP read mem space 0x%08x."),
 		   mrk3_get_mem_space ());
-	  raw_regnum = MRK3_SSP_REGNUM;
+	  raw_regnum = MRK3_SSSP_REGNUM;
 	}
 
       regcache_raw_read (regcache, raw_regnum, buf);
@@ -515,12 +532,18 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
   switch (cooked_regnum)
     {
     case MRK3_SP_REGNUM:
+      if (mrk3_is_ssys_mem_space ())
+	raw_regnum = MRK3_SSSP_REGNUM;
       if (mrk3_is_sys_mem_space ())
 	raw_regnum = MRK3_SSP_REGNUM;
       else if (mrk3_is_usr_mem_space ())
 	raw_regnum = MRK3_USP_REGNUM;
       else
-	error (_("mrk3-tdep.c: Attempt to write to non-existent mem space."));
+	{
+	  warning (_("mrk3-tdep.c: invalid SP write mem space 0x%08x."),
+		   mrk3_get_mem_space ());
+	  raw_regnum = MRK3_SSSP_REGNUM;
+	}
 
       regcache_raw_write (regcache, raw_regnum, buf);
       return;
@@ -1284,6 +1307,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 {
   CORE_ADDR func_start = get_frame_func (this_frame);
   CORE_ADDR this_pc  = get_frame_pc (this_frame);
+  CORE_ADDR this_sssp;
   CORE_ADDR this_ssp;
   CORE_ADDR this_usp;
   CORE_ADDR this_sp;
@@ -1291,16 +1315,19 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
   /* Get the stack pointers if we can. */
   if (this_frame)
     {
-      this_ssp = get_frame_register_unsigned (this_frame, MRK3_SSP_REGNUM);
-      this_usp = get_frame_register_unsigned (this_frame, MRK3_USP_REGNUM);
-      this_sp = mrk3_is_sys_mem_space () ? this_ssp : this_usp;
+      this_sssp = get_frame_register_unsigned (this_frame, MRK3_SSSP_REGNUM);
+      this_ssp  = get_frame_register_unsigned (this_frame, MRK3_SSP_REGNUM);
+      this_usp  = get_frame_register_unsigned (this_frame, MRK3_USP_REGNUM);
+      this_sp   = mrk3_is_ssys_mem_space () ? this_sssp
+	: mrk3_is_sys_mem_space () ? this_ssp : this_usp;
     }
   else
     {
-      /* Default is to start in system mode. */
+      /* Default is to start in super system mode. */
+      this_sssp = 0;
       this_ssp = 0;
       this_usp = 0;
-      this_sp  = this_ssp;
+      this_sp  = this_sssp;
     }
 
   /* Set the frame ID and frame base */
@@ -1404,7 +1431,7 @@ mrk3_unwind_pc (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
   ULONGEST pc;
   pc = frame_unwind_register_unsigned (next_frame, MRK3_PC_REGNUM);
-  pc = pc * 2 | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_CODE;
+  pc = pc * 2 | MRK3_MEM_SPACE_SSYS | MRK3_MEM_TYPE_CODE;
   return gdbarch_addr_bits_remove (gdbarch, pc);
 }
 
@@ -1417,7 +1444,7 @@ mrk3_unwind_sp (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
   ULONGEST sp;
   sp = frame_unwind_register_unsigned (next_frame, MRK3_SP_REGNUM);
-  return sp | MRK3_MEM_SPACE_SYS | MRK3_MEM_TYPE_DATA;
+  return sp | MRK3_MEM_SPACE_SSYS | MRK3_MEM_TYPE_DATA;
 }
 
 static int
