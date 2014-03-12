@@ -1,3 +1,7 @@
+2014-03-12  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_HIGH16 relocation.
+
 2014-02-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* elf32-mrk3.c: Reduce shift for R_MRK3_CALL16 by 1 to turn byte
