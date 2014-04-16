@@ -1178,6 +1178,8 @@ internal_cplus_demangle (struct work_stuff *work, const char *mangled)
 	}
       if (!success)
 	{
+	  delete_work_stuff (work);
+	  string_delete (&decl);
 	  success = demangle_prefix (work, &mangled, &decl);
 	}
       if (success && (*mangled != '\0'))
@@ -1218,10 +1220,12 @@ squangle_mop_up (struct work_stuff *work)
   if (work -> btypevec != NULL)
     {
       free ((char *) work -> btypevec);
+      work->btypevec = NULL;
     }
   if (work -> ktypevec != NULL)
     {
       free ((char *) work -> ktypevec);
+      work->ktypevec = NULL;
     }
 }
 
