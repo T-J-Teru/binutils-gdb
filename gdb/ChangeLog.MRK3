@@ -1,6 +1,11 @@
+2014-05-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_print_insn): Disassemble from target if
+	available.
+
 2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
-	* gdb/mrk3-tdep.c: Add super system memory space.
+	* mrk3-tdep.c: Add super system memory space.
 	(mrk3_get_mem_space): Support super system memory space.
 	(mrk3_is_ssys_mem_space): Created.
 	(mrk3_register_name): Add SSSP.

@@ -1491,26 +1491,60 @@ mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
 #endif
 
 
-/* Temporary disassembler. 
+/* Diassembler
 
-   We don't have a working LLVM disassembler. */
+   Get the target to disassemble if possible. Otherwise, just dump out the
+   hex. */
 static int
 mrk3_print_insn (bfd_vma addr,
 		 disassemble_info *info)
 {
-  uint16_t  insn16;
-  uint32_t  insn32;
+  if (target_has_execution)
+    {
+      // This is a bit dodgy. We assume that if we have an executable target
+      // it knows how to disassemble. We are also dealing direct with the
+      // target, so we need the address, not the pointer.
+      struct ui_file *mf = mem_fileopen ();
+      char cmd[40];
+      char buf[80];
+      sprintf (cmd, "silent-disas %s\n", hex_string (addr));
+      target_rcmd (cmd, mf);
+      /* Result is in mf->stream->buffer, of length
+	 mf->stream->length_buffer. Extract it into buf. */
+      ui_file_put (mf, mrk3_ui_memcpy, buf);
 
-  CORE_ADDR ptr = ((addr & ~MRK3_MEM_TYPE_MASK) / 2) | MRK3_MEM_TYPE_CODE;
-  read_memory (ptr, (gdb_byte *) &insn16, sizeof (insn16));
-  read_memory (ptr, (gdb_byte *) &insn32, sizeof (insn32));
+      if (strlen (buf) == 0)
+	{
+	  /* TODO: What do we do if something goes wrong? */
+	  warning (_("mrk3-tdep.c: Unable to diassemble."));
+	  return -1;
+	}
+      else
+	{
+	  // Print the instruction if we had one.
+	  int size = buf [0] - '0';		// Yuk - what if we have EBCDIC
+	  if (size > 0)
+	    (*info->fprintf_func) (info->stream, "%s", &(buf[2]));
 
-  /* Because of the way we read things, we have to use a middle-endian
-     presentation of 32-bit instructions. */
-  (*info->fprintf_func) (info->stream, "%04x%04x %04hx", insn32 >> 16,
-			 insn32 &0xffff, insn16);
-  return sizeof (insn16);	/* Assume 16-bit instruction. */
+	  return size > 0 ? size : -1;
+	}
+    }
+  else
+    {
+      // Not executing, so simple hex dump
+      uint16_t  insn16;
+      uint32_t  insn32;
 
+      CORE_ADDR ptr = ((addr & ~MRK3_MEM_TYPE_MASK) / 2) | MRK3_MEM_TYPE_CODE;
+      read_memory (ptr, (gdb_byte *) &insn16, sizeof (insn16));
+      read_memory (ptr, (gdb_byte *) &insn32, sizeof (insn32));
+
+      /* Because of the way we read things, we have to use a middle-endian
+	 presentation of 32-bit instructions. */
+      (*info->fprintf_func) (info->stream, "%04x%04x %04hx", insn32 >> 16,
+			     insn32 &0xffff, insn16);
+      return sizeof (insn16);	/* Assume 16-bit instruction. */
+    }
 }	/* mrk3_print_insn () */
 
 
