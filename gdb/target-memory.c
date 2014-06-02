@@ -310,7 +310,8 @@ cleanup_write_requests_vector (void *p)
 int
 target_write_memory_blocks (VEC(memory_write_request_s) *requests,
 			    enum flash_preserve_mode preserve_flash_p,
-			    void (*progress_cb) (ULONGEST, void *))
+			    void (*progress_cb) (ULONGEST, void *),
+			    struct type *type)
 {
   struct cleanup *back_to = make_cleanup (null_cleanup, NULL);
   VEC(memory_write_request_s) *blocks = VEC_copy (memory_write_request_s,
@@ -401,7 +402,7 @@ target_write_memory_blocks (VEC(memory_write_request_s) *requests,
       len = target_write_with_progress (current_target.beneath,
 					TARGET_OBJECT_MEMORY, NULL,
 					r->data, r->begin, r->end - r->begin,
-					progress_cb, r->baton);
+					progress_cb, r->baton, type);
       if (len < (LONGEST) (r->end - r->begin))
 	{
 	  /* Call error?  */
@@ -425,7 +426,7 @@ target_write_memory_blocks (VEC(memory_write_request_s) *requests,
 					    TARGET_OBJECT_FLASH, NULL,
 					    r->data, r->begin,
 					    r->end - r->begin,
-					    progress_cb, r->baton);
+					    progress_cb, r->baton, type);
 	  if (len < (LONGEST) (r->end - r->begin))
 	    error (_("Error writing data to flash"));
 	}

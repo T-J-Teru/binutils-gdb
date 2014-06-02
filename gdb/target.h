@@ -290,7 +290,7 @@ LONGEST target_write_with_progress (struct target_ops *ops,
 				    const char *annex, const gdb_byte *buf,
 				    ULONGEST offset, LONGEST len,
 				    void (*progress) (ULONGEST, void *),
-				    void *baton);
+				    void *baton, struct type *type);
 
 /* Wrapper to perform a full read of unknown size.  OBJECT/ANNEX will
    be read using OPS.  The return value will be -1 if the transfer
@@ -1113,10 +1113,15 @@ enum flash_preserve_mode
      to the request currently being written.  It may also be called
      with a NULL baton, when preserved flash sectors are being rewritten.
 
+   We pass in the type of address we are writing to, to permit address to
+   pointer conversion when dealing with architectures which (for example) have
+   word address code space.
+
    The function returns 0 on success, and error otherwise.  */
 int target_write_memory_blocks (VEC(memory_write_request_s) *requests,
 				enum flash_preserve_mode preserve_flash_p,
-				void (*progress_cb) (ULONGEST, void *));
+				void (*progress_cb) (ULONGEST, void *),
+				struct type *type);
 
 /* Print a line about the current target.  */
 

@@ -2035,7 +2035,7 @@ generic_load (char *args, int from_tty)
   struct load_section_data cbdata;
   struct load_progress_data total_progress;
   struct ui_out *uiout = current_uiout;
-
+  struct type *code_type = builtin_type (target_gdbarch())->builtin_func_ptr;
   CORE_ADDR entry;
   char **argv;
 
@@ -2093,7 +2093,7 @@ generic_load (char *args, int from_tty)
   gettimeofday (&start_time, NULL);
 
   if (target_write_memory_blocks (cbdata.requests, flash_discard,
-				  load_progress) != 0)
+				  load_progress, code_type) != 0)
     error (_("Load failed"));
 
   gettimeofday (&end_time, NULL);
