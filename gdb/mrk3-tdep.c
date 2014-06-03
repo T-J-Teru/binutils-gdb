@@ -400,7 +400,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       warning ("memspace is 0x%08x.", mrk3_get_mem_space ());
       if (mrk3_is_ssys_mem_space ())
 	raw_regnum = MRK3_SSSP_REGNUM;
-      if (mrk3_is_sys_mem_space ())
+      else if (mrk3_is_sys_mem_space ())
 	raw_regnum = MRK3_SSP_REGNUM;
       else if (mrk3_is_usr_mem_space ())
 	raw_regnum = MRK3_USP_REGNUM;
@@ -534,7 +534,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
     case MRK3_SP_REGNUM:
       if (mrk3_is_ssys_mem_space ())
 	raw_regnum = MRK3_SSSP_REGNUM;
-      if (mrk3_is_sys_mem_space ())
+      else if (mrk3_is_sys_mem_space ())
 	raw_regnum = MRK3_SSP_REGNUM;
       else if (mrk3_is_usr_mem_space ())
 	raw_regnum = MRK3_USP_REGNUM;
