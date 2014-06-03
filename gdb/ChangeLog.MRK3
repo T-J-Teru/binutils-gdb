@@ -1,5 +1,10 @@
 2014-06-03  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* gdb/target.c (target_write_with_progress): Correctly deal with
+	odd bytes with word address transfers.
+
+2014-06-03  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* gdb/mrk3-tdep.c (mrk3_pseudo_register_read): Add missing "else".
 	(mrk3_pseudo_register_write): Likewise.
 

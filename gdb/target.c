@@ -2302,33 +2302,35 @@ target_write_with_progress (struct target_ops *ops,
 			    struct type *type)
 {
   LONGEST xfered = 0;
+  int     uoa = 1;
 
   /* Give the progress callback a chance to set up.  */
   if (progress)
     (*progress) (0, baton);
 
+  /* Find the unit of addressibility for this type if we are given it by
+     comparing the number of bytes between adjacent pointers.  We don't know
+     what pointers are permissible, but OFFSET is a reasonable choice. */
+  if (NULL != type)
+    {
+      struct gdbarch *gdbarch = target_gdbarch ();
+      enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+      gdb_byte buf[MAX_REGISTER_SIZE];
+      int off_len = sizeof (offset);
+      CORE_ADDR base_addr;
+
+      /* Convert offset and offset + 1 from pointers to addresses. The
+	 difference is the unit of addressibility. */
+      store_unsigned_integer (buf, off_len, byte_order, offset);
+      base_addr = gdbarch_pointer_to_address (gdbarch, type, buf);
+      store_unsigned_integer (buf, off_len, byte_order, offset + 1);
+      uoa = gdbarch_pointer_to_address (gdbarch, type, buf) - base_addr;
+    }      
+
   while (xfered < len)
     {
       LONGEST xfer;
-      CORE_ADDR start_ptr = offset + xfered;
-
-      if (NULL != type)
-	{
-	  gdb_byte buf[MAX_REGISTER_SIZE];
-	  struct gdbarch *gdbarch = target_gdbarch ();
-	  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-	  int off_len = sizeof (offset);
-	  CORE_ADDR start_addr;
-
-	  /* We need to get the offset (which is a pointer) into a
-	     buffer. Note we don't use store_typed_address /
-	     extract_typed_address here, since it is already a pointer, and we
-	     want a pointer when we have finished. */
-	  store_unsigned_integer (buf, off_len, byte_order, offset);
-	  start_addr = gdbarch_pointer_to_address (gdbarch, type, buf);
-	  gdbarch_address_to_pointer (gdbarch, type, buf, start_addr + xfered);
-	  start_ptr = extract_unsigned_integer (buf, off_len, byte_order);
-	}
+      CORE_ADDR start_ptr = offset + xfered / uoa;
 
       xfer = target_write_partial (ops, object, annex,
 				   (gdb_byte *) buf + xfered,
@@ -2339,10 +2341,21 @@ target_write_with_progress (struct target_ops *ops,
       if (xfer < 0)
 	return -1;
 
+      /* Deal with the corner case where this is a word addressed transfer
+	 and this is the last partial word. */
+
+      if (xfer < uoa)
+	return xfered + xfer;
+
       if (progress)
 	(*progress) (xfer, baton);
 
-      xfered += xfer;
+      /* If we were word addressed, the transfer could be a number of bytes
+	 that is not an exact number of words. In this case we round down to the
+	 nearest number of whole words. A few bytes will be retransferred, but
+	 in the scale of things this doesn't matter. */
+
+      xfered += xfer / uoa * uoa;	/* Will be multiple of uoa */
       QUIT;
     }
   return len;
