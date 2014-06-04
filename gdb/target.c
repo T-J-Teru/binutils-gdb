@@ -2281,25 +2281,14 @@ read_memory_robust (struct target_ops *ops, ULONGEST offset, LONGEST len)
 }
 
 
-/* An alternative to target_write with progress callbacks.
-
-   There is a problem here if we are using word addressed architectures and
-   need to transfer in multiple blocks. The amount transferred is measured in
-   bytes, but the offset is a "pointer" in GDB's parlance, in other words
-   potentially a word address.
-
-   We fix this by converting to an "address" (GDB's uniform byte-addressed
-   memory space), adding the offset, then converting back to a "pointer". To
-   do this we need also to pass in the type of the address to which we are
-   writing and we only do the conversion if that type is non-null. */
+/* An alternative to target_write with progress callbacks.  */
 
 LONGEST
 target_write_with_progress (struct target_ops *ops,
 			    enum target_object object,
 			    const char *annex, const gdb_byte *buf,
 			    ULONGEST offset, LONGEST len,
-			    void (*progress) (ULONGEST, void *), void *baton,
-			    struct type *type)
+			    void (*progress) (ULONGEST, void *), void *baton)
 {
   LONGEST xfered = 0;
 
@@ -2309,30 +2298,9 @@ target_write_with_progress (struct target_ops *ops,
 
   while (xfered < len)
     {
-      LONGEST xfer;
-      CORE_ADDR start_ptr = offset + xfered;
-
-      if (NULL != type)
-	{
-	  gdb_byte buf[MAX_REGISTER_SIZE];
-	  struct gdbarch *gdbarch = target_gdbarch ();
-	  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-	  int off_len = sizeof (offset);
-	  CORE_ADDR start_addr;
-
-	  /* We need to get the offset (which is a pointer) into a
-	     buffer. Note we don't use store_typed_address /
-	     extract_typed_address here, since it is already a pointer, and we
-	     want a pointer when we have finished. */
-	  store_unsigned_integer (buf, off_len, byte_order, offset);
-	  start_addr = gdbarch_pointer_to_address (gdbarch, type, buf);
-	  gdbarch_address_to_pointer (gdbarch, type, buf, start_addr + xfered);
-	  start_ptr = extract_unsigned_integer (buf, off_len, byte_order);
-	}
-
-      xfer = target_write_partial (ops, object, annex,
-				   (gdb_byte *) buf + xfered,
-				   start_ptr, len - xfered);
+      LONGEST xfer = target_write_partial (ops, object, annex,
+					   (gdb_byte *) buf + xfered,
+					   offset + xfered, len - xfered);
 
       if (xfer == 0)
 	return xfered;
@@ -2357,7 +2325,7 @@ target_write (struct target_ops *ops,
 	      ULONGEST offset, LONGEST len)
 {
   return target_write_with_progress (ops, object, annex, buf, offset, len,
-				     NULL, NULL, NULL);
+				     NULL, NULL);
 }
 
 /* Read OBJECT/ANNEX using OPS.  Store the result in *BUF_P and return
