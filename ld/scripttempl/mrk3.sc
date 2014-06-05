@@ -7,20 +7,24 @@ OUTPUT_ARCH(mrk3)
 
 ENTRY (_start)
 
-PROVIDE (___bss_start = __bss_start);
-PROVIDE (___heap_start = end);
-PROVIDE (___heap_end = (0x1500));
-PROVIDE (___STACK_END = (0x2000));
-
 SECTIONS
 {
-/* Code in System code space. */
-. = 0x000000;
-.text : AT ( 0x11000000 ) { *(.vectors)
-                            *(.text) }
-/* Data in System data space */
-. = 0x00004000;
-.data : AT ( 0x10004000 ) { *(.data) }
-.bss  : AT ( 0x10004000 + SIZEOF (.data) ) { *(.bss) } 
+	/* Code in Super System code space. */
+	. = 0x000000;
+	.text : AT ( 0x41000000 ) { *(.vectors)
+	                            *(.text) }
+	/* Data in Super System data space */
+	PROVIDE (___data_start = 0x100);
+	. = ___data_start;
+	.data : AT ( 0x40000000 + ___data_start ) { *(.data) }
+	. = ALIGN (., 0x10);
+	PROVIDE (___bss_start = .);
+	.bss  : AT ( 0x40000000 + ___bss_start ) { *(.bss) } 
+	___bss_end = .;
+	.rodata : AT ( 0x40000000 + ___bss_end ) { *(.rodata) }
+	PROVIDE (___heap_start = ALIGN (., 0x10));
 }
+
+PROVIDE (___STACK_END = (0xfff8));
+PROVIDE (___heap_end = (___STACK_END + ___heap_start) / 2);
 EOF
