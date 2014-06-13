@@ -867,6 +867,7 @@ d_make_empty (struct d_info *di)
   if (di->next_comp >= di->num_comps)
     return NULL;
   p = &di->comps[di->next_comp];
+  memset (p, 0xa5, sizeof *p);
   ++di->next_comp;
   return p;
 }

@@ -455,7 +455,7 @@ struct demangle_component
   /* The type of this component.  */
   enum demangle_component_type type;
 
-  union
+  struct
   {
     /* For DEMANGLE_COMPONENT_NAME.  */
     struct
