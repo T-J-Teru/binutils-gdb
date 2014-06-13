@@ -3064,10 +3064,17 @@ d_exprlist (struct d_info *di, char terminator)
 static int
 op_is_new_cast (struct demangle_component *op)
 {
-  const char *code = op->u.s_operator.op->code;
-  return (code[1] == 'c'
-	  && (code[0] == 's' || code[0] == 'd'
-	      || code[0] == 'c' || code[0] == 'r'));
+  const char *code;
+
+  if (op->type == DEMANGLE_COMPONENT_OPERATOR)
+    {
+      code = op->u.s_operator.op->code;
+      return (code[1] == 'c'
+              && (code[0] == 's' || code[0] == 'd'
+                  || code[0] == 'c' || code[0] == 'r'));
+    }
+
+  return 0;
 }
 
 /* <expression> ::= <(unary) operator-name> <expression>
@@ -3236,9 +3243,9 @@ d_expression_1 (struct d_info *di)
 	      left = cplus_demangle_type (di);
 	    else
 	      left = d_expression_1 (di);
-	    if (!strcmp (code, "cl"))
+	    if (code && !strcmp (code, "cl"))
 	      right = d_exprlist (di, 'E');
-	    else if (!strcmp (code, "dt") || !strcmp (code, "pt"))
+	    else if (code && (!strcmp (code, "dt") || !strcmp (code, "pt")))
 	      {
 		right = d_unqualified_name (di);
 		if (d_peek_char (di) == 'I')
@@ -3259,14 +3266,14 @@ d_expression_1 (struct d_info *di)
 	    struct demangle_component *second;
 	    struct demangle_component *third;
 
-	    if (!strcmp (code, "qu"))
+	    if (code && !strcmp (code, "qu"))
 	      {
 		/* ?: expression.  */
 		first = d_expression_1 (di);
 		second = d_expression_1 (di);
 		third = d_expression_1 (di);
 	      }
-	    else if (code[0] == 'n')
+	    else if (code && code[0] == 'n')
 	      {
 		/* new-expression.  */
 		if (code[1] != 'w' && code[1] != 'a')
