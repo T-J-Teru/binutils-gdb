@@ -28,6 +28,12 @@
 	(mrk3_pseudo_register_read): Reduce SP memory space problem to warning.
 	(mrk3_print_insn): Use middle-endian 32-bit output.
 
+2014-08-25  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_get_mem_space): Add cleanups.
+	(mrk3_register_type): Only allocate types once.
+	(mrk3_print_insn): Add cleanups.
+
 2014-02-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_get_mem_type): Deleted.

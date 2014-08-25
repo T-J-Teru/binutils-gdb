@@ -1,23 +1,23 @@
-/* Target-dependent code for the MRK3 CPU, for GDB. 
+/* Target-dependent code for the MRK3 CPU, for GDB.
 
    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
    2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
    Copyright (C) 2013 NXP Semiconductors Austria GmbH
 
    Contributor Jeremy Bennett <jeremy.bennett@embecosm.com>
-   
+
    This file is part of GDB.
-   
+
    This program is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the Free
    Software Foundation; either version 3 of the License, or (at your option)
    any later version.
-   
+
    This program is distributed in the hope that it will be useful, but WITHOUT
    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
    more details.
-   
+
    You should have received a copy of the GNU General Public License along
    with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
@@ -51,9 +51,6 @@
 /* #include "p40/gdb_registers.h" */
 /* #include "p40/debug.h" */
 /* #include "p40/P40_DLL.h" */
-
-#undef XMALLOC
-#define XMALLOC(TYPE) ((TYPE*) xmalloc (sizeof (TYPE)))
 
 /* Useful register numbers - CPU registers */
 #define MRK3_R0_REGNUM     0
@@ -169,6 +166,7 @@ mrk3_get_mem_space (void)
      look at whether we have we have a valid value. A shame because we'll get
      an error message. */
   struct ui_file *mf = mem_fileopen ();
+  struct cleanup *old_chain = make_cleanup_ui_file_delete (mf);
   char buf[64];
   target_rcmd ("SilentGetMemSpace", mf);
   ui_file_put (mf, mrk3_ui_memcpy, buf);
@@ -179,6 +177,7 @@ mrk3_get_mem_space (void)
          should we return a default? */
       warning (_
 	       ("mrk3-tdep.c: using default memory space (super system)."));
+      do_cleanups (old_chain);
       return MRK3_MEM_SPACE_SSYS;
     }
   else
@@ -190,6 +189,7 @@ mrk3_get_mem_space (void)
 	fprintf_unfiltered (gdb_stdlog,
 			    "mrk3-tdep.c: buf \"%s\", mem space 0x%08lx\n.",
 			    buf, res);
+      do_cleanups (old_chain);
       return (uint32_t) res & MRK3_MEM_SPACE_MASK;
     }
 }
@@ -304,79 +304,91 @@ mrk3_register_name (struct gdbarch *gdbarch, int regnum)
 static struct type *
 mrk3_register_type (struct gdbarch *gdbarch, int regnum)
 {
+  static struct type *bt_uint8 = NULL;
+  static struct type *bt_uint16 = NULL;
+  static struct type *bt_uint32 = NULL;
+
+  /* Initialize each type just once to avoid leaks. */
+  if (NULL == bt_uint8)
+    bt_uint8 = builtin_type (gdbarch)->builtin_uint8;
+  if (NULL == bt_uint16)
+    bt_uint16 = builtin_type (gdbarch)->builtin_uint16;
+  if (NULL == bt_uint32)
+    bt_uint32 = builtin_type (gdbarch)->builtin_uint32;
+
   switch (regnum)
     {
       /* CPU registers */
     case (MRK3_R0_REGNUM + 0):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R0_REGNUM + 1):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R0_REGNUM + 2):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R0_REGNUM + 3):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R0_REGNUM + 4):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R0_REGNUM + 5):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R0_REGNUM + 6):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_PC_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint32;
+      return bt_uint32;
     case (MRK3_PSW_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_SSSP_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_SSP_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_USP_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R4E_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R5E_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R6E_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
 
       /* Special Function Registers  - TODO through XML */
 
       /* Pseudo registers */
     case (MRK3_SP_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint16;
+      return bt_uint16;
     case (MRK3_R0L_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R1L_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R2L_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R3L_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R0H_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R1H_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R2H_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R3H_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_R4L_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint32;
+      return bt_uint32;
     case (MRK3_R5L_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint32;
+      return bt_uint32;
     case (MRK3_R6L_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint32;
+      return bt_uint32;
     case (MRK3_SYS_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_INT_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_ZERO_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_NEG_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_OVERFLOW_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     case (MRK3_CARRY_REGNUM):
-      return builtin_type (gdbarch)->builtin_uint8;
+      return bt_uint8;
     default:
       /*  Moan */
       warning (_("mrk3_register_type: unknown register number %d.\n"), regnum);
@@ -924,7 +936,7 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
 
   if (mrk3_debug)
     fprintf_unfiltered (gdb_stdlog, "mrk3-tdep.c: gdbarch->num_regs=%d "
-			"dwarf2_regnr(%d) maps to (%d)\n", 
+			"dwarf2_regnr(%d) maps to (%d)\n",
 			gdbarch_num_regs( gdbarch), dwarf2_regnr, regnr);
   return regnr;
 
@@ -1505,6 +1517,7 @@ mrk3_print_insn (bfd_vma addr,
       // it knows how to disassemble. We are also dealing direct with the
       // target, so we need the address, not the pointer.
       struct ui_file *mf = mem_fileopen ();
+      struct cleanup *old_chain = make_cleanup_ui_file_delete (mf);
       char cmd[40];
       char buf[80];
       sprintf (cmd, "silent-disas %s\n", hex_string (addr));
@@ -1517,6 +1530,7 @@ mrk3_print_insn (bfd_vma addr,
 	{
 	  /* TODO: What do we do if something goes wrong? */
 	  warning (_("mrk3-tdep.c: Unable to diassemble."));
+	  do_cleanups (old_chain);
 	  return -1;
 	}
       else
@@ -1526,6 +1540,7 @@ mrk3_print_insn (bfd_vma addr,
 	  if (size > 0)
 	    (*info->fprintf_func) (info->stream, "%s", &(buf[2]));
 
+	  do_cleanups (old_chain);
 	  return size > 0 ? size : -1;
 	}
     }
