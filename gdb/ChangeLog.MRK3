@@ -1,3 +1,9 @@
+2014-08-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* trad-frame.c (trad_frame_set_reg_unknown): New definition.
+	* trad-frame.h: Remove final argument from declaration of
+	trad_frame_set_reg_unknown.
+
 2014-06-03  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* gdb/mrk3-tdep.c (mrk3_pseudo_register_read): Add missing "else".

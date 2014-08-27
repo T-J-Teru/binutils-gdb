@@ -123,6 +123,13 @@ trad_frame_set_reg_addr (struct trad_frame_cache *this_trad_cache,
 }
 
 void
+trad_frame_set_reg_unknown (struct trad_frame_cache *this_trad_cache,
+			    int regnum)
+{
+  trad_frame_set_reg_realreg (this_trad_cache, regnum, TF_REG_UNKNOWN);
+}
+
+void
 trad_frame_set_unknown (struct trad_frame_saved_reg this_saved_regs[],
 			int regnum)
 {
