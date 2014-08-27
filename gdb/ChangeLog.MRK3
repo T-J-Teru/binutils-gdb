@@ -1,5 +1,17 @@
 2014-08-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* mrk3-tdep.c: Add definition of MRK3_FP_REGNUM.
+	(mrk3_pointer_to_address): Better commenting, correct warnings and
+	only issue if debugging is enabled.
+	(mrk3_address_to_pointer): Correct warnings and only issue if
+	debugging is enabled.
+	(mrk3_read_code_memory): Created.
+	(mrk3_skip_prologue): Provide implementation.
+	(mrk3_analyze_prologue): Add code to populate frame cache.
+	(mrk3_frame_cache): Tidy up debug message.
+
+2014-08-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* trad-frame.c (trad_frame_set_reg_unknown): New definition.
 	* trad-frame.h: Remove final argument from declaration of
 	trad_frame_set_reg_unknown.

@@ -54,6 +54,7 @@
 
 /* Useful register numbers - CPU registers */
 #define MRK3_R0_REGNUM     0
+#define MRK3_FP_REGNUM     6
 #define MRK3_PC_REGNUM     7
 #define MRK3_PSW_REGNUM    8
 #define MRK3_SSSP_REGNUM   9
@@ -1124,7 +1125,13 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
 
    However...
 
-   There is no mechanism (yet!) in Remote Serial Protocol to distinguish which
+   The GDB Remote Serial Protocol (RSP) does not distinguish address spaces
+   when accessing memory (this is a change from the distant past).  So the
+   communication protocol uses addresses, not pointers.
+
+   The symbol table
+
+   Where this matters is in presentation of values to the user.which
    address space is being used. So we cannot make the transformation. We must
    pass the higher order bits and leave it to the server.
 
@@ -1150,8 +1157,11 @@ mrk3_pointer_to_address (struct gdbarch *gdbarch,
       /* Sanity check */
       if (mrk3_is_code_address (addr))
 	{
-	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
-		   hex_string (addr));
+	  if (mrk3_debug >= 1)
+	    {
+	      warning (_("MRK3 code address %s missing code flags"),
+		       hex_string (addr));
+	    }
 	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
 	}
 
@@ -1170,8 +1180,11 @@ mrk3_pointer_to_address (struct gdbarch *gdbarch,
       /* Sanity check */
       if (mrk3_is_data_address (addr))
 	{
-	  warning (_("MRK3 code pointer 0x%s missing code flags - corrected"),
-		   hex_string (addr));
+	  if (mrk3_debug >= 1)
+	    {
+	      warning (_("MRK3 data address %s missing data flags"),
+		       hex_string (addr));
+	    }
 	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
 	}
 
@@ -1204,8 +1217,11 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
       /* Sanity check */
       if (mrk3_is_code_address (ptr))
 	{
-	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
-		   hex_string (ptr));
+	  if (mrk3_debug >= 1)
+	    {
+	      warning (_("MRK3 code pointer %s missing code flags"),
+		       hex_string (ptr));
+	    }
 	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
 	}
 
@@ -1224,8 +1240,11 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
       /* Sanity check */
       if (mrk3_is_data_address (ptr))
 	{
-	  warning (_("MRK3 code address 0x%s missing code flags - corrected"),
-		   hex_string (ptr));
+	  if (mrk3_debug >= 1)
+	    {
+	      warning (_("MRK3 data pointer %s missing code flags"),
+		       hex_string (ptr));
+	    }
 	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
 	}
 
@@ -1271,6 +1290,25 @@ mrk3_read_pc (struct regcache *regcache)
 }	/* mrk3_read_pc () */
 
 
+/* Read from code memory.
+
+   We are given a word address, and must convert it to the correct pointer for
+   the read to work.
+*/
+static void
+mrk3_read_code_memory (CORE_ADDR ptr, gdb_byte *buf, ssize_t  len)
+{
+  if (mrk3_debug >= 1)
+    {
+      fprintf_unfiltered (gdb_stdlog, _("MRK3 read code memory from %s\n"),
+			  hex_string (ptr));
+    }
+
+  read_memory ((ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE, buf, len);
+
+}	/* mrk3_read_code_memory () */
+
+
 /* Write PC, which is a word pointer, with a value supplied as a GDB byte
    address. */
 static void
@@ -1300,56 +1338,235 @@ mrk3_register_to_value (struct frame_info *frame, int regnum,
 }
 
 
+/* Skip the prologue.
+
+   If the input address, PC, is in a function prologue, return the address of
+   the end of the prologue, otherwise return the input address.
+
+   We attempt to use the source and line data from the symtab and line data.
+
+   MRK3 has a very simple prologue.
+
+   PUSH   R6                   ;; Only if using FP (16-bit instruction)
+   SUB.w  R6,#<frame_size>     ;; Only if using FP (32-bit instruction)
+   SUB.w  R6,#<stack_size>     ;;                  (32-bit instruction)
+
+   We let prologue analysis do any validation. We just count bytes here.
+
+   @param[in] gdbarch  The current architecture.
+   @param[in] pc       The current current program counter.
+
+   @return  Updated PC, pointing after the prologue if the PC supplied was in
+   the prologue. */
 static CORE_ADDR
 mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 {
-  /*  TODO: See alpha-tdep.c :: alpha_after_prologue */
+  CORE_ADDR  func_start;
+  CORE_ADDR  func_end;
 
-  /*  Actually do not skip anything. */
-  return pc;
-}
+  if (find_pc_partial_function (pc, NULL, &func_start, &func_end))
+    {
+      CORE_ADDR  prologue_end = skip_prologue_using_sal (gdbarch, func_start);
+      uint16_t  insn16;
+
+      if (0 != prologue_end)
+	return  prologue_end;		/* SAL gave us the answer. */
+
+      /* SAL didn't give us what we want, so count forward by steam from the
+	 PC, which is now at the start of the function. If the first
+	 instruction is PUSH R6, we have a FP, and a 5 word (10 byte)
+	 prologue, else we have a 2 word (4 byte) prologue. */
+      mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
+      return  (0x57a0 == insn16) ? pc + 10 : pc + 4;
+    }
+  else
+    {
+      /* Can't find the function. Give up.
+
+         @todo Should we consider disassembling to look for a prologue
+	 pattern? */
+      return  pc;
+    }
+}	/* mrk3_skip_prologue () */
 
 
 /* Determine the value of registers in the PREV frame and save them in the
    prologue cache for THIS frame. Note that in general we cannot just unwind
-   registers here, or we'll end p with a circular dependency. */
+   registers here, or we'll end up with a circular dependency.
+
+   The MRK3 prologue is incredibly simple. @see mrk3_skip_prologue for details.
+
+   @param[in]  this_frame  THIS frame info, from which we can get THIS program
+                           counter and THIS stack pointer.  May be null, in
+                           which case we use defaults values.
+   @param[out] this_cache  The cache of registers in the PREV frame, which we
+                           should initialize. */
 static void
 mrk3_analyze_prologue (struct frame_info *this_frame,
 		       struct trad_frame_cache *this_cache)
 {
   CORE_ADDR func_start = get_frame_func (this_frame);
   CORE_ADDR this_pc  = get_frame_pc (this_frame);
-  CORE_ADDR this_sssp;
-  CORE_ADDR this_ssp;
-  CORE_ADDR this_usp;
-  CORE_ADDR this_sp;
+  CORE_ADDR this_sp = mrk3_is_ssys_mem_space ()
+    ? get_frame_register_unsigned (this_frame, MRK3_SSSP_REGNUM)
+    : mrk3_is_sys_mem_space ()
+    ? get_frame_register_unsigned (this_frame, MRK3_SSP_REGNUM)
+    : get_frame_register_unsigned (this_frame, MRK3_USP_REGNUM);
 
-  /* Get the stack pointers if we can. */
-  if (this_frame)
+  int have_fp_p;		/* If we use a FP */
+  CORE_ADDR fp_offset;		/* Set if we have updated the FP */
+  int sp_updated_p;		/* If we have updated the SP for this frame */
+
+  CORE_ADDR prev_sp;
+  CORE_ADDR pc = func_start;	/* For counting through prologue */
+
+  uint16_t  insn16;
+
+  /* If we don't have a function start, then we can't do any meaningful
+     analysis. We can set the ID and base, but we just leave the register
+     cache "as is", with its default values being that the reg in this frame
+     is the reg in the previous frame. */
+  if (0 == func_start)
     {
-      this_sssp = get_frame_register_unsigned (this_frame, MRK3_SSSP_REGNUM);
-      this_ssp  = get_frame_register_unsigned (this_frame, MRK3_SSP_REGNUM);
-      this_usp  = get_frame_register_unsigned (this_frame, MRK3_USP_REGNUM);
-      this_sp   = mrk3_is_ssys_mem_space () ? this_sssp
-	: mrk3_is_sys_mem_space () ? this_ssp : this_usp;
+      /* Set the frame ID and frame base */
+      trad_frame_set_id (this_cache, frame_id_build (this_sp, this_pc));
+      trad_frame_set_this_base (this_cache, this_sp);
+
+      if (mrk3_debug >= 1)
+	{
+	  fprintf_unfiltered (gdb_stdlog,
+			      _("MRK3 prologue: No func_start.\n"));
+	}
+
+      return;
     }
+
+  /* Set up the cache. Generally previous frame's registers are unknown. The
+     execptions are:
+     - the previous PC, which is either the last thing on the previous stack
+       frame, or if we have a FP the penultimate thing on the previous stack
+       frame.
+     - the previous R6, in case where we are using this as a FP, in which case
+       it is the last thing on the previous stack frame.
+     - the previous SP, which can be calculated as a fixed amount from the
+       current SP.
+
+     To work these out, we need to know exactly where we have stopped, and
+     whether we have a FP, so we can deduce the value of the previous frame
+     SP. */
+
+  /* Default values until we find out where we are. */
+  prev_sp = this_sp;
+  have_fp_p = 0;
+  fp_offset = 0;
+  sp_updated_p = 0;
+
+  /* Walk the prologue. */
+
+  mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
+
+  if (0x57a0 == insn16)
+    {
+      if (mrk3_debug >= 1)
+	{
+	  fprintf_unfiltered (gdb_stdlog,
+			      _("MRK3 prologue: Found PUSH R6 at %s.\n"),
+			      hex_string (pc));
+	}
+
+      /* PUSH R6: Have FP. In this case, the prev FP is pushed on the stack. */
+      have_fp_p = 1;
+      pc += 2;
+
+      /* Check we really have SUB.w R6,#<frame_size> here, but looking at the
+	 first 16 bits of the instruction */
+      mrk3_read_code_memory (this_sp - 2, (gdb_byte *) &insn16,
+			     sizeof (insn16));
+      gdb_assert (0x0406 == insn16);
+      pc += 4;			/* Full instr has 16-bit const */
+
+      /* Have we updated the FP? */
+      fp_offset = (this_pc >= pc) ? 2 : 0;
+
+      /* Update the instruction we are looking at. */
+      mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
+    }
+
+  /* Check we have SUB.w R7,#<stack_size>.  If not we may just be looking at a
+     corrupted program, so give up, setting ID and frame base and leaving the
+     register cache "as is". */
+  if (0x0407 != insn16)
+    {
+      /* Set the frame ID and frame base */
+      trad_frame_set_id (this_cache, frame_id_build (this_sp, this_pc));
+      trad_frame_set_this_base (this_cache, this_sp);
+
+      if (mrk3_debug >= 1)
+	{
+	  fprintf_unfiltered (gdb_stdlog,
+			      _("MRK3 prologue: %s at %s, not SUB.w R7.\n"),
+			      hex_string (insn16), hex_string (pc));
+	}
+
+      return;
+    }
+
+  /* We seem to have a valid prologue, so get the stack size */
+  mrk3_read_code_memory (pc + 2, (gdb_byte *) &insn16, sizeof (insn16));
+  pc += 4;
+
+  /* Have we yet updated the SP? */
+  sp_updated_p = (this_pc >= pc);
+
+  /* this_sp holds the value currently in the register. Is this the PREV or
+     THIS stack pointer? And do we need to allow for a frame pointer having
+     been pushed? */
+  prev_sp = sp_updated_p ? this_sp + insn16 + fp_offset : this_sp;
+  this_sp = sp_updated_p ? this_sp : prev_sp - insn16 - fp_offset;
+
+  /* Populate the cache. For simplicity, we populate all SP variants - two
+     will be ignored, but we don't need to worry about which here. */
+  trad_frame_set_reg_addr (this_cache, MRK3_PC_REGNUM, prev_sp);
+  trad_frame_set_reg_value (this_cache, MRK3_USP_REGNUM, prev_sp);
+  trad_frame_set_reg_value (this_cache, MRK3_SSP_REGNUM, prev_sp);
+  trad_frame_set_reg_value (this_cache, MRK3_SSSP_REGNUM, prev_sp);
+
+  if (mrk3_debug >= 1)
+    {
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue: Prev PC addr 0x%s.\n"),
+			  hex_string (prev_sp));
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue: Prev SP value 0x%s.\n"),
+			  hex_string (prev_sp));
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue: %s frame pointer.\n"),
+			  have_fp_p ? "Have" : "Do not have");
+    }
+
+
+  if (have_fp_p)
+    trad_frame_set_reg_value (this_cache, MRK3_FP_REGNUM, prev_sp - 2);
   else
-    {
-      /* Default is to start in super system mode. */
-      this_sssp = 0;
-      this_ssp = 0;
-      this_usp = 0;
-      this_sp  = this_sssp;
-    }
+    trad_frame_set_reg_unknown (this_cache, MRK3_FP_REGNUM);
+
+  /* All other registers are unknown. */
+  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 0);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 1);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 2);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 3);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 4);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 5);
+  trad_frame_set_reg_unknown (this_cache, MRK3_PSW_REGNUM);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R4E_REGNUM);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R5E_REGNUM);
+  trad_frame_set_reg_unknown (this_cache, MRK3_R6E_REGNUM);
 
   /* Set the frame ID and frame base */
   trad_frame_set_id (this_cache, frame_id_build (this_sp, this_pc));
   trad_frame_set_this_base (this_cache, this_sp);
 
-  /* TODO: We'll leave register initialization to another time.
-     trad_frame_set_reg_value (this_cache, MRK3_PC_REGNUM, pc);
-     etc... */
-}
+}	/* mrk3_analyse_prologue */
 
 
 /* Populate the frame cache if it doesn't exist. */
@@ -1358,8 +1575,11 @@ mrk3_frame_cache (struct frame_info *this_frame,
 		  void **this_cache)
 {
   if (mrk3_debug)
-    fprintf_unfiltered (gdb_stdlog,
-			"mrk3-tdep.c: frame_cache = 0x%p\n", *this_cache);
+    {
+      fprintf_unfiltered (gdb_stdlog,
+			  _("mrk3-tdep.c: frame_cache = %s\n"),
+			  hex_string ((CORE_ADDR) (*this_cache)));
+    }
 
   if (!*this_cache)
     {
