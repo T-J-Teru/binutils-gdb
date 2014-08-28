@@ -1,3 +1,7 @@
+2014-08-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_skip_prologue): Allow for zero length prologues.
+
 2014-08-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c: Add definition of MRK3_FP_REGNUM.

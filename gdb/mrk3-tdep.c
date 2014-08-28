@@ -1345,7 +1345,7 @@ mrk3_register_to_value (struct frame_info *frame, int regnum,
 
    We attempt to use the source and line data from the symtab and line data.
 
-   MRK3 has a very simple prologue.
+   MRK3 has a very simple prologue (if any).
 
    PUSH   R6                   ;; Only if using FP (16-bit instruction)
    SUB.w  R6,#<frame_size>     ;; Only if using FP (32-bit instruction)
@@ -1375,9 +1375,13 @@ mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
       /* SAL didn't give us what we want, so count forward by steam from the
 	 PC, which is now at the start of the function. If the first
 	 instruction is PUSH R6, we have a FP, and a 5 word (10 byte)
-	 prologue, else we have a 2 word (4 byte) prologue. */
+	 prologue, if SUB.w R7,#<offset> we have a simple stack frame and a 2
+	 word (4 byte) prologue, else we have no stack frame and no
+	 prologue. */
       mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
-      return  (0x57a0 == insn16) ? pc + 10 : pc + 4;
+      return (0x57a0 == insn16) ? pc + 10	/* Have FP */
+	: (0x0407 == insn16) ? pc + 4		/* Have stack frame */
+	: pc;					/* No prologue */
     }
   else
     {
@@ -1422,6 +1426,18 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 
   uint16_t  insn16;
 
+  if (mrk3_debug >= 1)
+    {
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue entry: func_start %s.\n"),
+			  hex_string (func_start));
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue entry: this_pc %s.\n"),
+			  hex_string (this_pc));
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue entry: prev_sp %s.\n"),
+			  hex_string (prev_sp));
+    }
   /* If we don't have a function start, then we can't do any meaningful
      analysis. We can set the ID and base, but we just leave the register
      cache "as is", with its default values being that the reg in this frame
@@ -1492,8 +1508,8 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
       mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
     }
 
-  /* Check we have SUB.w R7,#<stack_size>.  If not we may just be looking at a
-     corrupted program, so give up, setting ID and frame base and leaving the
+  /* Check we have SUB.w R7,#<stack_size>.  If not we may not have a stack
+     frame at all, so give up, setting ID and frame base and leaving the
      register cache "as is". */
   if (0x0407 != insn16)
     {
