@@ -312,13 +312,27 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 
       if (r_symndx < symtab_hdr->sh_info)
 	{
+	  asection *osec;
+
 	  sym = local_syms + r_symndx;
 	  sec = local_sections [r_symndx];
+	  osec = sec;
+
+	  if ((sec->flags & SEC_MERGE)
+	      && ELF_ST_TYPE (sym->st_info) == STT_SECTION)
+	    {
+	      /* This relocation is relative to a section symbol that is going
+		 to be merged.  Change it so that it is relative to the merged
+		 section symbol.  */
+	      rel->r_addend = _bfd_elf_rel_local_sym (output_bfd, sym, &sec,
+						      rel->r_addend);
+	    }
+
 	  relocation = BASEADDR (sec) + sym->st_value;
 
 	  name = bfd_elf_string_from_elf_section
 	    (input_bfd, symtab_hdr->sh_link, sym->st_name);
-	  name = (name == NULL) ? bfd_section_name (input_bfd, sec) : name;
+	  name = (name == NULL) ? bfd_section_name (input_bfd, osec) : name;
 	}
       else
 	{
