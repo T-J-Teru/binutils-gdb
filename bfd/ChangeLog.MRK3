@@ -1,3 +1,8 @@
+2014-09-10  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_ABS_HI and
+	R_MRK3_ABS_LO relocations.
+
 2014-08-29  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* elf32-mrk3.c (mrk3_elf_relocate_section): Add support for
