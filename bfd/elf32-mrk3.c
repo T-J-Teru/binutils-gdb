@@ -255,6 +255,7 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
       if (symbol_section && symbol_section->flags & SEC_CODE)
 	{
 	  relocation >>= 1;
+	  rel->r_addend >>= 1;
 	}
       break;
       /* Pass others through.  */
