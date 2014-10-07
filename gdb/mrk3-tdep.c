@@ -21,6 +21,108 @@
    You should have received a copy of the GNU General Public License along
    with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/*! @file
+		      GDB for the NXP MRK3 Architecture
+		      =================================
+
+The MRK3 is a "16-bit" Harvard architecture with a word addressed code
+space.  Although a 16-bit architecture, the program counter is 32-bit,
+allowing larger code spaces to be addressed.
+
+The architecture also supports up to 16 separate address spaces (each with
+a separate code and data space).  Of these address spaces, two are special, the
+System address space and the Super-system adddress space.  Each address space
+has its own stack pointer, but otherwise register context is shared.
+
+Registers
+---------
+
+At all times GDB has visibility of the current user address space stack
+pointer as well as the system and super system stack pointers.  The full set
+of physical registers visible to GDB and their size in bits in order is:
+
+    Register    Size        Notes
+    --------    ----        -----
+    R0            16
+    R1            16
+    R2            16
+    R3            16
+    R4            16
+    R5            16
+    R6            16        Can be used as frame pointer
+    PC            32        Program counter @note Word address
+    PSW           16        Status word
+    SSSP          16        Super-system space stack pointer
+    SSP           16        System space stack pointer
+    USP           16        Current user space stack pointer
+    R4E           16        Combined with R4 to create 32-bit value
+    R5E           16        Combined with R5 to create 32-bit value
+    R6E           16        Combined with R6 to create 32-bit value
+
+GDB also defines some pseudo-registers which are combinations of the physical
+registers.
+
+    Register    Size        Notes
+    --------    ----        -----
+    SP            16        Stack pointer of current space (SSSP, SSP or USP)
+    R0L            8        Low 8 bits of R0
+    R1L            8        Low 8 bits of R1
+    R2L            8        Low 8 bits of R2
+    R3L            8        Low 8 bits of R3
+    R0H            8        High 8 bits of R0
+    R1H            8        High 8 bits of R1
+    R2H            8        High 8 bits of R2
+    R3H            8        High 8 bits of R3
+    R4LONG        32        Concatenation of R4E and R4
+    R5LONG        32        Concatenation of R5E and R5
+    R6LONG        32        Concatenation of R6E and R6
+    SYS            8        Bit 15 of PSW, 1 in System Mode, 0 otherwise
+    INT            8        Bits 14-10 of PSW, interrupt level acceptance
+    ZERO           8        Bit 3 of PSW, zero flag
+    NEG            8        Bit 2 of PSW, negative (sign) flag
+    OVERFLOW       8        Bit 1 of PSW, signed overflow flag
+    CARRY          8        Bit 0 of PFS, carry flag
+
+Memory
+------
+
+MRK3 has up to 16 address spaces, of which two are special, the System address
+space and the Supersystem address space.  Each of these address spaces is
+further divided into data and code spaces.  The code space is word addressed,
+and can be only accessed by the program counter.
+
+GDB expects a single unified byte addressed memory. For Harvard architectures,
+and/or those with word addressing, this means that addresses on the target
+need mapping.
+
+To avoid confusion, GDB refers to "addresses" to mean the unified byte address
+space used internally within GDB and "pointers" to refer to the values used on
+the target (which need be neither unique, nor byte addressed).
+
+This mapping is typically achieved by shifting to convert to/from word
+addressing if required and adding high order bits to addresses to distinguish
+multiple address spaces.
+
+This is not quite perfect. GDB actually uses two flavours of *address*. Symbol
+tables hold byte values, but without any higher order bits. So sometimes GDB
+wants pointers converted to addresses, but without any higher order bits.
+
+@note The GDB Remote Serial Protocol (RSP) does not distinguish address
+      spaces when accessing memory (this is a change from the distant
+      past).  So the communication protocol uses addresses, not pointers.
+
+@note Therefore, the purpose of this address <-> pointer manipulation should
+      be purely for presentation to the user.
+
+We use this mechanism for MRK3. Although the PC is 32 bits, the achitecture
+has a maximum addressability of 20-bits (word addressing). We use the top
+8-bits to identify the address space (top 4 bits) and within the address
+space, its code and data spaces (bit 24).  Code pointers are shifted to be
+code addresses.
+
+*/
+
+
 #include "defs.h"
 #include "frame.h"
 #include "frame-unwind.h"
@@ -35,6 +137,7 @@
 #include "regcache.h"
 #include "dis-asm.h"
 #include "ui-file.h"
+#include "observer.h"
 
 /*  Required for symbol switch handling. */
 #include "gdb/defs.h"
@@ -44,13 +147,6 @@
 #include "gdb/gdb_obstack.h"
 #include "gdb/progspace.h"
 #include "gdb/breakpoint.h"
-
-/*  Mrk3 specific headers. */
-/* #include "p40/gdb_types.h" */
-/* #include "p40/gdb_mem_map.h" */
-/* #include "p40/gdb_registers.h" */
-/* #include "p40/debug.h" */
-/* #include "p40/P40_DLL.h" */
 
 /* Useful register numbers - CPU registers */
 #define MRK3_R0_REGNUM     0
@@ -79,9 +175,9 @@
 #define MRK3_R1H_REGNUM      (PSEUDO_START +  6)
 #define MRK3_R2H_REGNUM      (PSEUDO_START +  7)
 #define MRK3_R3H_REGNUM      (PSEUDO_START +  8)
-#define MRK3_R4L_REGNUM      (PSEUDO_START +  9)
-#define MRK3_R5L_REGNUM      (PSEUDO_START + 10)
-#define MRK3_R6L_REGNUM      (PSEUDO_START + 11)
+#define MRK3_R4LONG_REGNUM      (PSEUDO_START +  9)
+#define MRK3_R5LONG_REGNUM      (PSEUDO_START + 10)
+#define MRK3_R6LONG_REGNUM      (PSEUDO_START + 11)
 #define MRK3_SYS_REGNUM      (PSEUDO_START + 12)
 #define MRK3_INT_REGNUM      (PSEUDO_START + 13)
 #define MRK3_ZERO_REGNUM     (PSEUDO_START + 14)
@@ -98,26 +194,34 @@
 #define NUM_REGS        (NUM_REAL_REGS + NUM_PSEUDO_REGS)
 
 /* Memory spaces. A total of 4 bits are allocated for this. */
-#define MRK3_MEM_SPACE_MASK 0xf0000000
-#define MRK3_MEM_SPACE_SYS  0x10000000
-#define MRK3_MEM_SPACE_APP1 0x20000000
-#define MRK3_MEM_SPACE_APP2 0x30000000
-#define MRK3_MEM_SPACE_SSYS 0x40000000
+static const uint32_t  MRK3_MEM_SPACE_MASK = 0xf0000000;
+static const uint32_t  MRK3_MEM_SPACE_NONE = 0x00000000;
+static const uint32_t  MRK3_MEM_SPACE_SYS  = 0x10000000;
+static const uint32_t  MRK3_MEM_SPACE_APP1 = 0x20000000;
+static const uint32_t  MRK3_MEM_SPACE_APP2 = 0x30000000;
+static const uint32_t  MRK3_MEM_SPACE_SSYS = 0x40000000;
 
 /* Memory types. One bit to indicate code or data. */
-#define MRK3_MEM_TYPE_MASK 0x01000000
-#define MRK3_MEM_TYPE_DATA 0x00000000
-#define MRK3_MEM_TYPE_CODE 0x01000000
+static const uint32_t  MRK3_MEM_TYPE_MASK = 0x01000000;
+static const uint32_t  MRK3_MEM_TYPE_DATA = 0x00000000;
+static const uint32_t  MRK3_MEM_TYPE_CODE = 0x01000000;
 
 /* General mask */
-#define MRK3_MEM_MASK 0xff000000
+static const uint32_t  MRK3_MEM_MASK = 0xff000000;
 
-/*  Define the breakpoint instruction which is inserted by */
-/*  GDB into the target code. This must be exactly the same */
-/*  as the simulator expects. */
-/*  Per definition, a breakpoint instruction has 16 bits. */
-/*  This should be sufficient for all purposes. */
+/* Define the breakpoint instruction which is inserted by GDB into the target
+   code. This must be exactly the same as the simulator expects.
+
+   Per definition, a breakpoint instruction has 16 bits.  This should be
+   sufficient for all purposes. */
 static const uint16_t mrk3_sim_break_insn = 0x0fc1;
+
+/* Debug flag values */
+static const int  MRK3_DEBUG_FLAG_GENERAL  = 0x0001;
+static const int  MRK3_DEBUG_FLAG_PTRADDR  = 0x0002;
+static const int  MRK3_DEBUG_FLAG_FRAME    = 0x0004;
+static const int  MRK3_DEBUG_FLAG_MEMSPACE = 0x0008;
+static const int  MRK3_DEBUG_FLAG_DWARF    = 0x0010;
 
 /* Structure describing architecture specific types. */
 struct gdbarch_tdep
@@ -133,7 +237,9 @@ struct gdbarch_tdep
   struct type *pc_type;
 };
 
-/* A structure to store the objectfile filenames for dynammic objectfile
+
+#if 0
+/*! A structure to store the objectfile filenames for dynammic objectfile
    switching. */
 struct mrk3_objfile_info_t {
 	char* name;
@@ -142,12 +248,84 @@ struct mrk3_objfile_info_t {
 	uint16_t mem_size_globals;
 	uint16_t mem_size_rodata;
 };
+#endif
+
 
 /*! Global debug flag */
-int mrk3_debug;
+int  mrk3_debug;
+
+/*! Global flag indicating if memspace is valid. */
+int  mrk3_memspace_valid_p;
 
 
-/* Wrapper around memcpy to make it legal argument to ui_file_put */
+/*! Is a particular debug flag set?
+
+  @param[in] target_flag  The flag to check
+  @return  Non-zero if these debug messages are enabled. Zero otherwise. */
+static int
+mrk3_have_debug_flag (const int  target_flag)
+{
+  return  (mrk3_debug & target_flag) == target_flag;
+
+}	/* mrk3_have_debug_flag () */
+
+
+/*! Are general debug messages enabled?
+
+  @return  Non-zero if these debug messages are enabled. Zero otherwise. */
+static int
+mrk3_debug_general (void)
+{
+  return  mrk3_have_debug_flag (MRK3_DEBUG_FLAG_GENERAL);
+
+}	/* mrk3_debug_general () */
+
+
+/*! Are debug messages concerning pointer-address conversion enabled?
+
+  @return  Non-zero if these debug messages are enabled. Zero otherwise. */
+static int
+mrk3_debug_ptraddr (void)
+{
+  return  mrk3_have_debug_flag (MRK3_DEBUG_FLAG_PTRADDR);
+
+}	/* mrk3_debug_ptraddr () */
+
+
+/*! Are debug messages concerning frame handling enabled?
+
+  @return  Non-zero if these debug messages are enabled. Zero otherwise. */
+static int
+mrk3_debug_frame (void)
+{
+  return  mrk3_have_debug_flag (MRK3_DEBUG_FLAG_FRAME);
+
+}	/* mrk3_debug_frame () */
+
+
+/*! Are debug messages concerning memory space handling enabled?
+
+  @return  Non-zero if these debug messages are enabled. Zero otherwise. */
+static int
+mrk3_debug_memspace (void)
+{
+  return  mrk3_have_debug_flag (MRK3_DEBUG_FLAG_MEMSPACE);
+
+}	/* mrk3_debug_memspace () */
+
+
+/*! Are debug messages concerning DWARF handling enabled?
+
+  @return  Non-zero if these debug messages are enabled. Zero otherwise. */
+static int
+mrk3_debug_dwarf (void)
+{
+  return  mrk3_have_debug_flag (MRK3_DEBUG_FLAG_DWARF);
+
+}	/* mrk3_debug_dwarf () */
+
+
+/*! Wrapper around memcpy to make it legal argument to ui_file_put */
 static void
 mrk3_ui_memcpy (void *dest, const char *buffer, long len)
 {
@@ -156,92 +334,101 @@ mrk3_ui_memcpy (void *dest, const char *buffer, long len)
 }
 
 
-/* Get the current memory space from the target.
+/*! Invalidate the memory space cache. */
+static void
+mrk3_invalidate_memspace_cache (void)
+{
+  mrk3_memspace_valid_p = 0;
+}
+
+/*! Get the current memory space from the target.
 
    TODO: Is RCmd the best way to do this? */
 static uint32_t
-mrk3_get_mem_space (void)
+mrk3_get_memspace (void)
 {
+  static uint32_t  cached_memspace;
+  struct ui_file *mf;
+  struct cleanup *old_chain;
+  char buf[64];
+
+  if (mrk3_memspace_valid_p)
+    return  cached_memspace;
+
   /* TODO: We can't tell if we have a valid target function here, because it
      is set to a value static within target.c (tcomplain). So we'll need to
      look at whether we have we have a valid value. A shame because we'll get
      an error message. */
-  struct ui_file *mf = mem_fileopen ();
-  struct cleanup *old_chain = make_cleanup_ui_file_delete (mf);
-  char buf[64];
+  mf = mem_fileopen ();
+  old_chain = make_cleanup_ui_file_delete (mf);
+
   target_rcmd ("SilentGetMemSpace", mf);
   ui_file_put (mf, mrk3_ui_memcpy, buf);
+
   /* Result is in mf->stream->buffer, of length mf->stream->length_buffer */
   if (strlen (buf) == 0)
     {
       /* TODO: We are presumably not connected to a target. Should we warn? Or
          should we return a default? */
-      warning (_
-	       ("mrk3-tdep.c: using default memory space (super system)."));
+      warning (_("MRK3: using default memory space (supersystem)."));
       do_cleanups (old_chain);
+      /* Don't cache in this circumstance. */
       return MRK3_MEM_SPACE_SSYS;
     }
   else
     {
-      /* The value is returned as a 32 bit value, with the result in the top 8
+      /* The value is returned as a 32 bit value, with the flags in the top 4
 	 bits. */
       long unsigned int res = strtol (buf, NULL, 16);
-      if (mrk3_debug >= 2)
+      if (mrk3_debug_memspace ())
 	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3-tdep.c: buf \"%s\", mem space 0x%08lx\n.",
+			    _("MRK3: memory space buf \"%s\", val 0x%08lx.\n"),
 			    buf, res);
       do_cleanups (old_chain);
-      return (uint32_t) res & MRK3_MEM_SPACE_MASK;
+      cached_memspace = res & MRK3_MEM_SPACE_MASK;
+      mrk3_memspace_valid_p = 1;
+      return  cached_memspace;
     }
-}
+}	/* mrk3_get_memspace () */
 
 
-/* Convenience function for the super system memory space. */
+/*! Convenience function for the super system memory space. */
 static int
-mrk3_is_ssys_mem_space (void)
+mrk3_is_ssys_memspace (void)
 {
-  uint32_t ms = mrk3_get_mem_space ();
+  uint32_t ms = mrk3_get_memspace ();
   return ms == MRK3_MEM_SPACE_SSYS;
 }
 
 
-/* Convenience function for the system memory space. */
+/*! Convenience function for the system memory space. */
 static int
-mrk3_is_sys_mem_space (void)
+mrk3_is_sys_memspace (void)
 {
-  uint32_t ms = mrk3_get_mem_space ();
+  uint32_t ms = mrk3_get_memspace ();
   return ms == MRK3_MEM_SPACE_SYS;
 }
 
 
-/* Convenience function for the user memory space. */
+/*! Convenience function for the user memory space. */
 static int
-mrk3_is_usr_mem_space (void)
+mrk3_is_usr_memspace (void)
 {
-  uint32_t ms = mrk3_get_mem_space ();
+  uint32_t ms = mrk3_get_memspace ();
   return (ms == MRK3_MEM_SPACE_APP1) || (ms == MRK3_MEM_SPACE_APP2);
 }
 
 
-/* Convenience function for the data memory type */
-static int
-mrk3_is_data_address (CORE_ADDR addr)
-{
-  return (addr & ~MRK3_MEM_TYPE_MASK) == MRK3_MEM_TYPE_DATA;
-
-}	/* mrk3_is_data_address () */
-
-
-/* Convenience function for the code memory type */
+/*! Convenience function for the code memory type */
 static int
 mrk3_is_code_address (CORE_ADDR addr)
 {
-  return (addr & ~MRK3_MEM_TYPE_MASK) == MRK3_MEM_TYPE_CODE;
+  return (addr & MRK3_MEM_TYPE_MASK) == MRK3_MEM_TYPE_CODE;
 
 }	/* mrk3_is_code_address () */
 
 
-/* Lookup the name of a register given it's number. */
+/*! Lookup the name of a register given it's number. */
 static const char *
 mrk3_register_name (struct gdbarch *gdbarch, int regnum)
 {
@@ -276,9 +463,9 @@ mrk3_register_name (struct gdbarch *gdbarch, int regnum)
     "R1H",
     "R2H",
     "R3H",
-    "R4l",
-    "R5l",
-    "R6l",
+    "R4LONG",
+    "R5LONG",
+    "R6LONG",
     "SYS",
     "INT",
     "ZERO",
@@ -292,13 +479,13 @@ mrk3_register_name (struct gdbarch *gdbarch, int regnum)
   else
     {
       /* Moan */
-      warning (_("mrk3_register_name: unknown register number %d.\n"), regnum);
+      warning (_("MRK3 register name: unknown register number %d.\n"), regnum);
       return "";
     }
 }
 
 
-/* Return the GDB type object for the "standard" data type
+/*! Return the GDB type object for the "standard" data type
    of data in register N.
 
    TODO. This should be done in XML. */
@@ -372,11 +559,11 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
       return bt_uint8;
     case (MRK3_R3H_REGNUM):
       return bt_uint8;
-    case (MRK3_R4L_REGNUM):
+    case (MRK3_R4LONG_REGNUM):
       return bt_uint32;
-    case (MRK3_R5L_REGNUM):
+    case (MRK3_R5LONG_REGNUM):
       return bt_uint32;
-    case (MRK3_R6L_REGNUM):
+    case (MRK3_R6LONG_REGNUM):
       return bt_uint32;
     case (MRK3_SYS_REGNUM):
       return bt_uint8;
@@ -392,7 +579,7 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
       return bt_uint8;
     default:
       /*  Moan */
-      warning (_("mrk3_register_type: unknown register number %d.\n"), regnum);
+      warning (_("MRK3 register type: unknown register number %d.\n"), regnum);
       return builtin_type (gdbarch)->builtin_int0;
     };
 }
@@ -410,17 +597,21 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
   switch (cooked_regnum)
     {
     case MRK3_SP_REGNUM:
-      warning ("memspace is 0x%08x.", mrk3_get_mem_space ());
-      if (mrk3_is_ssys_mem_space ())
+
+      if (mrk3_debug_memspace ())
+	fprintf_unfiltered (gdb_stdlog,
+			    _("MRK3: memspace for SP read is 0x%08x.\n"),
+			    mrk3_get_memspace ());
+      if (mrk3_is_ssys_memspace ())
 	raw_regnum = MRK3_SSSP_REGNUM;
-      else if (mrk3_is_sys_mem_space ())
+      else if (mrk3_is_sys_memspace ())
 	raw_regnum = MRK3_SSP_REGNUM;
-      else if (mrk3_is_usr_mem_space ())
+      else if (mrk3_is_usr_memspace ())
 	raw_regnum = MRK3_USP_REGNUM;
       else
 	{
-	  warning (_("mrk3-tdep.c: invalid SP read mem space 0x%08x."),
-		   mrk3_get_mem_space ());
+	  warning (_("MRK3: invalid SP read mem space 0x%08x."),
+		   mrk3_get_memspace ());
 	  raw_regnum = MRK3_SSSP_REGNUM;
 	}
 
@@ -451,18 +642,18 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 	memcpy (buf, raw_buf + 1, 1);
       return REG_VALID;
 
-    case MRK3_R4L_REGNUM:
-    case MRK3_R5L_REGNUM:
-    case MRK3_R6L_REGNUM:
+    case MRK3_R4LONG_REGNUM:
+    case MRK3_R5LONG_REGNUM:
+    case MRK3_R6LONG_REGNUM:
       /*  LO reg */
-      raw_regnum = cooked_regnum - MRK3_R4L_REGNUM + MRK3_R0_REGNUM + 4;
+      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R0_REGNUM + 4;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (buf, raw_buf + 2, 2);
       else
 	memcpy (buf, raw_buf, 2);
       /*  HI reg */
-      raw_regnum = cooked_regnum - MRK3_R4L_REGNUM + MRK3_R4E_REGNUM;
+      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R4E_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (buf, raw_buf, 2);
@@ -526,7 +717,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 
     default:
       /*  Moan */
-      warning (_("mrk3_pseudo_register_read: Not a pseudo reg %d.\n"),
+      warning (_("MRK3: Not a valid pseudo reg to read %d.\n"),
 	       cooked_regnum);
       return REG_UNKNOWN;
     }
@@ -544,17 +735,21 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
   /*  R0L is based on R0 */
   switch (cooked_regnum)
     {
+      if (mrk3_debug_memspace ())
+	fprintf_unfiltered (gdb_stdlog,
+			    _("MRK3: memspace for SP write is 0x%08x.\n"),
+			    mrk3_get_memspace ());
     case MRK3_SP_REGNUM:
-      if (mrk3_is_ssys_mem_space ())
+      if (mrk3_is_ssys_memspace ())
 	raw_regnum = MRK3_SSSP_REGNUM;
-      else if (mrk3_is_sys_mem_space ())
+      else if (mrk3_is_sys_memspace ())
 	raw_regnum = MRK3_SSP_REGNUM;
-      else if (mrk3_is_usr_mem_space ())
+      else if (mrk3_is_usr_memspace ())
 	raw_regnum = MRK3_USP_REGNUM;
       else
 	{
-	  warning (_("mrk3-tdep.c: invalid SP write mem space 0x%08x."),
-		   mrk3_get_mem_space ());
+	  warning (_("MRK3: invalid SP write mem space 0x%08x."),
+		   mrk3_get_memspace ());
 	  raw_regnum = MRK3_SSSP_REGNUM;
 	}
 
@@ -587,22 +782,22 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
 
-    case MRK3_R4L_REGNUM:
-    case MRK3_R5L_REGNUM:
-    case MRK3_R6L_REGNUM:
+    case MRK3_R4LONG_REGNUM:
+    case MRK3_R5LONG_REGNUM:
+    case MRK3_R6LONG_REGNUM:
       /*  LO reg */
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (raw_buf + 2, buf, 2);
       else
 	memcpy (raw_buf, buf, 2);
-      raw_regnum = cooked_regnum - MRK3_R4L_REGNUM + MRK3_R0_REGNUM + 4;
+      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R0_REGNUM + 4;
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       /*  HI reg */
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (raw_buf, buf, 2);
       else
 	memcpy (raw_buf + 2, buf, 2);
-      raw_regnum = cooked_regnum - MRK3_R4L_REGNUM + MRK3_R4E_REGNUM;
+      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R4E_REGNUM;
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
 
@@ -704,23 +899,26 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 
     default:
       /*  Moan */
-      warning (_("mrk3_pseudo_register_write: Not a pseudo reg %d.\n"),
+      warning (_("MRK3: Not a valid pseudo reg to write %d.\n"),
 	       cooked_regnum);
       return;
     }
 }
 
 
+/*! Map DWARF register number to GDB register number.
+
+  NXP have advised the mapping used in this function.
+
+  @note Despite the naming, GDB now uses DWARF4.
+
+  @param[in] gdbarch  The current GDB architecture
+  @param[in] dwarf2_regnum  The DWARF register number
+  @return  The corresponding GDB register number. */
+
 static int
 mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
 {
-  /*  According to Target the following algorithm is used to determine */
-  /*  dwarf2 locations: */
-  /*    1. take the storages from file lib/isg/mrk3_regs.txt and sort */
-  /*       alphabetically, first registers then memories */
-  /*    2. number the locations in the resulting list */
-  /*  */
-  /*  The following values are taken from a list from Target: */
   uint32_t regnr;
   switch (dwarf2_regnr)
     {
@@ -754,8 +952,8 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
       regnr = MRK3_R0_REGNUM + 3;
       break;			/*  R3 */
 
-      /*  R46 is a virtual 48 bit register */
-      /*  having R4, R5 and R6 as real registers. */
+      /*  R46 is a virtual 48 bit register having R4, R5 and R6 as real
+	  registers. */
     case 10:
       regnr = MRK3_R0_REGNUM + 4;
       break;			/*  R46[0] */
@@ -779,15 +977,15 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
       break;			/*  R46e[2] */
 
       /*  R46L is a virtual 96 bit register */
-      /*  having R4l, R5l and R6l as real registers. */
+      /*  having R4LONG, R5LONG and R6LONG as real registers. */
     case 16:
-      regnr = MRK3_R4L_REGNUM;
+      regnr = MRK3_R4LONG_REGNUM;
       break;			/*  R46e[0] */
     case 17:
-      regnr = MRK3_R5L_REGNUM;
+      regnr = MRK3_R5LONG_REGNUM;
       break;			/*  R46e[1] */
     case 18:
-      regnr = MRK3_R6L_REGNUM;
+      regnr = MRK3_R6LONG_REGNUM;
       break;			/*  R46e[2] */
 
     case 19:
@@ -930,23 +1128,21 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
       break;			/*  z flag */
 
     default:
-      warning (_("mrk3_dwarf2_reg_to_regnum: unknown drwarf2 regnum: %d."),
+      warning (_("MRK3_dwarf2_reg_to_regnum: unknown drwarf2 regnum: %d."),
 	       dwarf2_regnr);
       regnr = MRK3_R0_REGNUM;
     }
 
-  if (mrk3_debug)
-    fprintf_unfiltered (gdb_stdlog, "mrk3-tdep.c: gdbarch->num_regs=%d "
-			"dwarf2_regnr(%d) maps to (%d)\n",
-			gdbarch_num_regs( gdbarch), dwarf2_regnr, regnr);
+  if (mrk3_debug_dwarf ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3: DWARF2 reg %d -> reg %d\n"),
+			dwarf2_regnr, regnr);
   return regnr;
 
-  /* return Dll_Dwarf2RegToRegnum(dwarf2_regnr); */
-}
+}	/* mrk3_dwarf2_reg_to_regnum () */
 
 #if 0
 uint32_t
-mrk3_map_dwarf2_data_addr (const ULONGEST dwarf2_addr)
+mrk3_map_dwarf2_data_addr (struct gdbarch *gdbarch, CORE_ADDR dwarf2_addr)
 {
 #define TARGET_DWARF_OFFSET_DM     0x00000003CULL
 #define TARGET_DWARF_OFFSET_DM12   0x00001003CULL
@@ -981,8 +1177,15 @@ mrk3_map_dwarf2_data_addr (const ULONGEST dwarf2_addr)
     {
       if (dwarf2_addr >= mem_offsets[n])
 	{
-	  uint32_t addr = (uint32_t) (dwarf2_addr - mem_offsets[n]);
-	  /* printf("mrk3-tdep.c:mrk3_map_dwarf2_data_addr dwarf2_addr=0x%llX minus mem_offset[%d]=0x%llX is addr=0x%lX\n",dwarf2_addr,n,mem_offsets[n],addr);                      */
+	  CORE_ADDR addr = dwarf2_addr - (CORE_ADDR) mem_offsets[n];
+
+	  if (mrk3_debug_dwarf ())
+	    fprintf_unfiltered (gdb_stdlog, _("MRK3: dwarf2_addr (%s) minus "
+					      "mem_offset[%d] (%s)"
+					      " = addr (%s)\n"),
+				print_core_address (gdbarch, dwarf2_addr), n,
+				hex_string (mem_offsets[n]),
+				print_core_address (gdbarch, addr));
 	  return addr;
 	}
     }
@@ -995,7 +1198,7 @@ mrk3_map_dwarf2_data_addr (const ULONGEST dwarf2_addr)
 
 
 #if 0
-/*  Free an objfile_info structure. */
+/*!  Free an objfile_info structure. */
 static void
 mrk3_free_objfile_info (struct mrk3_objfile_info_t *of_info)
 {
@@ -1014,7 +1217,7 @@ mrk3_free_objfile_info (struct mrk3_objfile_info_t *of_info)
 }
 
 
-/*  Save the full and base filename to an objfile info struct. */
+/*!  Save the full and base filename to an objfile info struct. */
 static void
 mrk3_save_objfile_name (struct mrk3_objfile_info_t *of_info,
 			const char *filename)
@@ -1034,16 +1237,16 @@ mrk3_save_objfile_name (struct mrk3_objfile_info_t *of_info,
 
 
 void
-mrk3_load_symbol_info (const uint32_t mem_space)
+mrk3_load_symbol_info (const uint32_t memspace)
 {
-  uint8_t mem_space_index = mrk3_mem_space_index (mem_space);
+  uint8_t memspace_index = mrk3_memspace_index (memspace);
   uint8_t n = 0;
   struct objfile *of = object_files;
   while (of != NULL)
     {
       char *base_name = basename (of->name);
-      if ((mrk3_objfile_info[mem_space_index].name != NULL) &&
-	  (strcmp (base_name, mrk3_objfile_info[mem_space_index].name) == 0))
+      if ((mrk3_objfile_info[memspace_index].name != NULL) &&
+	  (strcmp (base_name, mrk3_objfile_info[memspace_index].name) == 0))
 	{
 	  objfile_to_front (of);
 	  break;
@@ -1053,7 +1256,7 @@ mrk3_load_symbol_info (const uint32_t mem_space)
 }
 
 
-/*  When looking up symbols, switch priorities such that the */
+/*!  When looking up symbols, switch priorities such that the */
 /*  symbol file for the given memory space is preferred. */
 uint32_t
 mrk3_get_memspace_from_objfile_name (const char *base_name)
@@ -1067,211 +1270,218 @@ mrk3_get_memspace_from_objfile_name (const char *base_name)
 	    {
 	      if (strcmp (base_name, mrk3_objfile_info[n].name) == 0)
 		{
-		  return mrk3_mem_space_from_mem_space_index (n);
+		  return mrk3_memspace_from_memspace_index (n);
 		}
 	    }
 	}
-      printf
-	("mrk3_get_memspace_from_objfile_name: Warning: No memspace found for objectfile \"%s\".\n",
-	 base_name);
-      return 0;
+      warning (_("MRK3: No memspace found for objectfile \"%s\".\n"),
+	       base_name);
+      return  MRK3_MEM_SPACE_NONE;
     }
-  printf
-    ("mrk3_get_memspace_from_objfile_name: Error: No objectfile name specified.\n");
-  return 0;
+
+  warning (_("MRK3: No objectfile name specified for memspace.\n"));
+  return  MRK3_MEM_SPACE_NONE;
 }
 #endif
 
 
-/* The breakpoint will be set at a GDB address, but we need to convert it to a
-   target (word) code address  */
-static const gdb_byte *
-mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
-			 CORE_ADDR * pcptr, int *lenptr)
-{
-  CORE_ADDR addr = *pcptr & ~MRK3_MEM_MASK;
-  CORE_ADDR ptr  = addr / 2;
+/*! Convert target pointer to GDB address.
 
-  /*  always use full addresses for breakpoints, and it is code. */
-  CORE_ADDR topbits = mrk3_get_mem_space () | MRK3_MEM_TYPE_CODE;
-  addr |= topbits;
-  ptr |= topbits;
+  @see mrk3-tdep.c for documentation of MRK3 addressing and how this is
+  handled in GDB.
 
-  *pcptr = ptr;
+  This is the base routine providing the mapping from a pointer on the MRK3
+  target to a unique byte address for GDB.
 
-  if (mrk3_debug)
-    fprintf_unfiltered (gdb_stdlog, "mrk3-tdep.c: breakpoint at %s.\n",
-			print_core_address (gdbarch, ptr));
-
-  *lenptr = sizeof (mrk3_sim_break_insn);
-  return (gdb_byte *) & mrk3_sim_break_insn;
-}
-
-
-/* Convert target pointer to GDB address.
-
-   GDB expects a single unified byte addressed memory. For Harvard
-   architectures, this means that addresses on the target need mapping. To
-   avoid confusion, GDB refers to "addresses" to mean the unified byte address
-   space used internally within GDB and "pointers" to refer to the values used
-   on the target (which need be neither unique, nor byte addressing).
-
-   This mapping is typically achieved by shifting to convert to/from word
-   addressing if required and adding high order bits to addresses to
-   distinguish multiple address spaces.
-
-   MRK3 is a Harvard architecture, with a word-addressed instruction space.,
-   so needs this mechanism.
-
-   However...
-
-   The GDB Remote Serial Protocol (RSP) does not distinguish address spaces
-   when accessing memory (this is a change from the distant past).  So the
-   communication protocol uses addresses, not pointers.
-
-   The symbol table
-
-   Where this matters is in presentation of values to the user.which
-   address space is being used. So we cannot make the transformation. We must
-   pass the higher order bits and leave it to the server.
-
-   However we do the byte <-> word conversion, because otherwise symbols go
-   'orribly wrong. We also do some validation of flags. */
+  @param[in] gdbarch    The current architecture
+  @param[in] is_code    Non-zero (TRUE) if this is a code pointer
+  @param[in] memspace  Memory space flags
+  @param[in] ptr        The pointer to convert
+  @return  The address. */
 
 static CORE_ADDR
-mrk3_pointer_to_address (struct gdbarch *gdbarch,
-			 struct type *type, const gdb_byte * buf)
+mrk3_p2a (struct gdbarch *gdbarch,
+	  int             is_code,
+	  uint32_t        memspace,
+	  CORE_ADDR       ptr)
 {
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  CORE_ADDR ptr = extract_unsigned_integer (buf, TYPE_LENGTH (type),
-					    byte_order);
+  CORE_ADDR addr;
 
-  if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
-      || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
-      || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type)))
+  ptr  &= ~MRK3_MEM_MASK;		/* Just in case */
+  addr  = is_code ? (ptr << 1) : ptr;
+  addr |= memspace | (is_code ? MRK3_MEM_TYPE_CODE : MRK3_MEM_TYPE_DATA);
+
+  if (mrk3_debug_ptraddr ())
     {
-      /* Word -> byte for code. */
-      CORE_ADDR flags = ptr & MRK3_MEM_MASK;
-      CORE_ADDR addr  = ((ptr & ~MRK3_MEM_MASK) * 2) | flags;
-
-      /* Sanity check */
-      if (mrk3_is_code_address (addr))
-	{
-	  if (mrk3_debug >= 1)
-	    {
-	      warning (_("MRK3 code address %s missing code flags"),
-		       hex_string (addr));
-	    }
-	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
-	}
-
-      if (mrk3_debug >= 2)
-	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_pointer_to_address: code %s -> %s.\n",
-			    hex_string (ptr), hex_string (addr));
-
-      return addr;
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 p2a: %s %s -> %s.\n"),
+			  (is_code ? "code" : "data"),
+			  print_core_address (gdbarch, ptr),
+			  print_core_address (gdbarch, addr));
     }
-  else
-    {
-      /* No change for data. */
-      CORE_ADDR addr = ptr;
 
-      /* Sanity check */
-      if (mrk3_is_data_address (addr))
-	{
-	  if (mrk3_debug >= 1)
-	    {
-	      warning (_("MRK3 data address %s missing data flags"),
-		       hex_string (addr));
-	    }
-	  addr = (addr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
-	}
+  return  addr;
 
-      if (mrk3_debug >= 2)
-	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_pointer_to_address: data %s -> %s.\n",
-			    hex_string (ptr), hex_string (addr));
-      return addr;
-    }
-}
+}	/* mrk3_p2a () */
 
 
-/* Convert GDB address to target pointer.
+/*! Convert GDB address to target pointer (direct version).
 
-   see mrk3_pointer_to_address for a description. */
+  @see mrk3-tdep.c for documentation of MRK3 addressing and how this is
+  handled in GDB.
 
-static void
-mrk3_address_to_pointer (struct gdbarch *gdbarch,
-			 struct type *type, gdb_byte * buf, CORE_ADDR addr)
-{
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  This is the base routine providing the mapping from a unique byte address in
+  GDB to a pointer on the MRK3 target.
 
-  if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
-      || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD)
-    {
-      /* Byte -> word for code. */
-      CORE_ADDR flags = addr & MRK3_MEM_MASK;
-      CORE_ADDR ptr   = ((addr & ~MRK3_MEM_MASK) / 2) | flags;
+  @note  This routine assumes addr has its flags correctly set.
 
-      /* Sanity check */
-      if (mrk3_is_code_address (ptr))
-	{
-	  if (mrk3_debug >= 1)
-	    {
-	      warning (_("MRK3 code pointer %s missing code flags"),
-		       hex_string (ptr));
-	    }
-	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE;
-	}
-
-      if (mrk3_debug >= 2)
-	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_address_to_pointer: code %s -> %s.\n",
-			    hex_string (addr), hex_string (ptr));
-
-      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, ptr);
-    }
-  else
-    {
-      /* No change for data. */
-      CORE_ADDR ptr = addr;
-
-      /* Sanity check */
-      if (mrk3_is_data_address (ptr))
-	{
-	  if (mrk3_debug >= 1)
-	    {
-	      warning (_("MRK3 data pointer %s missing code flags"),
-		       hex_string (ptr));
-	    }
-	  ptr = (ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_DATA;
-	}
-
-      if (mrk3_debug >= 2)
-	fprintf_unfiltered (gdb_stdlog,
-			    "mrk3_address_to_pointer: data %s -> %s.\n",
-			    hex_string (addr), hex_string (ptr));
-
-      store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, ptr);
-    }
-}
-
-
-/* Remove useless bits from addresses. */
+  @param[in] gdbarch    The current architecture
+  @param[in] addr  The address to convert
+  @return  The pointer */
 
 static CORE_ADDR
-mrk3_addr_bits_remove (struct gdbarch *gdbarch, CORE_ADDR val)
+mrk3_a2p (struct gdbarch *gdbarch,
+	  CORE_ADDR       addr)
 {
-  return val & ~MRK3_MEM_MASK;
+  int is_code = mrk3_is_code_address (addr);
+  CORE_ADDR ptr = addr & ~MRK3_MEM_MASK;
+  ptr = is_code ? (ptr >> 1) : ptr;
+
+  if (mrk3_debug_ptraddr ())
+    {
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 a2p: %s %s -> %s.\n"),
+			  is_code ? "code" : "data",
+			  print_core_address (gdbarch, addr),
+			  print_core_address (gdbarch, ptr));
+    }
+
+  return  ptr;
+
+}	/* mrk3_a2p () */
+
+
+/*! Remove useless bits from addresses.
+
+   Remove bits indicating the address space and whether this is code or data.
+
+   This gives us a raw byte address as found in symbol tables.
+
+   @param[in]  gdbarch  The current architecture
+   @param[in]  addr     The address to strip
+
+   @return  Address withouts its address space and code/data bits. */
+static CORE_ADDR
+mrk3_addr_bits_remove (struct gdbarch *gdbarch,
+		       CORE_ADDR       addr)
+{
+  return addr & ~MRK3_MEM_MASK;
 
 }	/* mrk3_addr_bits_remove () */
 
 
-/* Read PC, which is a word pointer, converting it to a byte pointer, BUT
-   DON'T ADD SPACE OR TYPE FLAGS!!! This seems only to be used for comparing
-   against symbol tables, which are all byte addresses, but don't have the
-   flags. */
+/*! Add flags to a byte "address"
+
+   We are given an address, presumed to be without flags bits (such as is
+   found in symbol tables), and set the flag bits as specified.
+
+   This gives us a true GDB "address".
+
+   @param[in] is_code    Non-zero (TRUE) if this is a code pointer
+   @param[in] memspace  Memory space flags
+   @param[in] addr       The address to which flags are added
+
+   @return  Address withouts its address space and code/data bits. */
+static CORE_ADDR
+mrk3_addr_bits_add (int        is_code,
+		     uint32_t   memspace,
+		     CORE_ADDR  addr)
+{
+  return (addr & ~MRK3_MEM_MASK) | memspace
+    | (is_code ? MRK3_MEM_TYPE_CODE : MRK3_MEM_TYPE_DATA);
+
+}	/* mrk3_addr_bits_add () */
+
+
+/*! Convert target pointer to GDB address (buffer version).
+
+  @see mrk3-tdep.c for documentation of MRK3 addressing and how this is
+  handled in GDB.
+
+  This is a wrapper to take the pointer in a buffer, since this is the format
+  needed for the GDB architecture routine.
+
+  @param[in] gdbarch  The current architecture
+  @param[in] type     The type of the pointer/address
+  @param[in] buf      The pointer to convert
+
+  @return  The address. */
+
+static CORE_ADDR
+mrk3_pointer_to_address (struct gdbarch *gdbarch,
+			 struct type    *type,
+			 const gdb_byte *buf)
+{
+  enum bfd_endian  byte_order = gdbarch_byte_order (gdbarch);
+  CORE_ADDR  ptr = extract_unsigned_integer (buf, TYPE_LENGTH (type),
+					    byte_order) & ~MRK3_MEM_MASK;
+  int  is_code = TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
+    || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
+    || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type));
+
+  return mrk3_p2a (gdbarch, is_code, mrk3_get_memspace (), ptr);
+
+}	/* mrk3_pointer_to_address () */
+
+
+/*! Convert GDB address to target pointer (buffer version).
+
+  @see mrk3-tdep.c for documentation of MRK3 addressing and how this is
+  handled in GDB.
+
+  This is a wrapper to supply the pointer in a buffer, since this is the format
+  needed for the GDB architecture routine.
+
+  @note  Although it is not documented officially, it is the type supplied by
+         the TYPE argument that matters, not any bits in the address.  To
+         keep things really clear, we explicitly add the bits before passing
+         on.
+
+  @param[in]  gdbarch  The current architecture
+  @param[in]  type     The type of the pointer/address
+  @param[out] buf      The converted pointer
+  @param[in]  addr     The address to convert */
+
+static void
+mrk3_address_to_pointer (struct gdbarch *gdbarch,
+			 struct type    *type,
+			 gdb_byte       *buf,
+			 CORE_ADDR       addr)
+{
+  int  is_code = TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
+    || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
+    || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type));
+  uint32_t  memspace = mrk3_get_memspace ();
+  CORE_ADDR ptr = mrk3_a2p (gdbarch,
+			    mrk3_addr_bits_add (is_code, memspace, addr));
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+
+  store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, ptr);
+
+}	/* mrk3_address_to_pointer () */
+
+
+/*! Read PC as byte address
+
+   The PC is a word "pointer".  This function converts it to a byte "address"
+   before it is used, BUT DOESN'T ADD SPACE OR TYPE FLAGS!!!
+
+   This seems only to be used for comparing against symbol tables, which are
+   all byte addresses, but don't have the flags.
+
+   @param[in] regcache  The register cache holding the raw value.
+
+   @return  Program counter as a byte "address" without flags. */
 
 static CORE_ADDR
 mrk3_read_pc (struct regcache *regcache)
@@ -1279,52 +1489,121 @@ mrk3_read_pc (struct regcache *regcache)
   CORE_ADDR pcptr;
   CORE_ADDR pcaddr;
 
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  uint32_t  memspace = mrk3_get_memspace ();
   regcache_cooked_read_unsigned (regcache, MRK3_PC_REGNUM, &pcptr);
-  pcaddr = pcptr * 2;
+  pcaddr = mrk3_addr_bits_remove (gdbarch,
+				  mrk3_p2a (gdbarch, 1, memspace, pcptr));
 
-  if (mrk3_debug >= 2)
-    fprintf_unfiltered (gdb_stdlog, "mrk3_read_pc: %s read as %s.\n",
-			hex_string (pcptr), hex_string (pcaddr));
+  if (mrk3_debug_ptraddr ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3 read pc: ptr %s -> addr %s.\n"),
+			print_core_address (gdbarch, pcptr),
+			print_core_address (gdbarch, pcaddr));
+
   return pcaddr;
 
 }	/* mrk3_read_pc () */
 
 
-/* Read from code memory.
+/*! Write PC supplied as a byte "address"
 
-   We are given a word address, and must convert it to the correct pointer for
-   the read to work.
-*/
-static void
-mrk3_read_code_memory (CORE_ADDR ptr, gdb_byte *buf, ssize_t  len)
-{
-  if (mrk3_debug >= 1)
-    {
-      fprintf_unfiltered (gdb_stdlog, _("MRK3 read code memory from %s\n"),
-			  hex_string (ptr));
-    }
+   The PC is a word "pointer".  This function converts it from a byte pointer
+   before it is used.
 
-  read_memory ((ptr & ~MRK3_MEM_TYPE_MASK) | MRK3_MEM_TYPE_CODE, buf, len);
+   This appears to be used when setting the PC from symbol table data.  By
+   comparison (@see mrk3_read_pc()), we must assume that the address supplied
+   does not have flags bits set.
 
-}	/* mrk3_read_code_memory () */
+   @param[out] regcache  The register cache holding the raw value.
+   @param[in]  pcaddr    The PC as a byte "address" without flags. */
 
-
-/* Write PC, which is a word pointer, with a value supplied as a GDB byte
-   address. */
 static void
 mrk3_write_pc (struct regcache *regcache, CORE_ADDR pcaddr)
 {
-  CORE_ADDR pcptr = (pcaddr & ~MRK3_MEM_MASK) / 2;
+  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+  CORE_ADDR pcptr;
+
+  pcaddr = mrk3_addr_bits_add (1, mrk3_get_memspace (), pcaddr);
+  pcptr = mrk3_a2p (gdbarch, pcaddr);
+
   regcache_cooked_write_unsigned (regcache, MRK3_PC_REGNUM, pcptr);
 
-  if (mrk3_debug >= 2)
-    fprintf_unfiltered (gdb_stdlog, "mrk3_write_pc: %s written as %s.\n",
-			hex_string (pcaddr), hex_string (pcptr));
+  if (mrk3_debug_ptraddr ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3 write pc: "
+				      "addr %s written as ptr %s.\n"),
+			print_core_address (gdbarch, pcaddr),
+			print_core_address (gdbarch, pcptr));
 
 }	/* mrk3_write_pc () */
 
 
-/* TODO. This has changed in the latest GDB, with more args. Need to
+/*! Read from code memory.
+
+   We are given a GDB byte address without flag bits (i.e. suitable for symbol
+   table lookup), not a word pointer.
+
+   We also need to deal with the case of reading a code location that has been
+   replaced by a breakpoint instruction.
+
+   @param[in]  gdbarch  Current architecture
+   @param[in]  addr     Address in code to read from
+   @param[out] buf      Where to put the result
+   @param[in]  len      Number of bytes to read.
+*/
+static void
+mrk3_read_code_memory (struct gdbarch *gdbarch,
+		       CORE_ADDR       addr,
+		       gdb_byte       *buf,
+		       ssize_t         len)
+{
+  enum bfd_endian  byte_order = gdbarch_byte_order (gdbarch);
+  ULONGEST  val;
+
+  read_memory (mrk3_addr_bits_add (1, mrk3_get_memspace (), addr), buf, len);
+  val = extract_unsigned_integer (buf, len, byte_order);
+
+}	/* mrk3_read_code_memory () */
+
+
+/*! Where should we actually set a breakpoint?
+
+  The addresses are all byte addresses, not word pointers and without flags
+  (i.e. from a symbol table). We can do a sanity check that it is a valid word
+  address and add appropriate flag bits.
+
+  @param[in]     gdbarch  The current architecture.
+  @param[in,out] pcptr    Pointer to the desired PC address on input, and the
+                          value to use on output.
+  @param[out]    lenptr   Pointer to store the length of the breakpoint
+                          instruction (in bytes).
+  @return  Pointer to a buffer with the breakpoint instruction. */
+
+static const gdb_byte *
+mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
+			 CORE_ADDR      *pcptr,
+			 int            *lenptr)
+{
+  CORE_ADDR pc = mrk3_addr_bits_add (1, mrk3_get_memspace (), *pcptr);
+
+  if (mrk3_debug_general ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3 breakpoint: requested at %s.\n"),
+			print_core_address (gdbarch, *pcptr));
+
+  gdb_assert ((pc / 2 * 2) == pc);
+  *pcptr = pc;
+
+  if (mrk3_debug_general ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3 breakpoint: proposed at %s.\n"),
+			print_core_address (gdbarch, pc));
+
+  *lenptr = sizeof (mrk3_sim_break_insn);
+  return (gdb_byte *) &mrk3_sim_break_insn;
+
+}	/* mrk3_breakpoint_from_pc () */
+
+
+#if 0
+/*! TODO. This has changed in the latest GDB, with more args. Need to
    understand what this does and why we need it. Result is a boolean
    indicating success or failure. */
 static int
@@ -1332,13 +1611,14 @@ mrk3_register_to_value (struct frame_info *frame, int regnum,
 			struct type *type, gdb_byte * buf,
 			int *optimizedp, int *unavailablep)
 {
-  /* printf("mrk3-tdep.c:mrk3_register_to_value frame=%p, regnum=%d, type=%p(length=%d)\n",frame,regnum,type,type->length);         */
+  /* printf("MRK3:mrk3_register_to_value frame=%p, regnum=%d, type=%p(length=%d)\n",frame,regnum,type,type->length);         */
   frame_unwind_register (frame, regnum, buf);
   return  1;
 }
+#endif
 
 
-/* Skip the prologue.
+/*! Skip the prologue.
 
    If the input address, PC, is in a function prologue, return the address of
    the end of the prologue, otherwise return the input address.
@@ -1349,28 +1629,49 @@ mrk3_register_to_value (struct frame_info *frame, int regnum,
 
    PUSH   R6                   ;; Only if using FP (16-bit instruction)
    SUB.w  R6,#<frame_size>     ;; Only if using FP (32-bit instruction)
-   SUB.w  R6,#<stack_size>     ;;                  (32-bit instruction)
+   SUB.w  R7,#<stack_size>     ;;                  (32-bit instruction)
 
    We let prologue analysis do any validation. We just count bytes here.
 
    @param[in] gdbarch  The current architecture.
-   @param[in] pc       The current current program counter.
+   @param[in] pc   The current current program counter as GDB _address_,
+                       but without flag bits.
 
    @return  Updated PC, pointing after the prologue if the PC supplied was in
-   the prologue. */
+            the prologue. */
+
 static CORE_ADDR
-mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
+mrk3_skip_prologue (struct gdbarch *gdbarch,
+		    CORE_ADDR       pc)
 {
   CORE_ADDR  func_start;
   CORE_ADDR  func_end;
+
+  if (mrk3_debug_frame ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3 skip_prologue: pc %s.\n"),
+			print_core_address (gdbarch, pc));
 
   if (find_pc_partial_function (pc, NULL, &func_start, &func_end))
     {
       CORE_ADDR  prologue_end = skip_prologue_using_sal (gdbarch, func_start);
       uint16_t  insn16;
 
-      if (0 != prologue_end)
-	return  prologue_end;		/* SAL gave us the answer. */
+      if (mrk3_debug_frame ())
+	{
+	  fprintf_unfiltered (gdb_stdlog,
+			      _("MRK3 skip_prologue: func_start %s.\n"),
+			      print_core_address (gdbarch, func_start));
+	  fprintf_unfiltered (gdb_stdlog,
+			      _("MRK3 skip_prologue: prologue_end %s.\n"),
+			      print_core_address (gdbarch, prologue_end));
+	}
+
+      /* @todo SAL is broken at present. This means that we rely on reading
+	       the code to work out the prologue.  So we had better have the
+	       program loaded in memory to get this right. */
+
+      /* if (0 != prologue_end) */
+      /* 	return  prologue_end;	/\* SAL gave us the answer. *\/ */
 
       /* SAL didn't give us what we want, so count forward by steam from the
 	 PC, which is now at the start of the function. If the first
@@ -1378,10 +1679,18 @@ mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 	 prologue, if SUB.w R7,#<offset> we have a simple stack frame and a 2
 	 word (4 byte) prologue, else we have no stack frame and no
 	 prologue. */
-      mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
-      return (0x57a0 == insn16) ? pc + 10	/* Have FP */
-	: (0x0407 == insn16) ? pc + 4		/* Have stack frame */
-	: pc;					/* No prologue */
+      mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
+			     sizeof (insn16));
+      prologue_end = (0x57a0 == insn16)
+	? pc + 10			/* Have FP */
+	: (0x0407 == insn16) ? pc + 4	/* Have stack frame */
+	: pc;				/* No prologue */
+
+      if (mrk3_debug_frame ())
+	fprintf_unfiltered (gdb_stdlog, _("MRK3 skip prolog to %s.\n"),
+			    print_core_address (gdbarch, prologue_end));
+
+      return  prologue_end;
     }
   else
     {
@@ -1389,16 +1698,19 @@ mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 
          @todo Should we consider disassembling to look for a prologue
 	 pattern? */
+      if (mrk3_debug_frame ())
+	fprintf_unfiltered (gdb_stdlog, _("MRK3 no function found.\n"));
+
       return  pc;
     }
 }	/* mrk3_skip_prologue () */
 
 
-/* Determine the value of registers in the PREV frame and save them in the
+/*! Determine the value of registers in the PREV frame and save them in the
    prologue cache for THIS frame. Note that in general we cannot just unwind
    registers here, or we'll end up with a circular dependency.
 
-   The MRK3 prologue is incredibly simple. @see mrk3_skip_prologue for details.
+   The MRK3 prologue is simple. @see mrk3_skip_prologue() for details.
 
    @param[in]  this_frame  THIS frame info, from which we can get THIS program
                            counter and THIS stack pointer.  May be null, in
@@ -1409,49 +1721,66 @@ static void
 mrk3_analyze_prologue (struct frame_info *this_frame,
 		       struct trad_frame_cache *this_cache)
 {
-  CORE_ADDR func_start = get_frame_func (this_frame);
-  CORE_ADDR this_pc  = get_frame_pc (this_frame);
-  CORE_ADDR this_sp = mrk3_is_ssys_mem_space ()
-    ? get_frame_register_unsigned (this_frame, MRK3_SSSP_REGNUM)
-    : mrk3_is_sys_mem_space ()
-    ? get_frame_register_unsigned (this_frame, MRK3_SSP_REGNUM)
-    : get_frame_register_unsigned (this_frame, MRK3_USP_REGNUM);
+  struct gdbarch *gdbarch = get_frame_arch (this_frame);
+  uint32_t  memspace = mrk3_get_memspace ();
 
-  int have_fp_p;		/* If we use a FP */
-  CORE_ADDR fp_offset;		/* Set if we have updated the FP */
-  int sp_updated_p;		/* If we have updated the SP for this frame */
+  /* Function starts are symbols, so GDB addresses, _without_ flag bits. */
+  CORE_ADDR  func_start = get_frame_func (this_frame);
+  /* Similarly frame PCs are symbols, so GDB addresses, _without_ flag bits */
+  CORE_ADDR  this_pc = get_frame_pc (this_frame);
+  /* The value in the SP is a data pointer. */
+  CORE_ADDR  this_sp = get_frame_register_unsigned (this_frame, MRK3_SP_REGNUM);
 
-  CORE_ADDR prev_sp;
-  CORE_ADDR pc = func_start;	/* For counting through prologue */
+  int  have_fp_p;		/* If we update the FP */
+  int  have_sp_p;		/* If we update the SP */
+  int  fp_pushed_p;		/* If we have pushed the FP for this frame */
+  int  fp_updated_p;		/* If we have updated the FP for this frame */
+  int  sp_updated_p;		/* If we have updated the SP for this frame */
 
+  CORE_ADDR fp_offset;		/* How much FP is incremented (if used) */
+  CORE_ADDR sp_offset;		/* How much SP is incremented (if used) */
+
+  CORE_ADDR  prev_sp;
+  CORE_ADDR  prev_pc_addr;
+
+  /* We need to count through the code from the start of the function. */
+  CORE_ADDR  pc;
   uint16_t  insn16;
 
-  if (mrk3_debug >= 1)
+  /* Turn values into full GDB addresses. */
+  func_start = mrk3_addr_bits_add (1, memspace, func_start);
+  this_pc = mrk3_addr_bits_add (1, memspace, this_pc);
+  this_sp = mrk3_p2a (gdbarch, 0, memspace, this_sp);
+
+  pc = func_start;
+
+  if (mrk3_debug_frame ())
     {
       fprintf_unfiltered (gdb_stdlog,
-			  _("MRK3 prologue entry: func_start %s.\n"),
-			  hex_string (func_start));
+			  _("MRK3 prologue: at entry func_start %s.\n"),
+			  print_core_address (gdbarch, func_start));
       fprintf_unfiltered (gdb_stdlog,
-			  _("MRK3 prologue entry: this_pc %s.\n"),
-			  hex_string (this_pc));
+			  _("MRK3 prologue: at entry this_pc %s.\n"),
+			  print_core_address (gdbarch, this_pc));
       fprintf_unfiltered (gdb_stdlog,
-			  _("MRK3 prologue entry: prev_sp %s.\n"),
-			  hex_string (prev_sp));
+			  _("MRK3 prologue: at entry this_sp %s.\n"),
+			  print_core_address (gdbarch, this_sp));
     }
+
   /* If we don't have a function start, then we can't do any meaningful
      analysis. We can set the ID and base, but we just leave the register
      cache "as is", with its default values being that the reg in this frame
      is the reg in the previous frame. */
-  if (0 == func_start)
+  if (0 == pc)
     {
-      /* Set the frame ID and frame base */
-      trad_frame_set_id (this_cache, frame_id_build (this_sp, this_pc));
+      /* Set the frame ID (which uses full GDB addresses) and frame base */
+      trad_frame_set_id (this_cache, frame_id_build (this_sp, func_start));
       trad_frame_set_this_base (this_cache, this_sp);
 
-      if (mrk3_debug >= 1)
+      if (mrk3_debug_frame ())
 	{
 	  fprintf_unfiltered (gdb_stdlog,
-			      _("MRK3 prologue: No func_start.\n"));
+			      _("MRK3 prologue: No function start.\n"));
 	}
 
       return;
@@ -1472,99 +1801,168 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
      SP. */
 
   /* Default values until we find out where we are. */
-  prev_sp = this_sp;
   have_fp_p = 0;
-  fp_offset = 0;
+  have_sp_p = 0;
+  fp_pushed_p = 0;
+  fp_updated_p = 0;
   sp_updated_p = 0;
 
   /* Walk the prologue. */
 
-  mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
+  mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
+			 sizeof (insn16));
 
   if (0x57a0 == insn16)
     {
-      if (mrk3_debug >= 1)
+      if (mrk3_debug_frame ())
 	{
 	  fprintf_unfiltered (gdb_stdlog,
 			      _("MRK3 prologue: Found PUSH R6 at %s.\n"),
-			      hex_string (pc));
+			      print_core_address (gdbarch, pc));
 	}
 
       /* PUSH R6: Have FP. In this case, the prev FP is pushed on the stack. */
       have_fp_p = 1;
       pc += 2;
+      fp_pushed_p = (this_pc >= pc);
 
       /* Check we really have SUB.w R6,#<frame_size> here, but looking at the
 	 first 16 bits of the instruction */
-      mrk3_read_code_memory (this_sp - 2, (gdb_byte *) &insn16,
+      mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
 			     sizeof (insn16));
       gdb_assert (0x0406 == insn16);
-      pc += 4;			/* Full instr has 16-bit const */
+      pc += 2;
+      mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
+			     sizeof (insn16));
+      fp_offset = (CORE_ADDR) insn16;
+      pc += 2;			/* Full instr has 16-bit const */
+      fp_updated_p = (this_pc >= pc);
 
-      /* Have we updated the FP? */
-      fp_offset = (this_pc >= pc) ? 2 : 0;
+      if (mrk3_debug_frame ())
+	{
+	  fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: Have FP.\n"));
+	  fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: FP pushed: %s.\n"),
+			      fp_pushed_p ? "yes" : "no");
+	  fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: FP updated: %s.\n"),
+			      fp_updated_p ? "yes" : "no");
+	  fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: FP offset: %s.\n"),
+			      hex_string_custom ((LONGEST) fp_offset, 4));
+	}
 
       /* Update the instruction we are looking at. */
-      mrk3_read_code_memory (pc, (gdb_byte *) &insn16, sizeof (insn16));
+      mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
+			     sizeof (insn16));
     }
 
   /* Check we have SUB.w R7,#<stack_size>.  If not we may not have a stack
      frame at all, so give up, setting ID and frame base and leaving the
      register cache "as is". */
-  if (0x0407 != insn16)
+  if (0x0407 == insn16)
     {
-      /* Set the frame ID and frame base */
-      trad_frame_set_id (this_cache, frame_id_build (this_sp, this_pc));
-      trad_frame_set_this_base (this_cache, this_sp);
+      have_sp_p = 1;
+      pc += 2;
+      /* We seem to have a valid prologue, so get the stack size */
+      mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
+			     sizeof (insn16));
+      sp_offset = (CORE_ADDR) insn16;
+      pc += 2;
 
-      if (mrk3_debug >= 1)
+      /* Have we yet updated the SP? */
+      sp_updated_p = (this_pc >= pc);
+
+      if (mrk3_debug_frame ())
 	{
-	  fprintf_unfiltered (gdb_stdlog,
-			      _("MRK3 prologue: %s at %s, not SUB.w R7.\n"),
-			      hex_string (insn16), hex_string (pc));
+	  fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: Have SP.\n"));
+	  if (sp_updated_p)
+	    fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: SP offset %s.\n"),
+				hex_string_custom ((LONGEST) sp_offset, 4));
 	}
-
-      return;
     }
 
-  /* We seem to have a valid prologue, so get the stack size */
-  mrk3_read_code_memory (pc + 2, (gdb_byte *) &insn16, sizeof (insn16));
-  pc += 4;
+  /* Populate the cache. */
 
-  /* Have we yet updated the SP? */
-  sp_updated_p = (this_pc >= pc);
+  /* this_sp and this_fp hold the values currently in the registers. Are these
+     the PREV or THIS values. Don't forget the 2 bytes of stack from the call */
+  if (have_sp_p)
+    {
+      if (sp_updated_p)
+	{
+	  if (have_fp_p)
+	    prev_sp = this_sp + 2 + (fp_pushed_p ? 2 : 0) + sp_offset;
+	  else
+	    prev_sp = this_sp + 2 + sp_offset;
+	}
+      else
+	{
+	  if (have_fp_p)
+	    {
+	      prev_sp = this_sp + 2 + (fp_pushed_p ? 2 : 0);
+	      this_sp = prev_sp - 2 - sp_offset - (fp_pushed_p ? 2 : 0);
+	    }
+	  else
+	    {
+	      prev_sp = this_sp + 2;
+	      this_sp = prev_sp - 2 - sp_offset;
+	    }
+	}
+    }
+  else
+    {
+      /* Could conceivably have FP but no SP? */
+      prev_sp = this_sp + 2 + (fp_pushed_p ? 2 : 0);
+    }
 
-  /* this_sp holds the value currently in the register. Is this the PREV or
-     THIS stack pointer? And do we need to allow for a frame pointer having
-     been pushed? */
-  prev_sp = sp_updated_p ? this_sp + insn16 + fp_offset : this_sp;
-  this_sp = sp_updated_p ? this_sp : prev_sp - insn16 - fp_offset;
+  trad_frame_set_reg_value (this_cache, MRK3_SP_REGNUM, prev_sp);
 
-  /* Populate the cache. For simplicity, we populate all SP variants - two
-     will be ignored, but we don't need to worry about which here. */
-  trad_frame_set_reg_addr (this_cache, MRK3_PC_REGNUM, prev_sp);
-  trad_frame_set_reg_value (this_cache, MRK3_USP_REGNUM, prev_sp);
-  trad_frame_set_reg_value (this_cache, MRK3_SSP_REGNUM, prev_sp);
-  trad_frame_set_reg_value (this_cache, MRK3_SSSP_REGNUM, prev_sp);
-
-  if (mrk3_debug >= 1)
+  if (mrk3_debug_frame ())
     {
       fprintf_unfiltered (gdb_stdlog,
-			  _("MRK3 prologue: Prev PC addr 0x%s.\n"),
-			  hex_string (prev_sp));
-      fprintf_unfiltered (gdb_stdlog,
-			  _("MRK3 prologue: Prev SP value 0x%s.\n"),
-			  hex_string (prev_sp));
-      fprintf_unfiltered (gdb_stdlog,
-			  _("MRK3 prologue: %s frame pointer.\n"),
-			  have_fp_p ? "Have" : "Do not have");
+			  _("MRK3 prologue: Prev SP has value 0x%s.\n"),
+			  print_core_address (gdbarch, prev_sp));
     }
 
+  /* PC is saved on the start of this stack */
+  prev_pc_addr = prev_sp - 2;
+  trad_frame_set_reg_addr (this_cache, MRK3_PC_REGNUM, prev_pc_addr);
 
+  if (mrk3_debug_frame ())
+    {
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue: Prev PC at addr 0x%s.\n"),
+			  print_core_address (gdbarch, prev_pc_addr));
+    }
+
+  /* If we have a FP it may be pushed onto the stack. */
   if (have_fp_p)
-    trad_frame_set_reg_value (this_cache, MRK3_FP_REGNUM, prev_sp - 2);
+    {
+      if (fp_pushed_p)
+	{
+	  CORE_ADDR prev_fp_addr = prev_pc_addr - 2;
+	  trad_frame_set_reg_addr (this_cache, MRK3_FP_REGNUM, prev_fp_addr);
+
+	  if (mrk3_debug_frame ())
+	    {
+	      fprintf_unfiltered (gdb_stdlog,
+				  _("MRK3 prologue: Prev FP at addr 0x%s.\n"),
+				  print_core_address (gdbarch, prev_fp_addr));
+	    }
+	}
+      else
+	{
+	  trad_frame_set_reg_realreg (this_cache, MRK3_FP_REGNUM,
+				      MRK3_FP_REGNUM);
+	  if (mrk3_debug_frame ())
+	    {
+	      fprintf_unfiltered (gdb_stdlog,
+				  _("MRK3 prologue: Prev FP in reg %d.\n"),
+				  MRK3_FP_REGNUM);
+	    }
+	}
+    }
   else
-    trad_frame_set_reg_unknown (this_cache, MRK3_FP_REGNUM);
+    {
+      trad_frame_set_reg_unknown (this_cache, MRK3_FP_REGNUM);
+    }
 
   /* All other registers are unknown. */
   trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 0);
@@ -1579,32 +1977,39 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
   trad_frame_set_reg_unknown (this_cache, MRK3_R6E_REGNUM);
 
   /* Set the frame ID and frame base */
-  trad_frame_set_id (this_cache, frame_id_build (this_sp, this_pc));
+  if (mrk3_debug_frame ())
+    {
+      fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue: frame_id (%s, %s)\n"),
+			  print_core_address (gdbarch, this_sp),
+			  print_core_address (gdbarch, func_start));
+    }
+
+  /* The frame ID uses full GDB addresses */
+  trad_frame_set_id (this_cache, frame_id_build (this_sp, func_start));
   trad_frame_set_this_base (this_cache, this_sp);
 
 }	/* mrk3_analyse_prologue */
 
 
-/* Populate the frame cache if it doesn't exist. */
+/*! Populate the frame cache if it doesn't exist. */
 static struct trad_frame_cache *
 mrk3_frame_cache (struct frame_info *this_frame,
 		  void **this_cache)
 {
-  if (mrk3_debug)
-    {
-      fprintf_unfiltered (gdb_stdlog,
-			  _("mrk3-tdep.c: frame_cache = %s\n"),
-			  hex_string ((CORE_ADDR) (*this_cache)));
-    }
+  if (mrk3_debug_general ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3: frame_cache = %p\n"), *this_cache);
 
   if (!*this_cache)
     {
+      struct gdbarch *gdbarch = get_frame_arch (this_frame);
       CORE_ADDR func_start;
       CORE_ADDR stop_addr;
 
       *this_cache = trad_frame_cache_zalloc (this_frame);
       func_start = get_frame_func (this_frame);
-      stop_addr = get_frame_pc (this_frame);
+      stop_addr = mrk3_p2a (gdbarch, 1, mrk3_get_memspace (),
+			    get_frame_pc (this_frame));
 
       /* If we couldn't find any function containing the PC, then just
          initialize the prologue cache, but don't do anything.  */
@@ -1632,10 +2037,19 @@ mrk3_frame_this_id (struct frame_info *this_frame,
 		    void **this_cache, struct frame_id *this_id)
 {
   CORE_ADDR base = mrk3_frame_base_address (this_frame, this_cache);
+
   if (base)
     {
-      *this_id = frame_id_build (base, get_frame_func (this_frame));
+      uint32_t  memspace = mrk3_get_memspace ();
+      CORE_ADDR pc = get_frame_func (this_frame);
+
+      /* Frame ID's always use full GDB addresses */
+      base = mrk3_addr_bits_add (0, memspace, base);
+      pc   = mrk3_addr_bits_add (1, memspace, pc);
+
+      *this_id = frame_id_build (base, pc);
     }
+
   /* Otherwise, leave it unset, and that will terminate the backtrace.  */
 }
 
@@ -1670,37 +2084,67 @@ static const struct frame_base mrk3_frame_base = {
 };
 
 
-/* When unwinding the PC we turn into a byte address and add the flags for
-   code type. This is different from mrk3_read_pc, where we don't worry about
-   the flags. */
+/*! Unwind the program counter for THIS frame.
+
+  This is a nightmare. What we want is a value that can be looked up in a
+  symbol table. I.e. a GDB address, but without any high order bits.
+
+  @note  When printing a register we get the raw (word address) value, which
+         is a relief.
+
+  @todo  This is a complete (upstream) mess.
+
+  @param[in] gdbarch     The current architecture.
+  @param[in] next_frame  Frame info for NEXT frame.
+
+  @return  The program counter in THIS frame as a GDB _address_, but without
+           any higher order bits set. */
 
 static CORE_ADDR
-mrk3_unwind_pc (struct gdbarch *gdbarch, struct frame_info *next_frame)
+mrk3_unwind_pc (struct gdbarch    *gdbarch,
+		struct frame_info *next_frame)
 {
-  ULONGEST pc;
-  pc = frame_unwind_register_unsigned (next_frame, MRK3_PC_REGNUM);
-  pc = pc * 2 | MRK3_MEM_SPACE_SSYS | MRK3_MEM_TYPE_CODE;
-  return gdbarch_addr_bits_remove (gdbarch, pc);
-}
+  CORE_ADDR pcptr = frame_unwind_register_unsigned (next_frame, MRK3_PC_REGNUM);
+  CORE_ADDR pcaddr = mrk3_addr_bits_remove (gdbarch,
+					    mrk3_p2a (gdbarch, 1,
+						      mrk3_get_memspace (),
+						      pcptr));
+
+  if (mrk3_debug_ptraddr ())
+    fprintf_unfiltered (gdb_stdlog, _("unwind PC value %s.\n"),
+			print_core_address (gdbarch, pcaddr));
+
+  return  pcaddr;
+
+}	/* mrk3_unwind_pc () */
 
 
-/* When unwinding the PC we turn into a byte address and add the flags for
-   data type. */
+/*! Unwind the stack pointer for THIS frame.
+
+   @todo Should we instead convert the raw pointer to a GDB "address",
+         i.e. with byte address and flags?
+
+   @param[in] gdbarch     The current architecture.
+   @param[in] next_frame  Frame info for NEXT frame.
+
+   @return  The stack pointer in THIS frame as a GDB "pointer". */
 
 static CORE_ADDR
 mrk3_unwind_sp (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
-  ULONGEST sp;
-  sp = frame_unwind_register_unsigned (next_frame, MRK3_SP_REGNUM);
-  return sp | MRK3_MEM_SPACE_SSYS | MRK3_MEM_TYPE_DATA;
-}
+  return frame_unwind_register_unsigned (next_frame, MRK3_SP_REGNUM);
 
+}	/* mrk3_unwind_sp () */
+
+
+#if 0
 static int
 mrk3_convert_register_p (struct gdbarch *gdbarch, int regnum,
 			 struct type *type)
 {
   return mrk3_register_type (gdbarch, regnum)->length != type->length;
 }
+#endif
 
 
 static int
@@ -1713,7 +2157,7 @@ mrk3_address_class_type_flags (int byte_size, int dwarf2_addr_class)
 }
 
 #if 0
-/* This appears not to be used for now. */
+/*! This appears not to be used for now. */
 
 static char *
 mrk3_address_class_type_flags_to_name (int type_flags)
@@ -1724,7 +2168,7 @@ mrk3_address_class_type_flags_to_name (int type_flags)
     return 0;
 }
 
-/* Not used, so disabled. */
+/*! Not used, so disabled. */
 static int
 mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
 {
@@ -1739,7 +2183,120 @@ mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
 #endif
 
 
-/* Diassembler
+/*! Fancy disassembler
+
+   We are passed the size of an instruction to disassemble and the text
+   string. We break out the string and try to print if with symbolic
+   information.
+
+   General format:
+
+     <word1> [<word2>] [<word3>] <opcode> [<arg1>] [, <arg2>]
+
+   @param[in] addr  Address being disassembled
+   @param[in] info  Details of the disassembly
+   @param[in] size  Number of bytes in the instruction
+   @param[in] buf   The instruction string */
+static void
+mrk3_fancy_print_insn (CORE_ADDR         addr,
+		       disassemble_info *info,
+		       int               size,
+		       char              buf[])
+{
+  int  nargs;			/* Number of args to opcode */
+  char hw1[5];			/* First half word of instr */
+  char hw2[5];			/* Second half word of instr */
+  char hw3[5];			/* Third half word of instr */
+  char opc[9];			/* Opcode */
+  char argsep[2];		/* Argument separator */
+  char arg1[14];		/* First argument, inc separator */
+  char arg2[13];		/* Second argument */
+  char allargs[27];             /* For neat printing */
+  char supstr[32];		/* Supplementary info about instr */
+
+  /* Set defaults for optional elements */
+  strcpy (hw2, "    ");
+  strcpy (hw3, "    ");
+  argsep[0] = '\0';
+  arg1[0] = '\0';
+  arg2[0] = '\0';
+  supstr[0] = '\0';
+
+  switch (size)
+    {
+    case 2:
+      nargs = sscanf (buf, "  0x%4s %8s %13s %12s", hw1, opc, arg1, arg2) - 2;
+      break;
+
+    case 4:
+      nargs = sscanf (buf, "  0x%4s %4s %8s %13s %12s", hw1, hw2, opc, arg1,
+		      arg2) - 3;
+      break;
+
+    case 6:
+      nargs = sscanf (buf, "  0x%4s %4s %4s %8s %13s %12s", hw1, hw2, hw3, opc,
+		      arg1, arg2) - 4;
+      break;
+
+
+    default:
+      warning (_("Invalid inst length to disassemble %d\n"), size);
+      return;
+    }
+
+  if (2 == nargs)
+    {
+      arg1[strlen (arg1) - 1] = '\0';
+      strcpy (argsep, ",");
+    }
+
+  /* Work out any useful supplementary information. */
+  if ((0 == strncmp ("BEQ", opc, strlen ("BRA")))
+      || (0 == strncmp ("BNE", opc, strlen ("BRA")))
+      || (0 == strncmp ("BLE", opc, strlen ("BRA")))
+      || (0 == strncmp ("BG", opc, strlen ("BRA")))
+      || (0 == strncmp ("BL", opc, strlen ("BRA")))
+      || (0 == strncmp ("BGE", opc, strlen ("BRA")))
+      || (0 == strncmp ("BLE", opc, strlen ("BRA")))
+      || (0 == strncmp ("BA", opc, strlen ("BRA")))
+      || (0 == strncmp ("BB", opc, strlen ("BRA")))
+      || (0 == strncmp ("BAE", opc, strlen ("BRA")))
+      || (0 == strncmp ("BRA", opc, strlen ("BRA")))
+      || (0 == strncmp ("BO", opc, strlen ("BRA")))
+      || (0 == strncmp ("BN", opc, strlen ("BRA")))
+      || (0 == strncmp ("BP", opc, strlen ("BRA"))))
+    {
+      /* A branch instruction. Work out the absolute address. The argument
+	 will be of the form 0xhhhh and is *word* offset. */
+      long unsigned int argval = strtoul (arg1, NULL, 0);
+      CORE_ADDR target_addr;
+
+      target_addr = (argval > 0x7fff)
+	? addr - 2 * (0x10000 - argval)
+	: addr + 2 * argval;
+      /* Can't use print_core_address, since no gdbarch */
+      sprintf (supstr, "<%s>", hex_string_custom (target_addr, 8));
+    }
+  else if (0 == strcmp ("FCALL", opc))
+    {
+      /* Call a function. Try to find a symbolic representation of its
+	 name. The argument is a word address. */
+      CORE_ADDR target = strtoul (arg1, NULL, 0) * 2;
+      struct obj_section *section = find_pc_section (target);
+      struct symbol *f = find_pc_sect_function (target, section);
+
+      if (f != NULL)
+	strncpy (arg1, SYMBOL_LINKAGE_NAME (f), 13);
+    }
+
+  sprintf (allargs, "%s%s%s", arg1, argsep, arg2);
+  (*info->fprintf_func) (info->stream, "%4s %4s %4s %-8s  %-16s %s", hw1, hw2,
+			 hw3, opc, allargs, supstr);
+
+}	/* mark3_fancy_print_insn () */
+
+
+/*! Diassembler
 
    Get the target to disassemble if possible. Otherwise, just dump out the
    hex. */
@@ -1756,7 +2313,8 @@ mrk3_print_insn (bfd_vma addr,
       struct cleanup *old_chain = make_cleanup_ui_file_delete (mf);
       char cmd[40];
       char buf[80];
-      sprintf (cmd, "silent-disas %s\n", hex_string (addr));
+      /* Can't use print_core_address, since no gdbarch */
+      sprintf (cmd, "silent-disas %s\n", hex_string_custom (addr, 8));
       target_rcmd (cmd, mf);
       /* Result is in mf->stream->buffer, of length
 	 mf->stream->length_buffer. Extract it into buf. */
@@ -1765,16 +2323,17 @@ mrk3_print_insn (bfd_vma addr,
       if (strlen (buf) == 0)
 	{
 	  /* TODO: What do we do if something goes wrong? */
-	  warning (_("mrk3-tdep.c: Unable to diassemble."));
+	  warning (_("MRK3: Unable to diassemble."));
 	  do_cleanups (old_chain);
 	  return -1;
 	}
       else
 	{
 	  // Print the instruction if we had one.
-	  int size = buf [0] - '0';		// Yuk - what if we have EBCDIC
+	  int size = buf [0] - '0';		// Yuk - what if we have
+						// EBCDIC
 	  if (size > 0)
-	    (*info->fprintf_func) (info->stream, "%s", &(buf[2]));
+	    mrk3_fancy_print_insn ((CORE_ADDR) addr, info, size, &(buf[2]));
 
 	  do_cleanups (old_chain);
 	  return size > 0 ? size : -1;
@@ -1799,7 +2358,7 @@ mrk3_print_insn (bfd_vma addr,
 }	/* mrk3_print_insn () */
 
 
-/* Initialize the gdbarch structure for the mrk3. */
+/*! Initialize the gdbarch structure for the mrk3. */
 static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
@@ -1819,8 +2378,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   /* Create a new architecture from the information provided. */
   tdep = XMALLOC (struct gdbarch_tdep);
-  gdbarch = gdbarch_alloc (&info, tdep);	/*  TODO: Can we use null for tdep? We do never use tdep anyways. */
-
+  gdbarch = gdbarch_alloc (&info, tdep);  /* @todo: Can we use NULL for tdep?
+					     We do never use tdep anyway. */
   set_gdbarch_address_class_type_flags (gdbarch,
 					mrk3_address_class_type_flags);
   set_gdbarch_short_bit (gdbarch, 1 * TARGET_CHAR_BIT);
@@ -1859,20 +2418,17 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   /* We don't currently have a proper disassembler, so we'll provide our own
      locally. The real one should be in opcodes/mrk3-dis.c (part of
      binutils). */
-  /* set_gdbarch_print_insn (gdbarch, print_insn_mrk3); */
   set_gdbarch_print_insn (gdbarch, mrk3_print_insn);
 
-/*   set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call); */
+  /* set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call); */
   set_gdbarch_dwarf2_reg_to_regnum (gdbarch, mrk3_dwarf2_reg_to_regnum);
 
   set_gdbarch_address_to_pointer (gdbarch, mrk3_address_to_pointer);
   set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
   set_gdbarch_addr_bits_remove (gdbarch, mrk3_addr_bits_remove);
 
-  /*  IMPORTANT - We need to be able to convert register contents to different length */
-  /*  gdb default will use 1:1 which is false in case we have a 16 bit register and need 32 bit values */
-  set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p);
-  set_gdbarch_register_to_value (gdbarch, mrk3_register_to_value);
+  /*  set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p); */
+  /* set_gdbarch_register_to_value (gdbarch, mrk3_register_to_value); */
   set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
   set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
 
@@ -1882,7 +2438,7 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   frame_unwind_append_unwinder (gdbarch, &mrk3_frame_unwind);
   frame_base_set_default (gdbarch, &mrk3_frame_base);
 
-/*   set_gdbarch_dummy_id (gdbarch, mrk3_dummy_id); */
+  /* set_gdbarch_dummy_id (gdbarch, mrk3_dummy_id); */
 
   set_gdbarch_unwind_pc (gdbarch, mrk3_unwind_pc);
   set_gdbarch_unwind_sp (gdbarch, mrk3_unwind_sp);
@@ -1895,9 +2451,27 @@ static void
 mrk3_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
 {
   struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
-  fprintf_unfiltered (file, "mrk3_dump_tdep: Nothing to show\n");
+  fprintf_unfiltered (file, "MRK3: No target dependencies to dump\n");
 
 }	/* mrk3_dump_tdep () */
+
+
+/*! Handler for the inferior stopping.
+
+  We use this to flush the cache of the memory space.
+
+  @param[in]  Breakpoint statistics (unused)
+  @param[in]  Flag to indicate whether the frame should be printed (unused) */
+
+static void
+mrk3_handle_normal_stop (struct bpstats *bs, int print_frame)
+{
+  if (mrk3_debug_memspace ())
+    fprintf_unfiltered (gdb_stdlog,
+			_("MRK3: Normal stop handler triggered.\n"));
+  mrk3_invalidate_memspace_cache ();
+
+}	/* mrk3_handle_normal_stop () */
 
 
 extern initialize_file_ftype _initialize_mrk3_tdep;
@@ -1907,12 +2481,16 @@ _initialize_mrk3_tdep (void)
 {
   gdbarch_register (bfd_arch_mrk3, mrk3_gdbarch_init, mrk3_dump_tdep);
 
+  /* Add ourselves to normal_stop event chain, which we can use to invalidate
+     the cached address space value. */
+  observer_attach_normal_stop (mrk3_handle_normal_stop);
+
   /* Debug internals for MRK3 GDB.  */
   add_setshow_zinteger_cmd ("mrk3", class_maintenance,
 			    &mrk3_debug,
 			    _("Set MRK3 specific debugging."),
 			    _("Show MRK3 specific debugging."),
-			    _("Non-zero enables MRK3 specific debugging."),
+			    _("Bits of value enable MRK3 specific debugging."),
 			    NULL,
 			    NULL,
 			    &setdebuglist,

@@ -1,3 +1,74 @@
+2014-10-07  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	Major update to get frame unwinding working correctly. Improve
+	debugging and address/pointer handling to make this work.  Needs
+	new version of GDB server.
+
+	* mrk3-tdep.c: Include observer.h and remove unused p40
+	headers.  Rename MRK3_R4L_REGNUM as MRK3_R4LONG_REGNUM,
+	MRK3_R5L_REGNUM as MRK3_R5LONG_REGNUM and MRK3_R6L_REGNUM as
+	MRK3_R6LONG_REGNUM.  Replace #defined symbols with static
+	constants for MRK3_MEM_SPACE_MASK, MRK3_MEM_SPACE_SYS,
+	MRK3_MEM_SPACE_APP1, MRK3_MEM_SPACE_APP2, MRK3_MEM_SPACE_SSYS,
+	MRK3_MEM_TYPE_MASK, MRK3_MEM_TYPE_DATA and MRK3_MEM_TYPE_CODE.
+	Create constants for different debug flags.
+	(mrk3_have_debug_flag): Created.
+	(mrk3_debug_general): Created.
+	(mrk3_debug_ptraddr): Created.
+	(mrk3_debug_frame): Created.
+	(mrk3_debug_memspace): Created.
+	(mrk3_debug_dwarf): Created.
+	(mrk3_invalidate_memspace_cache): Created.
+	(mrk3_get_memspace): Updated to use cached value if available.
+	Renamed from mrk3_get_mem_space.
+	(mrk3_is_ssys_memspace): Rename from mrk3_is_ssys_memspace and call
+	mrk3_get_mem_space.
+	(mrk3_is_sys_memspace): Rename from mrk3_is_sys_memspace and call
+	mrk3_get_mem_space.
+	(mrk3_is_usr_memspace): Rename from mrk3_is_usr_memspace and call
+	mrk3_get_mem_space.
+	(mrk3_is_data_address): Deleted.
+	(mrk3_is_code_address): Corrected logic.
+	(mrk3_register_name, mrk3_register_type): Replace R4l by R4LONG,
+	R5l by R5LONG and R6l by R6LONG.
+	(mrk3_pseudo_register_read, mrk3_pseudo_register_write): Remove
+	warning and add debug message.  Use new memspace functions.
+	(mrk3_dwarf2_reg_to_regnum): Clarify comments.  Replace R4l by
+	R4LONG, R5l by R5LONG and R6l by R6LONG.
+	(mrk3_map_dwarf2_data_addr): Pass gdbarch to allow for consistent
+	analysis and add debug messages.
+	(mrk3_save_objfile_name, mrk3_load_symbol_info)
+	(mrk3_get_memspace_from_objfile_name): Use new memspace functions.
+	(mrk3_breakpoint_from_pc): Convert between byte address and word
+	pointer.
+	(mrk3_p2a, mrk3_a2p): Created.
+	(mrk3_addr_bits_remove): Rewrite to deal with word in PC
+	(mrk3_addr_bits_add): Created.
+	(mrk3_pointer_to_address): Base on mrk3_p2a.
+	(mrk3_address_to_pointer): Base on mrk3-a2p.
+	(mrk3_read_pc, mrk3_write_pc): Use new memspace functions and
+	improve debug messages.
+	(mrk3_read_code_memory): Rewritten.
+	(mrk3_skip_prologue): Rewritten. Don't rely on SAL (defective at
+	present).
+	(mrk3_analyze_prologue): Rewritten to correctly populate frame
+	cache.
+	(mrk3_frame_cache): Improved debug and correct handling of
+	address/pointer conversion.
+	(mrk3_frame_this_id): Use full GDB addresses.
+	(mrk3_unwind_pc): Generate a GDB address without flags suitable
+	for symbol table lookup.
+	(mrk3_unwind_sp): Return raw value - no flags.
+	(mrk3_convert_register_p, mrk3_address_class_type_flags)
+	(mrk3_address_class_type_flags_to_name)
+	(mrk3_address_class_name_to_type_flags): #define out
+	(mrk3_fancy_print_insn): Do more tidying up of formatting.
+	(mrk3_print_insn): Better messaging, use mrk3_fancy_print_insn to
+	fix formatting.
+	(mrk3_gdbarch_init): Remove some functions which are no longer used.
+	(mrk3_handle_normal_stop): Created.
+	(_initialize_mrk3_tdep): Add observer for stopping.
+
 2014-08-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_skip_prologue): Allow for zero length prologues.
