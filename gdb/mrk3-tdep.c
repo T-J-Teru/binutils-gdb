@@ -1959,22 +1959,8 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 	    }
 	}
     }
-  else
-    {
-      trad_frame_set_reg_unknown (this_cache, MRK3_FP_REGNUM);
-    }
 
-  /* All other registers are unknown. */
-  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 0);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 1);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 2);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 3);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 4);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R0_REGNUM + 5);
-  trad_frame_set_reg_unknown (this_cache, MRK3_PSW_REGNUM);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R4E_REGNUM);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R5E_REGNUM);
-  trad_frame_set_reg_unknown (this_cache, MRK3_R6E_REGNUM);
+  /* All other registers are just in themselves for now. */
 
   /* Set the frame ID and frame base */
   if (mrk3_debug_frame ())
