@@ -1628,8 +1628,8 @@ mrk3_register_to_value (struct frame_info *frame, int regnum,
    MRK3 has a very simple prologue (if any).
 
    PUSH   R6                   ;; Only if using FP (16-bit instruction)
-   SUB.w  R6,#<frame_size>     ;; Only if using FP (32-bit instruction)
-   SUB.w  R7,#<stack_size>     ;;                  (32-bit instruction)
+   SUB.w  R6,#<frame_size>     ;; Only if using FP (16- or 32-bit instruction)
+   SUB.w  R7,#<stack_size>     ;;                  (16- or 32-bit instruction)
 
    We let prologue analysis do any validation. We just count bytes here.
 
@@ -1679,12 +1679,29 @@ mrk3_skip_prologue (struct gdbarch *gdbarch,
 	 prologue, if SUB.w R7,#<offset> we have a simple stack frame and a 2
 	 word (4 byte) prologue, else we have no stack frame and no
 	 prologue. */
-      mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
+      prologue_end = pc;
+      mrk3_read_code_memory (gdbarch, prologue_end, (gdb_byte *) &insn16,
 			     sizeof (insn16));
-      prologue_end = (0x57a0 == insn16)
-	? pc + 10			/* Have FP */
-	: (0x0407 == insn16) ? pc + 4	/* Have stack frame */
-	: pc;				/* No prologue */
+
+      if (0x57a0 == insn16)
+	{
+	  /* We have a FP being set up. We skip either 2 or 3 words, depending
+	     on whether we use a 16- or 32-bit sub instruction to set up the
+	     new FP. */
+	  prologue_end += 2;
+	  mrk3_read_code_memory (gdbarch, prologue_end, (gdb_byte *) &insn16,
+				 sizeof (insn16));
+
+	  /* 16- or 32-bit sub.w */
+	  prologue_end += (0x0486 == (insn16 & 0xff87)) ? 2 : 4;
+	  mrk3_read_code_memory (gdbarch, prologue_end, (gdb_byte *) &insn16,
+				 sizeof (insn16));
+	}
+
+      prologue_end += (0x0407 == insn16)
+	? 4					/* 32-bit SP set up */
+	: (0x0487 == (insn16 & 0xff87)) ? 2	/* 16-bit SP set up */
+	: 0;					/* No stack frame */
 
       if (mrk3_debug_frame ())
 	fprintf_unfiltered (gdb_stdlog, _("MRK3 skip prolog to %s.\n"),
