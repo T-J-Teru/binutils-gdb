@@ -34,16 +34,23 @@
 int print_insn_mrk3 (bfd_vma addr, disassemble_info *info) {
   uint32_t insn = 0;
   uint32_t insn_len = 0;
+#ifdef _MSC_VER
   char text[512] = {0};
+#else
+  bfd_byte buf[16];
+#endif
 
   /* Temporary kludge to deal with lack of client disassembler. */
-#if 0
+#ifdef _MSC_VER
   insn_len  = Dll_PrintInsn(addr, text, sizeof(text) - 1);
   (*info->fprintf_func) (info->stream, "%s", text);
 #else
-  insn_len  = 1;
-  (*info->fprintf_func) (info->stream, "dissassemble of address %08x\n",
-			       addr);
+  insn_len  = 4;
+  (*info->read_memory_func) (addr, buf, insn_len, info);
+  insn = (uint32_t) bfd_get_bits (buf, insn_len * 8,
+				  info->endian == BFD_ENDIAN_BIG);
+  (*info->fprintf_func) (info->stream, ".word\t0x%08lx",
+			 (long unsigned int) insn);
 #endif
 
   return insn_len ;
