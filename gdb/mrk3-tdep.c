@@ -1831,6 +1831,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 
   if (0x57a0 == insn16)
     {
+      /* PUSH R6: Have FP. In this case, the prev FP is pushed on the stack. */
       if (mrk3_debug_frame ())
 	{
 	  fprintf_unfiltered (gdb_stdlog,
@@ -1838,22 +1839,37 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 			      print_core_address (gdbarch, pc));
 	}
 
-      /* PUSH R6: Have FP. In this case, the prev FP is pushed on the stack. */
       have_fp_p = 1;
       pc += 2;
       fp_pushed_p = (this_pc >= pc);
 
-      /* Check we really have SUB.w R6,#<frame_size> here, but looking at the
-	 first 16 bits of the instruction */
+      /* Check we really have SUB.w R6,#<frame_size> here. This could be the
+	 short or long version */
       mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
 			     sizeof (insn16));
-      gdb_assert (0x0406 == insn16);
-      pc += 2;
-      mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
-			     sizeof (insn16));
-      fp_offset = (CORE_ADDR) insn16;
-      pc += 2;			/* Full instr has 16-bit const */
-      fp_updated_p = (this_pc >= pc);
+      if (0x0406 == insn16)
+	{
+	  /* Long SUB.w. Offset is in the second word */
+	  pc += 2;
+	  mrk3_read_code_memory (gdbarch, pc, (gdb_byte *) &insn16,
+				 sizeof (insn16));
+	  fp_offset = (CORE_ADDR) insn16;
+	  pc += 2;			/* Full instr has 16-bit const */
+	  fp_updated_p = (this_pc >= pc);
+	}
+      else if (0x0486 == (insn16 & 0xff87))
+	{
+	  /* Short SUB.w. Offset is in bits [6:3] */
+	  fp_offset = (CORE_ADDR) ((insn16 & 0x78) >> 3);
+	  pc += 2;
+	  fp_updated_p = (this_pc >= pc);
+	}
+      else
+	{
+	  warning (_("FP pushed, but no new value set."));
+	  fp_offset = 0;
+	  fp_updated_p = 0;
+	}
 
       if (mrk3_debug_frame ())
 	{
@@ -1871,11 +1887,12 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 			     sizeof (insn16));
     }
 
-  /* Check we have SUB.w R7,#<stack_size>.  If not we may not have a stack
-     frame at all, so give up, setting ID and frame base and leaving the
-     register cache "as is". */
+  /* Check we have SUB.w R7,#<stack_size> (this may be short or long form).
+     If not we may not have a stack frame at all, so give up, setting ID and
+     frame base and leaving the register cache "as is". */
   if (0x0407 == insn16)
     {
+      /* Long SUB.w. Offset is in second word. */
       have_sp_p = 1;
       pc += 2;
       /* We seem to have a valid prologue, so get the stack size */
@@ -1886,14 +1903,25 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 
       /* Have we yet updated the SP? */
       sp_updated_p = (this_pc >= pc);
+    }
+  else if (0x0487 == (insn16 & 0xff87))
+    {
+      /* Short SUB.w. Offset is in bits [6:3]. */
+      have_sp_p = 1;
+      sp_offset = (CORE_ADDR) ((insn16 & 0x78) >> 3);
+      pc += 2;
 
-      if (mrk3_debug_frame ())
-	{
-	  fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: Have SP.\n"));
-	  if (sp_updated_p)
-	    fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: SP offset %s.\n"),
-				hex_string_custom ((LONGEST) sp_offset, 4));
-	}
+      /* Have we yet updated the SP? */
+      sp_updated_p = (this_pc >= pc);
+    }
+
+  if (mrk3_debug_frame () && have_sp_p)
+    {
+      fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: Have SP.\n"));
+      fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: SP offset %s.\n"),
+			  hex_string_custom ((LONGEST) sp_offset, 4));
+      fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: SP updated: %s.\n"),
+			  sp_updated_p ? "yes" : "no");
     }
 
   /* Populate the cache. */

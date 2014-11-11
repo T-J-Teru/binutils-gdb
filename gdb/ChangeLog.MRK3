@@ -1,3 +1,8 @@
+2014-11-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_analyze_prologue): Deal with short
+	instructions for SP and FP offsets.
+
 2014-11-10  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_skip_prologue): Skip prologues with short
