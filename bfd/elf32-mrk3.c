@@ -51,7 +51,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
 	 32,                    /* Bitsize.  */
 	 FALSE,                 /* PC_relative.  */
-	 15,                    /* Bitpos. Kludge to turn bytes into words */
+	 16,                    /* Bitpos.  */
 	 complain_overflow_bitfield, /* Complain_on_overflow.  */
 	 bfd_elf_generic_reloc, /* Special_function.  */
 	 "R_MRK3_CALL16",       /* Name.  */
@@ -234,7 +234,8 @@ mrk3_elf_object_p (bfd *abfd)
 }
 
 /* Perform a single relocation.
-   By default we use the standard BFD routines.  */
+   By default we use the standard BFD routines.
+   The SYMBOL_NAME is passed only for a debugging aid.  */
 
 static bfd_reloc_status_type
 mrk3_final_link_relocate (reloc_howto_type *  howto,
@@ -243,24 +244,21 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
 			  bfd_byte *          contents,
 			  Elf_Internal_Rela * rel,
 			  bfd_vma             relocation,
-			  asection *          symbol_section)
+			  asection *          symbol_section,
+			  const char *        symbol_name ATTRIBUTE_UNUSED)
 {
-  switch (howto->type)
+  /* If this is a relocation to a code symbol, and the relocation is NOT
+     located inside debugging information then we should scale the value to
+     make it into a word addressed value.  */
+  if (symbol_section
+      && ((symbol_section->flags & SEC_CODE) != 0)
+      && ((input_section->flags & SEC_DEBUGGING) == 0))
     {
-      /* In the case of an automatic code/data relocation for MRK3, the
-	 linker decides whether to apply a bitshift or not. This is done
-	 based on whether the symbol being relocated against is stored in
-	 a section which has the code bit set.  */
-    case R_MRK3_AUTO16:
-      if (symbol_section && symbol_section->flags & SEC_CODE)
-	{
-	  relocation >>= 1;
-	  rel->r_addend >>= 1;
-	}
-      break;
-      /* Pass others through.  */
-    default:
-      break;
+      /* TODO: Should give a warning if this scaling is going to drop off a
+         set bit as this may indicate that either something has gone wrong,
+         or that the user is not getting what they expect.  */
+      relocation >>= 1;
+      rel->r_addend >>= 1;
     }
 
   /* Only install relocation if above tests did not disqualify it.  */
@@ -384,7 +382,7 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 
       /* Finally, the sole MRK3-specific part.  */
       r = mrk3_final_link_relocate (howto, input_bfd, input_section,
-				     contents, rel, relocation, sec);
+                                    contents, rel, relocation, sec, name);
 
       if (r != bfd_reloc_ok)
 	{
