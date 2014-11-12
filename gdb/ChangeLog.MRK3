@@ -1,3 +1,11 @@
+2014-11-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (skip_whitespace): New function.
+	(parse_opcode_hex): New function.
+	(parse_opcode_and_args): New function.
+	(mrk3_fancy_print_insn): Replace use of sscanf with use of new
+	parser functions.
+
 2014-11-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_analyze_prologue): Deal with short

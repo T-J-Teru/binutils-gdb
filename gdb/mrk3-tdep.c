@@ -138,6 +138,7 @@ code addresses.
 #include "dis-asm.h"
 #include "ui-file.h"
 #include "observer.h"
+#include "safe-ctype.h"
 
 /*  Required for symbol switch handling. */
 #include "gdb/defs.h"
@@ -2213,6 +2214,154 @@ mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
 }
 #endif
 
+/* Skip whitespace in BUF, update BUF.  Return non-zero if at least one
+   whitespace is skipped, otherwise return zero.  */
+static int
+skip_whitespace (char **buf)
+{
+  char *tmp = *buf;
+
+  while (ISSPACE (*tmp))
+    tmp++;
+
+  if (tmp == *buf)
+    return 0;
+
+  *buf = tmp;
+  return 1;
+}
+
+/* Copy 4 digit hex string from string pointed to by BUF into DST, and add
+   a null terminator to DST.  Buffer DST is SIZE bytes long, including
+   space for null character, this must be 5 or more then.  This is
+   checked (by an assertion).  Afterwards BUF is updated past the hex
+   string.  The hex string can optionally have a '0x' prefix, this is
+   skipped, and not copied.  Return non-zero if a hex string is copied
+   successfully, in which case DST is valid, otherwise return zero, and DST
+   is not valid.  */
+static int
+parse_opcode_hex (char **buf, char *dst, size_t size)
+{
+  char *tmp = *buf;
+  size_t can_copy;
+
+  /* Skip '0x' prefix if there is one.  */
+  if (tmp [0] == '0' && tmp [1] == 'x')
+    tmp += 2;
+
+  /* Should now have 4 hex characters, that we copy into DST, then add a
+     NULL pointer at the end (of DST).  */
+  gdb_assert (size > 4);
+  for (can_copy = 4;
+       can_copy > 0 && ISXDIGIT (*tmp);
+       --can_copy)
+    *dst++ = *tmp++;
+  *dst = '\0';
+
+  if (can_copy > 0)
+    return 0; /* Failed to extract 4 hex digits.  */
+
+  *buf = tmp;
+  return 1;
+}
+
+/* Parse opcode string and arguments out of string pointed to by BUF, and
+   update BUF to skip the characters read.
+   See the comment on mrk3_fancy_print_insn for a description of the
+   incoming instruction format.
+   The OPCODE, ARG1, and ARG2 buffers are filled, and null characters added
+   to the end of each, with no more than OPCODE_LEN, ARG1_LEN, and ARG2_LEN
+   bytes being written to each buffer respectively.
+   If the instruction string in BUF is parsed then non-zero is returned and
+   the output buffers are valid, otherwise zero is returned and the output
+   buffers are invalid.
+   The NARGS is update to either 0, 1, or 2 to indicate how many of ARG1
+   and ARG2 are valid.  NARGS only applies when this function returns
+   non-zero, if this function returns zero then NARGS is meaningless and
+   should not be checked.  */
+static int
+parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
+		       char *arg1, size_t arg1_len,
+		       char *arg2, size_t arg2_len,
+		       int *nargs)
+{
+  size_t can_copy;
+  char *tmp;
+
+  /* Now copy everything up to the next whitespace into OPCODE, however
+     don't copy more than (OPCODE_LEN - 1) characters, then add a \0 to
+     the end of OPCODE.  */
+  for (can_copy = opcode_len - 1;
+       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0';
+       --can_copy)
+    *opcode++ = *(*buf)++;
+  *opcode = '\0';
+
+  /* Ooops, looks like the opcode is too long.  */
+  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0'))
+    return 0;
+
+  /* End of the string?  No arguments then.  */
+  if (**buf == '\0')
+    {
+      *nargs = 0;
+      return 1;
+    }
+
+  /* OK, we're expecting some arguments.  */
+  if (!skip_whitespace (buf))
+    return 0;
+
+  /* Now parse first argument, up to either whitespace, end of string, or
+     comma between arguments.  Copy the argument into the ARG1 buffer, and
+     add a null character to the ARG1 buffer.  */
+  for (can_copy = arg1_len - 1;
+       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0' && **buf != ',';
+       --can_copy)
+    *arg1++ = *(*buf)++;
+  *arg1 = '\0';
+
+  /* Ooops, looks like arg1 is too long.  */
+  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0' || **buf == ','))
+    return 0;
+
+  /* End of string?  No second argument then.  */
+  if (**buf == '\0')
+    {
+      *nargs = 1;
+      return 1;
+    }
+
+  /* We're expecting a second argument, skip the comma.  */
+  if (**buf != ',')
+    return 0;
+  (*buf)++;
+
+  /* And skip the whitespace.  */
+  if (!skip_whitespace (buf))
+    return 0;
+
+  /* Now copy the second argument, just like the first.  */
+  for (can_copy = arg2_len - 1;
+       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0';
+       --can_copy)
+    *arg2++ = *(*buf)++;
+  *arg2 = '\0';
+
+  /* Ooops, looks like arg2 is too long.  */
+  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0'))
+    return 0;
+
+  /* Should be at the end of the string now.  */
+  if (**buf == '\0')
+    {
+      *nargs = 2;
+      return 1;
+    }
+
+  return 0;
+}
+
 
 /*! Fancy disassembler
 
@@ -2244,6 +2393,7 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
   char arg2[13];		/* Second argument */
   char allargs[27];             /* For neat printing */
   char supstr[32];		/* Supplementary info about instr */
+  char *orig_buf = buf;
 
   /* Set defaults for optional elements */
   strcpy (hw2, "    ");
@@ -2256,19 +2406,44 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
   switch (size)
     {
     case 2:
-      nargs = sscanf (buf, "  0x%4s %8s %13s %12s", hw1, opc, arg1, arg2) - 2;
+      if (!(skip_whitespace (&buf)
+	    && parse_opcode_hex (&buf, hw1, 5)
+	    && skip_whitespace (&buf)
+	    && parse_opcode_and_args (&buf, opc, 9,
+				      arg1, 14, arg2, 13,
+				      &nargs)))
+	goto parse_failure;
       break;
 
     case 4:
-      nargs = sscanf (buf, "  0x%4s %4s %8s %13s %12s", hw1, hw2, opc, arg1,
-		      arg2) - 3;
+      if (!(skip_whitespace (&buf)
+	    && parse_opcode_hex (&buf, hw1, 5)
+	    && skip_whitespace (&buf)
+	    && parse_opcode_hex (&buf, hw2, 5)
+	    && skip_whitespace (&buf)
+	    && parse_opcode_and_args (&buf, opc, 9,
+				      arg1, 14, arg2, 13,
+				      &nargs)))
+	goto parse_failure;
       break;
 
     case 6:
-      nargs = sscanf (buf, "  0x%4s %4s %4s %8s %13s %12s", hw1, hw2, hw3, opc,
-		      arg1, arg2) - 4;
+      if (!(skip_whitespace (&buf)
+	    && parse_opcode_hex (&buf, hw1, 5)
+	    && skip_whitespace (&buf)
+	    && parse_opcode_hex (&buf, hw2, 5)
+	    && skip_whitespace (&buf)
+	    && parse_opcode_hex (&buf, hw3, 5)
+	    && skip_whitespace (&buf)
+	    && parse_opcode_and_args (&buf, opc, 9,
+				      arg1, 14, arg2, 13,
+				      &nargs)))
+	goto parse_failure;
       break;
 
+    parse_failure:
+      warning (_("Unable to parse `%s'"), orig_buf);
+      return;
 
     default:
       warning (_("Invalid inst length to disassemble %d\n"), size);
@@ -2276,10 +2451,7 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
     }
 
   if (2 == nargs)
-    {
-      arg1[strlen (arg1) - 1] = '\0';
-      strcpy (argsep, ",");
-    }
+    strcpy (argsep, ",");
 
   /* Work out any useful supplementary information. */
   if ((0 == strncmp ("BEQ", opc, strlen ("BRA")))
