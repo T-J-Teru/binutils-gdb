@@ -224,6 +224,23 @@ static const int  MRK3_DEBUG_FLAG_FRAME    = 0x0004;
 static const int  MRK3_DEBUG_FLAG_MEMSPACE = 0x0008;
 static const int  MRK3_DEBUG_FLAG_DWARF    = 0x0010;
 
+/* Information extracted from frame.  */
+struct mrk3_frame_cache
+{
+  /* Previous stack pointer for frame.  */
+  CORE_ADDR prev_sp;
+
+  /* Frame pointer base for frame.  */
+  CORE_ADDR base;
+
+  /* If the previous program counter is on the stack, which is almost
+     certainly the case, then we should only access it as 16-bit.  */
+  unsigned prev_pc_on_stack : 1;
+
+  /* Table indicating the location of each and every register.  */
+  struct trad_frame_saved_reg *saved_regs;
+};
+
 /* Structure describing architecture specific types. */
 struct gdbarch_tdep
 {
@@ -1737,7 +1754,7 @@ mrk3_skip_prologue (struct gdbarch *gdbarch,
                            should initialize. */
 static void
 mrk3_analyze_prologue (struct frame_info *this_frame,
-		       struct trad_frame_cache *this_cache)
+		       struct mrk3_frame_cache *this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   uint32_t  memspace = mrk3_get_memspace ();
@@ -1772,6 +1789,13 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 
   pc = func_start;
 
+  /* Initialise the traditional frame cache component.  */
+  gdb_assert (this_cache->saved_regs == NULL);
+  this_cache->saved_regs = trad_frame_alloc_saved_regs (this_frame);
+
+  /* For now, always mark the previous pc as on the stack.  */
+  this_cache->prev_pc_on_stack = 1;
+
   if (mrk3_debug_frame ())
     {
       fprintf_unfiltered (gdb_stdlog,
@@ -1792,8 +1816,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
   if (0 == pc)
     {
       /* Set the frame ID (which uses full GDB addresses) and frame base */
-      trad_frame_set_id (this_cache, frame_id_build (this_sp, func_start));
-      trad_frame_set_this_base (this_cache, this_sp);
+      this_cache->base = this_sp;
 
       if (mrk3_debug_frame ())
 	{
@@ -1958,7 +1981,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
       prev_sp = this_sp + 2 + (fp_pushed_p ? 2 : 0);
     }
 
-  trad_frame_set_reg_value (this_cache, MRK3_SP_REGNUM, prev_sp);
+  this_cache->prev_sp = prev_sp;
 
   if (mrk3_debug_frame ())
     {
@@ -1969,7 +1992,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 
   /* PC is saved on the start of this stack */
   prev_pc_addr = prev_sp - 2;
-  trad_frame_set_reg_addr (this_cache, MRK3_PC_REGNUM, prev_pc_addr);
+  this_cache->saved_regs [MRK3_PC_REGNUM].addr = prev_pc_addr;
 
   if (mrk3_debug_frame ())
     {
@@ -1984,7 +2007,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
       if (fp_pushed_p)
 	{
 	  CORE_ADDR prev_fp_addr = prev_pc_addr - 2;
-	  trad_frame_set_reg_addr (this_cache, MRK3_FP_REGNUM, prev_fp_addr);
+	  this_cache->saved_regs [MRK3_FP_REGNUM].addr = prev_fp_addr;
 
 	  if (mrk3_debug_frame ())
 	    {
@@ -1995,8 +2018,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 	}
       else
 	{
-	  trad_frame_set_reg_realreg (this_cache, MRK3_FP_REGNUM,
-				      MRK3_FP_REGNUM);
+	  this_cache->saved_regs [MRK3_FP_REGNUM].realreg = MRK3_FP_REGNUM;
 	  if (mrk3_debug_frame ())
 	    {
 	      fprintf_unfiltered (gdb_stdlog,
@@ -2018,14 +2040,24 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
     }
 
   /* The frame ID uses full GDB addresses */
-  trad_frame_set_id (this_cache, frame_id_build (this_sp, func_start));
-  trad_frame_set_this_base (this_cache, this_sp);
+  this_cache->base = this_sp;
 
 }	/* mrk3_analyse_prologue */
 
+static struct mrk3_frame_cache *
+mrk3_alloc_frame_cache (void)
+{
+  struct mrk3_frame_cache *cache;
+
+  cache = FRAME_OBSTACK_ZALLOC (struct mrk3_frame_cache);
+  cache->saved_regs = NULL;
+
+  return cache;
+}
+
 
 /*! Populate the frame cache if it doesn't exist. */
-static struct trad_frame_cache *
+static struct mrk3_frame_cache *
 mrk3_frame_cache (struct frame_info *this_frame,
 		  void **this_cache)
 {
@@ -2038,7 +2070,7 @@ mrk3_frame_cache (struct frame_info *this_frame,
       CORE_ADDR func_start;
       CORE_ADDR stop_addr;
 
-      *this_cache = trad_frame_cache_zalloc (this_frame);
+      *this_cache = mrk3_alloc_frame_cache ();
       func_start = get_frame_func (this_frame);
       stop_addr = mrk3_p2a (gdbarch, 1, mrk3_get_memspace (),
 			    get_frame_pc (this_frame));
@@ -2058,9 +2090,9 @@ static CORE_ADDR
 mrk3_frame_base_address (struct frame_info *this_frame,
 			 void **this_cache)
 {
-  struct trad_frame_cache *frame_cache = mrk3_frame_cache (this_frame,
-							   this_cache);
-  return trad_frame_get_this_base (frame_cache);
+  struct mrk3_frame_cache *frame_cache =
+    mrk3_frame_cache (this_frame, this_cache);
+  return frame_cache->base;
 }
 
 
@@ -2090,9 +2122,28 @@ static struct value *
 mrk3_frame_prev_register (struct frame_info *this_frame,
 			  void **this_cache, int regnum)
 {
-  struct trad_frame_cache *frame_cache = mrk3_frame_cache (this_frame,
-							   this_cache);
-  return trad_frame_get_register (frame_cache, this_frame, regnum);
+  struct value *val = NULL;
+  struct mrk3_frame_cache *frame_cache =
+    mrk3_frame_cache (this_frame, this_cache);
+
+  if (regnum == MRK3_PC_REGNUM
+      && trad_frame_addr_p (frame_cache->saved_regs, MRK3_PC_REGNUM)
+      && frame_cache->prev_pc_on_stack)
+    {
+      uint16_t pc;
+
+      read_memory (frame_cache->saved_regs[MRK3_PC_REGNUM].addr,
+		   (gdb_byte *) &pc, 2); /* Read 2 bytes only.  */
+
+      val = frame_unwind_got_constant (this_frame, regnum, pc);
+    }
+  else
+    val = trad_frame_get_prev_register (this_frame,
+					frame_cache->saved_regs,
+					regnum);
+
+  gdb_assert (val != NULL);
+  return val;
 }
 
 

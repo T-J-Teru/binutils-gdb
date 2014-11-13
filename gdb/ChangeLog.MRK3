@@ -1,3 +1,17 @@
+2014-11-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (struct mrk3_frame_cache): New structure.
+	(mrk3_analyze_prologue): Change parameter type. Initialise
+	saved_regs set.  Write register data into saved_regs set instead
+	of using a trad_frame_cache.
+	(mrk3_alloc_frame_cache): New function.
+	(mrk3_frame_cache): Update return type.  Allocate mrk3_frame_cache
+	rather than a trad_frame_cache.
+	(mrk3_frame_base_address): Extract the base from mrk3_frame_cache.
+	(mrk3_frame_prev_register): Use saved_regs from mrk3_frame_cache
+	to unwind registers.  Add special case handling for
+	MRK3_PC_REGNUM.
+
 2014-11-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (skip_whitespace): New function.
