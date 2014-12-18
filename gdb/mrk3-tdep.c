@@ -1737,6 +1737,39 @@ mrk3_skip_prologue (struct gdbarch *gdbarch,
     }
 }	/* mrk3_skip_prologue () */
 
+/*! Decode a const4 from an instruction.
+
+  The const4 immediates, as used in short instructions are encoded using a
+  special mapping table, this allows for some special values to be placed
+  in the table at high offsets.
+
+  This function takes a value as encoded in an instruction, and returns the
+  const4 value this represents.
+
+  @param[in]   indx   The offset into the const4 table as encoded in the
+                      instruction.
+
+  @parma[in]   is_word_insn_p   If this is true (non zero) then the source
+                                instruction is word based (has the word bit
+                                set), and the immediate returned will be
+                                16-bits long.  If this is false (zero) then
+				only the lower 8 bits of the immediate
+                                returned will be valid.
+
+  @return   Returns a value which is a const4 for use in instructions.  */
+
+static int16_t
+mrk3_decode_const4 (uint8_t indx, int is_word_insn_p)
+{
+  static uint16_t const4_table []
+    = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, -1, 16, 32, 64, 128 };
+  uint16_t const4_mask = (is_word_insn_p ? 0xffff : 0x00ff);
+
+  gdb_assert (indx < sizeof (const4_table) / sizeof (const4_table [0]));
+
+  return const4_table [indx] & const4_mask;
+}
+
 
 /*! Determine the value of registers in the PREV frame and save them in the
    prologue cache for THIS frame. Note that in general we cannot just unwind
@@ -1882,7 +1915,8 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
       else if (0x0486 == (insn16 & 0xff87))
 	{
 	  /* Short SUB.w. Offset is in bits [6:3] */
-	  fp_offset = (CORE_ADDR) ((insn16 & 0x78) >> 3);
+	  fp_offset = mrk3_decode_const4 ((insn16 & 0x78) >> 3, TRUE);
+
 	  pc += 2;
 	  fp_updated_p = (this_pc >= pc);
 	}
@@ -1930,7 +1964,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
     {
       /* Short SUB.w. Offset is in bits [6:3]. */
       have_sp_p = 1;
-      sp_offset = (CORE_ADDR) ((insn16 & 0x78) >> 3);
+      sp_offset = mrk3_decode_const4 ((insn16 & 0x78) >> 3, TRUE);
       pc += 2;
 
       /* Have we yet updated the SP? */
