@@ -1,5 +1,14 @@
 2014-12-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (struct mrk3_frame_cache): Remove prev_sp, this is
+	the same as base.
+	(mrk3_analyze_prologue): No longer set prev_sp member of the cache
+	structure.  Set the base memory of the cache struture to th
+	previous stack pointer (prev_sp), and set the value of the
+	previous stack pointer register in the traditional frame cache.
+
+2014-12-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_analyze_prologue): Flush gdb_stdout before
 	printing log messages.  Add some additional output about FP.
 

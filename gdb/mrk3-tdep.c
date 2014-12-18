@@ -227,9 +227,6 @@ static const int  MRK3_DEBUG_FLAG_DWARF    = 0x0010;
 /* Information extracted from frame.  */
 struct mrk3_frame_cache
 {
-  /* Previous stack pointer for frame.  */
-  CORE_ADDR prev_sp;
-
   /* Frame pointer base for frame.  */
   CORE_ADDR base;
 
@@ -1988,8 +1985,6 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
       prev_sp = this_sp + 2 + (fp_pushed_p ? 2 : 0);
     }
 
-  this_cache->prev_sp = prev_sp;
-
   if (mrk3_debug_frame ())
     {
       fprintf_unfiltered (gdb_stdlog,
@@ -2047,7 +2042,12 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
     }
 
   /* The frame ID uses full GDB addresses */
-  this_cache->base = this_sp;
+  this_cache->base = prev_sp;
+
+  /* gdbarch_sp_regnum contains the value and not the address.  */
+  trad_frame_set_value (this_cache->saved_regs,
+                        MRK3_SP_REGNUM,
+                        this_cache->base);
 
 }	/* mrk3_analyse_prologue */
 
