@@ -1798,6 +1798,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 
   if (mrk3_debug_frame ())
     {
+      gdb_flush (gdb_stdout);
       fprintf_unfiltered (gdb_stdlog,
 			  _("MRK3 prologue: at entry func_start %s.\n"),
 			  print_core_address (gdbarch, func_start));
@@ -1946,6 +1947,12 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 			  hex_string_custom ((LONGEST) sp_offset, 4));
       fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: SP updated: %s.\n"),
 			  sp_updated_p ? "yes" : "no");
+    }
+  if (mrk3_debug_frame () && have_fp_p)
+    {
+      fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: Have FP.\n"));
+      fprintf_unfiltered (gdb_stdlog, _("MRK3 prologue: FP pushed: %s.\n"),
+			  fp_pushed_p ? "yes" : "no");
     }
 
   /* Populate the cache. */

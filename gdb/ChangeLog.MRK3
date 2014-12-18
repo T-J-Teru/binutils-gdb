@@ -1,3 +1,8 @@
+2014-12-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_analyze_prologue): Flush gdb_stdout before
+	printing log messages.  Add some additional output about FP.
+
 2014-11-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (struct mrk3_frame_cache): New structure.
