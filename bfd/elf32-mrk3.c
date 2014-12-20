@@ -248,7 +248,12 @@ mrk3_elf_object_p (bfd *abfd)
 }
 
 /* Perform a single relocation.
-   By default we use the standard BFD routines.
+
+   The bulk of this function is a direct copy of the standard bfd routine
+   used in these case _BFD_FINAL_LINK_RELOCATE, however, there is one MRK3
+   specific change required (see comment inline) relating to byte vs code
+   addresses.
+
    The SYMBOL_NAME is passed only for a debugging aid.  */
 
 static bfd_reloc_status_type
@@ -261,24 +266,56 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
 			  asection *          symbol_section,
 			  const char *        symbol_name ATTRIBUTE_UNUSED)
 {
-  /* If this is a relocation to a code symbol, and the relocation is NOT
-     located inside debugging information then we should scale the value to
-     make it into a word addressed value.  */
+  bfd_vma address = rel->r_offset;
+  bfd_vma addend = rel->r_addend;
+
+  /* Sanity check the address.  */
+  if (address > bfd_get_section_limit (input_bfd, input_section))
+    return bfd_reloc_outofrange;
+
+  /* This function assumes that we are dealing with a basic relocation
+     against a symbol.  We want to compute the value of the symbol to
+     relocate to.  This is just RELOCATION, the value of the symbol, plus
+     ADDEND, any addend associated with the reloc.  */
+  relocation += addend;
+
+  /* If the relocation is PC relative, we want to set RELOCATION to
+     the distance between the symbol (currently in RELOCATION) and the
+     location we are relocating.  Some targets (e.g., i386-aout)
+     arrange for the contents of the section to be the negative of the
+     offset of the location within the section; for such targets
+     pcrel_offset is FALSE.  Other targets (e.g., m88kbcs or ELF)
+     simply leave the contents of the section as zero; for such
+     targets pcrel_offset is TRUE.  If pcrel_offset is FALSE we do not
+     need to subtract out the offset of the location within the
+     section (which is just ADDRESS).  */
+  if (howto->pc_relative)
+    {
+      relocation -= (input_section->output_section->vma
+		     + input_section->output_offset);
+      if (howto->pcrel_offset)
+	relocation -= address;
+    }
+
+  /* If the symbol being targeted is a code symbol, and the relocation is
+     NOT located inside debugging information then we should scale the
+     value to make it into a word addressed value.  */
   if (symbol_section
       && ((symbol_section->flags & SEC_CODE) != 0)
       && ((input_section->flags & SEC_DEBUGGING) == 0))
     {
-      /* TODO: Should give a warning if this scaling is going to drop off a
-         set bit as this may indicate that either something has gone wrong,
-         or that the user is not getting what they expect.  */
+      if (relocation & 1)
+        _bfd_error_handler
+          (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT"x references code, but has least significant bit set."),
+           input_bfd, input_section->name, address);
+
+      /* Scale the byte address into a 16-bit word address.  */
       relocation >>= 1;
-      rel->r_addend >>= 1;
     }
 
-  /* Only install relocation if above tests did not disqualify it.  */
-  return _bfd_final_link_relocate (howto, input_bfd, input_section,
-				   contents, rel->r_offset,
-				   relocation, rel->r_addend);
+  /* Now call the standard bfd routine to handle a single relocation.  */
+  return _bfd_relocate_contents (howto, input_bfd, relocation,
+				 contents + address);
 }
 
 /* Relocate an MRK3 ELF section.

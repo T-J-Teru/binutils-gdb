@@ -1,5 +1,12 @@
 2014-12-20  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf32-mrk3.c (mrk3_final_link_relocate): Extend comment.  Add
+	copy of code from _bfd_final_link_relocate into here.  Remove
+	adjustment of the r_addend, and call _bfd_relocate_contents to
+	finish the relocation.
+
+2014-12-20  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf32-mrk3.c (elf_mrk3_howto_table): Update R_MRK3_PCREL16.
 
 2014-11-19  Simon Cook  <simon.cook@embecosm.com>
