@@ -164,18 +164,18 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 0xffff,                /* Dst_mask.  */
 	 FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_PCREL16,             /* Type.  */
-   1,                     /* Rightshift.  */
-   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+   0,                     /* Rightshift.  */
+   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
    16,                    /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   0,                     /* Bitpos.  */
+   TRUE,                  /* PC_relative.  */
+   16,                     /* Bitpos.  */
    complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
+   bfd_elf_generic_reloc,  /* Special_function.  */
    "R_MRK3_PCREL16",       /* Name.  */
-   TRUE,                  /* Partial_inplace.  */
-   0x1ffff,                /* Src_mask.  */
-   0xffff,                /* Dst_mask.  */
-   TRUE),                /* PCrel_offset.  */
+   TRUE,                   /* Partial_inplace.  */
+   0xffff,                 /* Src_mask.  */
+   0xffff0000,             /* Dst_mask.  */
+   TRUE),                  /* PCrel_offset.  */
 
 };
 
