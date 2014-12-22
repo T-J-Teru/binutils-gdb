@@ -1,3 +1,8 @@
+2014-12-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* findvar.c (value_from_register): Access the register as it's
+	native type, then cast to the desired address type.
+
 2014-12-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_decode_const4): New function.
