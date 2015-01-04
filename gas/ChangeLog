@@ -1,3 +1,8 @@
+2015-01-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* config/tc-avr.c (md_apply_fix): Update the contents of VALP for
+	diff fixups.
+
 2015-01-01  Alan Modra  <amodra@gmail.com>
 
 	* as.c (parse_args): Just print current year.
