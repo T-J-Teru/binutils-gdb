@@ -1,3 +1,9 @@
+2015-01-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	Cherry pick upstream commit 8d983e3.
+	* testsuite/lib/ld-lib.exp (run_dump_test): Extend comment to
+	mention readelf.
+
 2014-06-05  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* scripttempl/mrk3.sc: Rewritten for new crt0.o.
