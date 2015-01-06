@@ -1,5 +1,14 @@
 2015-01-07  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	From: https://sourceware.org/ml/binutils/2015-01/msg00063.html
+	* testsuite/ld-scripts/overlay-size.d: Add 'map' option.
+	* testsuite/ld-scripts/overlay-size.exp: Remove manual check of
+	mapfile.
+	* testsuite/lib/ld-lib.exp (run_dump_test): Add support for new
+	'map' option, checking linker mapfile output.
+
+2015-01-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	Cherry pick upstream commit 8d983e3.
 	* testsuite/lib/ld-lib.exp (run_dump_test): Extend comment to
 	mention readelf.
