@@ -1,5 +1,17 @@
 2015-01-07  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	From: https://sourceware.org/ml/binutils/2015-01/msg00062.html
+	* testsuite/ld-scripts/provide-4.d: New file.
+	* testsuite/ld-scripts/provide-4-map.d: New file.
+	* testsuite/ld-scripts/provide-4.t: New file.
+	* testsuite/ld-scripts/provide.exp: Run the provide-4.d test.
+	* ldlang.c (print_assignment): Only evaluate the expression for a
+	PROVIDE'd assignment when the destination is being defined.
+	Display a special message for PROVIDE'd symbols that are not being
+	provided.
+
+2015-01-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	From: https://sourceware.org/ml/binutils/2015-01/msg00063.html
 	* testsuite/ld-scripts/overlay-size.d: Add 'map' option.
 	* testsuite/ld-scripts/overlay-size.exp: Remove manual check of

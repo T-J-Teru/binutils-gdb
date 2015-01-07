@@ -3980,7 +3980,14 @@ print_assignment (lang_assignment_statement_type *assignment,
   osec = output_section->bfd_section;
   if (osec == NULL)
     osec = bfd_abs_section_ptr;
-  exp_fold_tree (tree, osec, &print_dot);
+
+  if (assignment->exp->type.node_class != etree_provide
+      || bfd_link_hash_lookup (link_info.hash,
+                               assignment->exp->assign.dst,
+                               FALSE, FALSE, TRUE) != NULL)
+    exp_fold_tree (tree, osec, &print_dot);
+  else
+    expld.result.valid_p = FALSE;
   if (expld.result.valid_p)
     {
       bfd_vma value;
@@ -4018,7 +4025,10 @@ print_assignment (lang_assignment_statement_type *assignment,
     }
   else
     {
-      minfo ("*undef*   ");
+      if (assignment->exp->type.node_class == etree_provide)
+        minfo ("[!provide]");
+      else
+        minfo ("*undef*   ");
 #ifdef BFD64
       minfo ("        ");
 #endif
