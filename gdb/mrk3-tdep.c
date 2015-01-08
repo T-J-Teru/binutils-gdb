@@ -1970,6 +1970,8 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
       /* Have we yet updated the SP? */
       sp_updated_p = (this_pc >= pc);
     }
+  else
+    sp_offset = 0;			/* Default initialization. */
 
   if (mrk3_debug_frame () && have_sp_p)
     {
@@ -2680,7 +2682,7 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_short_bit (gdbarch, 1 * TARGET_CHAR_BIT);
   set_gdbarch_int_bit (gdbarch, 2 * TARGET_CHAR_BIT);
   set_gdbarch_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-  set_gdbarch_long_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_long_long_bit (gdbarch, 8 * TARGET_CHAR_BIT);
   set_gdbarch_ptr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
   set_gdbarch_addr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
 

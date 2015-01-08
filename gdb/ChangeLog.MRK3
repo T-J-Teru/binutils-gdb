@@ -1,3 +1,9 @@
+2015-01-08  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_analyze_prologue): Ensure sp_offset is
+	initialized.
+	(mrk3_gdbarch_init): Make long long int 64-bit.
+
 2014-12-22  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* findvar.c (value_from_register): Access the register as it's
