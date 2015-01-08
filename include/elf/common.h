@@ -184,7 +184,6 @@
 #define EM_HUANY	 81	/* Harvard's machine-independent format */
 #define EM_PRISM	 82	/* SiTera Prism */
 #define EM_AVR		 83	/* Atmel AVR 8-bit microcontroller */
-#define EM_MRK3		 83	/* Atmel MRK3 8-bit microcontroller */
 #define EM_FR30		 84	/* Fujitsu FR30 */
 #define EM_D10V		 85	/* Mitsubishi D10V */
 #define EM_D30V		 86	/* Mitsubishi D30V */
@@ -408,6 +407,9 @@
 #define EM_MICROBLAZE_OLD	0xbaab	/* Old MicroBlaze */
 
 #define EM_ADAPTEVA_EPIPHANY   0x1223  /* Adapteva's Epiphany architecture.  */
+
+/* Randomly selected value for MRK3 microcontroller.  */
+#define EM_MRK3		       0xca98
 
 /* See the above comment before you add a new EM_* value here.  */
 

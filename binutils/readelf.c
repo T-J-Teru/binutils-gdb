@@ -2086,6 +2086,7 @@ get_machine_name (unsigned e_machine)
     case EM_TILEGX:		return "Tilera TILE-Gx multicore architecture family";
     case EM_CUDA:		return "NVIDIA CUDA architecture";
     case EM_XGATE:		return "Motorola XGATE embedded processor";
+    case EM_MRK3:               return "NXP MRK3";
     default:
       snprintf (buff, sizeof (buff), _("<unknown>: 0x%x"), e_machine);
       return buff;

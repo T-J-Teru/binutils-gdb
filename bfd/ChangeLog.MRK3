@@ -1,3 +1,7 @@
+2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-mrk3.c (ELF_MACHINE_CODE): Use EM_MRK3 for MRK3.
+
 2014-12-20  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf32-mrk3.c (mrk3_final_link_relocate): Extend comment.  Add

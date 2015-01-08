@@ -1,3 +1,7 @@
+2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf/common.h: Give EM_MRK3 a unique value.
+
 2014-11-19  Simon Cook  <simon.cook@embecosm.com>
 
 	* elf/mrk3.h: Add R_MRK3_PCREL16 relocation.

@@ -489,7 +489,7 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 /*#define TARGET_BIG_SYM      bfd_elf32_mrk3_vec*/
 /*#define TARGET_BIG_NAME     "elf32-mrk3"*/
 #define ELF_ARCH            bfd_arch_mrk3
-#define ELF_MACHINE_CODE    0
+#define ELF_MACHINE_CODE    EM_MRK3
 #define ELF_MAXPAGESIZE     0x1000
 
 #define elf_info_to_howto                   0
