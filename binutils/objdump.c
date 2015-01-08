@@ -2407,6 +2407,10 @@ dump_dwarf (bfd *abfd)
 	}
       break;
 
+    case bfd_arch_mrk3:
+      init_dwarf_regnames_mrk3 ();
+      break;
+
     default:
       break;
     }

@@ -1,3 +1,11 @@
 2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* dwarf.c (dwarf_regnames_mrk3): New table.
+	(init_dwarf_regnames_mrk3): New function.
+	(init_dwarf_regnames): Add EM_MRK3 case.
+	* dwarf.h (init_dwarf_regnames_mrk3): Declare.
+	* objdump.c (dump_dwarf): Add bfd_arch_mrk3 case.
+
+2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* readelf.c (get_machine_name): Handle EM_MRK3.
