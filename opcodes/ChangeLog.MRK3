@@ -1,3 +1,8 @@
+2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* configure.in: Add bfd_mrk3_arch.
+	* configure: Regenerate.
+
 2014-11-10  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-dis.c: Disassemble as words.
