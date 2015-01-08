@@ -242,9 +242,10 @@ mrk3_info_to_howto_rel (bfd *abfd ATTRIBUTE_UNUSED,
 static bfd_boolean
 mrk3_elf_object_p (bfd *abfd)
 {
-  // Set the machine to 0. (we have no officially assigned machine number.)
-  unsigned int mach = 0;
-  return bfd_default_set_arch_mach (abfd, bfd_arch_mrk3, mach);
+  /* The MRK3 compiler does not place the machine type into the elf
+     headers.  This doesn't really matter right now, we assume that there's
+     only one machine type for now.  In the future this might change.  */
+  return bfd_default_set_arch_mach (abfd, bfd_arch_mrk3, bfd_mach_mrk3);
 }
 
 /* Perform a single relocation.

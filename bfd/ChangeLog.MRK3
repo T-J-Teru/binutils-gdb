@@ -1,5 +1,12 @@
 2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* archures.c: Add bfd_mach_mrk3.
+	* bfd-in2.h: Regenerate.
+	* cpu-mrk3.c: Use bfd_mach_mrk3.
+	* elf32-mrk3.c: Use bfd_mach_mrk3.
+
+2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf32-mrk3.c (ELF_MACHINE_CODE): Use EM_MRK3 for MRK3.
 
 2014-12-20  Andrew Burgess  <andrew.burgess@embecosm.com>

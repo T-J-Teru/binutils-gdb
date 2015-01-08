@@ -406,6 +406,7 @@ DESCRIPTION
 .#define bfd_mach_avrxmega6 106
 .#define bfd_mach_avrxmega7 107
 .  bfd_arch_mrk3,       {* NXP MRK3 microcontroller.  *}
+.#define bfd_mach_mrk3          1
 .  bfd_arch_bfin,        {* ADI Blackfin *}
 .#define bfd_mach_bfin          1
 .  bfd_arch_cr16,       {* National Semiconductor CompactRISC (ie CR16). *}

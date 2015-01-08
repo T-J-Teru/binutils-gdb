@@ -31,7 +31,7 @@ const bfd_arch_info_type bfd_mrk3_arch =
   32,                     /* bits per address */
   8,                      /* bits per byte */
   bfd_arch_mrk3,          /* architecture */
-  0,                      /* machine */
+  bfd_mach_mrk3,          /* machine */
   "mrk3",                 /* architecture name */
   "mrk3",                 /* printable name */
   2,                      /* section align power */
