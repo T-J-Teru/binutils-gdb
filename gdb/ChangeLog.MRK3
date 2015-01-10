@@ -1,3 +1,9 @@
+2015-01-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	Revert commit by me on 2014-12-22 to findvar.c.
+	* findvar.c (address_from_register): Read value from register with
+	requested type.
+
 2015-01-08  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_analyze_prologue): Ensure sp_offset is

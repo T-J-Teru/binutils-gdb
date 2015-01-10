@@ -751,13 +751,10 @@ value_from_register (struct type *type, int regnum, struct frame_info *frame)
 CORE_ADDR
 address_from_register (struct type *type, int regnum, struct frame_info *frame)
 {
-  struct gdbarch *gdbarch = get_frame_arch (frame);
   struct value *value;
   CORE_ADDR result;
-  struct type *reg_type;
 
-  reg_type = gdbarch_register_type (gdbarch, regnum);
-  value = value_from_register (reg_type, regnum, frame);
+  value = value_from_register (type, regnum, frame);
   gdb_assert (value);
 
   if (value_optimized_out (value))
@@ -769,7 +766,6 @@ address_from_register (struct type *type, int regnum, struct frame_info *frame)
       error_value_optimized_out ();
     }
 
-  value = value_cast (type, value);
   result = value_as_address (value);
   release_value (value);
   value_free (value);
