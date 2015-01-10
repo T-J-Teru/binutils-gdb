@@ -1,5 +1,12 @@
 2015-01-10  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_convert_register_p): New function.
+	(mrk3_register_to_value): New function.
+	(mrk3_value_to_register): New function.
+	(mrk3_gdbarch_init): Register new gdbarch functions.
+
+2015-01-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	Revert commit by me on 2014-12-22 to findvar.c.
 	* findvar.c (address_from_register): Read value from register with
 	requested type.

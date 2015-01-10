@@ -2654,6 +2654,49 @@ mrk3_print_insn (bfd_vma addr,
     }
 }	/* mrk3_print_insn () */
 
+static int
+mrk3_convert_register_p (struct gdbarch *gdbarch, int regno,
+			 struct type *type)
+{
+  return (TYPE_CODE (type) == TYPE_CODE_PTR);
+}
+
+static int
+mrk3_register_to_value (struct frame_info *frame, int regnum,
+			struct type *valtype, gdb_byte *out,
+			int *optimizedp, int *unavailablep)
+{
+  struct gdbarch *gdbarch = get_frame_arch (frame);
+
+  memset (out, 0, TYPE_LENGTH (valtype));
+  if (!get_frame_register_bytes (frame, regnum, 0,
+				 register_size (gdbarch, regnum),
+				 out, optimizedp, unavailablep))
+    return 0;
+
+  return 1;
+}
+
+static void
+mrk3_value_to_register (struct frame_info *frame, int regnum,
+			struct type *valtype, const gdb_byte *from)
+{
+  int len;
+  struct gdbarch *gdbarch;
+  struct type *reg_type;
+
+  len = TYPE_LENGTH (valtype);
+  gdbarch = get_frame_arch (frame);
+  reg_type = gdbarch_register_type (gdbarch, regnum);
+
+  gdb_assert (len == 4);
+  gdb_assert (TYPE_LENGTH (reg_type) == 2);
+
+  if (from [2] != 0 || from [3] != 0)
+    error ("setting 2-byte register using 4-byte value");
+
+  put_frame_register (frame, regnum, from);
+}
 
 /*! Initialize the gdbarch structure for the mrk3. */
 static struct gdbarch *
@@ -2739,6 +2782,10 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   set_gdbarch_unwind_pc (gdbarch, mrk3_unwind_pc);
   set_gdbarch_unwind_sp (gdbarch, mrk3_unwind_sp);
+
+  set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p);
+  set_gdbarch_register_to_value (gdbarch, mrk3_register_to_value);
+  set_gdbarch_value_to_register (gdbarch, mrk3_value_to_register);
 
   return gdbarch;
 }
