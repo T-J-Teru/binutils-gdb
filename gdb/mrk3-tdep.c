@@ -2698,6 +2698,98 @@ mrk3_value_to_register (struct frame_info *frame, int regnum,
   put_frame_register (frame, regnum, from);
 }
 
+/* Extract from REGCACHE a function return value of type TYPE and copy that
+   into VALBUF.  */
+
+static void
+mrk3_extract_return_value (struct type *type, struct regcache *regcache,
+			   gdb_byte *valbuf)
+{
+  switch (TYPE_LENGTH (type))
+    {
+    case 1:
+      regcache_raw_read (regcache, MRK3_R0L_REGNUM, valbuf);
+      break;
+    case 2:
+      regcache_raw_read (regcache, MRK3_R0_REGNUM, valbuf);
+      break;
+    case 4:
+      /* Need to read from R0 and R1.  */
+      regcache_raw_read (regcache, MRK3_R0_REGNUM, valbuf);
+      regcache_raw_read (regcache, MRK3_R0_REGNUM + 1, valbuf + 2);
+      break;
+    default:
+      error ("unable to extract return value of size %d bytes",
+	     TYPE_LENGTH (type));
+    }
+}
+
+/* Stores a function return value of type TYPE, where VALBUF is the address
+   of the value to be stored, into REGCACHE.  */
+
+static void
+mrk3_store_return_value (struct type *type, struct regcache *regcache,
+			 const gdb_byte *valbuf)
+{
+  switch (TYPE_LENGTH (type))
+    {
+    case 1:
+      regcache_raw_write (regcache, MRK3_R0L_REGNUM, valbuf);
+      break;
+    case 2:
+      regcache_raw_write (regcache, MRK3_R0_REGNUM, valbuf);
+      break;
+    case 4:
+      /* Need to write to R0 and R1.  */
+      regcache_raw_write (regcache, MRK3_R0_REGNUM, valbuf);
+      regcache_raw_write (regcache, MRK3_R0_REGNUM + 1, valbuf + 2);
+      break;
+    default:
+      error ("unable to store return value of size %d bytes",
+	     TYPE_LENGTH (type));
+    }
+}
+
+/* Determine, for architecture GDBARCH, how a return value of TYPE
+   should be returned.  If it is supposed to be returned in registers,
+   and READBUF is non-zero, read the appropriate value from REGCACHE,
+   and copy it into READBUF.  If WRITEBUF is non-zero, write the value
+   from WRITEBUF into REGCACHE.  */
+
+static enum return_value_convention
+mrk3_return_value (struct gdbarch *gdbarch, struct value *function,
+		   struct type *valtype, struct regcache *regcache,
+		   gdb_byte *readbuf, const gdb_byte *writebuf)
+{
+  if (TYPE_CODE (valtype) == TYPE_CODE_STRUCT
+      || TYPE_CODE (valtype) == TYPE_CODE_UNION
+      || TYPE_CODE (valtype) == TYPE_CODE_ARRAY)
+    {
+      if (readbuf)
+	{
+	  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+	  struct gdbarch *gdbarch = get_regcache_arch (regcache);
+	  ULONGEST addr;
+	  bfd_byte buf[MAX_REGISTER_SIZE];
+
+	  mrk3_pseudo_register_read (gdbarch, regcache,
+				     MRK3_SP_REGNUM, buf);
+	  addr = extract_unsigned_integer
+	    (buf, register_size (gdbarch, MRK3_SP_REGNUM), byte_order);
+	  read_memory (addr, readbuf, TYPE_LENGTH (valtype));
+	}
+
+      return RETURN_VALUE_ABI_RETURNS_ADDRESS;
+    }
+
+  if (readbuf)
+    mrk3_extract_return_value (valtype, regcache, readbuf);
+  if (writebuf)
+    mrk3_store_return_value (valtype, regcache, writebuf);
+
+  return RETURN_VALUE_REGISTER_CONVENTION;
+}
+
 /*! Initialize the gdbarch structure for the mrk3. */
 static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
@@ -2752,9 +2844,7 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_pseudo_register_read (gdbarch, mrk3_pseudo_register_read);
   set_gdbarch_pseudo_register_write (gdbarch, mrk3_pseudo_register_write);
 
-  /* @todo: reading the stack and address to pointer conversion is not
-     supported atm. */
-  /* set_gdbarch_return_value (gdbarch, mrk3_return_value); */
+  set_gdbarch_return_value (gdbarch, mrk3_return_value);
   /* We don't currently have a proper disassembler, so we'll provide our own
      locally. The real one should be in opcodes/mrk3-dis.c (part of
      binutils). */
