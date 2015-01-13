@@ -1,3 +1,9 @@
+2015-01-13  Simon Cook  <simon.cook@embecosm.com>
+
+	* cpu-mrk3.c (bfd_arch_mrk3_fill): Added.
+	(bfd_mrk3_arch): Use bfd_arch_mrk3_fill to fill holes with
+	NOPs.
+
 2015-01-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* archures.c: Add bfd_mach_mrk3.
