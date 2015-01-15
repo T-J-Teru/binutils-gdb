@@ -1,3 +1,7 @@
+2015-01-14  Joern Rennecke  <joern.rennecke@embecosm.com>
+
+	* scripttempl/mrk3.sc (.text): Add (SORT(.text.*)) .
+
 2015-01-07  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	From: https://sourceware.org/ml/binutils/2015-01/msg00062.html

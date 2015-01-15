@@ -12,7 +12,8 @@ SECTIONS
 	/* Code in Super System code space. */
 	. = 0x000000;
 	.text : AT ( 0x41000000 ) { *(.vectors)
-	                            *(.text) }
+	                            *(.text)
+	                            *(SORT(.text.*)) }
 	/* Data in Super System data space */
 	PROVIDE (___data_start = 0x100);
 	. = ___data_start;
