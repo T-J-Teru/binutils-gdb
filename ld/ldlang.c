@@ -3981,10 +3981,7 @@ print_assignment (lang_assignment_statement_type *assignment,
   if (osec == NULL)
     osec = bfd_abs_section_ptr;
 
-  if (assignment->exp->type.node_class != etree_provide
-      || bfd_link_hash_lookup (link_info.hash,
-                               assignment->exp->assign.dst,
-                               FALSE, FALSE, TRUE) != NULL)
+  if (assignment->exp->type.node_class != etree_provide)
     exp_fold_tree (tree, osec, &print_dot);
   else
     expld.result.valid_p = FALSE;
