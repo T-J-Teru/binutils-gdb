@@ -2419,6 +2419,9 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
   if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0' || **buf == ','))
     return 0;
 
+  /* Skip any whitespace. */
+  skip_whitespace (buf);
+
   /* End of string?  No second argument then.  */
   if (**buf == '\0')
     {
@@ -2431,20 +2434,31 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
     return 0;
   (*buf)++;
 
-  /* And skip the whitespace.  */
-  if (!skip_whitespace (buf))
-    return 0;
+  /* And skip any whitespace.  */
+  skip_whitespace (buf);
 
-  /* Now copy the second argument, just like the first.  */
-  for (can_copy = arg2_len - 1;
-       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0';
-       --can_copy)
-    *arg2++ = *(*buf)++;
+  /* Now copy the second argument, just like the first.  To deal with
+     instructions like POP, we copy everything up to the newline, ignoring
+     any spaces. */
+  for (can_copy = arg2_len - 1; can_copy > 0 && **buf != '\0';)
+    if (!ISSPACE (**buf))
+      {
+	*arg2++ = *(*buf)++;
+	--can_copy;
+      }
+    else
+      {
+	(*buf)++;
+      }
+
   *arg2 = '\0';
 
   /* Ooops, looks like arg2 is too long.  */
   if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0'))
     return 0;
+
+  /* Skip any whitespace. */
+  skip_whitespace (buf);
 
   /* Should be at the end of the string now.  */
   if (**buf == '\0')
@@ -2484,7 +2498,7 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
   char opc[9];			/* Opcode */
   char argsep[2];		/* Argument separator */
   char arg1[14];		/* First argument, inc separator */
-  char arg2[13];		/* Second argument */
+  char arg2[18];		/* Second argument */
   char allargs[27];             /* For neat printing */
   char supstr[32];		/* Supplementary info about instr */
   char *orig_buf = buf;
@@ -2500,37 +2514,37 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
   switch (size)
     {
     case 2:
-      if (!(skip_whitespace (&buf)
-	    && parse_opcode_hex (&buf, hw1, 5)
+      skip_whitespace (&buf);		// Optional.
+      if (!(parse_opcode_hex (&buf, hw1, 5)
 	    && skip_whitespace (&buf)
 	    && parse_opcode_and_args (&buf, opc, 9,
-				      arg1, 14, arg2, 13,
+				      arg1, 14, arg2, 18,
 				      &nargs)))
 	goto parse_failure;
       break;
 
     case 4:
-      if (!(skip_whitespace (&buf)
-	    && parse_opcode_hex (&buf, hw1, 5)
-	    && skip_whitespace (&buf)
-	    && parse_opcode_hex (&buf, hw2, 5)
-	    && skip_whitespace (&buf)
-	    && parse_opcode_and_args (&buf, opc, 9,
-				      arg1, 14, arg2, 13,
-				      &nargs)))
-	goto parse_failure;
+      skip_whitespace (&buf);		// Optional.
+      if (!(parse_opcode_hex (&buf, hw1, 5)
+      	    && skip_whitespace (&buf)
+      	    && parse_opcode_hex (&buf, hw2, 5)
+      	    && skip_whitespace (&buf)
+      	    && parse_opcode_and_args (&buf, opc, 9,
+      				      arg1, 14, arg2, 18,
+      				      &nargs)))
+      	goto parse_failure;
       break;
 
     case 6:
-      if (!(skip_whitespace (&buf)
-	    && parse_opcode_hex (&buf, hw1, 5)
+      skip_whitespace (&buf);		// Optional.
+      if (!(parse_opcode_hex (&buf, hw1, 5)
 	    && skip_whitespace (&buf)
 	    && parse_opcode_hex (&buf, hw2, 5)
 	    && skip_whitespace (&buf)
 	    && parse_opcode_hex (&buf, hw3, 5)
 	    && skip_whitespace (&buf)
 	    && parse_opcode_and_args (&buf, opc, 9,
-				      arg1, 14, arg2, 13,
+				      arg1, 14, arg2, 18,
 				      &nargs)))
 	goto parse_failure;
       break;
