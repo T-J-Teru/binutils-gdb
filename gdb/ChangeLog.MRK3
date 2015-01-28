@@ -1,5 +1,9 @@
 2015-01-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_breakpoint_from_pc): Simplify assertion.
+
+2015-01-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (strut mrk3_objfile_info_t): Delete.
 	(mrk3_map_dwarf2_data_addr): Delete.
 	(mrk3_free_objfile_info): Delete.

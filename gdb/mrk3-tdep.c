@@ -1446,7 +1446,7 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
     fprintf_unfiltered (gdb_stdlog, _("MRK3 breakpoint: requested at %s.\n"),
 			print_core_address (gdbarch, *pcptr));
 
-  gdb_assert ((pc / 2 * 2) == pc);
+  gdb_assert ((pc & 1) == 0);
   *pcptr = pc;
 
   if (mrk3_debug_general ())
