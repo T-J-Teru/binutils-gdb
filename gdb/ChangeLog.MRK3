@@ -1,5 +1,9 @@
 2015-01-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_analyze_prologue): Additional debug output.
+
+2015-01-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_breakpoint_from_pc): Simplify assertion.
 
 2015-01-28  Andrew Burgess  <andrew.burgess@embecosm.com>

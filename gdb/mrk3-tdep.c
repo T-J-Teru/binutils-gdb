@@ -1656,6 +1656,9 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
     {
       gdb_flush (gdb_stdout);
       fprintf_unfiltered (gdb_stdlog,
+			  _("MRK3 prologue: frame_cache %p.\n"),
+			  this_cache);
+      fprintf_unfiltered (gdb_stdlog,
 			  _("MRK3 prologue: at entry func_start %s.\n"),
 			  print_core_address (gdbarch, func_start));
       fprintf_unfiltered (gdb_stdlog,
