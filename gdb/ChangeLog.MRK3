@@ -1,3 +1,18 @@
+2015-01-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (strut mrk3_objfile_info_t): Delete.
+	(mrk3_map_dwarf2_data_addr): Delete.
+	(mrk3_free_objfile_info): Delete.
+	(mrk3_save_objfile_name): Delete.
+	(mrk3_load_symbol_info): Delete.
+	(mrk3_get_memspace_from_objfile_name): Delete.
+	(mrk3_register_to_value): Delete.
+	(mrk3_convert_register_p): Delete.
+	(mrk3_address_class_type_flags_to_name): Delete.
+	(mrk3_address_class_name_to_type_flags): Delete.
+	(mrk3_gdbarch_init): Remove commented out calls to functions
+	deleted above, mrk3_convert_register_p, mrk3_register_to_value.
+
 2015-01-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (parse_opcode_and_args): Deal with new simulator

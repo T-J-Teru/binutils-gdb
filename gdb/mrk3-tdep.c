@@ -253,19 +253,6 @@ struct gdbarch_tdep
 };
 
 
-#if 0
-/*! A structure to store the objectfile filenames for dynammic objectfile
-   switching. */
-struct mrk3_objfile_info_t {
-	char* name;
-	char* full_name;
-	uint32_t mem_size_code;
-	uint16_t mem_size_globals;
-	uint16_t mem_size_rodata;
-};
-#endif
-
-
 /*! Global debug flag */
 int  mrk3_debug;
 
@@ -1155,151 +1142,6 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
 
 }	/* mrk3_dwarf2_reg_to_regnum () */
 
-#if 0
-uint32_t
-mrk3_map_dwarf2_data_addr (struct gdbarch *gdbarch, CORE_ADDR dwarf2_addr)
-{
-#define TARGET_DWARF_OFFSET_DM     0x00000003CULL
-#define TARGET_DWARF_OFFSET_DM12   0x00001003CULL
-#define TARGET_DWARF_OFFSET_DM12w  0x00001103CULL
-#define TARGET_DWARF_OFFSET_DM32   0x00001183CULL
-#define TARGET_DWARF_OFFSET_DM32w  0x10001183CULL
-#define TARGET_DWARF_OFFSET_DM9    0x18001183CULL
-#define TARGET_DWARF_OFFSET_DM9w   0x180011A3CULL
-#define TARGET_DWARF_OFFSET_DMw    0x180011C92ULL
-#define TARGET_DWARF_OFFSET_PM     0x180019C92ULL
-#define TARGET_DWARF_OFFSET_PM1    0x180029C92ULL
-#define TARGET_DWARF_OFFSET_ULP    0x180031C92ULL
-  /*  Sorted offsets from low addr to high addr! */
-  static const ULONGEST mem_offsets[] = {
-    TARGET_DWARF_OFFSET_DM,
-    TARGET_DWARF_OFFSET_DM12,
-    TARGET_DWARF_OFFSET_DM12w,
-    TARGET_DWARF_OFFSET_DM32,
-    TARGET_DWARF_OFFSET_DM32w,
-    TARGET_DWARF_OFFSET_DM9,
-    TARGET_DWARF_OFFSET_DM9w,
-    TARGET_DWARF_OFFSET_DMw,
-    TARGET_DWARF_OFFSET_PM,
-    TARGET_DWARF_OFFSET_PM1,
-    TARGET_DWARF_OFFSET_ULP
-  };
-  static const size_t n_offsets =
-    sizeof (mem_offsets) / sizeof (mem_offsets[0]);
-
-  int n;
-  for (n = n_offsets - 1; n >= 0; n--)
-    {
-      if (dwarf2_addr >= mem_offsets[n])
-	{
-	  CORE_ADDR addr = dwarf2_addr - (CORE_ADDR) mem_offsets[n];
-
-	  if (mrk3_debug_dwarf ())
-	    fprintf_unfiltered (gdb_stdlog, _("MRK3: dwarf2_addr (%s) minus "
-					      "mem_offset[%d] (%s)"
-					      " = addr (%s)\n"),
-				print_core_address (gdbarch, dwarf2_addr), n,
-				hex_string (mem_offsets[n]),
-				print_core_address (gdbarch, addr));
-	  return addr;
-	}
-    }
-
-  return (uint32_t) dwarf2_addr;
-
-  /* return Dll_Dwarf2AddrToAddr(dwarf2_addr); */
-}
-#endif
-
-
-#if 0
-/*!  Free an objfile_info structure. */
-static void
-mrk3_free_objfile_info (struct mrk3_objfile_info_t *of_info)
-{
-  if (of_info->name != NULL)
-    {
-      /*  Remove the old symbol file. */
-      free (of_info->name);
-      of_info->name = NULL;
-    }
-  if (of_info->full_name != NULL)
-    {
-      /*  Remove the old symbol file. */
-      free (of_info->full_name);
-      of_info->full_name = NULL;
-    }
-}
-
-
-/*!  Save the full and base filename to an objfile info struct. */
-static void
-mrk3_save_objfile_name (struct mrk3_objfile_info_t *of_info,
-			const char *filename)
-{
-  if (filename != NULL)
-    {
-      char *base_name = basename (filename);
-      mrk3_free_objfile_info (of_info);
-
-      of_info->full_name = malloc (strlen (filename) + 1);
-      strcpy (of_info->full_name, filename);
-
-      of_info->name = malloc (strlen (base_name) + 1);
-      strcpy (of_info->name, base_name);
-    }
-}
-
-
-void
-mrk3_load_symbol_info (const uint32_t memspace)
-{
-  uint8_t memspace_index = mrk3_memspace_index (memspace);
-  uint8_t n = 0;
-  struct objfile *of = object_files;
-  while (of != NULL)
-    {
-      char *base_name = basename (of->name);
-      if ((mrk3_objfile_info[memspace_index].name != NULL) &&
-	  (strcmp (base_name, mrk3_objfile_info[memspace_index].name) == 0))
-	{
-	  objfile_to_front (of);
-	  break;
-	}
-      of = of->next;
-    }
-}
-
-
-/*!  When looking up symbols, switch priorities such that the */
-/*  symbol file for the given memory space is preferred. */
-uint32_t
-mrk3_get_memspace_from_objfile_name (const char *base_name)
-{
-  uint8_t n = 0;
-  if (base_name != NULL)
-    {
-      for (n = 0; n < MRK3_MAX_OBJFILES; n++)
-	{
-	  if (mrk3_objfile_info[n].name != NULL)
-	    {
-	      if (strcmp (base_name, mrk3_objfile_info[n].name) == 0)
-		{
-		  return mrk3_memspace_from_memspace_index (n);
-		}
-	    }
-	}
-      warning (_("MRK3: No memspace found for objectfile \"%s\".\n"),
-	       base_name);
-      return  MRK3_MEM_SPACE_NONE;
-    }
-
-  warning (_("MRK3: No objectfile name specified for memspace.\n"));
-  return  MRK3_MEM_SPACE_NONE;
-}
-#endif
-
-
 /*! Convert target pointer to GDB address.
 
   @see mrk3-tdep.c for documentation of MRK3 addressing and how this is
@@ -1615,22 +1457,6 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
   return (gdb_byte *) &mrk3_sim_break_insn;
 
 }	/* mrk3_breakpoint_from_pc () */
-
-
-#if 0
-/*! TODO. This has changed in the latest GDB, with more args. Need to
-   understand what this does and why we need it. Result is a boolean
-   indicating success or failure. */
-static int
-mrk3_register_to_value (struct frame_info *frame, int regnum,
-			struct type *type, gdb_byte * buf,
-			int *optimizedp, int *unavailablep)
-{
-  /* printf("MRK3:mrk3_register_to_value frame=%p, regnum=%d, type=%p(length=%d)\n",frame,regnum,type,type->length);         */
-  frame_unwind_register (frame, regnum, buf);
-  return  1;
-}
-#endif
 
 
 /*! Skip the prologue.
@@ -2263,16 +2089,6 @@ mrk3_unwind_sp (struct gdbarch *gdbarch, struct frame_info *next_frame)
 }	/* mrk3_unwind_sp () */
 
 
-#if 0
-static int
-mrk3_convert_register_p (struct gdbarch *gdbarch, int regnum,
-			 struct type *type)
-{
-  return mrk3_register_type (gdbarch, regnum)->length != type->length;
-}
-#endif
-
-
 static int
 mrk3_address_class_type_flags (int byte_size, int dwarf2_addr_class)
 {
@@ -2281,32 +2097,6 @@ mrk3_address_class_type_flags (int byte_size, int dwarf2_addr_class)
   else
     return 0;
 }
-
-#if 0
-/*! This appears not to be used for now. */
-
-static char *
-mrk3_address_class_type_flags_to_name (int type_flags)
-{
-  if (type_flags & TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1)
-    return "short";
-  else
-    return 0;
-}
-
-/*! Not used, so disabled. */
-static int
-mrk3_address_class_name_to_type_flags (char *name, int *type_flags_ptr)
-{
-  if (strcmp (name, "short") == 0)
-    {
-      *type_flags_ptr = TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1;
-      return 1;
-    }
-  else
-    return 0;
-}
-#endif
 
 /* Skip whitespace in BUF, update BUF.  Return non-zero if at least one
    whitespace is skipped, otherwise return zero.  */
@@ -2871,8 +2661,6 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
   set_gdbarch_addr_bits_remove (gdbarch, mrk3_addr_bits_remove);
 
-  /*  set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p); */
-  /* set_gdbarch_register_to_value (gdbarch, mrk3_register_to_value); */
   set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
   set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
 
