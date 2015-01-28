@@ -812,7 +812,7 @@ memory_spec: 	NAME
 origin_spec:
 	ORIGIN '=' mustbe_exp
 		{
-		  region->origin = exp_get_vma ($3, 0, "origin");
+		  region->origin_exp = $3;
 		  region->current = region->origin;
 		}
 	;
@@ -820,7 +820,7 @@ origin_spec:
 length_spec:
              LENGTH '=' mustbe_exp
 		{
-		  region->length = exp_get_vma ($3, -1, "length");
+		  region->length_exp = $3;
 		}
 	;
 
