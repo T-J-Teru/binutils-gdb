@@ -1,5 +1,10 @@
 2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_unwind_stop_at_frame_p): New function.
+	(mrk3_gdbarch_init): Register mrk3_unwind_stop_at_frame_p.
+
+2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* frame.c: Add gdbarch.h include.
 	(get_prev_frame): Call gdbarch_unwind_stop_at_frame_p instead of
 	checking for zero pc.

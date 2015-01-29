@@ -2597,6 +2597,23 @@ mrk3_return_value (struct gdbarch *gdbarch, struct value *function,
   return RETURN_VALUE_REGISTER_CONVENTION;
 }
 
+static const char *
+mrk3_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
+			     struct frame_info *this_frame)
+{
+  CORE_ADDR frame_pc;
+  int frame_pc_p;
+
+  gdb_assert (this_frame != NULL);
+  frame_pc_p = get_frame_pc_if_available (this_frame, &frame_pc);
+
+  if (frame_pc_p && mrk3_a2p (gdbarch, frame_pc) == 0)
+    return "zero PC";
+
+  return NULL; /* False, don't stop here.  */
+}
+
+
 /*! Initialize the gdbarch structure for the mrk3. */
 static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
@@ -2681,6 +2698,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_convert_register_p (gdbarch, mrk3_convert_register_p);
   set_gdbarch_register_to_value (gdbarch, mrk3_register_to_value);
   set_gdbarch_value_to_register (gdbarch, mrk3_value_to_register);
+
+  set_gdbarch_unwind_stop_at_frame_p (gdbarch, mrk3_unwind_stop_at_frame_p);
 
   return gdbarch;
 }
