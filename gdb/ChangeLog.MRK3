@@ -1,5 +1,13 @@
 2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_addr_bits_remove): Delete.
+	(mrk3_read_pc): Don't call mrk3_addr_bits_remove.
+	(mrk3_breakpoint_from_pc): Don't mess with the PC passed in.
+	(mrk3_unwind_pc): Don't call mrk3_addr_bits_remove.
+	(mrk3_gdbarch_init): Don't register mrk3_addr_bits_remove.
+
+2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_convert_register_p): Change param name.
 	Tighten logic to include a check of the type lengths.
 

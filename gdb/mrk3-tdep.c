@@ -1218,25 +1218,6 @@ mrk3_a2p (struct gdbarch *gdbarch,
 }	/* mrk3_a2p () */
 
 
-/*! Remove useless bits from addresses.
-
-   Remove bits indicating the address space and whether this is code or data.
-
-   This gives us a raw byte address as found in symbol tables.
-
-   @param[in]  gdbarch  The current architecture
-   @param[in]  addr     The address to strip
-
-   @return  Address withouts its address space and code/data bits. */
-static CORE_ADDR
-mrk3_addr_bits_remove (struct gdbarch *gdbarch,
-		       CORE_ADDR       addr)
-{
-  return addr & ~MRK3_MEM_MASK;
-
-}	/* mrk3_addr_bits_remove () */
-
-
 /*! Add flags to a byte "address"
 
    We are given an address, presumed to be without flags bits (such as is
@@ -1349,8 +1330,7 @@ mrk3_read_pc (struct regcache *regcache)
   struct gdbarch *gdbarch = get_regcache_arch (regcache);
   uint32_t  memspace = mrk3_get_memspace ();
   regcache_cooked_read_unsigned (regcache, MRK3_PC_REGNUM, &pcptr);
-  pcaddr = mrk3_addr_bits_remove (gdbarch,
-				  mrk3_p2a (gdbarch, 1, memspace, pcptr));
+  pcaddr = mrk3_p2a (gdbarch, 1, memspace, pcptr);
 
   if (mrk3_debug_ptraddr ())
     fprintf_unfiltered (gdb_stdlog, _("MRK3 read pc: ptr %s -> addr %s.\n"),
@@ -1440,7 +1420,7 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
 			 CORE_ADDR      *pcptr,
 			 int            *lenptr)
 {
-  CORE_ADDR pc = mrk3_addr_bits_add (1, mrk3_get_memspace (), *pcptr);
+  CORE_ADDR pc = *pcptr;
 
   if (mrk3_debug_general ())
     fprintf_unfiltered (gdb_stdlog, _("MRK3 breakpoint: requested at %s.\n"),
@@ -2060,10 +2040,7 @@ mrk3_unwind_pc (struct gdbarch    *gdbarch,
 		struct frame_info *next_frame)
 {
   CORE_ADDR pcptr = frame_unwind_register_unsigned (next_frame, MRK3_PC_REGNUM);
-  CORE_ADDR pcaddr = mrk3_addr_bits_remove (gdbarch,
-					    mrk3_p2a (gdbarch, 1,
-						      mrk3_get_memspace (),
-						      pcptr));
+  CORE_ADDR pcaddr = mrk3_p2a (gdbarch, 1, mrk3_get_memspace (), pcptr);
 
   if (mrk3_debug_ptraddr ())
     fprintf_unfiltered (gdb_stdlog, _("unwind PC value %s.\n"),
@@ -2680,7 +2657,6 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   set_gdbarch_address_to_pointer (gdbarch, mrk3_address_to_pointer);
   set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
-  set_gdbarch_addr_bits_remove (gdbarch, mrk3_addr_bits_remove);
 
   set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
   set_gdbarch_inner_than (gdbarch, core_addr_lessthan);
