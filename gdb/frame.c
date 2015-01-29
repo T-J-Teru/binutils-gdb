@@ -1661,6 +1661,8 @@ reinit_frame_cache (void)
   frame_stash_invalidate ();
   if (frame_debug)
     fprintf_unfiltered (gdb_stdlog, "{ reinit_frame_cache () }\n");
+
+  observer_notify_frame_cache_cleared ();
 }
 
 /* Find where a register is saved (in memory or another register).

@@ -94,6 +94,10 @@ the breakpoints were are stopped at, if any.  Second argument
 inferior has stopped.
 @end deftypefun
 
+@deftypefun void frame_cache_cleared (void)
+The inferior has had it's frame cached cleared.
+@end deftypefun
+
 @deftypefun void target_changed (struct target_ops *@var{target})
 The target's register contents have changed.
 @end deftypefun

@@ -1,5 +1,10 @@
 2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* frame.c (reinit_frame_cache): Trigger frame_cache_cleared
+	observers.
+
+2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_addr_bits_remove): Delete.
 	(mrk3_read_pc): Don't call mrk3_addr_bits_remove.
 	(mrk3_breakpoint_from_pc): Don't mess with the PC passed in.
