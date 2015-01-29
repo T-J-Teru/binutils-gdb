@@ -1,3 +1,8 @@
+2015-01-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-mrk3.c (elf_mrk3_howto_table): Set pcrel_offset values to
+	FALSE throughout.
+
 2015-01-27  Simon Cook  <simon.cook@embecosm.com>
 
 	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_PCREL8.

@@ -175,7 +175,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
    TRUE,                   /* Partial_inplace.  */
    0xffff,                 /* Src_mask.  */
    0xffff0000,             /* Dst_mask.  */
-   TRUE),                  /* PCrel_offset.  */
+   FALSE),                 /* PCrel_offset.  */
   HOWTO (R_MRK3_PCREL8,             /* Type.  */
    0,                     /* Rightshift.  */
    1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
@@ -188,7 +188,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
    TRUE,                   /* Partial_inplace.  */
    0xff,                 /* Src_mask.  */
    0x00ff,             /* Dst_mask.  */
-   TRUE)                  /* PCrel_offset.  */
+   FALSE)                 /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
