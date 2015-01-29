@@ -58,6 +58,7 @@ struct axs_value;
 struct stap_parse_info;
 struct ravenscar_arch_ops;
 struct elf_internal_linux_prpsinfo;
+struct frame;
 
 /* The architecture associated with the inferior through the
    connection to the target.
@@ -559,6 +560,10 @@ extern int gdbarch_unwind_sp_p (struct gdbarch *gdbarch);
 typedef CORE_ADDR (gdbarch_unwind_sp_ftype) (struct gdbarch *gdbarch, struct frame_info *next_frame);
 extern CORE_ADDR gdbarch_unwind_sp (struct gdbarch *gdbarch, struct frame_info *next_frame);
 extern void set_gdbarch_unwind_sp (struct gdbarch *gdbarch, gdbarch_unwind_sp_ftype *unwind_sp);
+
+typedef const char * (gdbarch_unwind_stop_at_frame_p_ftype) (struct gdbarch *gdbarch, struct frame_info *frame);
+extern const char * gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch, struct frame_info *frame);
+extern void set_gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch, gdbarch_unwind_stop_at_frame_p_ftype *func);
 
 /* DEPRECATED_FRAME_LOCALS_ADDRESS as been replaced by the per-frame
    frame-base.  Enable frame-base before frame-unwind. */

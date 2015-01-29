@@ -45,6 +45,7 @@
 #include "tracepoint.h"
 #include "hashtab.h"
 #include "valprint.h"
+#include "gdbarch.h"
 
 static struct frame_info *get_prev_frame_1 (struct frame_info *this_frame);
 static struct frame_info *get_prev_frame_raw (struct frame_info *this_frame);
@@ -2006,6 +2007,7 @@ inside_entry_func (struct frame_info *this_frame)
 struct frame_info *
 get_prev_frame (struct frame_info *this_frame)
 {
+  struct gdbarch *gdbarch;
   CORE_ADDR frame_pc;
   int frame_pc_p;
 
@@ -2085,17 +2087,37 @@ get_prev_frame (struct frame_info *this_frame)
   /* Assume that the only way to get a zero PC is through something
      like a SIGSEGV or a dummy frame, and hence that NORMAL frames
      will never unwind a zero PC.  */
+  gdbarch = get_frame_arch (this_frame);
   if (this_frame->level > 0
       && (get_frame_type (this_frame) == NORMAL_FRAME
 	  || get_frame_type (this_frame) == INLINE_FRAME)
-      && get_frame_type (get_next_frame (this_frame)) == NORMAL_FRAME
-      && frame_pc_p && frame_pc == 0)
+      && get_frame_type (get_next_frame (this_frame)) == NORMAL_FRAME)
     {
-      frame_debug_got_null_frame (this_frame, "zero PC");
-      return NULL;
+      const char *msg = gdbarch_unwind_stop_at_frame_p (gdbarch, this_frame);
+      if (msg != NULL)
+	{
+	  frame_debug_got_null_frame (this_frame, msg);
+	  return NULL;
+	}
     }
 
   return get_prev_frame_1 (this_frame);
+}
+
+const char *
+default_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
+				struct frame_info *this_frame)
+{
+  CORE_ADDR frame_pc;
+  int frame_pc_p;
+
+  gdb_assert (this_frame != NULL);
+  frame_pc_p = get_frame_pc_if_available (this_frame, &frame_pc);
+
+  if (frame_pc_p && frame_pc == 0)
+    return "zero PC";
+
+  return NULL;
 }
 
 CORE_ADDR

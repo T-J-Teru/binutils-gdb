@@ -50,6 +50,7 @@
 #include "observer.h"
 #include "regcache.h"
 #include "objfiles.h"
+#include "frame.h"
 
 /* Static function declarations */
 
@@ -213,6 +214,7 @@ struct gdbarch
   CORE_ADDR frame_args_skip;
   gdbarch_unwind_pc_ftype *unwind_pc;
   gdbarch_unwind_sp_ftype *unwind_sp;
+  gdbarch_unwind_stop_at_frame_p_ftype *unwind_stop_at_frame_p;
   gdbarch_frame_num_args_ftype *frame_num_args;
   gdbarch_frame_align_ftype *frame_align;
   gdbarch_stabs_argument_has_addr_ftype *stabs_argument_has_addr;
@@ -386,6 +388,7 @@ struct gdbarch startup_gdbarch =
   0,  /* frame_args_skip */
   0,  /* unwind_pc */
   0,  /* unwind_sp */
+  default_unwind_stop_at_frame_p,  /* unwind_stop_at_frame_p */
   0,  /* frame_num_args */
   0,  /* frame_align */
   default_stabs_argument_has_addr,  /* stabs_argument_has_addr */
@@ -493,6 +496,7 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->target_desc = info->target_desc;
 
   /* Force the explicit initialization of these.  */
+  gdbarch->unwind_stop_at_frame_p = default_unwind_stop_at_frame_p;
   gdbarch->bits_big_endian = (gdbarch->byte_order == BFD_ENDIAN_BIG);
   gdbarch->short_bit = 2*TARGET_CHAR_BIT;
   gdbarch->int_bit = 4*TARGET_CHAR_BIT;
@@ -1401,6 +1405,9 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file,
                       "gdbarch_dump: unwind_sp = <%s>\n",
                       host_address_to_string (gdbarch->unwind_sp));
+  fprintf_unfiltered (file,
+                      "gdbarch_dump: gdbarch_unwind_stop_at_frame_p = %s\n",
+                      host_address_to_string (gdbarch->unwind_stop_at_frame_p));
   fprintf_unfiltered (file,
                       "gdbarch_dump: value_from_register = <%s>\n",
                       host_address_to_string (gdbarch->value_from_register));
@@ -2899,6 +2906,24 @@ set_gdbarch_unwind_sp (struct gdbarch *gdbarch,
                        gdbarch_unwind_sp_ftype unwind_sp)
 {
   gdbarch->unwind_sp = unwind_sp;
+}
+
+const char *
+gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
+				struct frame_info *frame)
+{
+  gdb_assert (gdbarch != NULL);
+  gdb_assert (gdbarch->unwind_stop_at_frame_p != NULL);
+  if (gdbarch_debug >= 2)
+    fprintf_unfiltered (gdb_stdlog, "gdbarch_unwind_stop_at_frame_p called\n");
+  return gdbarch->unwind_stop_at_frame_p (gdbarch, frame);
+}
+
+void
+set_gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
+				    gdbarch_unwind_stop_at_frame_p_ftype *func)
+{
+  gdbarch->unwind_stop_at_frame_p = func;
 }
 
 int

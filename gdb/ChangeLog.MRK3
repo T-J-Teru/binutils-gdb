@@ -1,3 +1,22 @@
+2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* frame.c: Add gdbarch.h include.
+	(get_prev_frame): Call gdbarch_unwind_stop_at_frame_p instead of
+	checking for zero pc.
+	(default_unwind_stop_at_frame_p): New function.
+	* frame.h (default_unwind_stop_at_frame_p): Declare.
+	* gdbarch.c: Add frame.h include.
+	(struct gdbarch): Add unwind_stop_at_frame_p member.
+	(startup_gdbarch): Initialise unwind_stop_at_frame_p.
+	(gdbarch_alloc): Initialise unwind_stop_at_frame_p.
+	(gdbarch_dump): Dump unwind_stop_at_frame_p.
+	(gdbarch_unwind_stop_at_frame_p): New function.
+	(set_gdbarch_unwind_stop_at_frame_p): New function.
+	* gdbarch.h (struct frame): Declare.
+	(gdbarch_unwind_stop_at_frame_p_ftype): New type.
+	(gdbarch_unwind_stop_at_frame_p): Declare.
+	(set_gdbarch_unwind_stop_at_frame_p): Declare.
+
 2015-01-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_analyze_prologue): Additional debug output.

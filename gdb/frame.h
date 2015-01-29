@@ -765,4 +765,8 @@ extern struct frame_info *create_new_frame (CORE_ADDR base, CORE_ADDR pc);
 extern int frame_unwinder_is (struct frame_info *fi,
 			      const struct frame_unwind *unwinder);
 
+
+extern const char * default_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
+						    struct frame_info *frame);
+
 #endif /* !defined (FRAME_H)  */
