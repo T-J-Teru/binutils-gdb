@@ -1,5 +1,13 @@
 2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_handle_normal_stop) Rename to ...
+	(mrk3_handle_frame_cache_cleared) ... this, and update log message
+	inside function.
+	(_initialize_mrk3_tdep): Install frame_cache_cleared observer, not
+	normal_stop.
+
+2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* frame.c (reinit_frame_cache): Trigger frame_cache_cleared
 	observers.
 

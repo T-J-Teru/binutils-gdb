@@ -2699,11 +2699,11 @@ mrk3_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
   @param[in]  Flag to indicate whether the frame should be printed (unused) */
 
 static void
-mrk3_handle_normal_stop (struct bpstats *bs, int print_frame)
+mrk3_handle_frame_cache_cleared (void)
 {
   if (mrk3_debug_memspace ())
     fprintf_unfiltered (gdb_stdlog,
-			_("MRK3: Normal stop handler triggered.\n"));
+			_("MRK3: Frame cache cleared handler triggered.\n"));
   mrk3_invalidate_memspace_cache ();
 
 }	/* mrk3_handle_normal_stop () */
@@ -2718,7 +2718,7 @@ _initialize_mrk3_tdep (void)
 
   /* Add ourselves to normal_stop event chain, which we can use to invalidate
      the cached address space value. */
-  observer_attach_normal_stop (mrk3_handle_normal_stop);
+  observer_attach_frame_cache_cleared (mrk3_handle_frame_cache_cleared);
 
   /* Debug internals for MRK3 GDB.  */
   add_setshow_zinteger_cmd ("mrk3", class_maintenance,
