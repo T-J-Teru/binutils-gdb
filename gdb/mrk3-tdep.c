@@ -2462,10 +2462,11 @@ mrk3_print_insn (bfd_vma addr,
 }	/* mrk3_print_insn () */
 
 static int
-mrk3_convert_register_p (struct gdbarch *gdbarch, int regno,
+mrk3_convert_register_p (struct gdbarch *gdbarch, int regnum,
 			 struct type *type)
 {
-  return (TYPE_CODE (type) == TYPE_CODE_PTR);
+  return (mrk3_register_type (gdbarch, regnum)->length != type->length
+	  && TYPE_CODE (type) == TYPE_CODE_PTR);
 }
 
 static int

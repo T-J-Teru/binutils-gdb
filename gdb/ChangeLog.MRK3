@@ -1,5 +1,10 @@
 2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_convert_register_p): Change param name.
+	Tighten logic to include a check of the type lengths.
+
+2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_unwind_stop_at_frame_p): New function.
 	(mrk3_gdbarch_init): Register mrk3_unwind_stop_at_frame_p.
 
