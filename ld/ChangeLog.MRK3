@@ -1,3 +1,8 @@
+2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* scripttempl/mrk3.sc (MEMORY): Add memory regions.
+	(SECTIONS): Update to use memory regions.
+
 2015-01-20  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ldlang.c (print_assignment): Remove symbol lookup before
