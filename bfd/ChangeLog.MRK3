@@ -1,5 +1,13 @@
 2015-01-30  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf32-mrk3.c (MRK3_GET_MEMORY_SPACE_ID): New macro.
+	(MRK3_GET_ADDRESS_LOCATION): New macro.
+	(MRK3_BUILD_ADDRESS): New macro.
+	(mrk3_final_link_relocate): Avoid adjusting addresses contains
+	memory space id bits.
+
+2015-01-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf32-mrk3.c (elf_mrk3_howto_table): Set pcrel_offset values to
 	FALSE throughout.
 

@@ -29,6 +29,10 @@
 
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
 
+#define MRK3_GET_MEMORY_SPACE_ID(ADDR) ((ADDR >> 24) & 0xff)
+#define MRK3_GET_ADDRESS_LOCATION(ADDR) (ADDR & 0xffffff)
+#define MRK3_BUILD_ADDRESS(ID,LOC) (((ID & 0xff) << 24) | (LOC & 0xffffff))
+
 static reloc_howto_type elf_mrk3_howto_table[] =
 {
   /* This reloc does nothing.  */
@@ -279,11 +283,15 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
 			  asection *          symbol_section,
 			  const char *        symbol_name ATTRIBUTE_UNUSED)
 {
-  bfd_vma address = rel->r_offset;
+  bfd_vma offset = rel->r_offset;
   bfd_vma addend = rel->r_addend;
+  bfd_vma address = (input_section->output_section->vma
+                     + input_section->output_offset
+                     + offset);
+  bfd_vma address_space_id;
 
   /* Sanity check the address.  */
-  if (address > bfd_get_section_limit (input_bfd, input_section))
+  if (offset > bfd_get_section_limit (input_bfd, input_section))
     return bfd_reloc_outofrange;
 
   /* This function assumes that we are dealing with a basic relocation
@@ -291,6 +299,51 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
      relocate to.  This is just RELOCATION, the value of the symbol, plus
      ADDEND, any addend associated with the reloc.  */
   relocation += addend;
+
+  /* For mrk3 we use address space identifier bits merged in to the VMA in
+     order to track which address space an address is in.
+     The real location within the address space is held in bits 0 to 23,
+     while the address space identifier is held in bits 24 to 31.
+
+     Now RELOCATION will hold the address that we wish to generate a
+     relocation to.  In most well behaved cases this will include the
+     address space identifier.  However, if the destination symbol was
+     undefined then the relocation address might have no address space
+     identification bits present.
+
+     Another complication is that code addresses are 16-bit word values,
+     not 8-bit byte values, and so the address must be scaled, however, we
+     must take care that we don't scale the address space identifier bits
+     otherwise they will become corrupted.
+
+     The approach that we take is to mask the address space identification
+     bits from the value in RELOCATION.  We then perform any pc-relative,
+     or scaling adjustments to RELOCATION.
+
+     Now, if the value is being patched into a debug section then the
+     address space bits must be merged back into the value of RELOCATION,
+     otherwise, it is fine to pass th value through without the address
+     space bits being present.
+
+     As an extra check, for pc-relative relocations, if the address space
+     identifier in RELOCATION does not match the address space identifier
+     on the relocation ADDRESS then we give an error (this would imply a
+     pc-relative relocation into a different memory space, something that
+     is not supported).  The only exception to this is if the memory space
+     identifier on RELOCATION is zero, this usually implies that we are
+     relocating against an undefined (weak) symbol.  */
+
+  address_space_id = MRK3_GET_MEMORY_SPACE_ID (relocation);
+
+  if (howto->pc_relative
+      && address_space_id != 0
+      && address_space_id != MRK3_GET_MEMORY_SPACE_ID (address))
+    _bfd_error_handler
+      (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT
+         "x is pc-relative across address spaces, %#08lx to %#08lx"),
+       input_bfd, input_section->name, offset, address, relocation);
+
+  relocation = MRK3_GET_ADDRESS_LOCATION (relocation);
 
   /* If the relocation is PC relative, we want to set RELOCATION to
      the distance between the symbol (currently in RELOCATION) and the
@@ -303,12 +356,7 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
      need to subtract out the offset of the location within the
      section (which is just ADDRESS).  */
   if (howto->pc_relative)
-    {
-      relocation -= (input_section->output_section->vma
-		     + input_section->output_offset);
-      if (howto->pcrel_offset)
-	relocation -= address;
-    }
+    relocation -= offset;
 
   /* If the symbol being targeted is a code symbol, and the relocation is
      NOT located inside debugging information then we should scale the
@@ -319,16 +367,22 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
     {
       if (relocation & 1)
         _bfd_error_handler
-          (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT"x references code, but has least significant bit set."),
-           input_bfd, input_section->name, address);
+          (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT
+             "x references code, but has least significant bit set (%#08lx)"),
+           input_bfd, input_section->name, offset, relocation);
 
       /* Scale the byte address into a 16-bit word address.  */
       relocation >>= 1;
     }
 
+  if ((input_section->flags & SEC_DEBUGGING) != 0
+      && !howto->pc_relative
+      && howto->bitsize == 32)
+    relocation = MRK3_BUILD_ADDRESS (address_space_id, relocation);
+
   /* Now call the standard bfd routine to handle a single relocation.  */
   return _bfd_relocate_contents (howto, input_bfd, relocation,
-				 contents + address);
+				 contents + offset);
 }
 
 /* Relocate an MRK3 ELF section.
