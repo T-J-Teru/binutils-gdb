@@ -1,3 +1,8 @@
+2015-02-05  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_FORCEPCREL16 and
+	R_MRK£_FORCEPCREL8.
+
 2015-01-30  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf32-mrk3.c (MRK3_GET_MEMORY_SPACE_ID): New macro.
