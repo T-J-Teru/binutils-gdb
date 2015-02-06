@@ -382,7 +382,7 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
      need to subtract out the offset of the location within the
      section (which is just ADDRESS).  */
   if (howto->pc_relative)
-    relocation -= offset;
+    relocation -= MRK3_GET_ADDRESS_LOCATION (address);
 
   /* If the symbol being targeted is a code symbol, and the relocation is
      NOT located inside debugging information then we should scale the
