@@ -29,9 +29,9 @@ SECTIONS
     /* .text in Super System code space. */
     .text :
     {
-        *(.vectors)
-        *(.text)
-        *(SORT(.text.*))
+        KEEP (*(.vectors))
+        KEEP (*(SORT(.text.compiler_rt.*)))
+        *(.text .text.*)
     } >SSM_CODE
 
     /* .data in Super System data space.  */

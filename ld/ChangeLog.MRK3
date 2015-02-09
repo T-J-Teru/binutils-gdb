@@ -1,3 +1,8 @@
+2015-02-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* scripttempl/mrk3.sc (.text): Include the compiler_rt sections
+	separately, and KEEP them.  Also KEEP .vectors sections.
+
 2015-01-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* scripttempl/mrk3.sc (MEMORY): Add memory regions.
