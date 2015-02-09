@@ -590,4 +590,6 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 #define elf_backend_object_p                mrk3_elf_object_p
 #define elf_backend_relocate_section		mrk3_elf_relocate_section
 
+#define elf_backend_can_gc_sections         1
+
 #include "elf32-target.h"
