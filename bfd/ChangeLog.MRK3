@@ -1,5 +1,12 @@
 2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_CONST4 and
+	R_MRK3_CALL14 entries.
+	(mrk3_final_link_relocate_const4): New function.
+	(mrk3_final_link_relocate): Add support for new relocation types.
+
+2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf32-mrk3.c (elf_mrk3_howto_table): Change bitsize of
 	R_MRK3_CALL16 to 16 bits and turn off overflow check.
 	(mrk3_final_link_relocate): Add link hash parameter.  Rename

@@ -218,7 +218,33 @@ static reloc_howto_type elf_mrk3_howto_table[] =
    TRUE,                   /* Partial_inplace.  */
    0xff,                 /* Src_mask.  */
    0x00ff,             /* Dst_mask.  */
-   FALSE)                 /* PCrel_offset.  */
+   FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_CONST4,   /* Type.  */
+   0,                     /* Rightshift.  */
+   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+   4,                     /* Bitsize.  */
+   FALSE,                 /* PC_relative.  */
+   3,                     /* Bitpos. */
+   complain_overflow_bitfield, /* Complain_on_overflow.  */
+   bfd_elf_generic_reloc, /* Special_function.  */
+   "R_MRK3_CONST4",       /* Name.  */
+   TRUE,                  /* Partial_inplace.  */
+   0xf,                   /* Src_mask.  */
+   0x78,                  /* Dst_mask.  */
+   FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_CALL14,   /* Type.  */
+   0,                     /* Rightshift.  */
+   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+   14,                    /* Bitsize.  */
+   FALSE,                 /* PC_relative.  */
+   0,                     /* Bitpos. */
+   complain_overflow_bitfield, /* Complain_on_overflow.  */
+   bfd_elf_generic_reloc, /* Special_function.  */
+   "R_MRK3_CALL14",       /* Name.  */
+   TRUE,                  /* Partial_inplace.  */
+   0x3fff,                /* Src_mask.  */
+   0x3fff,                /* Dst_mask.  */
+   FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
@@ -288,6 +314,67 @@ mrk3_elf_object_p (bfd *abfd)
      headers.  This doesn't really matter right now, we assume that there's
      only one machine type for now.  In the future this might change.  */
   return bfd_default_set_arch_mach (abfd, bfd_arch_mrk3, bfd_mach_mrk3);
+}
+
+/* Helper function for MRK3_FINAL_LINK_RELOCATE.  Called to adjust the
+   value being patched into a R_MRK3_CONST4 relocation.  The const4
+   relocations are a 4-bit symbol value being patched into an instruction.
+   The 4-bit value space is used to encode a set of common values rather
+   than just a sequential set of values.  This function takes the symbol
+   value in parameter SYMBOL_VALUE, and returns the actual value within the
+   4-bit value space that encodes the given SYMBOL_VALUE.
+
+   If the SYMBOL_VALUE is not one that is represented within the 4-bit
+   value space then an error will be reported, and the value 0 will be
+   returned.
+
+   The parameters INPUT_BFD, INPUT_SECTION, and RELOC_OFFSET are only used
+   when reporting the invalid value error, and are the same as the
+   parameters being passed to MRK3_FINAL_LINK_RELOCATE.  */
+
+static bfd_vma
+mrk3_final_link_relocate_const4 (bfd *input_bfd,
+                                 asection *input_section,
+                                 bfd_vma reloc_offset,
+                                 bfd_vma symbol_value)
+{
+  bfd_signed_vma val = symbol_value;
+
+  /* Extracting the address part of relocation gives a 24-bit value.
+     To allow comparison to -1 below, this code sign extends the 24-bit
+     value.  */
+  BFD_ASSERT (sizeof (val) == 8);
+  BFD_ASSERT ((val >> 24) == 0);
+  val = ((val << 40) >> 40);
+
+  switch (val)
+    {
+      /* These values are represented 1:1 within CONST4.  */
+    case 0: case 1: case 2: case 3: case 4:
+    case 5: case 6: case 7: case 8: case 9: case 10:
+      break;
+
+      /* These values are also mapping into the CONST4 space.  */
+    case -1: val = 11; break;
+    case 16: val = 12; break;
+    case 32: val = 13; break;
+    case 64: val = 14; break;
+    case 128: val = 15; break;
+
+      /* No other value can be represented within CONST4.  */
+    default:
+      /* Error.  */
+      _bfd_error_handler
+        (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT
+           "x is const4, containing invalid value %lld"),
+         input_bfd, input_section->name, reloc_offset, val);
+      /* Setting to zero prevents further (overflow) errors occurring later
+         on; we've already registered an error about this issue, we don't
+         need more.  */
+      val = 0;
+    }
+
+  return ((bfd_vma) val);
 }
 
 /* Perform a single relocation.
@@ -372,6 +459,13 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
 
   relocation = MRK3_GET_ADDRESS_LOCATION (relocation);
 
+  /* The special R_MRK3_CONST4 relocation uses a mapping table to encode it's
+     value.  Only some values can be handled by a R_MRK3_CONST4
+     relocation.  */
+  if (howto->type == R_MRK3_CONST4)
+    relocation = mrk3_final_link_relocate_const4 (input_bfd, input_section,
+                                                  offset, relocation);
+
   /* If the relocation is PC relative, we want to set RELOCATION to
      the distance between the symbol (currently in RELOCATION) and the
      location we are relocating.  Some targets (e.g., i386-aout)
@@ -414,7 +508,8 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
   /* It is important that this overflow check is performed after we have
      changed addresses from byte addresses to word addresses where
      appropriate, otherwise the BITWSIZE below would be wrong.  */
-  if (howto->type == R_MRK3_CALL16)
+  if (howto->type == R_MRK3_CALL16
+      || howto->type == R_MRK3_CALL14)
     {
       unsigned int bitsize = howto->bitsize;
 

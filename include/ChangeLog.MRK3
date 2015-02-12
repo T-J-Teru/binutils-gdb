@@ -1,3 +1,8 @@
+2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf/mrk3.h: Add R_MRK3_CONST4 and R_MRK3_CALL14 relocation
+	numbers.
+
 2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf/mrk3.h: Add SHF_MRK3_NON_RELAX.
