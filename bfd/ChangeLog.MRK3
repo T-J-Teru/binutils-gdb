@@ -1,3 +1,9 @@
+2015-02-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-mrk3.c (MRK3_GET_MEMORY_SPACE_ID): Add parenthesis around
+	ADDR.
+	(MRK3_GET_ADDRESS_LOCATION): Likewise.
+
 2015-02-09  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf32-mrk3.c (elf_backend_can_gc_sections): Define.
