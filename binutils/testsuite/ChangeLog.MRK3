@@ -1,0 +1,8 @@
+2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	Cherry-pick commit acf1419 from upstream.
+	* binutils-all/update-1.s: New file.
+	* binutils-all/update-2.s: New file.
+	* binutils-all/update-3.s: New file.
+	* binutils-all/update-4.s: New file.
+	* binutils-all/update-section.exp: New file.

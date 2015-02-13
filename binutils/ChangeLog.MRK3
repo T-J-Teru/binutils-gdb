@@ -1,5 +1,21 @@
 2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	Cherry-pick commit acf1419 from upstream.
+	* objcopy.c (update_sections): New list.
+	(command_line_switch): Add OPTION_UPDATE_SECTION.
+	(copy_options): Add update-section.
+	(copy_usage): Document new option.
+	(is_update_section): New function.
+	(is_strip_section_1): Add check for attempt to update and remove
+	the same section.
+	(copy_object): Update size and content of requested sections.
+	(skip_section): Don't copy for updated sections.
+	(copy_main): Handle --update-section.
+	* doc/binutils.texi (objcopy): Add description of --update-section
+	option.
+
+2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	Cherry-pick commit 06b73f4 from upstream.
 	* objcopy.c (init_section_add): Rename optarg to arg in order to
 	avoid shadowing a global variable.
