@@ -1,3 +1,8 @@
+2015-02-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-mrk3 (elf_mrk3_howto_table): Change bitsize of
+	R_MRK3_HIGH16 to 16 bits.
+
 2015-02-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf32-mrk3.c (MRK3_GET_MEMORY_SPACE_ID): Add parenthesis around

@@ -105,7 +105,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
   HOWTO (R_MRK3_HIGH16,         /* Type.  */
    0,                     /* Rightshift.  */
    2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   32,                    /* Bitsize.  */
+   16,                    /* Bitsize.  */
    FALSE,                 /* PC_relative.  */
    16,                    /* Bitpos. */
    complain_overflow_bitfield, /* Complain_on_overflow.  */
