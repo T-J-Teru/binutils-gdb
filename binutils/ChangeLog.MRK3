@@ -1,3 +1,10 @@
+2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	Cherry-pick commit 7173b38 from upstream.
+	* objcopy.c (init_section_add): New function.
+	(section_add_load_file): New function.
+	(copy_main): Make use of new functions.
+
 2015-02-28  Nick Clifton  <nickc@redhat.com>
 
 	Cherry-pick commit bbad633 from upstream.
