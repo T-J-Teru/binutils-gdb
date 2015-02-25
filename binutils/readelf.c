@@ -129,6 +129,7 @@
 #include "elf/mn10200.h"
 #include "elf/mn10300.h"
 #include "elf/moxie.h"
+#include "elf/mrk3.h"
 #include "elf/mt.h"
 #include "elf/msp430.h"
 #include "elf/nios2.h"
@@ -1133,6 +1134,10 @@ dump_relocations (FILE * file,
 	case EM_MOXIE:
 	  rtype = elf_moxie_reloc_type (type);
 	  break;
+
+        case EM_MRK3:
+          rtype = elf_mrk3_reloc_type (type);
+          break;
 
 	case EM_MSP430:
 	  if (uses_msp430x_relocs ())
