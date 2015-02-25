@@ -1,3 +1,21 @@
+2015-03-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3: Add include of bfd_stdint.h.
+	(retrieve_internal_relocs): New function.
+	(pin_internal_relocs): New function.
+	(release_internal_relocs): New function.
+	(retrieve_contents): New function.
+	(pin_contents): New function.
+	(release_contents): New function.
+	(retrieve_local_syms): New function.
+	(release_local_syms): New function.
+	(relax_log): New function.
+	(elf64_mrk3_relax_delete_bytes): New function.
+	(is_16bit_call_instruction): New function.
+	(is_16bit_immediate_instruction): New function.
+	(elf64_mrk3_relax_section): New function.
+	(bfd_elf64_bfd_relax_section): Define.
+
 2015-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	Switch to 64-bit ELF format.

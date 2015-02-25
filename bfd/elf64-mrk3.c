@@ -26,6 +26,7 @@
 #include "elf-bfd.h"
 #include "libiberty.h"
 #include "elf/mrk3.h"
+#include "bfd_stdint.h"
 
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
 
@@ -693,10 +694,678 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
   return TRUE;
 }
 
+/* Access to internal relocations, section contents and symbols.  */
+
+/* During relaxation, we need to modify relocations, section contents,
+   and symbol definitions, and we need to keep the original values from
+   being reloaded from the input files, i.e., we need to "pin" the
+   modified values in memory.  We also want to continue to observe the
+   setting of the "keep-memory" flag.  The following functions wrap the
+   standard BFD functions to take care of this for us.  */
+
+static Elf_Internal_Rela *
+retrieve_internal_relocs (bfd *abfd, asection *sec, bfd_boolean keep_memory)
+{
+  Elf_Internal_Rela *internal_relocs;
+
+  if ((sec->flags & SEC_LINKER_CREATED) != 0)
+    return NULL;
+
+  internal_relocs = elf_section_data (sec)->relocs;
+  if (internal_relocs == NULL)
+    internal_relocs = (_bfd_elf_link_read_relocs
+		       (abfd, sec, NULL, NULL, keep_memory));
+  return internal_relocs;
+}
+
+static void
+pin_internal_relocs (asection *sec, Elf_Internal_Rela *internal_relocs)
+{
+  elf_section_data (sec)->relocs = internal_relocs;
+}
+
+static void
+release_internal_relocs (asection *sec, Elf_Internal_Rela *internal_relocs)
+{
+  if (internal_relocs
+      && elf_section_data (sec)->relocs != internal_relocs)
+    free (internal_relocs);
+}
+
+static bfd_byte *
+retrieve_contents (bfd *abfd, asection *sec, bfd_boolean keep_memory)
+{
+  bfd_byte *contents;
+  bfd_size_type sec_size;
+
+  sec_size = bfd_get_section_limit (abfd, sec);
+  contents = elf_section_data (sec)->this_hdr.contents;
+
+  if (contents == NULL && sec_size != 0)
+    {
+      if (!bfd_malloc_and_get_section (abfd, sec, &contents))
+	{
+	  if (contents)
+	    free (contents);
+	  return NULL;
+	}
+      if (keep_memory)
+	elf_section_data (sec)->this_hdr.contents = contents;
+    }
+  return contents;
+}
+
+static void
+pin_contents (asection *sec, bfd_byte *contents)
+{
+  elf_section_data (sec)->this_hdr.contents = contents;
+}
+
+static void
+release_contents (asection *sec, bfd_byte *contents)
+{
+  if (contents && elf_section_data (sec)->this_hdr.contents != contents)
+    free (contents);
+}
+
+static Elf_Internal_Sym *
+retrieve_local_syms (bfd *input_bfd)
+{
+  Elf_Internal_Shdr *symtab_hdr;
+  Elf_Internal_Sym *isymbuf;
+  size_t locsymcount;
+
+  symtab_hdr = &elf_tdata (input_bfd)->symtab_hdr;
+  locsymcount = symtab_hdr->sh_info;
+
+  isymbuf = (Elf_Internal_Sym *) symtab_hdr->contents;
+  if (isymbuf == NULL && locsymcount != 0)
+    isymbuf = bfd_elf_get_elf_syms (input_bfd, symtab_hdr, locsymcount, 0,
+				    NULL, NULL, NULL);
+
+  /* Save the symbols for this input file so they won't be read again.  */
+  if (isymbuf && isymbuf != (Elf_Internal_Sym *) symtab_hdr->contents)
+    symtab_hdr->contents = (unsigned char *) isymbuf;
+
+  return isymbuf;
+}
+
+static void
+release_local_syms (bfd *input_bfd, Elf_Internal_Sym *isymbuf)
+{
+  Elf_Internal_Shdr *symtab_hdr;
+
+  symtab_hdr = &elf_tdata (input_bfd)->symtab_hdr;
+  if (isymbuf != NULL
+      && symtab_hdr->contents != (unsigned char *) isymbuf)
+    free (isymbuf);
+}
+
+static void
+relax_log (const char *fmt, ...)
+{
+  static enum
+  {
+    UNINITIALISED, LOGGING_OFF, LOGGING_ON
+  } relaxation_logging;
+  va_list ap;
+
+  if (relaxation_logging == UNINITIALISED)
+    {
+      const char *var = getenv ("MRK3_RELAXATION_LOGGING");
+      if (var && (*var == 'y' || *var == 'Y'))
+        relaxation_logging = LOGGING_ON;
+      else
+        relaxation_logging = LOGGING_OFF;
+    }
+
+  if (relaxation_logging == LOGGING_OFF)
+    return;
+
+  va_start (ap, fmt);
+  vfprintf (stderr, fmt, ap);
+  va_end (ap);
+}
+
+/* Delete some bytes from a section while changing the size of an instruction.
+   The parameter "addr" denotes the section-relative offset pointing just
+   behind the shrinked instruction. "addr+count" point at the first
+   byte just behind the original unshrinked instruction.  */
+
+static bfd_boolean
+elf64_mrk3_relax_delete_bytes (bfd *abfd,
+                               asection *sec,
+                               bfd_vma addr,
+                               int count)
+{
+  Elf_Internal_Shdr *symtab_hdr;
+  unsigned int sec_shndx;
+  bfd_byte *contents;
+  Elf_Internal_Rela *irel, *irelend, *internal_relocs;
+  Elf_Internal_Sym *isym;
+  Elf_Internal_Sym *isymbuf = NULL;
+  bfd_vma toaddr;
+  struct elf_link_hash_entry **sym_hashes;
+  struct elf_link_hash_entry **end_hashes;
+  unsigned int symcount;
+  struct bfd_section *isec;
+
+  /* Actually delete the bytes.  */
+  contents = retrieve_contents (abfd, sec, TRUE);
+  toaddr = sec->size;
+  if (toaddr - addr - count > 0)
+    memmove (contents + addr, contents + addr + count,
+             (size_t) (toaddr - addr - count));
+  sec->size -= count;
+
+  /* Adjust all the reloc addresses.  */
+  internal_relocs = retrieve_internal_relocs (abfd, sec, TRUE);
+  irelend = internal_relocs + sec->reloc_count;
+  for (irel = internal_relocs; irel < irelend; irel++)
+    {
+      /* Get the new reloc address.  */
+      if (irel->r_offset > addr && irel->r_offset < toaddr)
+        irel->r_offset -= count;
+    }
+
+   /* The reloc's own addresses are now ok. However, we need to readjust
+      the reloc's addend, i.e. the reloc's value if two conditions are met:
+      1.) the reloc is relative to a symbol in this section that
+          is located in front of the shrinked instruction
+      2.) symbol plus addend end up behind the shrinked instruction.
+
+      The most common case where this happens are relocs relative to
+      the section-start symbol.
+
+      This step needs to be done for all of the sections of the bfd.  */
+  symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+  for (isec = abfd->sections; isec; isec = isec->next)
+    {
+      bfd_vma symval;
+      bfd_vma shrinked_insn_address;
+
+      if (isec->reloc_count == 0)
+        continue;
+
+      shrinked_insn_address = (sec->output_section->vma
+                               + sec->output_offset + addr - count);
+
+      irel = retrieve_internal_relocs (abfd, isec, TRUE);
+      for (irelend = irel + isec->reloc_count;
+           irel < irelend;
+           irel++)
+        {
+          /* Read this BFD's local symbols if we haven't done
+             so already.  */
+          if (isymbuf == NULL)
+            isymbuf = retrieve_local_syms (abfd);
+
+          /* Get the value of the symbol referred to by the reloc.  */
+          if (ELF64_R_SYM (irel->r_info) < symtab_hdr->sh_info)
+            {
+              /* A local symbol.  */
+              asection *sym_sec;
+
+              isym = isymbuf + ELF64_R_SYM (irel->r_info);
+              sym_sec = bfd_section_from_elf_index (abfd, isym->st_shndx);
+              symval = isym->st_value;
+              /* If the reloc is absolute, it will not have
+                 a symbol or section associated with it.  */
+              if (sym_sec == sec)
+                {
+                  symval += sym_sec->output_section->vma
+                    + sym_sec->output_offset;
+
+                  if (symval <= shrinked_insn_address
+                      && (symval + irel->r_addend) > shrinked_insn_address)
+                    irel->r_addend -= count;
+                }
+              /* else...Reference symbol is absolute.  No adjustment needed.  */
+            }
+          /* else...Reference symbol is extern.  No need for adjusting
+             the addend.  */
+        }
+    }
+
+  /* Adjust the local symbols defined in this section.  */
+  isym = retrieve_local_syms (abfd);
+  sec_shndx = _bfd_elf_section_from_bfd_section (abfd, sec);
+  if (isym != NULL)
+    {
+      Elf_Internal_Sym *isymend;
+
+      isymend = isym + symtab_hdr->sh_info;
+      for (; isym < isymend; isym++)
+	{
+	  if (isym->st_shndx == sec_shndx
+	      && isym->st_value > addr
+	      && isym->st_value < toaddr)
+	    isym->st_value -= count;
+	}
+    }
+
+  /* Now adjust the global symbols defined in this section.  */
+  symcount = (symtab_hdr->sh_size / sizeof (Elf64_External_Sym)
+              - symtab_hdr->sh_info);
+  sym_hashes = elf_sym_hashes (abfd);
+  end_hashes = sym_hashes + symcount;
+  for (; sym_hashes < end_hashes; sym_hashes++)
+    {
+      struct elf_link_hash_entry *sym_hash = *sym_hashes;
+      if ((sym_hash->root.type == bfd_link_hash_defined
+           || sym_hash->root.type == bfd_link_hash_defweak)
+          && sym_hash->root.u.def.section == sec
+          && sym_hash->root.u.def.value > addr
+          && sym_hash->root.u.def.value < toaddr)
+        {
+          sym_hash->root.u.def.value -= count;
+        }
+    }
+
+  return TRUE;
+}
+
+/* Take the most significant 16 bits of INSN and return true if the
+   instruction is a 16-bit call instruction, otherwise return false.  */
+
+static bfd_boolean
+is_16bit_call_instruction (const uint16_t insn)
+{
+  return (insn == 0x0fc0);
+}
+
+/* Take the most significant 16 bits of INSN and return true if the
+   instruction is one that takes a 16-bit immediate, which also has a 4-bit
+   immediate version available, otherwise, return false.  */
+
+static bfd_boolean
+is_16bit_immediate_instruction (const uint16_t insn)
+{
+  bfd_boolean is_match = FALSE;
+
+  if ((insn & 0x03f8) == 0)
+    {
+      switch ((insn >> 11) & 0x1f)
+        {
+        case 0:  /* SUB */
+        case 1:  /* SUBB */
+        case 2:  /* ADD */
+        case 3:  /* ADDC */
+        case 4:  /* AND */
+        case 5:  /* OR */
+        case 6:  /* XOR */
+        case 8:  /* CMP */
+        case 12: /* TST */
+        case 13: /* MOV */
+          is_match = TRUE;
+          break;
+        }
+    }
+  return is_match;
+}
+
+/* Perform relaxation of section SEC from ABFD.  Set contents of AGAIN to
+   be false if no relaxation is performed, or true if relaxation is
+   performed (this will trigger a relay-out and another relaxation pass).
+
+   The LINK_INFO is the general purpose control data structure.
+
+   The return value should be true if no errors are encountered, otherwise,
+   return false.  */
+
+static bfd_boolean
+elf64_mrk3_relax_section (bfd *abfd,
+			 asection *sec,
+                         struct bfd_link_info *link_info,
+                         bfd_boolean *again)
+{
+  Elf_Internal_Shdr *symtab_hdr;
+  Elf_Internal_Rela *internal_relocs;
+  Elf_Internal_Rela *irel, *irelend;
+  Elf_Internal_Sym *isymbuf = NULL;
+  bfd_byte *contents = NULL;
+
+  /* Assume that nothing changes.  Set this to true if we perform any
+     relaxation.  */
+  *again = FALSE;
+
+  relax_log ("Relaxing section `%s' from `%s'\n",
+             sec->name, abfd->filename);
+
+  /* We don't have to do anything for a relocatable link, if
+     this section does not have relocs, or if this is not a
+     code section.  */
+  if (link_info->relocatable
+      || (sec->flags & SEC_RELOC) == 0
+      || sec->reloc_count == 0
+      || (sec->flags & SEC_CODE) == 0)
+    return TRUE;
+
+  symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+
+  /* Get a copy of the native relocations.  */
+  internal_relocs = retrieve_internal_relocs (abfd, sec,
+                                              link_info->keep_memory);
+  if (internal_relocs == NULL || sec->reloc_count == 0)
+    return TRUE;
+
+  /* Walk through the relocs looking for relaxing opportunities.  */
+  irelend = internal_relocs + sec->reloc_count;
+  for (irel = internal_relocs; irel < irelend; irel++)
+    {
+      bfd_vma symval;
+      reloc_howto_type *howto;
+      unsigned char sym_type;
+      bfd_vma toff;
+      asection *tsec;
+
+      /* Filter out all relocation types that we know can't be relaxed.  */
+      if (ELF64_R_TYPE (irel->r_info) != R_MRK3_PCREL16
+          && ELF64_R_TYPE (irel->r_info) != R_MRK3_HIGH16)
+        continue;
+
+      BFD_ASSERT (ELF64_R_TYPE (irel->r_info) < (unsigned int) R_MRK3_max);
+      howto = &elf_mrk3_howto_table[ELF64_R_TYPE (irel->r_info)];
+      relax_log ("  Relocation type: %s at section Offset %#08lx\n",
+                 howto->name, irel->r_offset);
+
+      /* Get the section contents if we haven't done so already.  */
+      if (contents == NULL)
+        contents = retrieve_contents (abfd, sec, link_info->keep_memory);
+
+      /* Read this BFD's local symbols if we haven't done so already.  */
+      if (isymbuf == NULL)
+        isymbuf = retrieve_local_syms (abfd);
+
+      /* Get the value of the symbol referred to by the reloc.  */
+      /* Get the value of the symbol referred to by the reloc.  */
+      if (ELF64_R_SYM (irel->r_info) < symtab_hdr->sh_info)
+	{
+	  /* A local symbol.  */
+	  Elf_Internal_Sym *isym;
+
+	  /* Read this BFD's local symbols.  */
+	  if (isymbuf == NULL)
+	    {
+	      isymbuf = (Elf_Internal_Sym *) symtab_hdr->contents;
+	      if (isymbuf == NULL)
+		isymbuf = bfd_elf_get_elf_syms (abfd, symtab_hdr,
+						symtab_hdr->sh_info, 0,
+						NULL, NULL, NULL);
+	      if (isymbuf == 0)
+		goto error_return;
+	    }
+	  isym = isymbuf + ELF64_R_SYM (irel->r_info);
+	  if (isym->st_shndx == SHN_UNDEF)
+	    tsec = bfd_und_section_ptr;
+	  else if (isym->st_shndx == SHN_ABS)
+	    tsec = bfd_abs_section_ptr;
+	  else if (isym->st_shndx == SHN_COMMON)
+	    tsec = bfd_com_section_ptr;
+	  else
+	    tsec = bfd_section_from_elf_index (abfd, isym->st_shndx);
+
+	  toff = isym->st_value;
+	  sym_type = ELF_ST_TYPE (isym->st_info);
+	}
+      else
+	{
+	  /* Global symbol handling.  */
+	  unsigned long indx;
+          struct elf_link_hash_entry *h;
+
+	  indx = ELF64_R_SYM (irel->r_info) - symtab_hdr->sh_info;
+	  h = elf_sym_hashes (abfd)[indx];
+
+	  while (h->root.type == bfd_link_hash_indirect
+		 || h->root.type == bfd_link_hash_warning)
+	    h = (struct elf_link_hash_entry *) h->root.u.i.link;
+
+	  if (h->root.type == bfd_link_hash_defined
+	      || h->root.type == bfd_link_hash_defweak)
+	    {
+	      tsec = h->root.u.def.section;
+	      toff = h->root.u.def.value;
+	    }
+	  else if (h->root.type == bfd_link_hash_undefined
+		   || h->root.type == bfd_link_hash_undefweak)
+	    {
+	      tsec = bfd_und_section_ptr;
+	      toff = link_info->relocatable ? indx : 0;
+	    }
+	  else
+	    continue;
+
+	  sym_type = h->type;
+	}
+
+      if (tsec->sec_info_type == SEC_INFO_TYPE_MERGE)
+	{
+	  /* At this stage in linking, no SEC_MERGE symbol has been
+	     adjusted, so all references to such symbols need to be
+	     passed through _bfd_merged_section_offset.  (Later, in
+	     relocate_section, all SEC_MERGE symbols *except* for
+	     section symbols have been adjusted.)
+
+	     gas may reduce relocations against symbols in SEC_MERGE
+	     sections to a relocation against the section symbol when
+	     the original addend was zero.  When the reloc is against
+	     a section symbol we should include the addend in the
+	     offset passed to _bfd_merged_section_offset, since the
+	     location of interest is the original symbol.  On the
+	     other hand, an access to "sym+addend" where "sym" is not
+	     a section symbol should not include the addend;  Such an
+	     access is presumed to be an offset from "sym";  The
+	     location of interest is just "sym".  */
+	  if (sym_type == STT_SECTION)
+	    toff += irel->r_addend;
+
+	  toff =
+            _bfd_merged_section_offset (abfd, &tsec,
+                                        elf_section_data (tsec)->sec_info,
+                                        toff);
+
+	  if (sym_type != STT_SECTION)
+	    toff += irel->r_addend;
+	}
+
+      symval = toff + tsec->output_section->vma + tsec->output_offset;
+
+      switch (ELF64_R_TYPE (irel->r_info))
+        {
+        case R_MRK3_PCREL16:
+          {
+            bfd_vma reloc_addr, dest_addr;
+            bfd_signed_vma offset;
+            uint16_t insn;
+
+            /* Compute the from and to addresses.  */
+            reloc_addr = (sec->output_section->vma
+                          + sec->output_offset
+                          + irel->r_offset);
+            dest_addr = (symval + irel->r_addend);
+
+            /* A pc-relative relocation across address spaces is not going
+               to work, this should be detected, and give an error later in
+               the process.  For now, just don't try to relax.  */
+            if (MRK3_GET_MEMORY_SPACE_ID (reloc_addr)
+                != MRK3_GET_MEMORY_SPACE_ID (dest_addr))
+              continue;
+
+            /* Let's not worry about address space ID any more.  */
+            reloc_addr = MRK3_GET_ADDRESS_LOCATION (reloc_addr);
+            dest_addr = MRK3_GET_ADDRESS_LOCATION (dest_addr);
+
+            offset = ((bfd_signed_vma) (dest_addr - reloc_addr)) >> 1;
+            if (offset < -127 || offset > 127)
+              continue;
+
+            /* Get the encoding of the instruction we're relaxing, and
+               convert to a 8-bit branch encoding.  */
+            relax_log ("    Convert to 8-bit branch instruction.\n");
+            insn = bfd_get_16 (abfd, contents + irel->r_offset);
+            BFD_ASSERT ((insn & 0xff) == 0x80);
+            insn = insn & 0xff00;
+            bfd_put_16 (abfd, insn, contents + irel->r_offset);
+
+            /* Note that we've changed the relocs, section contents,
+               etc.  */
+            pin_internal_relocs (sec, internal_relocs);
+            pin_contents (sec, contents);
+
+            /* Fix the relocation's type.  */
+            irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
+                                         R_MRK3_PCREL8);
+
+            /* Actually delete the bytes.  */
+            if (!elf64_mrk3_relax_delete_bytes (abfd, sec,
+                                                irel->r_offset + 2, 2))
+              goto error_return;
+
+            /* That will change things, so, we should relax again.
+               Note that this is not required, and it may be slow.  */
+            *again = TRUE;
+          }
+          break;
+
+        case R_MRK3_HIGH16:
+          {
+            uint16_t insn;
+
+            /* Get the instruction code for relaxing.  */
+            insn = bfd_get_16 (abfd, contents + irel->r_offset);
+
+            relax_log ("    Instruction encoding is %#08x\n", insn);
+
+            /* Is this a 16-bit CALL instruction?  These might be
+               shrinkable to a 14-bit CALL instruction.  */
+            if (is_16bit_call_instruction (insn))
+              {
+                bfd_vma reloc_addr, dest_addr;
+
+                /* Compute the from and to addresses.  */
+                reloc_addr = (sec->output_section->vma
+                              + sec->output_offset
+                              + irel->r_offset);
+                dest_addr = (symval + irel->r_addend);
+
+                /* A CALL instruction across address spaces does not make
+                   sense, and probably indicates an error.  To avoid
+                   confusion such cases are not modified here.  */
+                if (MRK3_GET_MEMORY_SPACE_ID (reloc_addr)
+                    != MRK3_GET_MEMORY_SPACE_ID (dest_addr))
+                  continue;
+
+                /* Let's not worry about address space ID any more.  */
+                reloc_addr = MRK3_GET_ADDRESS_LOCATION (reloc_addr);
+                dest_addr = MRK3_GET_ADDRESS_LOCATION (dest_addr);
+
+                /* The 14-bit call instruction places the 14-bits of the
+                   word address into the lower 14-bits of the current pc to
+                   compute the call destination.  To check that a call from
+                   RELOC_ADDR to DEST_ADDR (both of which are byte
+                   addresses) will fit we check that everything other than
+                   the lower 15-bits match.  */
+                if ((reloc_addr & ~0x7fff) != (dest_addr & ~0x7fff))
+                  continue;
+
+                relax_log ("    Relocation at: %#08lx\n", reloc_addr);
+                relax_log ("    Destination at %#08lx\n", dest_addr);
+
+                /* Convert to a 14-bit CALL instruction.  */
+                relax_log ("    Convert to 14-bit call instruction.\n");
+                insn = 0x8000;
+                bfd_put_16 (abfd, insn, contents + irel->r_offset);
+
+                /* Note that we've changed the relocs, section contents,
+                   etc.  */
+                pin_internal_relocs (sec, internal_relocs);
+                pin_contents (sec, contents);
+
+                /* Fix the relocation's type.  */
+                irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
+                                             R_MRK3_CALL14);
+
+                /* Actually delete the bytes.  */
+                if (!elf64_mrk3_relax_delete_bytes (abfd, sec,
+                                                    irel->r_offset + 2, 2))
+                  goto error_return;
+
+                /* That will change things, so, we should relax again.
+                   Note that this is not required, and it may be slow.  */
+                *again = TRUE;
+              }
+            /* Is this a 16-bit immediate instruction?  These might be
+               shrinkable to a 4-bit immediate instruction.  For now I
+               just check bit 4 is set, but this probably needs to be
+               improved.  */
+            else if (is_16bit_immediate_instruction (insn))
+              {
+                bfd_signed_vma imm_value;
+
+                imm_value = (symval + irel->r_addend);
+
+                /* Only select values can be encoded in a 4-bit immediate.  */
+                if (imm_value < -1
+                    || (imm_value > 10
+                        && imm_value != 16
+                        && imm_value != 32
+                        && imm_value != 64
+                        && imm_value != 128))
+                  continue;
+
+                /* Set bit 7 to convert to the 4-bit constant version of
+                   the instruction.  */
+                relax_log ("    Immediate value is %d\n", imm_value);
+                relax_log ("    Convert to 4-bit constant instruction.\n");
+                insn |= (1 << 7);
+                bfd_put_16 (abfd, insn, contents + irel->r_offset);
+
+                /* Note that we've changed the relocs, section contents,
+                   etc.  */
+                pin_internal_relocs (sec, internal_relocs);
+                pin_contents (sec, contents);
+
+                /* Fix the relocation's type.  */
+                irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
+                                             R_MRK3_CONST4);
+
+                /* Actually delete the bytes.  */
+                if (!elf64_mrk3_relax_delete_bytes (abfd, sec,
+                                                    irel->r_offset + 2, 2))
+                  goto error_return;
+
+                /* That will change things, so, we should relax again.
+                   Note that this is not required, and it may be slow.  */
+                *again = TRUE;
+              }
+          }
+          break;
+
+        default:
+          goto error_return;
+        }
+    }
+
+  /* These release calls will only free the resources if they have not been
+     pinned to the section or bfd.  */
+  release_local_syms (abfd, isymbuf);
+  release_contents (sec, contents);
+  release_internal_relocs (sec, internal_relocs);
+  return TRUE;
+
+error_return:
+  release_local_syms (abfd, isymbuf);
+  release_contents (sec, contents);
+  release_internal_relocs (sec, internal_relocs);
+  return FALSE;
+}
+
 #define TARGET_LITTLE_SYM   bfd_elf64_mrk3_vec
 #define TARGET_LITTLE_NAME  "elf64-mrk3"
 /*#define TARGET_BIG_SYM      bfd_elf64_mrk3_vec*/
 /*#define TARGET_BIG_NAME     "elf64-mrk3"*/
+
 #define ELF_ARCH            bfd_arch_mrk3
 #define ELF_MACHINE_CODE    EM_MRK3
 #define ELF_MAXPAGESIZE     0x1000
@@ -707,5 +1376,6 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 #define elf_backend_relocate_section		mrk3_elf_relocate_section
 
 #define elf_backend_can_gc_sections         1
+#define bfd_elf64_bfd_relax_section         elf64_mrk3_relax_section
 
 #include "elf64-target.h"
