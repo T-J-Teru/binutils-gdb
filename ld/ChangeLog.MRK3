@@ -1,3 +1,10 @@
+2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ld/Makefile.am: Add mrk3.em dependency.
+	* ld/Makefile.in: Regenerate.
+	* ld/emulparams/elf32mrk3.sh: Add EXTRA_EM_FILE.
+	* ld/emultempl/mrk3.em: New file.
+
 2015-02-09  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* scripttempl/mrk3.sc (.text): Include the compiler_rt sections

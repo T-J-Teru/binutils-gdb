@@ -1183,7 +1183,7 @@ eelf32moxie.c: $(srcdir)/emulparams/elf32moxie.sh \
   $(ELF_GEN_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 	${GENSCRIPTS} elf32moxie "$(tdir_moxie)"
 eelf32mrk3.c: $(srcdir)/emulparams/elf32mrk3.sh \
-  $(ELF_DEPS) ${GEN_DEPENDS}
+  $(ELF_DEPS) $(srcdir)/emultempl/mrk3.em ${GEN_DEPENDS}
 	${GENSCRIPTS} elf32mrk3 "$(tdir_mrk3)"
 eelf32mt.c: $(srcdir)/emulparams/elf32mt.sh \
   $(ELF_GEN_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}

@@ -41,6 +41,9 @@
 #define E_MRK3_MACH_MRK351 51
 #define E_MRK3_MACH_MRK36 6
 
+/* Section flags */
+#define SHF_MRK3_NON_RELAX 0x08000000
+
 /* Target Relocations.  */
 /* START_RELOC_NUMBERS (elf_mrk3_reloc_type)
      RELOC_NUMBER (R_MRK3_NONE,			0)
