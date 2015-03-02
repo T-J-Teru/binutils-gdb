@@ -1,3 +1,15 @@
+2015-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	Switch to 64-bit ELF format.
+	* Makefile.am: Rename dependecy files.
+	* Makefile.in: Regenerated.
+	* configure.tgt: Rename dependecy files.
+	* emulparams/elf32mrk3.sh: Moved to ...
+	* emulparams/elf64mrk3.sh: ... here.  Update OUTPUT_FORMAT.
+	* emultempl/mrk3.em: Update comment for 64-bit.
+	* scripttempl/mrk3.sc: Update OUTPUT_FORMAT, and make masks
+	64-bit.
+
 2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ld/Makefile.am: Add mrk3.em dependency.

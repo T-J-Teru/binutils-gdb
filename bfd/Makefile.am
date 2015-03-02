@@ -316,7 +316,7 @@ BFD32_BACKENDS = \
 	elf32-arc.lo \
 	elf32-arm.lo \
 	elf32-avr.lo \
-	elf32-mrk3.lo \
+	elf64-mrk3.lo \
 	elf32-bfin.lo \
 	elf32-cr16.lo \
 	elf32-cr16c.lo \
@@ -505,7 +505,7 @@ BFD32_BACKENDS_CFILES = \
 	elf32-arc.c \
 	elf32-arm.c \
 	elf32-avr.c \
-	elf32-mrk3.c \
+	elf64-mrk3.c \
 	elf32-bfin.c \
 	elf32-cr16.c \
 	elf32-cr16c.c \

@@ -355,7 +355,7 @@ case "${targ}" in
     ;;
 
   mrk3-*-*)
-    targ_defvec=bfd_elf32_mrk3_vec
+    targ_defvec=bfd_elf64_mrk3_vec
     ;;
 
   bfin-*-*)

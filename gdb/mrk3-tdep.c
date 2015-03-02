@@ -194,7 +194,7 @@ code addresses.
 #define NUM_PSEUDO_REGS (PSEUDO_END - PSEUDO_START + 1)
 #define NUM_REGS        (NUM_REAL_REGS + NUM_PSEUDO_REGS)
 
-#define MRK3_ELF_ADDRESS_SIZE 4
+#define MRK3_ELF_ADDRESS_SIZE 8
 
 #define MRK3_MEM_SPACE_BYTE(B) (((CORE_ADDR) B) << ((MRK3_ELF_ADDRESS_SIZE - 1) * 8))
 /* Memory spaces. A total of 4 bits are allocated for this. */
@@ -2606,8 +2606,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_int_bit (gdbarch, 2 * TARGET_CHAR_BIT);
   set_gdbarch_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
   set_gdbarch_long_long_bit (gdbarch, 8 * TARGET_CHAR_BIT);
-  set_gdbarch_ptr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
-  set_gdbarch_addr_bit (gdbarch, 4 * TARGET_CHAR_BIT);
+  set_gdbarch_ptr_bit (gdbarch, 8 * TARGET_CHAR_BIT);
+  set_gdbarch_addr_bit (gdbarch, 8 * TARGET_CHAR_BIT);
 
   set_gdbarch_float_bit (gdbarch, 2 * TARGET_CHAR_BIT);
   set_gdbarch_double_bit (gdbarch, 2 * TARGET_CHAR_BIT);

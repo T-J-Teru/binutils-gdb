@@ -166,7 +166,7 @@ elf32-am33lin.c
 elf32-arc.c
 elf32-arm.c
 elf32-avr.c
-elf32-mrk3.c
+elf64-mrk3.c
 elf32-bfin.c
 elf32-cr16.c
 elf32-cr16c.c

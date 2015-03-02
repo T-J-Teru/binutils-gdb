@@ -29,9 +29,9 @@
 
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
 
-#define MRK3_GET_MEMORY_SPACE_ID(ADDR) (((ADDR) >> 24) & 0xff)
-#define MRK3_GET_ADDRESS_LOCATION(ADDR) ((ADDR) & 0xffffff)
-#define MRK3_BUILD_ADDRESS(ID,LOC) (((ID & 0xff) << 24) | (LOC & 0xffffff))
+#define MRK3_GET_MEMORY_SPACE_ID(ADDR) (((ADDR) >> (64 - 8)) & 0xff)
+#define MRK3_GET_ADDRESS_LOCATION(ADDR) ((ADDR) & 0xffffffff)
+#define MRK3_BUILD_ADDRESS(ID,LOC) (((ID & 0xff) << (64 - 8)) | (LOC & 0xffffffff))
 
 static reloc_howto_type elf_mrk3_howto_table[] =
 {
@@ -49,20 +49,6 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 0,			/* Src_mask.  */
 	 0,			/* Dst_mask.  */
 	 FALSE),		/* PCrel_offset.  */
-  /* This relocation is for the target for a CALL instruction. */
-  HOWTO (R_MRK3_CALL16,         /* Type.  */
-	 0,                     /* Rightshift.  */
-	 2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-	 16,                    /* Bitsize.  */
-	 FALSE,                 /* PC_relative.  */
-	 16,                    /* Bitpos.  */
-	 complain_overflow_dont,/* Complain_on_overflow.  */
-	 bfd_elf_generic_reloc, /* Special_function.  */
-	 "R_MRK3_CALL16",       /* Name.  */
-	 TRUE,                  /* Partial_inplace.  */
-	 0xffff0000,            /* Src_mask.  */
-	 0xffff0000,            /* Dst_mask.  */
-	 FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_8,              /* Type.  */
 	 0,                     /* Rightshift.  */
 	 0,                     /* Size (0 = byte, 1 = short, 2 = long).  */
@@ -90,161 +76,162 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 0xffff,                /* Dst_mask.  */
 	 FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_32,             /* Type.  */
-   0,                     /* Rightshift.  */
-   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   32,                    /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   0,                     /* Bitpos.  */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_32",           /* Name.  */
-   TRUE,                  /* Partial_inplace.  */
-   0xffffffff,                /* Src_mask.  */
-   0xffffffff,                /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_HIGH16,         /* Type.  */
-   0,                     /* Rightshift.  */
-   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   16,                    /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   16,                    /* Bitpos. */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_HIGH16",       /* Name.  */
-   TRUE,                  /* Partial_inplace.  */
-   0xffff0000,            /* Src_mask.  */
-   0xffff0000,            /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_WORD16,             /* Type.  */
-   1,                     /* Rightshift.  */
-   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   16,                    /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   0,                     /* Bitpos.  */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_WORD16",       /* Name.  */
-   TRUE,                  /* Partial_inplace.  */
-   0x1ffff,                /* Src_mask.  */
-   0xffff,                /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_ABS_HI,         /* Type.  */
-   16,                     /* Rightshift.  */
-   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   32,                    /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   16,                    /* Bitpos. */
-   complain_overflow_dont, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_ABS_HI",       /* Name.  */
-   FALSE,                  /* Partial_inplace.  */
-   0xffff0000,            /* Src_mask.  */
-   0xffff0000,            /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_ABS_LO,         /* Type.  */
-   0,                     /* Rightshift.  */
-   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   32,                    /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   16,                    /* Bitpos. */
-   complain_overflow_dont, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_ABS_LO",       /* Name.  */
-   FALSE,                  /* Partial_inplace.  */
-   0xffff0000,            /* Src_mask.  */
-   0xffff0000,            /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_AUTO16,             /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         32,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         0,                     /* Bitpos.  */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_32",           /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xffffffff,            /* Src_mask.  */
+         0xffffffff,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_64,             /* Type.  */
+         0,                     /* Rightshift.  */
+         4,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         64,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         0,                     /* Bitpos.  */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_64",           /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xffffffffffffffff,    /* Src_mask.  */
+         0xffffffffffffffff,    /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  /* This relocation is for the target for a CALL instruction. */
+  HOWTO (R_MRK3_CALL16,         /* Type.  */
 	 0,                     /* Rightshift.  */
-	 1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+	 2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
 	 16,                    /* Bitsize.  */
 	 FALSE,                 /* PC_relative.  */
-	 0,                     /* Bitpos.  */
-	 complain_overflow_bitfield, /* Complain_on_overflow.  */
+	 16,                    /* Bitpos.  */
+	 complain_overflow_dont,/* Complain_on_overflow.  */
 	 bfd_elf_generic_reloc, /* Special_function.  */
-	 "R_MRK3_AUTO16",       /* Name.  */
+	 "R_MRK3_CALL16",       /* Name.  */
 	 TRUE,                  /* Partial_inplace.  */
-	 0x1ffff,                /* Src_mask.  */
-	 0xffff,                /* Dst_mask.  */
+	 0xffff0000,            /* Src_mask.  */
+	 0xffff0000,            /* Dst_mask.  */
 	 FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_PCREL16,             /* Type.  */
-   0,                     /* Rightshift.  */
-   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   16,                    /* Bitsize.  */
-   TRUE,                  /* PC_relative.  */
-   16,                     /* Bitpos.  */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc,  /* Special_function.  */
-   "R_MRK3_PCREL16",       /* Name.  */
-   TRUE,                   /* Partial_inplace.  */
-   0xffff,                 /* Src_mask.  */
-   0xffff0000,             /* Dst_mask.  */
-   FALSE),                 /* PCrel_offset.  */
-  HOWTO (R_MRK3_PCREL8,             /* Type.  */
-   0,                     /* Rightshift.  */
-   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   8,                     /* Bitsize.  */
-   TRUE,                  /* PC_relative.  */
-   0,                     /* Bitpos.  */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc,  /* Special_function.  */
-   "R_MRK3_PCREL8",       /* Name.  */
-   TRUE,                   /* Partial_inplace.  */
-   0xff,                 /* Src_mask.  */
-   0x00ff,             /* Dst_mask.  */
-   FALSE),                 /* PCrel_offset.  */
-  HOWTO (R_MRK3_FORCEPCREL16,             /* Type.  */
-   0,                     /* Rightshift.  */
-   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   16,                    /* Bitsize.  */
-   TRUE,                  /* PC_relative.  */
-   16,                     /* Bitpos.  */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc,  /* Special_function.  */
-   "R_MRK3_FORCEPCREL16",       /* Name.  */
-   TRUE,                   /* Partial_inplace.  */
-   0xffff,                 /* Src_mask.  */
-   0xffff0000,             /* Dst_mask.  */
-   FALSE),                 /* PCrel_offset.  */
-  HOWTO (R_MRK3_FORCEPCREL8,             /* Type.  */
-   0,                     /* Rightshift.  */
-   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   8,                     /* Bitsize.  */
-   TRUE,                  /* PC_relative.  */
-   0,                     /* Bitpos.  */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc,  /* Special_function.  */
-   "R_MRK3_FORCEPCREL8",       /* Name.  */
-   TRUE,                   /* Partial_inplace.  */
-   0xff,                 /* Src_mask.  */
-   0x00ff,             /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_CONST4,   /* Type.  */
-   0,                     /* Rightshift.  */
-   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   4,                     /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   3,                     /* Bitpos. */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_CONST4",       /* Name.  */
-   TRUE,                  /* Partial_inplace.  */
-   0xf,                   /* Src_mask.  */
-   0x78,                  /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
-  HOWTO (R_MRK3_CALL14,   /* Type.  */
-   0,                     /* Rightshift.  */
-   1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-   14,                    /* Bitsize.  */
-   FALSE,                 /* PC_relative.  */
-   0,                     /* Bitpos. */
-   complain_overflow_bitfield, /* Complain_on_overflow.  */
-   bfd_elf_generic_reloc, /* Special_function.  */
-   "R_MRK3_CALL14",       /* Name.  */
-   TRUE,                  /* Partial_inplace.  */
-   0x3fff,                /* Src_mask.  */
-   0x3fff,                /* Dst_mask.  */
-   FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_CALL14,         /* Type.  */
+         0,                     /* Rightshift.  */
+         1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         14,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         0,                     /* Bitpos. */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_CALL14",       /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0x3fff,                /* Src_mask.  */
+         0x3fff,                /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_HIGH16,         /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         16,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         16,                    /* Bitpos. */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_HIGH16",       /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xffff0000,            /* Src_mask.  */
+         0xffff0000,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_ABS_HI,         /* Type.  */
+         16,                    /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         32,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         16,                    /* Bitpos. */
+         complain_overflow_dont,/* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_ABS_HI",       /* Name.  */
+         FALSE,                 /* Partial_inplace.  */
+         0xffff0000,            /* Src_mask.  */
+         0xffff0000,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_ABS_LO,         /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         32,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         16,                    /* Bitpos. */
+         complain_overflow_dont,/* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_ABS_LO",       /* Name.  */
+         FALSE,                 /* Partial_inplace.  */
+         0xffff0000,            /* Src_mask.  */
+         0xffff0000,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_PCREL16,        /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         16,                    /* Bitsize.  */
+         TRUE,                  /* PC_relative.  */
+         16,                    /* Bitpos.  */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_PCREL16",      /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xffff,                /* Src_mask.  */
+         0xffff0000,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_PCREL8,         /* Type.  */
+         0,                     /* Rightshift.  */
+         1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         8,                     /* Bitsize.  */
+         TRUE,                  /* PC_relative.  */
+         0,                     /* Bitpos.  */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_PCREL8",       /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xff,                  /* Src_mask.  */
+         0x00ff,                /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_FORCEPCREL16,   /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         16,                    /* Bitsize.  */
+         TRUE,                  /* PC_relative.  */
+         16,                    /* Bitpos.  */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_FORCEPCREL16", /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xffff,                /* Src_mask.  */
+         0xffff0000,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_FORCEPCREL8,    /* Type.  */
+         0,                     /* Rightshift.  */
+         1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         8,                     /* Bitsize.  */
+         TRUE,                  /* PC_relative.  */
+         0,                     /* Bitpos.  */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_FORCEPCREL8",  /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xff,                  /* Src_mask.  */
+         0x00ff,                /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_CONST4,         /* Type.  */
+         0,                     /* Rightshift.  */
+         1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         4,                     /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         3,                     /* Bitpos. */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_CONST4",       /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0xf,                   /* Src_mask.  */
+         0x78,                  /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
@@ -260,11 +247,12 @@ static const struct mrk3_reloc_map mrk3_reloc_map[] =
   { BFD_RELOC_NONE, R_MRK3_NONE },
   { BFD_RELOC_8,    R_MRK3_8 },
   { BFD_RELOC_16,   R_MRK3_16 },
-  { BFD_RELOC_32,   R_MRK3_32 }
+  { BFD_RELOC_32,   R_MRK3_32 },
+  { BFD_RELOC_64,   R_MRK3_64 }
 };
 
 static reloc_howto_type *
-bfd_elf32_bfd_reloc_type_lookup (bfd *abfd ATTRIBUTE_UNUSED,
+bfd_elf64_bfd_reloc_type_lookup (bfd *abfd ATTRIBUTE_UNUSED,
 				 bfd_reloc_code_real_type code)
 {
   unsigned int i;
@@ -277,7 +265,7 @@ bfd_elf32_bfd_reloc_type_lookup (bfd *abfd ATTRIBUTE_UNUSED,
 }
 
 static reloc_howto_type *
-bfd_elf32_bfd_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED,
+bfd_elf64_bfd_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED,
 				 const char *r_name)
 {
   unsigned int i;
@@ -301,7 +289,7 @@ mrk3_info_to_howto_rel (bfd *abfd ATTRIBUTE_UNUSED,
 {
   unsigned int r_type;
 
-  r_type = ELF32_R_TYPE (dst->r_info);
+  r_type = ELF64_R_TYPE (dst->r_info);
   BFD_ASSERT (r_type < (unsigned int) R_MRK3_max);
   cache_ptr->howto = &elf_mrk3_howto_table[r_type];
 }
@@ -531,7 +519,7 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
 
   if ((input_section->flags & SEC_DEBUGGING) != 0
       && !howto->pc_relative
-      && howto->bitsize == 32)
+      && (howto->bitsize == 32 || howto->bitsize == 64))
     relocation = MRK3_BUILD_ADDRESS (relocation_memory_id, relocation);
 
   /* Now call the standard bfd routine to handle a single relocation.  */
@@ -600,9 +588,9 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
       const char *                 name = NULL;
       int                          r_type ATTRIBUTE_UNUSED;
 
-      r_type = ELF32_R_TYPE (rel->r_info);
-      r_symndx = ELF32_R_SYM (rel->r_info);
-      howto  = elf_mrk3_howto_table + ELF32_R_TYPE (rel->r_info);
+      r_type = ELF64_R_TYPE (rel->r_info);
+      r_symndx = ELF64_R_SYM (rel->r_info);
+      howto  = elf_mrk3_howto_table + ELF64_R_TYPE (rel->r_info);
       h      = NULL;
       sym    = NULL;
       sec    = NULL;
@@ -705,10 +693,10 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
   return TRUE;
 }
 
-#define TARGET_LITTLE_SYM   bfd_elf32_mrk3_vec
-#define TARGET_LITTLE_NAME  "elf32-mrk3"
-/*#define TARGET_BIG_SYM      bfd_elf32_mrk3_vec*/
-/*#define TARGET_BIG_NAME     "elf32-mrk3"*/
+#define TARGET_LITTLE_SYM   bfd_elf64_mrk3_vec
+#define TARGET_LITTLE_NAME  "elf64-mrk3"
+/*#define TARGET_BIG_SYM      bfd_elf64_mrk3_vec*/
+/*#define TARGET_BIG_NAME     "elf64-mrk3"*/
 #define ELF_ARCH            bfd_arch_mrk3
 #define ELF_MACHINE_CODE    EM_MRK3
 #define ELF_MAXPAGESIZE     0x1000
@@ -720,4 +708,4 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 
 #define elf_backend_can_gc_sections         1
 
-#include "elf32-target.h"
+#include "elf64-target.h"

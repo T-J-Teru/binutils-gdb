@@ -2,19 +2,19 @@
 # (This linker script is not parameratised at all)
 
 cat <<EOF
-OUTPUT_FORMAT("elf32-mrk3", "elf32-mrk3", "elf32-mrk3")
+OUTPUT_FORMAT("elf64-mrk3", "elf64-mrk3", "elf64-mrk3")
 OUTPUT_ARCH(mrk3)
 
 /* Set up some symbols to be used in building the origin addresses of
    memory regions.  The memory space id values used here must not
    change, they are known throughout the toolchain.*/
 
-MRK3_MEM_SPACE_SYS  = 0x10000000;
-MRK3_MEM_SPACE_USER = 0x20000000;
-MRK3_MEM_SPACE_SSYS = 0x40000000;
+MRK3_MEM_SPACE_SYS  = 0x1000000000000000;
+MRK3_MEM_SPACE_USER = 0x2000000000000000;
+MRK3_MEM_SPACE_SSYS = 0x4000000000000000;
 
-MRK3_MEM_TYPE_DATA  = 0x00000000;
-MRK3_MEM_TYPE_CODE  = 0x01000000;
+MRK3_MEM_TYPE_DATA  = 0x0000000000000000;
+MRK3_MEM_TYPE_CODE  = 0x0100000000000000;
 
 ENTRY (_start)
 

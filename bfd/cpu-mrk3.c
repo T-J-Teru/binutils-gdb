@@ -53,7 +53,7 @@ bfd_arch_mrk3_fill (bfd_size_type count,
 const bfd_arch_info_type bfd_mrk3_arch =
 {
   16,                     /* bits per word */
-  32,                     /* bits per address */
+  64,                     /* bits per address */
   8,                      /* bits per byte */
   bfd_arch_mrk3,          /* architecture */
   bfd_mach_mrk3,          /* machine */

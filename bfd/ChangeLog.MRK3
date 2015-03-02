@@ -1,3 +1,19 @@
+2015-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	Switch to 64-bit ELF format.
+	* Makefile.am: Use elf64-mrk3.c not elf32-mrk3.c.
+	* Makefile.in: Regenerate.
+	* config.bfd: Rename variable to elf64.
+	* configure: Regenerate.
+	* configure.in: Rename dependencies from elf32 to elf64.
+	* cpu-mrk3.c: Update, now have 64 bits in an address.
+	* elf32-mrk3.c: Moved...
+	* elf64-mrk3.c: ...to here. Adjustments thoughout file to move to
+	64-bit ELF format, adjusting masks, rename functions.  Reordered
+	the relocation list to match order defined by llvm.
+	* po/SRC-POTFILES.in: Regenerate
+	* targets.c: Rename target from elf32 to elf64.
+
 2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf32-mrk3.c (mrk3_final_link_relocate): Cast bfd_vma to

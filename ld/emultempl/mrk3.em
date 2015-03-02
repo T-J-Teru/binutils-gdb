@@ -19,7 +19,7 @@
 # MA 02110-1301, USA.
 #
 
-# This file is sourced from elf32.em, and defines extra mrk3
+# This file is sourced from elf64.em, and defines extra mrk3
 # specific routines.
 #
 fragment <<EOF
