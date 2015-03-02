@@ -786,7 +786,7 @@ proc run_dump_test { name {extra_options {}} } {
     }
 
     # Assemble each file.
-    set objfiles {}x
+    set objfiles {}
     for { set i 0 } { $i < [llength $sourcefiles] } { incr i } {
 	set sourcefile [lindex $sourcefiles $i]
 	set sourceasflags [lindex $asflags $i]

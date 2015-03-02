@@ -1,0 +1,4 @@
+2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* lib/ld-lib.exp (run_dump_test): Remove typo from commit
+	0d669a4f.
