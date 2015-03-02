@@ -53,10 +53,10 @@ static reloc_howto_type elf_mrk3_howto_table[] =
   HOWTO (R_MRK3_CALL16,         /* Type.  */
 	 0,                     /* Rightshift.  */
 	 2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
-	 32,                    /* Bitsize.  */
+	 16,                    /* Bitsize.  */
 	 FALSE,                 /* PC_relative.  */
 	 16,                    /* Bitpos.  */
-	 complain_overflow_bitfield, /* Complain_on_overflow.  */
+	 complain_overflow_dont,/* Complain_on_overflow.  */
 	 bfd_elf_generic_reloc, /* Special_function.  */
 	 "R_MRK3_CALL16",       /* Name.  */
 	 TRUE,                  /* Partial_inplace.  */
@@ -307,14 +307,15 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
 			  Elf_Internal_Rela * rel,
 			  bfd_vma             relocation,
 			  asection *          symbol_section,
-			  const char *        symbol_name ATTRIBUTE_UNUSED)
+			  const char *        symbol_name ATTRIBUTE_UNUSED,
+                          struct elf_link_hash_entry * h)
 {
   bfd_vma offset = rel->r_offset;
   bfd_vma addend = rel->r_addend;
   bfd_vma address = (input_section->output_section->vma
                      + input_section->output_offset
                      + offset);
-  bfd_vma address_space_id;
+  bfd_vma relocation_memory_id, address_location;
 
   /* Sanity check the address.  */
   if (offset > bfd_get_section_limit (input_bfd, input_section))
@@ -359,11 +360,11 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
      identifier on RELOCATION is zero, this usually implies that we are
      relocating against an undefined (weak) symbol.  */
 
-  address_space_id = MRK3_GET_MEMORY_SPACE_ID (relocation);
+  relocation_memory_id = MRK3_GET_MEMORY_SPACE_ID (relocation);
 
   if (howto->pc_relative
-      && address_space_id != 0
-      && address_space_id != MRK3_GET_MEMORY_SPACE_ID (address))
+      && relocation_memory_id != 0
+      && relocation_memory_id != MRK3_GET_MEMORY_SPACE_ID (address))
     _bfd_error_handler
       (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT
          "x is pc-relative across address spaces, %#08lx to %#08lx"),
@@ -381,8 +382,9 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
      targets pcrel_offset is TRUE.  If pcrel_offset is FALSE we do not
      need to subtract out the offset of the location within the
      section (which is just ADDRESS).  */
+  address_location = MRK3_GET_ADDRESS_LOCATION (address);
   if (howto->pc_relative)
-    relocation -= MRK3_GET_ADDRESS_LOCATION (address);
+    relocation -= address_location;
 
   /* If the symbol being targeted is a code symbol, and the relocation is
      NOT located inside debugging information then we should scale the
@@ -393,18 +395,49 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
     {
       if (relocation & 1)
         _bfd_error_handler
-          (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT
-             "x references code, but has least significant bit set (%#08lx)"),
+          (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT"x "
+             "references code, but has least significant bit "
+             "set (0x%"BFD_VMA_FMT"x)"),
            input_bfd, input_section->name, offset, relocation);
+      if (address_location & 1)
+        _bfd_error_handler
+          (_("warning: %B relocation at %s + 0x%"BFD_VMA_FMT"x "
+             "references code, but is at an unaligned address "
+             " 0x%"BFD_VMA_FMT"x"),
+           input_bfd, input_section->name, offset, address_location);
 
-      /* Scale the byte address into a 16-bit word address.  */
+      /* Scale the byte addresses into a 16-bit word address.  */
       relocation >>= 1;
+      address_location >>= 1;
+    }
+
+  /* It is important that this overflow check is performed after we have
+     changed addresses from byte addresses to word addresses where
+     appropriate, otherwise the BITWSIZE below would be wrong.  */
+  if (howto->type == R_MRK3_CALL16)
+    {
+      unsigned int bitsize = howto->bitsize;
+
+      /* Call instructions to undefined weak symbols are patched to jump
+         address zero within the current call sized page.  */
+      if ((h && h->root.type == bfd_link_hash_undefweak)
+          || bfd_is_und_section (symbol_section))
+        relocation = address_location & ~((1 << bitsize) - 1);
+
+      /* Compare the address of the relocation with the address of the
+         destination.  Only BITSIZE least significant bits are allowed to
+         vary between the two addresses, the remainder must match.  */
+      if ((address_location >> bitsize) != (relocation >> bitsize))
+        return bfd_reloc_overflow;
+
+      /* The generic overflow check in common code is disabled for call
+         style relocations, so nothing more is required here.  */
     }
 
   if ((input_section->flags & SEC_DEBUGGING) != 0
       && !howto->pc_relative
       && howto->bitsize == 32)
-    relocation = MRK3_BUILD_ADDRESS (address_space_id, relocation);
+    relocation = MRK3_BUILD_ADDRESS (relocation_memory_id, relocation);
 
   /* Now call the standard bfd routine to handle a single relocation.  */
   return _bfd_relocate_contents (howto, input_bfd, relocation,
@@ -526,7 +559,7 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 
       /* Finally, the sole MRK3-specific part.  */
       r = mrk3_final_link_relocate (howto, input_bfd, input_section,
-                                    contents, rel, relocation, sec, name);
+                                    contents, rel, relocation, sec, name, h);
 
       if (r != bfd_reloc_ok)
 	{

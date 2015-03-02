@@ -1,3 +1,14 @@
+2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-mrk3.c (elf_mrk3_howto_table): Change bitsize of
+	R_MRK3_CALL16 to 16 bits and turn off overflow check.
+	(mrk3_final_link_relocate): Add link hash parameter.  Rename
+	address_space_id to relocation_memory_id.  Scale both the
+	relocation destination address and the source address.  Perform
+	special overflow checking for R_MRK3_CALL16 including weak
+	undefined symbol handling.
+	(mrk3_elf_relocate_section): Add link hash parameter.
+
 2015-02-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf32-mrk3 (elf_mrk3_howto_table): Change bitsize of
