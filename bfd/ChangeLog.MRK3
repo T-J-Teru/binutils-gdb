@@ -1,5 +1,10 @@
 2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf32-mrk3.c (mrk3_final_link_relocate): Cast bfd_vma to
+	bfd_signed_vma before shifting.
+
+2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf32-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_CONST4 and
 	R_MRK3_CALL14 entries.
 	(mrk3_final_link_relocate_const4): New function.

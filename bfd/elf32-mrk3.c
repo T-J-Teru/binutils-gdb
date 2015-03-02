@@ -501,8 +501,8 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
            input_bfd, input_section->name, offset, address_location);
 
       /* Scale the byte addresses into a 16-bit word address.  */
-      relocation >>= 1;
-      address_location >>= 1;
+      relocation = ((bfd_signed_vma) relocation) >> 1;
+      address_location = ((bfd_signed_vma) address_location) >> 1;
     }
 
   /* It is important that this overflow check is performed after we have
