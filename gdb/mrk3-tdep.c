@@ -238,21 +238,6 @@ struct mrk3_frame_cache
   struct trad_frame_saved_reg *saved_regs;
 };
 
-/* Structure describing architecture specific types. */
-struct gdbarch_tdep
-{
-  /* Number of bytes stored to the stack by call instructions. */
-  int call_length;
-
-  /* Type for void.  */
-  struct type *void_type;
-  /* Type for a function returning void.  */
-  struct type *func_void_type;
-  /* Type for a pointer to a function.  Used for the type of PC.  */
-  struct type *pc_type;
-};
-
-
 /*! Global debug flag */
 int  mrk3_debug;
 
@@ -2597,7 +2582,6 @@ static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   struct gdbarch *gdbarch;
-  struct gdbarch_tdep *tdep;
 
   /* This is a horrible temporary kludge to deal with the problem that
      the Target compiler generates a big-endian ELF file for a
@@ -2611,9 +2595,7 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     return arches->gdbarch;
 
   /* Create a new architecture from the information provided. */
-  tdep = XMALLOC (struct gdbarch_tdep);
-  gdbarch = gdbarch_alloc (&info, tdep);  /* @todo: Can we use NULL for tdep?
-					     We do never use tdep anyway. */
+  gdbarch = gdbarch_alloc (&info, NULL);
   set_gdbarch_address_class_type_flags (gdbarch,
 					mrk3_address_class_type_flags);
   set_gdbarch_short_bit (gdbarch, 1 * TARGET_CHAR_BIT);
@@ -2681,16 +2663,6 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   return gdbarch;
 }
 
-/*! Dump out the target specific information. Currently we have none. */
-static void
-mrk3_dump_tdep (struct gdbarch *gdbarch, struct ui_file *file)
-{
-  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
-  fprintf_unfiltered (file, "MRK3: No target dependencies to dump\n");
-
-}	/* mrk3_dump_tdep () */
-
-
 /*! Handler for the inferior stopping.
 
   We use this to flush the cache of the memory space.
@@ -2714,7 +2686,7 @@ extern initialize_file_ftype _initialize_mrk3_tdep;
 void
 _initialize_mrk3_tdep (void)
 {
-  gdbarch_register (bfd_arch_mrk3, mrk3_gdbarch_init, mrk3_dump_tdep);
+  gdbarch_register (bfd_arch_mrk3, mrk3_gdbarch_init, NULL);
 
   /* Add ourselves to normal_stop event chain, which we can use to invalidate
      the cached address space value. */
