@@ -194,21 +194,27 @@ code addresses.
 #define NUM_PSEUDO_REGS (PSEUDO_END - PSEUDO_START + 1)
 #define NUM_REGS        (NUM_REAL_REGS + NUM_PSEUDO_REGS)
 
+#define MRK3_ELF_ADDRESS_SIZE 4
+
+#define MRK3_MEM_SPACE_BYTE(B) (((CORE_ADDR) B) << ((MRK3_ELF_ADDRESS_SIZE - 1) * 8))
 /* Memory spaces. A total of 4 bits are allocated for this. */
-static const uint32_t  MRK3_MEM_SPACE_MASK = 0xf0000000;
-static const uint32_t  MRK3_MEM_SPACE_NONE = 0x00000000;
-static const uint32_t  MRK3_MEM_SPACE_SYS  = 0x10000000;
-static const uint32_t  MRK3_MEM_SPACE_APP1 = 0x20000000;
-static const uint32_t  MRK3_MEM_SPACE_APP2 = 0x30000000;
-static const uint32_t  MRK3_MEM_SPACE_SSYS = 0x40000000;
+static const CORE_ADDR MRK3_MEM_SPACE_MASK = MRK3_MEM_SPACE_BYTE(0xf0);
+static const CORE_ADDR MRK3_MEM_SPACE_NONE = MRK3_MEM_SPACE_BYTE(0x00);
+static const CORE_ADDR MRK3_MEM_SPACE_SYS  = MRK3_MEM_SPACE_BYTE(0x10);
+static const CORE_ADDR MRK3_MEM_SPACE_APP1 = MRK3_MEM_SPACE_BYTE(0x20);
+static const CORE_ADDR MRK3_MEM_SPACE_APP2 = MRK3_MEM_SPACE_BYTE(0x30);
+static const CORE_ADDR MRK3_MEM_SPACE_SSYS = MRK3_MEM_SPACE_BYTE(0x40);
 
 /* Memory types. One bit to indicate code or data. */
-static const uint32_t  MRK3_MEM_TYPE_MASK = 0x01000000;
-static const uint32_t  MRK3_MEM_TYPE_DATA = 0x00000000;
-static const uint32_t  MRK3_MEM_TYPE_CODE = 0x01000000;
+static const CORE_ADDR MRK3_MEM_TYPE_MASK = MRK3_MEM_SPACE_BYTE(0x01);
+static const CORE_ADDR MRK3_MEM_TYPE_DATA = MRK3_MEM_SPACE_BYTE(0x00);
+static const CORE_ADDR MRK3_MEM_TYPE_CODE = MRK3_MEM_SPACE_BYTE(0x01);
 
 /* General mask */
-static const uint32_t  MRK3_MEM_MASK = 0xff000000;
+static const CORE_ADDR MRK3_MEM_MASK = MRK3_MEM_SPACE_BYTE(0xff);
+#undef MRK3_MEM_SPACE_BYTE
+
+#define PRIxMEM_SPACE "08lx"
 
 /* Define the breakpoint instruction which is inserted by GDB into the target
    code. This must be exactly the same as the simulator expects.
@@ -331,16 +337,16 @@ mrk3_invalidate_memspace_cache (void)
 /*! Get the current memory space from the target.
 
    TODO: Is RCmd the best way to do this? */
-static uint32_t
+static CORE_ADDR
 mrk3_get_memspace (void)
 {
-  static uint32_t  cached_memspace;
+  static CORE_ADDR cached_memspace;
   struct ui_file *mf;
   struct cleanup *old_chain;
   char buf[64];
 
   if (mrk3_memspace_valid_p)
-    return  cached_memspace;
+    return cached_memspace;
 
   /* TODO: We can't tell if we have a valid target function here, because it
      is set to a value static within target.c (tcomplain). So we'll need to
@@ -366,15 +372,16 @@ mrk3_get_memspace (void)
     {
       /* The value is returned as a 32 bit value, with the flags in the top 4
 	 bits. */
-      long unsigned int res = strtol (buf, NULL, 16);
+      CORE_ADDR res =
+	(CORE_ADDR) strtoll (buf, NULL, 16);
       if (mrk3_debug_memspace ())
-	fprintf_unfiltered (gdb_stdlog,
-			    _("MRK3: memory space buf \"%s\", val 0x%08lx.\n"),
-			    buf, res);
+	fprintf_unfiltered (gdb_stdlog, _("MRK3: memory space buf "
+					  "\"%s\", val 0x%" PRIxMEM_SPACE
+					  ".\n"), buf, res);
       do_cleanups (old_chain);
       cached_memspace = res & MRK3_MEM_SPACE_MASK;
       mrk3_memspace_valid_p = 1;
-      return  cached_memspace;
+      return cached_memspace;
     }
 }	/* mrk3_get_memspace () */
 
@@ -383,7 +390,7 @@ mrk3_get_memspace (void)
 static int
 mrk3_is_ssys_memspace (void)
 {
-  uint32_t ms = mrk3_get_memspace ();
+  CORE_ADDR ms = mrk3_get_memspace ();
   return ms == MRK3_MEM_SPACE_SSYS;
 }
 
@@ -392,7 +399,7 @@ mrk3_is_ssys_memspace (void)
 static int
 mrk3_is_sys_memspace (void)
 {
-  uint32_t ms = mrk3_get_memspace ();
+  CORE_ADDR ms = mrk3_get_memspace ();
   return ms == MRK3_MEM_SPACE_SYS;
 }
 
@@ -401,7 +408,7 @@ mrk3_is_sys_memspace (void)
 static int
 mrk3_is_usr_memspace (void)
 {
-  uint32_t ms = mrk3_get_memspace ();
+  CORE_ADDR ms = mrk3_get_memspace ();
   return (ms == MRK3_MEM_SPACE_APP1) || (ms == MRK3_MEM_SPACE_APP2);
 }
 
@@ -587,8 +594,8 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 
       if (mrk3_debug_memspace ())
 	fprintf_unfiltered (gdb_stdlog,
-			    _("MRK3: memspace for SP read is 0x%08x.\n"),
-			    mrk3_get_memspace ());
+			    _("MRK3: memspace for SP read is 0x%"
+			      PRIxMEM_SPACE ".\n"), mrk3_get_memspace ());
       if (mrk3_is_ssys_memspace ())
 	raw_regnum = MRK3_SSSP_REGNUM;
       else if (mrk3_is_sys_memspace ())
@@ -597,8 +604,8 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 	raw_regnum = MRK3_USP_REGNUM;
       else
 	{
-	  warning (_("MRK3: invalid SP read mem space 0x%08x."),
-		   mrk3_get_memspace ());
+	  warning (_("MRK3: invalid SP read mem space 0x%"
+		     PRIxMEM_SPACE "."), mrk3_get_memspace ());
 	  raw_regnum = MRK3_SSSP_REGNUM;
 	}
 
@@ -724,8 +731,8 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
     {
       if (mrk3_debug_memspace ())
 	fprintf_unfiltered (gdb_stdlog,
-			    _("MRK3: memspace for SP write is 0x%08x.\n"),
-			    mrk3_get_memspace ());
+			    _("MRK3: memspace for SP write is 0x%"
+			      PRIxMEM_SPACE ".\n"), mrk3_get_memspace ());
     case MRK3_SP_REGNUM:
       if (mrk3_is_ssys_memspace ())
 	raw_regnum = MRK3_SSSP_REGNUM;
@@ -735,8 +742,8 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 	raw_regnum = MRK3_USP_REGNUM;
       else
 	{
-	  warning (_("MRK3: invalid SP write mem space 0x%08x."),
-		   mrk3_get_memspace ());
+	  warning (_("MRK3: invalid SP write mem space 0x%"
+		     PRIxMEM_SPACE "."), mrk3_get_memspace ());
 	  raw_regnum = MRK3_SSSP_REGNUM;
 	}
 
@@ -906,7 +913,7 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
 static int
 mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
 {
-  uint32_t regnr;
+  int regnr;
   switch (dwarf2_regnr)
     {
     case 0:
@@ -1142,10 +1149,8 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
   @return  The address. */
 
 static CORE_ADDR
-mrk3_p2a (struct gdbarch *gdbarch,
-	  int             is_code,
-	  uint32_t        memspace,
-	  CORE_ADDR       ptr)
+mrk3_p2a (struct gdbarch *gdbarch, int is_code,
+	  CORE_ADDR memspace, CORE_ADDR ptr)
 {
   CORE_ADDR addr;
 
@@ -1216,9 +1221,8 @@ mrk3_a2p (struct gdbarch *gdbarch,
 
    @return  Address withouts its address space and code/data bits. */
 static CORE_ADDR
-mrk3_addr_bits_add (int        is_code,
-		     uint32_t   memspace,
-		     CORE_ADDR  addr)
+mrk3_addr_bits_add (int is_code, CORE_ADDR memspace,
+		    CORE_ADDR addr)
 {
   return (addr & ~MRK3_MEM_MASK) | memspace
     | (is_code ? MRK3_MEM_TYPE_CODE : MRK3_MEM_TYPE_DATA);
@@ -1284,7 +1288,7 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
   int  is_code = TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
     || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
     || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type));
-  uint32_t  memspace = mrk3_get_memspace ();
+  CORE_ADDR memspace = mrk3_get_memspace ();
   CORE_ADDR ptr = mrk3_a2p (gdbarch,
 			    mrk3_addr_bits_add (is_code, memspace, addr));
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
@@ -1313,7 +1317,7 @@ mrk3_read_pc (struct regcache *regcache)
   CORE_ADDR pcaddr;
 
   struct gdbarch *gdbarch = get_regcache_arch (regcache);
-  uint32_t  memspace = mrk3_get_memspace ();
+  CORE_ADDR memspace = mrk3_get_memspace ();
   regcache_cooked_read_unsigned (regcache, MRK3_PC_REGNUM, &pcptr);
   pcaddr = mrk3_p2a (gdbarch, 1, memspace, pcptr);
 
@@ -1578,7 +1582,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 		       struct mrk3_frame_cache *this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
-  uint32_t  memspace = mrk3_get_memspace ();
+  CORE_ADDR memspace = mrk3_get_memspace ();
 
   /* Function starts are symbols, so GDB addresses, _without_ flag bits. */
   CORE_ADDR  func_start = get_frame_func (this_frame);
@@ -1941,7 +1945,7 @@ mrk3_frame_this_id (struct frame_info *this_frame,
 
   if (base)
     {
-      uint32_t  memspace = mrk3_get_memspace ();
+      CORE_ADDR memspace = mrk3_get_memspace ();
       CORE_ADDR pc = get_frame_func (this_frame);
 
       /* Frame ID's always use full GDB addresses */

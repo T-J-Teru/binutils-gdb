@@ -1,5 +1,36 @@
 2015-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (MRK3_ELF_ADDRESS_SIZE): Define.
+	(MRK3_MEM_SPACE_BYTE): Define, use, then undefine.
+	(MRK3_MEM_SPACE_MASK): Define using MRK3_MEM_SPACE_BYTE.
+	(MRK3_MEM_SPACE_NONE): Likewise.
+	(MRK3_MEM_SPACE_SYS): Likewise.
+	(MRK3_MEM_SPACE_APP1): Likewise.
+	(MRK3_MEM_SPACE_APP2): Likewise.
+	(MRK3_MEM_SPACE_SSYS): Likewise.
+	(MRK3_MEM_TYPE_MASK): Likewise.
+	(MRK3_MEM_TYPE_DATA): Likewise.
+	(MRK3_MEM_TYPE_CODE): Likewise.
+	(MRK3_MEM_MASK): Likewise.
+        (PRIxMEM_SPACE): Define.
+	(mrk3_get_memspace): Update types to CORE_ADDR.  Some whitespace
+	cleanups.  Parse string from gdbserver as long long.  Use new
+	print format string.
+	(mrk3_is_ssys_memspace): Use CORE_ADDR type.
+	(mrk3_is_sys_memspace): Likewise.
+        (mrk3_pseudo_register_read): Use new print format string.
+        (mrk3_pseudo_register_write): Likewise.
+	(mrk3_dwarf2_reg_to_regnum): Use int within function to match
+	return type.
+	(mrk3_p2a): Use CORE_ADDR type.
+	(mrk3_addr_bits_add): Likewise.
+	(mrk3_address_to_pointer): Likewise.
+	(mrk3_read_pc): Likewise.
+	(mrk3_analyze_prologue): Likewise.
+	(mrk3_frame_this_id): Likewise.
+
+2015-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (struct gdbarch_tdep): Delete.
 	(mrk3_gdbarch_init): Don't initialise architecture specific tdep
 	field.
