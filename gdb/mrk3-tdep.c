@@ -151,7 +151,13 @@ code addresses.
 
 /* Useful register numbers - CPU registers */
 #define MRK3_R0_REGNUM     0
-#define MRK3_FP_REGNUM     6
+#define MRK3_R1_REGNUM     1
+#define MRK3_R2_REGNUM     2
+#define MRK3_R3_REGNUM     3
+#define MRK3_R4_REGNUM     4
+#define MRK3_R5_REGNUM     5
+#define MRK3_R6_REGNUM     6
+#define MRK3_FP_REGNUM     MRK3_R6_REGNUM
 #define MRK3_PC_REGNUM     7
 #define MRK3_PSW_REGNUM    8
 #define MRK3_SSSP_REGNUM   9
@@ -916,210 +922,30 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
   int regnr;
   switch (dwarf2_regnr)
     {
-    case 0:
-      regnr = 0;
-      break;			/*  AUSP (?) */
-    case 1:
-      regnr = MRK3_PC_REGNUM;
-      break;			/*  PC */
-    case 2:
-      regnr = MRK3_PC_REGNUM;
-      break;			/*  PC16 */
-    case 3:
-      regnr = MRK3_PC_REGNUM;
-      break;			/*  PCh */
-    case 4:
-      regnr = MRK3_PSW_REGNUM;
-      break;			/*  PSW */
-      /*  case  5:                                      // PU (?) */
-
-    case 6:
-      regnr = MRK3_R0_REGNUM;
-      break;			/*  R0 */
-    case 7:
-      regnr = MRK3_R0_REGNUM + 1;
-      break;			/*  R1 */
-    case 8:
-      regnr = MRK3_R0_REGNUM + 2;
-      break;			/*  R2 */
-    case 9:
-      regnr = MRK3_R0_REGNUM + 3;
-      break;			/*  R3 */
-
-      /*  R46 is a virtual 48 bit register having R4, R5 and R6 as real
-	  registers. */
-    case 10:
-      regnr = MRK3_R0_REGNUM + 4;
-      break;			/*  R46[0] */
-    case 11:
-      regnr = MRK3_R0_REGNUM + 5;
-      break;			/*  R46[1] */
-    case 12:
-      regnr = MRK3_R0_REGNUM + 6;
-      break;			/*  R46[2] */
-
-      /*  R46e is a virtual 48 bit register */
-      /*  having R4e, R5e and R6e as real registers. */
-    case 13:
-      regnr = MRK3_R4E_REGNUM;
-      break;			/*  R46e[0] */
-    case 14:
-      regnr = MRK3_R5E_REGNUM;
-      break;			/*  R46e[1] */
-    case 15:
-      regnr = MRK3_R6E_REGNUM;
-      break;			/*  R46e[2] */
-
-      /*  R46L is a virtual 96 bit register */
-      /*  having R4LONG, R5LONG and R6LONG as real registers. */
-    case 16:
-      regnr = MRK3_R4LONG_REGNUM;
-      break;			/*  R46e[0] */
-    case 17:
-      regnr = MRK3_R5LONG_REGNUM;
-      break;			/*  R46e[1] */
-    case 18:
-      regnr = MRK3_R6LONG_REGNUM;
-      break;			/*  R46e[2] */
-
-    case 19:
-      regnr = MRK3_SP_REGNUM;
-      break;			/*  R7 */
-
-      /*  case 20:                                      // RO (?) */
-
-      /*  Rb is a virtual register, consisting of all */
-      /*  byte registers. */
-    case 21:
-      regnr = MRK3_R0L_REGNUM;
-      break;			/*  Rb[0] */
-    case 22:
-      regnr = MRK3_R1L_REGNUM;
-      break;			/*  Rb[1] */
-    case 23:
-      regnr = MRK3_R2L_REGNUM;
-      break;			/*  Rb[2] */
-    case 24:
-      regnr = MRK3_R3L_REGNUM;
-      break;			/*  Rb[3] */
-    case 25:
-      regnr = MRK3_R0H_REGNUM;
-      break;			/*  Rb[4] */
-    case 26:
-      regnr = MRK3_R1H_REGNUM;
-      break;			/*  Rb[5] */
-    case 27:
-      regnr = MRK3_R2H_REGNUM;
-      break;			/*  Rb[6] */
-    case 28:
-      regnr = MRK3_R3H_REGNUM;
-      break;			/*  Rb[7] */
-
-      /*  RbH is a virtual register, consisting of all */
-      /*  high byte registers. */
-    case 29:
-      regnr = MRK3_R0H_REGNUM;
-      break;			/*  RbH[0] */
-    case 30:
-      regnr = MRK3_R1H_REGNUM;
-      break;			/*  RbH[1] */
-    case 31:
-      regnr = MRK3_R2H_REGNUM;
-      break;			/*  RbH[2] */
-    case 32:
-      regnr = MRK3_R3H_REGNUM;
-      break;			/*  RbH[3] */
-
-      /*  RbL is a virtual register, consisting of all */
-      /*  high byte registers. */
-    case 33:
-      regnr = MRK3_R0L_REGNUM;
-      break;			/*  RbL[0] */
-    case 34:
-      regnr = MRK3_R1L_REGNUM;
-      break;			/*  RbL[1] */
-    case 35:
-      regnr = MRK3_R2L_REGNUM;
-      break;			/*  RbL[2] */
-    case 36:
-      regnr = MRK3_R3L_REGNUM;
-      break;			/*  RbL[3] */
-
-      /*  Rw is a virtual register, consisting of all */
-      /*  word registers. */
-    case 37:
-      regnr = MRK3_R0_REGNUM;
-      break;			/*  Rw[0] */
-    case 38:
-      regnr = MRK3_R0_REGNUM + 1;
-      break;			/*  Rw[1] */
-    case 39:
-      regnr = MRK3_R0_REGNUM + 2;
-      break;			/*  Rw[2] */
-    case 40:
-      regnr = MRK3_R0_REGNUM + 3;
-      break;			/*  Rw[3] */
-    case 41:
-      regnr = MRK3_R0_REGNUM + 4;
-      break;			/*  Rw[4] */
-    case 42:
-      regnr = MRK3_R0_REGNUM + 5;
-      break;			/*  Rw[5] */
-    case 43:
-      regnr = MRK3_R0_REGNUM + 6;
-      break;			/*  Rw[6] */
-    case 44:
-      regnr = MRK3_R4E_REGNUM;
-      break;			/*  Rw[7] */
-    case 45:
-      regnr = MRK3_R5E_REGNUM;
-      break;			/*  Rw[8] */
-    case 46:
-      regnr = MRK3_R6E_REGNUM;
-      break;			/*  Rw[9] */
-
-      /*  RwL is probably a virtual register consisting */
-      /*  of all word registers. */
-    case 47:
-      regnr = MRK3_R0_REGNUM;
-      break;			/*  RwL[0] */
-    case 48:
-      regnr = MRK3_R0_REGNUM + 1;
-      break;			/*  RwL[1] */
-    case 49:
-      regnr = MRK3_R0_REGNUM + 2;
-      break;			/*  RwL[2] */
-    case 50:
-      regnr = MRK3_R0_REGNUM + 3;
-      break;			/*  RwL[3] */
-
-    case 51:
-      regnr = MRK3_CARRY_REGNUM;
-      break;			/*  c flag */
-    case 52:
-      regnr = MRK3_INT_REGNUM;
-      break;			/*  interrupt level */
-    case 53:
-      regnr = MRK3_NEG_REGNUM;
-      break;			/*  n flag */
-    case 54:
-      regnr = MRK3_ZERO_REGNUM;
-      break;			/*  z flag (actually nz (?)) */
-    case 55:
-      regnr = MRK3_OVERFLOW_REGNUM;
-      break;			/*  o flag */
-    case 56:
-      regnr = 0;
-      break;			/*  res (?) */
-    case 57:
-      regnr = MRK3_SYS_REGNUM;
-      break;			/*  s flag */
-    case 58:
-      regnr = 0;
-      break;			/*  tLSB (?) */
-    case 59:
-      regnr = MRK3_ZERO_REGNUM;
-      break;			/*  z flag */
+    case 0:  regnr = MRK3_R0L_REGNUM; break;
+    case 1:  regnr = MRK3_R0H_REGNUM; break;
+    case 2:  regnr = MRK3_R1L_REGNUM; break;
+    case 3:  regnr = MRK3_R1H_REGNUM; break;
+    case 4:  regnr = MRK3_R2L_REGNUM; break;
+    case 5:  regnr = MRK3_R2H_REGNUM; break;
+    case 6:  regnr = MRK3_R3L_REGNUM; break;
+    case 7:  regnr = MRK3_R3H_REGNUM; break;
+    case 8:  regnr = MRK3_R4E_REGNUM; break;
+    case 9:  regnr = MRK3_R5E_REGNUM; break;
+    case 10: regnr = MRK3_R6E_REGNUM; break;
+    case 11: regnr = MRK3_R4LONG_REGNUM; break;
+    case 12: regnr = MRK3_R5LONG_REGNUM; break;
+    case 13: regnr = MRK3_R6LONG_REGNUM; break;
+    case 14: regnr = MRK3_R0_REGNUM;  break;
+    case 15: regnr = MRK3_R1_REGNUM;  break;
+    case 16: regnr = MRK3_R2_REGNUM;  break;
+    case 17: regnr = MRK3_R3_REGNUM;  break;
+    case 18: regnr = MRK3_R4_REGNUM;  break;
+    case 19: regnr = MRK3_R5_REGNUM;  break;
+    case 20: regnr = MRK3_R6_REGNUM;  break;
+    case 21: regnr = MRK3_SP_REGNUM;  break; /* SP = R7 */
+    case 22: regnr = MRK3_PSW_REGNUM; break;
+    case 23: regnr = MRK3_PC_REGNUM;  break;
 
     default:
       warning (_("MRK3_dwarf2_reg_to_regnum: unknown drwarf2 regnum: %d."),

@@ -5101,18 +5101,11 @@ init_dwarf_regnames_x86_64 (void)
 
 static const char *const dwarf_regnames_mrk3[] =
 {
-  /*  0 ->   4 */ NULL,  NULL,  NULL,  NULL,  NULL,
-  /*  5 ->   9 */ NULL,  "R0",  "R1",  "R2",  "R3",
-  /* 10 ->  14 */ "R4",  "R5",  "R6",  "R4e", "R5e",
-  /* 15 ->  19 */ "R6e", "R4L", "R5L", "R6L", "R7",
-  /* 20 ->  24 */ NULL,  "R0L", "R1L", "R2L", "R3L",
-  /* 25 ->  29 */ "R0H", "R1H", "R2H", "R3H", "R0H",
-  /* 30 ->  34 */ "R1H", "R2H", "R3H", "R0L", "R1L",
-  /* 35 ->  39 */ "R2L", "R3L", "R0",  "R1",  "R2",
-  /* 40 ->  44 */ "R3",  "R4",  "R5",  "R6",  "R4e",
-  /* 45 ->  49 */ "R5e", "R6e", "R0",  "R1",  "R2",
-  /* 50 ->  54 */ "R3",  NULL,  NULL,  NULL,  NULL,
-  /* 55 ->  59 */ NULL,  NULL,  NULL,  NULL,  NULL,
+  /*  0 ->   4 */ "R0L", "R0H", "R1L", "R1H", "R2L",
+  /*  5 ->   9 */ "R2H", "R3L", "R3H", "R4e", "R5e",
+  /* 10 ->  14 */ "R6e", "R4L", "R5L", "R6L", "R0",
+  /* 15 ->  19 */ "R1",  "R2",  "R3",  "R4",  "R5",
+  /* 20 ->  24 */ "R6",  "R7",  "PSW", "PC",  NULL,
 };
 
 void

@@ -1,3 +1,8 @@
+2015-03-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dwarf.c (dwarf_regnames_mrk3): Update to match new numbreing
+	scheme in llvm.
+
 2015-02-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	Cherry-pick commit acf1419 from upstream.
