@@ -1,5 +1,12 @@
 2015-03-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf64-mrk3.c (is_16bit_immediate_instruction): Renamed to...
+	(is_relaxable_16bit_immediate_instruction): ... this.
+	(elf64_mrk3_relax_section): Split the CALL16 handling out from the
+	HIGH16 handling.
+
+2015-03-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf64-mrk3.c: Add include of bfd_stdint.h.
 	(retrieve_internal_relocs): New function.
 	(pin_internal_relocs): New function.

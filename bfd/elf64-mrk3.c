@@ -979,7 +979,7 @@ is_16bit_call_instruction (const uint16_t insn)
    immediate version available, otherwise, return false.  */
 
 static bfd_boolean
-is_16bit_immediate_instruction (const uint16_t insn)
+is_relaxable_16bit_immediate_instruction (const uint16_t insn)
 {
   bfd_boolean is_match = FALSE;
 
@@ -1061,7 +1061,8 @@ elf64_mrk3_relax_section (bfd *abfd,
 
       /* Filter out all relocation types that we know can't be relaxed.  */
       if (ELF64_R_TYPE (irel->r_info) != R_MRK3_PCREL16
-          && ELF64_R_TYPE (irel->r_info) != R_MRK3_HIGH16)
+          && ELF64_R_TYPE (irel->r_info) != R_MRK3_HIGH16
+          && ELF64_R_TYPE (irel->r_info) != R_MRK3_CALL16)
         continue;
 
       BFD_ASSERT (ELF64_R_TYPE (irel->r_info) < (unsigned int) R_MRK3_max);
@@ -1228,117 +1229,117 @@ elf64_mrk3_relax_section (bfd *abfd,
           }
           break;
 
-        case R_MRK3_HIGH16:
+        case R_MRK3_CALL16:
           {
             uint16_t insn;
+            bfd_vma reloc_addr, dest_addr;
 
             /* Get the instruction code for relaxing.  */
             insn = bfd_get_16 (abfd, contents + irel->r_offset);
-
             relax_log ("    Instruction encoding is %#08x\n", insn);
+            BFD_ASSERT (is_16bit_call_instruction (insn));
 
-            /* Is this a 16-bit CALL instruction?  These might be
-               shrinkable to a 14-bit CALL instruction.  */
-            if (is_16bit_call_instruction (insn))
-              {
-                bfd_vma reloc_addr, dest_addr;
+            /* Compute the from and to addresses.  */
+            reloc_addr = (sec->output_section->vma
+                          + sec->output_offset
+                          + irel->r_offset);
+            dest_addr = (symval + irel->r_addend);
 
-                /* Compute the from and to addresses.  */
-                reloc_addr = (sec->output_section->vma
-                              + sec->output_offset
-                              + irel->r_offset);
-                dest_addr = (symval + irel->r_addend);
+            /* A CALL instruction across address spaces does not make
+               sense, and probably indicates an error.  To avoid
+               confusion such cases are not modified here.  */
+            if (MRK3_GET_MEMORY_SPACE_ID (reloc_addr)
+                != MRK3_GET_MEMORY_SPACE_ID (dest_addr))
+              continue;
 
-                /* A CALL instruction across address spaces does not make
-                   sense, and probably indicates an error.  To avoid
-                   confusion such cases are not modified here.  */
-                if (MRK3_GET_MEMORY_SPACE_ID (reloc_addr)
-                    != MRK3_GET_MEMORY_SPACE_ID (dest_addr))
-                  continue;
+            /* Let's not worry about address space ID any more.  */
+            reloc_addr = MRK3_GET_ADDRESS_LOCATION (reloc_addr);
+            dest_addr = MRK3_GET_ADDRESS_LOCATION (dest_addr);
 
-                /* Let's not worry about address space ID any more.  */
-                reloc_addr = MRK3_GET_ADDRESS_LOCATION (reloc_addr);
-                dest_addr = MRK3_GET_ADDRESS_LOCATION (dest_addr);
+            /* The 14-bit call instruction places the 14-bits of the
+               word address into the lower 14-bits of the current pc to
+               compute the call destination.  To check that a call from
+               RELOC_ADDR to DEST_ADDR (both of which are byte
+               addresses) will fit we check that everything other than
+               the lower 15-bits match.  */
+            if ((reloc_addr & ~0x7fff) != (dest_addr & ~0x7fff))
+              continue;
 
-                /* The 14-bit call instruction places the 14-bits of the
-                   word address into the lower 14-bits of the current pc to
-                   compute the call destination.  To check that a call from
-                   RELOC_ADDR to DEST_ADDR (both of which are byte
-                   addresses) will fit we check that everything other than
-                   the lower 15-bits match.  */
-                if ((reloc_addr & ~0x7fff) != (dest_addr & ~0x7fff))
-                  continue;
+            relax_log ("    Relocation at: %#08lx\n", reloc_addr);
+            relax_log ("    Destination at %#08lx\n", dest_addr);
 
-                relax_log ("    Relocation at: %#08lx\n", reloc_addr);
-                relax_log ("    Destination at %#08lx\n", dest_addr);
+            /* Convert to a 14-bit CALL instruction.  */
+            relax_log ("    Convert to 14-bit call instruction.\n");
+            insn = 0x8000;
+            bfd_put_16 (abfd, insn, contents + irel->r_offset);
 
-                /* Convert to a 14-bit CALL instruction.  */
-                relax_log ("    Convert to 14-bit call instruction.\n");
-                insn = 0x8000;
-                bfd_put_16 (abfd, insn, contents + irel->r_offset);
+            /* Note that we've changed the relocs, section contents,
+               etc.  */
+            pin_internal_relocs (sec, internal_relocs);
+            pin_contents (sec, contents);
 
-                /* Note that we've changed the relocs, section contents,
-                   etc.  */
-                pin_internal_relocs (sec, internal_relocs);
-                pin_contents (sec, contents);
+            /* Fix the relocation's type.  */
+            irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
+                                         R_MRK3_CALL14);
 
-                /* Fix the relocation's type.  */
-                irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
-                                             R_MRK3_CALL14);
+            /* Actually delete the bytes.  */
+            if (!elf64_mrk3_relax_delete_bytes (abfd, sec,
+                                                irel->r_offset + 2, 2))
+              goto error_return;
 
-                /* Actually delete the bytes.  */
-                if (!elf64_mrk3_relax_delete_bytes (abfd, sec,
-                                                    irel->r_offset + 2, 2))
-                  goto error_return;
+            /* That will change things, so, we should relax again.
+               Note that this is not required, and it may be slow.  */
+            *again = TRUE;
+          }
+          break;
 
-                /* That will change things, so, we should relax again.
-                   Note that this is not required, and it may be slow.  */
-                *again = TRUE;
-              }
-            /* Is this a 16-bit immediate instruction?  These might be
-               shrinkable to a 4-bit immediate instruction.  For now I
-               just check bit 4 is set, but this probably needs to be
-               improved.  */
-            else if (is_16bit_immediate_instruction (insn))
-              {
-                bfd_signed_vma imm_value;
+        case R_MRK3_HIGH16:
+          {
+            uint16_t insn;
+            bfd_signed_vma imm_value;
 
-                imm_value = (symval + irel->r_addend);
+            /* Get the instruction code for relaxing.  Only some of the
+               16-bit immediate instructions have 4-bit immediate versions,
+               skip those that don't.  */
+            insn = bfd_get_16 (abfd, contents + irel->r_offset);
+            relax_log ("    Instruction encoding is %#08x\n", insn);
+            if (!is_relaxable_16bit_immediate_instruction (insn))
+              continue;
 
-                /* Only select values can be encoded in a 4-bit immediate.  */
-                if (imm_value < -1
-                    || (imm_value > 10
-                        && imm_value != 16
-                        && imm_value != 32
-                        && imm_value != 64
-                        && imm_value != 128))
-                  continue;
+            /* Only select values can be encoded in a 4-bit immediate.  */
+            imm_value = (symval + irel->r_addend);
+            if (imm_value < -1
+                || (imm_value > 10
+                    && imm_value != 16
+                    && imm_value != 32
+                    && imm_value != 64
+                    && imm_value != 128))
+              continue;
 
-                /* Set bit 7 to convert to the 4-bit constant version of
-                   the instruction.  */
-                relax_log ("    Immediate value is %d\n", imm_value);
-                relax_log ("    Convert to 4-bit constant instruction.\n");
-                insn |= (1 << 7);
-                bfd_put_16 (abfd, insn, contents + irel->r_offset);
+            /* Set bit 7 to convert to the 4-bit constant version of
+               the instruction.  */
+            relax_log ("    Immediate value is %d\n", imm_value);
+            relax_log ("    Convert to 4-bit constant instruction.\n");
+            insn |= (1 << 7);
+            bfd_put_16 (abfd, insn, contents + irel->r_offset);
 
-                /* Note that we've changed the relocs, section contents,
-                   etc.  */
-                pin_internal_relocs (sec, internal_relocs);
-                pin_contents (sec, contents);
+            /* Note that we've changed the relocs, section contents,
+               etc.  */
+            pin_internal_relocs (sec, internal_relocs);
+            pin_contents (sec, contents);
 
-                /* Fix the relocation's type.  */
-                irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
-                                             R_MRK3_CONST4);
+            /* Fix the relocation's type.  */
+            irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
+                                         R_MRK3_CONST4);
 
-                /* Actually delete the bytes.  */
-                if (!elf64_mrk3_relax_delete_bytes (abfd, sec,
-                                                    irel->r_offset + 2, 2))
-                  goto error_return;
+            /* Actually delete the bytes.  */
+            if (!elf64_mrk3_relax_delete_bytes (abfd, sec,
+                                                irel->r_offset + 2, 2))
+              goto error_return;
 
-                /* That will change things, so, we should relax again.
-                   Note that this is not required, and it may be slow.  */
-                *again = TRUE;
-              }
+            /* That will change things, so, we should relax again.
+               Note that this is not required, and it may be slow.  */
+            *again = TRUE;
           }
           break;
 
