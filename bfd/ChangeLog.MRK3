@@ -1,3 +1,10 @@
+2015-03-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (elf_mrk3_howto_table): Change overflow mechanism
+	for all pc-relative relocations, R_MRK3_PCREL16, R_MRK3_PCREL8,
+	R_MRK3_FORCEPCREL16, and R_MRK3_FORCEPCREL8 to
+	complain_overflow_signed.
+
 2015-03-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (is_16bit_immediate_instruction): Renamed to...
