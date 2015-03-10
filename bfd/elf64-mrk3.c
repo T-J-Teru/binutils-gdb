@@ -122,7 +122,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          14,                    /* Bitsize.  */
          FALSE,                 /* PC_relative.  */
          0,                     /* Bitpos. */
-         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         complain_overflow_dont,/* Complain_on_overflow.  */
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_CALL14",       /* Name.  */
          TRUE,                  /* Partial_inplace.  */

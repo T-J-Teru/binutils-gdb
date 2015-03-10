@@ -1,3 +1,8 @@
+2015-03-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (elf_mrk3_howto_table): Change overflow mechanism
+	for R_MRK3_CALL14 to complain_overflow_dont.
+
 2015-03-09  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (elf_mrk3_howto_table): Change overflow mechanism
