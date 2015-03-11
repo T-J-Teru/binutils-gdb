@@ -138,7 +138,7 @@ code addresses.
 #include "dis-asm.h"
 #include "ui-file.h"
 #include "observer.h"
-#include "safe-ctype.h"
+#include "readline/readline.h"
 
 /*  Required for symbol switch handling. */
 #include "gdb/defs.h"
@@ -148,6 +148,15 @@ code addresses.
 #include "gdb/gdb_obstack.h"
 #include "gdb/progspace.h"
 #include "gdb/breakpoint.h"
+
+#include <sys/types.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <ctype.h>
+#include <time.h>
+#include <sys/time.h>
+
 
 /* Useful register numbers - CPU registers */
 #define MRK3_R0_REGNUM     0
@@ -255,6 +264,34 @@ int  mrk3_debug;
 
 /*! Global flag indicating if memspace is valid. */
 int  mrk3_memspace_valid_p;
+
+/*! Opaque data for nxpload_section_callback.  Reused from symfile.c */
+struct nxpload_section_data {
+  CORE_ADDR load_offset;
+  struct nxpload_progress_data *progress_data;
+  VEC(memory_write_request_s) *requests;
+};
+
+/*! Opaque data for nxpload_progress.  Reused from symfile.c */
+struct nxpload_progress_data {
+  /* Cumulative data.  */
+  unsigned long write_count;
+  unsigned long data_count;
+  bfd_size_type total_size;
+};
+
+/*! Opaque data for load_progress for a single section.  Reused from
+    symfile.c */
+struct nxpload_progress_section_data {
+  struct nxpload_progress_data *cumulative;
+
+  /* Per-section data.  */
+  const char *section_name;
+  ULONGEST section_sent;
+  ULONGEST section_size;
+  CORE_ADDR lma;
+  gdb_byte *buffer;
+};
 
 
 /*! Is a particular debug flag set?
@@ -1900,7 +1937,7 @@ skip_whitespace (char **buf)
 {
   char *tmp = *buf;
 
-  while (ISSPACE (*tmp))
+  while (isspace (*tmp))
     tmp++;
 
   if (tmp == *buf)
@@ -1971,13 +2008,13 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
      don't copy more than (OPCODE_LEN - 1) characters, then add a \0 to
      the end of OPCODE.  */
   for (can_copy = opcode_len - 1;
-       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0';
+       can_copy > 0 && !isspace (**buf) && **buf != '\0';
        --can_copy)
     *opcode++ = *(*buf)++;
   *opcode = '\0';
 
   /* Ooops, looks like the opcode is too long.  */
-  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0'))
+  if (can_copy == 0 && !(isspace (**buf) || **buf == '\0'))
     return 0;
 
   /* End of the string?  No arguments then.  */
@@ -1995,13 +2032,13 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
      comma between arguments.  Copy the argument into the ARG1 buffer, and
      add a null character to the ARG1 buffer.  */
   for (can_copy = arg1_len - 1;
-       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0' && **buf != ',';
+       can_copy > 0 && !isspace (**buf) && **buf != '\0' && **buf != ',';
        --can_copy)
     *arg1++ = *(*buf)++;
   *arg1 = '\0';
 
   /* Ooops, looks like arg1 is too long.  */
-  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0' || **buf == ','))
+  if (can_copy == 0 && !(isspace (**buf) || **buf == '\0' || **buf == ','))
     return 0;
 
   /* Skip any whitespace. */
@@ -2026,7 +2063,7 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
      instructions like POP, we copy everything up to the newline, ignoring
      any spaces. */
   for (can_copy = arg2_len - 1; can_copy > 0 && **buf != '\0';)
-    if (!ISSPACE (**buf))
+    if (!isspace (**buf))
       {
 	*arg2++ = *(*buf)++;
 	--can_copy;
@@ -2039,7 +2076,7 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
   *arg2 = '\0';
 
   /* Ooops, looks like arg2 is too long.  */
-  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0'))
+  if (can_copy == 0 && !(isspace (**buf) || **buf == '\0'))
     return 0;
 
   /* Skip any whitespace. */
@@ -2511,6 +2548,351 @@ mrk3_handle_frame_cache_cleared (void)
 }	/* mrk3_handle_normal_stop () */
 
 
+/*! Clean up an entire memory request vector, including load
+    data and progress records.
+
+  Reused from symfile.c
+
+  @param arg  Generic vector pointer. */
+
+static void
+mrk3_clear_memory_write_data (void *arg)
+{
+  VEC(memory_write_request_s) **vec_p = arg;
+  VEC(memory_write_request_s) *vec = *vec_p;
+  int i;
+  struct memory_write_request *mr;
+
+  for (i = 0; VEC_iterate (memory_write_request_s, vec, i, mr); ++i)
+    {
+      xfree (mr->data);
+      xfree (mr->baton);
+    }
+  VEC_free (memory_write_request_s, vec);
+
+}	/* mrk3_clear_memory_write_data () */
+
+
+/*! Callback service function for generic_load (bfd_map_over_sections).
+
+  Copied from the generic version in symfile.c
+
+  @param[in]  abfd  BFD for the section
+  @param[in]  asec  The section
+  @param[out] data  The running size total. */
+
+static void
+mrk3_add_section_size_callback (bfd *abfd,
+				asection *asec,
+				void *data)
+{
+  bfd_size_type *sum = data;
+
+  *sum += bfd_get_section_size (asec);
+
+}	/* mrk3_add_section_size_callback () */
+
+
+/*! Callback service function for mrk3_nxpload (bfd_map_over_sections).
+
+  Based on the generic version in symfile.c
+
+  @param[in] abfd  BFD for the section
+  @param[in] asec  The section
+  @param[in] data  The arguments. */
+
+static void
+mrk3_load_section_callback (bfd *abfd,
+			    asection *asec,
+			    void *data)
+{
+  struct memory_write_request *new_request;
+  struct nxpload_section_data *args = data;
+  struct nxpload_progress_section_data *section_data;
+  bfd_size_type size = bfd_get_section_size (asec);
+  gdb_byte *buffer;
+  const char *sect_name = bfd_get_section_name (abfd, asec);
+
+  if ((bfd_get_section_flags (abfd, asec) & SEC_LOAD) == 0)
+    return;
+
+  if (size == 0)
+    return;
+
+  new_request = VEC_safe_push (memory_write_request_s,
+			       args->requests, NULL);
+  memset (new_request, 0, sizeof (struct memory_write_request));
+  section_data = xcalloc (1, sizeof (struct nxpload_progress_section_data));
+  new_request->begin = bfd_section_lma (abfd, asec) + args->load_offset;
+  new_request->end = new_request->begin + size; /* FIXME Should size
+						   be in instead?  */
+  new_request->data = xmalloc (size);
+  new_request->baton = section_data;
+
+  buffer = new_request->data;
+
+  section_data->cumulative = args->progress_data;
+  section_data->section_name = sect_name;
+  section_data->section_size = size;
+  section_data->lma = new_request->begin;
+  section_data->buffer = buffer;
+
+  bfd_get_section_contents (abfd, asec, buffer, 0, size);
+
+}	/* mrk3_load_section_callback () */
+
+
+/*! Write callback routine for progress reporting.
+
+  Based on the generic version in symfile.c
+
+  @param[in] bytes        Number of bytes written
+  @param[in] untyped_arg  The arguments */
+
+static void
+mrk3_nxpload_progress (ULONGEST bytes, void *untyped_arg)
+{
+  struct nxpload_progress_section_data *args = untyped_arg;
+  struct nxpload_progress_data *totals;
+
+  if (args == NULL)
+    /* Writing padding data.  No easy way to get at the cumulative
+       stats, so just ignore this.  */
+    return;
+
+  totals = args->cumulative;
+
+  if (bytes == 0 && args->section_sent == 0)
+    {
+      /* The write is just starting.  Let the user know we've started
+	 this section.  */
+      ui_out_message (current_uiout, 0, "Loading section %s, size %s lma %s\n",
+		      args->section_name, hex_string (args->section_size),
+		      paddress (target_gdbarch (), args->lma));
+      return;
+    }
+
+  /* The original has code to validate downloads here, which as far as I can
+     see is never used. */
+
+  totals->data_count += bytes;
+  args->lma += bytes;
+  args->buffer += bytes;
+  totals->write_count += 1;
+  args->section_sent += bytes;
+  if (check_quit_flag ()
+      || (deprecated_ui_load_progress_hook != NULL
+	  && deprecated_ui_load_progress_hook (args->section_name,
+					       args->section_sent)))
+    error (_("Canceled the download"));
+
+  if (deprecated_show_load_progress != NULL)
+    deprecated_show_load_progress (args->section_name,
+				   args->section_sent,
+				   args->section_size,
+				   totals->data_count,
+				   totals->total_size);
+
+}	/* mrk3_nxpload_progress () */
+
+
+/*! Custom load command for MRK3
+
+  Largely based on the generic_load function, but implementing key differences
+  for MRK3.
+
+  Specifically the contents of *all* sections is transferred,  with
+  unallocated ones sent first.  These may include encryption information for
+  the allocated sections.
+
+   @param[in] args      The args to the command
+   @param[in] from_tty  True (1) if GDB is running from a TTY, false (0)
+   otherwise. */
+
+static void
+mrk3_nxpload (char *args,
+	      int from_tty)
+{
+  bfd *loadfile_bfd;
+  struct timeval start_time, end_time;
+  char *filename;
+  struct cleanup *old_cleanups = make_cleanup (null_cleanup, 0);
+  struct nxpload_section_data cbdata;
+  struct nxpload_progress_data total_progress;
+  struct ui_out *uiout = current_uiout;
+
+  CORE_ADDR entry;
+  char **argv;
+
+  memset (&cbdata, 0, sizeof (cbdata));
+  memset (&total_progress, 0, sizeof (total_progress));
+  cbdata.progress_data = &total_progress;
+
+  make_cleanup (mrk3_clear_memory_write_data, &cbdata.requests);
+
+  if (args == NULL)
+    error_no_arg (_("file to load"));
+
+  argv = gdb_buildargv (args);
+  make_cleanup_freeargv (argv);
+
+  filename = tilde_expand (argv[0]);
+  make_cleanup (xfree, filename);
+
+  if (argv[1] != NULL)
+    {
+      const char *endptr;
+
+      cbdata.load_offset = strtoulst (argv[1], &endptr, 0);
+
+      /* If the last word was not a valid number then
+         treat it as a file name with spaces in.  */
+      if (argv[1] == endptr)
+        error (_("Invalid download offset:%s."), argv[1]);
+
+      if (argv[2] != NULL)
+	error (_("Too many parameters."));
+    }
+
+  /* Open the file for loading.  */
+  loadfile_bfd = gdb_bfd_open (filename, gnutarget, -1);
+  if (loadfile_bfd == NULL)
+    {
+      perror_with_name (filename);
+      return;
+    }
+
+  make_cleanup_bfd_unref (loadfile_bfd);
+
+  if (!bfd_check_format (loadfile_bfd, bfd_object))
+    {
+      error (_("\"%s\" is not an object file: %s"), filename,
+	     bfd_errmsg (bfd_get_error ()));
+    }
+
+  bfd_map_over_sections (loadfile_bfd, mrk3_add_section_size_callback,
+			 (void *) &total_progress.total_size);
+
+  bfd_map_over_sections (loadfile_bfd, mrk3_load_section_callback, &cbdata);
+
+  gettimeofday (&start_time, NULL);
+
+  if (target_write_memory_blocks (cbdata.requests, flash_discard,
+				  mrk3_nxpload_progress) != 0)
+    error (_("Load failed"));
+
+  gettimeofday (&end_time, NULL);
+
+  entry = bfd_get_start_address (loadfile_bfd);
+  entry = gdbarch_addr_bits_remove (target_gdbarch (), entry);
+  ui_out_text (uiout, "Start address ");
+  ui_out_field_fmt (uiout, "address", "%s", paddress (target_gdbarch (), entry));
+  ui_out_text (uiout, ", load size ");
+  ui_out_field_fmt (uiout, "load-size", "%lu", total_progress.data_count);
+  ui_out_text (uiout, "\n");
+  /* We were doing this in remote-mips.c, I suspect it is right
+     for other targets too.  */
+  regcache_write_pc (get_current_regcache (), entry);
+
+  /* Reset breakpoints, now that we have changed the load image.  For
+     instance, breakpoints may have been set (or reset, by
+     post_create_inferior) while connected to the target but before we
+     loaded the program.  In that case, the prologue analyzer could
+     have read instructions from the target to find the right
+     breakpoint locations.  Loading has changed the contents of that
+     memory.  */
+
+  breakpoint_re_set ();
+
+  /* FIXME: are we supposed to call symbol_file_add or not?  According
+     to a comment from remote-mips.c (where a call to symbol_file_add
+     was commented out), making the call confuses GDB if more than one
+     file is loaded in.  Some targets do (e.g., remote-vx.c) but
+     others don't (or didn't - perhaps they have all been deleted).  */
+
+  print_transfer_performance (gdb_stdout, total_progress.data_count,
+			      total_progress.write_count,
+			      &start_time, &end_time);
+
+  do_cleanups (old_cleanups);
+
+}	/* mrk3_nxpload () */
+
+
+/*! NXP specific load command
+
+   MRK3 needs a custom command to load files, because of the encrypted
+   sections, and the need to pass in unallocated info sections which contain
+   information on handling the encryption etc.
+
+   Largely taken from the default load_command function
+
+   @param[in] arg       The arg to the command
+   @param[in] from_tty  True (1) if GDB is running from a TTY, false (0)
+   otherwise. */
+
+static void
+mrk3_nxpload_command (char *arg,
+		      int   from_tty)
+{
+  struct cleanup *cleanup = make_cleanup (null_cleanup, NULL);
+
+  dont_repeat ();		/* Don't repeat command by null line */
+
+  /* The user might be reloading because the binary has changed.  Take
+     this opportunity to check.  */
+  reopen_exec_file ();
+  reread_symbols ();
+
+  if (arg == NULL)
+    {
+      char *parg;
+      int count = 0;
+
+      parg = arg = get_exec_file (1);
+
+      /* Count how many \ " ' tab space there are in the name.  */
+      while ((parg = strpbrk (parg, "\\\"'\t ")))
+	{
+	  parg++;
+	  count++;
+	}
+
+      if (count)
+	{
+	  /* We need to quote this string so buildargv can pull it apart.  */
+	  char *temp = xmalloc (strlen (arg) + count + 1 );
+	  char *ptemp = temp;
+	  char *prev;
+
+	  make_cleanup (xfree, temp);
+
+	  prev = parg = arg;
+	  while ((parg = strpbrk (parg, "\\\"'\t ")))
+	    {
+	      strncpy (ptemp, prev, parg - prev);
+	      ptemp += parg - prev;
+	      prev = parg++;
+	      *ptemp++ = '\\';
+	    }
+	  strcpy (ptemp, prev);
+
+	  arg = temp;
+	}
+    }
+
+  mrk3_nxpload (arg, from_tty);
+
+  /* After re-loading the executable, we don't really know which overlays are
+     mapped any more.  This almost certainly will never apply to MRK3, but
+     keep it just in case. */
+  overlay_cache_invalid = 1;
+
+  do_cleanups (cleanup);
+
+}	/* mrk3_nxpload_command() */
+
+
 extern initialize_file_ftype _initialize_mrk3_tdep;
 
 void
@@ -2532,4 +2914,8 @@ _initialize_mrk3_tdep (void)
 			    NULL,
 			    &setdebuglist,
 			    &showdebuglist);
+
+  add_com ("nxpload", class_files, mrk3_nxpload_command,
+	   "Customized load command for NXP");
+
 }

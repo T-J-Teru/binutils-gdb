@@ -1,3 +1,20 @@
+2015-03-11  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	Initial framework for custom NXP load comman.
+
+	* gdb/mrk3-tdep.c (nxpload_section_data, nxpload_progress_data)
+	(nxpload_progress_section_data): Created.
+	(skip_whitespace): Replace ISSPACE by isspace,
+	to avoid conflict with READLINE.
+	(parse_opcode_and_args): Likewise.
+	(mrk3_clear_memory_write_data): Created.
+	(mrk3_add_section_size_callback): Created.
+	(mrk3_load_section_callback): Created.
+	(mrk3_nxpload_progress): Created.
+	(mrk3_nxpload): Created.
+	(mrk3_nxpload_command): Created.
+	(_initialize_mrk3_tdep): Added nxpload command.
+
 2015-03-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (MRK3_FP_REGNUM): Define as alias to R6.
