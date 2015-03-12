@@ -27,6 +27,13 @@ fragment <<EOF
 #include "elf/mrk3.h"
 
 static void
+gld${EMULATION_NAME}_after_parse (void)
+{
+  link_info.relax_pass = 2;
+  after_parse_default ();
+}
+
+static void
 gld${EMULATION_NAME}_finish (void)
 {
   finish_default ();
@@ -58,3 +65,4 @@ gld${EMULATION_NAME}_finish (void)
 EOF
 
 LDEMUL_FINISH=gld${EMULATION_NAME}_finish
+LDEMUL_AFTER_PARSE=gld${EMULATION_NAME}_after_parse

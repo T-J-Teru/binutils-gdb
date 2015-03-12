@@ -1,3 +1,40 @@
+2015-03-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (struct mrk3_relax_info): New struct.
+	(struct elf_mrk3_section_data): New struct.
+	(get_mrk3_relax_info): New function.
+	(init_mrk3_relax_info): New function.
+	(elf_mrk3_new_section_hook): New function.
+	(pin_contents): Add assert.
+	(retrieve_local_syms): Add header comment.
+	(release_local_syms): Delete.
+	(elf64_mrk3_relax_delete_bytes): Renamed to ...
+	(mrk3_elf_relax_delete_bytes): ... this.  Improve comments
+	throughout.  Record that a section was relaxed.
+	(mrk3_elf_relax_insert_bytes): New function.
+	(is_14bit_call_instruction): New function.
+	(mrk3_relax_section_filter): New function.
+	(mrk3_relax_relocation_filter): New function.
+	(mrk3_relax_handle_relocation): New function.
+	(mrk3_check_section_filter): New function.
+	(mrk3_check_relocation_filter): New function.
+	(mrk3_check_handle_relocation): New function.
+	(typedef section_filter_ftype): New type.
+	(typedef reloc_filter_ftype): New type.
+	(typedef handle_reloc_ftype): New type.
+	(struct mrk3_relaxation_hooks): New struct.
+	(mrk3_relax_hooks): New global.
+	(mrk3_check_hooks): New global.
+	(mrk3_elf_relax_section_worker): New function, takes most of the
+	code that used to be in elf64_mrk3_relax_section, but now uses
+	hooks to eithr relax or check as required.
+	(elf64_mrk3_relax_section): Renamed to ...
+	(mrk3_elf_relax_section): ... this.  Now uses
+	mrk3_elf_relax_section_worker to perform either relaxation or
+	checking.
+	(bfd_elf64_bfd_relax_section): Update function name.
+	(bfd_elf64_new_section_hook): Define.
+
 2015-03-10  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (elf_mrk3_howto_table): Change overflow mechanism
