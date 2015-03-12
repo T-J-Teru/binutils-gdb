@@ -1,3 +1,10 @@
+2015-03-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ld-mrk3/ld-relax.exp: New file.
+	* ld-mrk3/relax-bad-br.d: New file.
+	* ld-mrk3/relax-bad-br.ld: New file.
+	* ld-mrk3/relax-bad-br.s: New file.
+
 2015-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* lib/ld-lib.exp (run_dump_test): Remove typo from commit
