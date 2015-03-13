@@ -2,7 +2,7 @@
 
 	Initial framework for custom NXP load comman.
 
-	* gdb/mrk3-tdep.c (nxpload_section_data, nxpload_progress_data)
+	* mrk3-tdep.c (nxpload_section_data, nxpload_progress_data)
 	(nxpload_progress_section_data): Created.
 	(skip_whitespace): Replace ISSPACE by isspace,
 	to avoid conflict with READLINE.
