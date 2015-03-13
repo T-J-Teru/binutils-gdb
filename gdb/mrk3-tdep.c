@@ -139,6 +139,7 @@ code addresses.
 #include "ui-file.h"
 #include "observer.h"
 #include "safe-ctype.h"
+#include "completer.h"
 #include "readline/tilde.h"
 
 /*  Required for symbol switch handling. */
@@ -2899,6 +2900,8 @@ extern initialize_file_ftype _initialize_mrk3_tdep;
 void
 _initialize_mrk3_tdep (void)
 {
+  struct cmd_list_element *c;
+
   gdbarch_register (bfd_arch_mrk3, mrk3_gdbarch_init, NULL);
 
   /* Add ourselves to normal_stop event chain, which we can use to invalidate
@@ -2916,7 +2919,7 @@ _initialize_mrk3_tdep (void)
 			    &setdebuglist,
 			    &showdebuglist);
 
-  add_com ("nxpload", class_files, mrk3_nxpload_command,
-	   "Customized load command for NXP");
-
+  c = add_com ("nxpload", class_files, mrk3_nxpload_command,
+	       "Customized load command for NXP");
+  set_cmd_completer (c, filename_completer);
 }

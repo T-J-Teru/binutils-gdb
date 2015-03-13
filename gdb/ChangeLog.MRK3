@@ -1,5 +1,10 @@
 2015-03-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c: Include 'completer.h'.
+	(_initialize_mrk3_tdep): Set command completion for nxpload.
+
+2015-03-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c: Include 'readline/tilde.h' and 'safe-ctype.h'
 	instead of 'readline/readline.h'.
 	(parse_opcode_and_args): Use ISSPACE instead of isspace.
