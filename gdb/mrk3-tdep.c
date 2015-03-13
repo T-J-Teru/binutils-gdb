@@ -138,7 +138,8 @@ code addresses.
 #include "dis-asm.h"
 #include "ui-file.h"
 #include "observer.h"
-#include "readline/readline.h"
+#include "safe-ctype.h"
+#include "readline/tilde.h"
 
 /*  Required for symbol switch handling. */
 #include "gdb/defs.h"
@@ -1937,7 +1938,7 @@ skip_whitespace (char **buf)
 {
   char *tmp = *buf;
 
-  while (isspace (*tmp))
+  while (ISSPACE (*tmp))
     tmp++;
 
   if (tmp == *buf)
@@ -2008,13 +2009,13 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
      don't copy more than (OPCODE_LEN - 1) characters, then add a \0 to
      the end of OPCODE.  */
   for (can_copy = opcode_len - 1;
-       can_copy > 0 && !isspace (**buf) && **buf != '\0';
+       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0';
        --can_copy)
     *opcode++ = *(*buf)++;
   *opcode = '\0';
 
   /* Ooops, looks like the opcode is too long.  */
-  if (can_copy == 0 && !(isspace (**buf) || **buf == '\0'))
+  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0'))
     return 0;
 
   /* End of the string?  No arguments then.  */
@@ -2032,13 +2033,13 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
      comma between arguments.  Copy the argument into the ARG1 buffer, and
      add a null character to the ARG1 buffer.  */
   for (can_copy = arg1_len - 1;
-       can_copy > 0 && !isspace (**buf) && **buf != '\0' && **buf != ',';
+       can_copy > 0 && !ISSPACE (**buf) && **buf != '\0' && **buf != ',';
        --can_copy)
     *arg1++ = *(*buf)++;
   *arg1 = '\0';
 
   /* Ooops, looks like arg1 is too long.  */
-  if (can_copy == 0 && !(isspace (**buf) || **buf == '\0' || **buf == ','))
+  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0' || **buf == ','))
     return 0;
 
   /* Skip any whitespace. */
@@ -2063,7 +2064,7 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
      instructions like POP, we copy everything up to the newline, ignoring
      any spaces. */
   for (can_copy = arg2_len - 1; can_copy > 0 && **buf != '\0';)
-    if (!isspace (**buf))
+    if (!ISSPACE (**buf))
       {
 	*arg2++ = *(*buf)++;
 	--can_copy;
@@ -2076,7 +2077,7 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
   *arg2 = '\0';
 
   /* Ooops, looks like arg2 is too long.  */
-  if (can_copy == 0 && !(isspace (**buf) || **buf == '\0'))
+  if (can_copy == 0 && !(ISSPACE (**buf) || **buf == '\0'))
     return 0;
 
   /* Skip any whitespace. */
