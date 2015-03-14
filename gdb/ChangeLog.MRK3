@@ -1,3 +1,17 @@
+2015-03-14  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (nxpload_logging): New global.
+	(struct nxpload_progress_section_data): New vma and flags members.
+	(mrk3_load_transfer_section): New function.
+	(mrk3_load_section_callback): Use mrk3_load_transfer_section
+	function.  Handle loading zero sized sections.  Store vma and
+	flags.
+	(mrk3_nxpload_progress): Give user control over logging.  Make the
+	logging MI friendly.
+	(mrk3_load_sort_write_requests): New function.
+	(mrk3_nxpload): Sort sections, then pass them to the target.
+	(_initialize_mrk3_tdep): Setup control of nxpload_logging global.
+
 2015-03-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c: Include 'completer.h'.

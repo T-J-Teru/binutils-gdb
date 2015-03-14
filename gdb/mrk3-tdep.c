@@ -267,6 +267,9 @@ int  mrk3_debug;
 /*! Global flag indicating if memspace is valid. */
 int  mrk3_memspace_valid_p;
 
+/* Global, logging level for nxpload command.  */
+int nxpload_logging = 1;
+
 /*! Opaque data for nxpload_section_callback.  Reused from symfile.c */
 struct nxpload_section_data {
   CORE_ADDR load_offset;
@@ -292,6 +295,8 @@ struct nxpload_progress_section_data {
   ULONGEST section_sent;
   ULONGEST section_size;
   CORE_ADDR lma;
+  CORE_ADDR vma;
+  flagword flags;
   gdb_byte *buffer;
 };
 
@@ -2594,6 +2599,22 @@ mrk3_add_section_size_callback (bfd *abfd,
 
 }	/* mrk3_add_section_size_callback () */
 
+/* Callback to decide if SEC from ABFD should be transfered to the remote
+   as part of nxpload command.
+
+   @param[in] abfd BFD for the section.
+   @param[in] asec The section.
+
+   @return Boolean, true if asec should be transfered, otherwise false.  */
+
+static int
+mrk3_load_transfer_section (bfd *abfd, asection *asec)
+{
+  /* For now we send everything over.  In the future we might want to
+     filter out some sections that we know the remote will never be
+     interested in, for example debug content, or relocations.  */
+  return 1;
+}
 
 /*! Callback service function for mrk3_nxpload (bfd_map_over_sections).
 
@@ -2615,10 +2636,7 @@ mrk3_load_section_callback (bfd *abfd,
   gdb_byte *buffer;
   const char *sect_name = bfd_get_section_name (abfd, asec);
 
-  if ((bfd_get_section_flags (abfd, asec) & SEC_LOAD) == 0)
-    return;
-
-  if (size == 0)
+  if (!mrk3_load_transfer_section (abfd, asec))
     return;
 
   new_request = VEC_safe_push (memory_write_request_s,
@@ -2628,7 +2646,7 @@ mrk3_load_section_callback (bfd *abfd,
   new_request->begin = bfd_section_lma (abfd, asec) + args->load_offset;
   new_request->end = new_request->begin + size; /* FIXME Should size
 						   be in instead?  */
-  new_request->data = xmalloc (size);
+  new_request->data = (size > 0) ? xmalloc (size) : NULL;
   new_request->baton = section_data;
 
   buffer = new_request->data;
@@ -2637,6 +2655,8 @@ mrk3_load_section_callback (bfd *abfd,
   section_data->section_name = sect_name;
   section_data->section_size = size;
   section_data->lma = new_request->begin;
+  section_data->vma = bfd_section_vma (abfd, asec);
+  section_data->flags = bfd_get_section_flags (abfd, asec);
   section_data->buffer = buffer;
 
   bfd_get_section_contents (abfd, asec, buffer, 0, size);
@@ -2666,12 +2686,29 @@ mrk3_nxpload_progress (ULONGEST bytes, void *untyped_arg)
 
   if (bytes == 0 && args->section_sent == 0)
     {
+      int log_this_load = 0;
+
+      if (nxpload_logging == 1
+	  && (args->flags & SEC_LOAD) && (args->section_size > 0))
+	log_this_load = 1;
+      else if (nxpload_logging > 1)
+	log_this_load = 1;
+
       /* The write is just starting.  Let the user know we've started
 	 this section.  */
-      ui_out_message (current_uiout, 0, "Loading section %s, size %s lma %s\n",
-		      args->section_name, hex_string (args->section_size),
-		      paddress (target_gdbarch (), args->lma));
-      return;
+      if (log_this_load)
+	{
+	  struct ui_out *uiout = current_uiout;
+
+	  ui_out_text (uiout, "Loading section ");
+	  ui_out_field_fmt (uiout, "section-name", "%s", args->section_name);
+	  ui_out_text (uiout, ", size ");
+	  ui_out_field_fmt (uiout, "section-size", "%s", hex_string (args->section_size));
+	  ui_out_text (uiout, ", lma ");
+	  ui_out_field_fmt (uiout, "section-lma", "%s", paddress (target_gdbarch (), args->lma));
+	  ui_out_text (uiout, "\n");
+	  return;
+	}
     }
 
   /* The original has code to validate downloads here, which as far as I can
@@ -2697,6 +2734,39 @@ mrk3_nxpload_progress (ULONGEST bytes, void *untyped_arg)
 
 }	/* mrk3_nxpload_progress () */
 
+/* Sort load requests gathered as part of the nxpload command.
+   Non-loadable sections are sorted to the front of the list, and loadable
+   sections are sorted to the end.  Loadable and non loadable sections are
+   then sorted by start address.  */
+
+static int
+mrk3_load_sort_write_requests (const void *a, const void *b)
+{
+  const struct memory_write_request *a_req = a;
+  const struct memory_write_request *b_req = b;
+
+  struct nxpload_progress_section_data *a_secdata =
+    (struct nxpload_progress_section_data *) a_req->baton;
+  struct nxpload_progress_section_data *b_secdata =
+    (struct nxpload_progress_section_data *) b_req->baton;
+
+  if ((a_secdata->flags & SEC_LOAD) != (b_secdata->flags & SEC_LOAD))
+    {
+      if (a_secdata->flags & SEC_LOAD)
+	return 1;
+      else
+	return -1;
+    }
+  else
+    {
+      if (a_req->begin < b_req->begin)
+	return -1;
+      else if (a_req->begin == b_req->begin)
+	return 0;
+      else
+	return 1;
+    }
+}
 
 /*! Custom load command for MRK3
 
@@ -2723,6 +2793,8 @@ mrk3_nxpload (char *args,
   struct nxpload_progress_data total_progress;
   struct ui_out *uiout = current_uiout;
 
+  struct memory_write_request *r;
+  unsigned i;
   CORE_ADDR entry;
   char **argv;
 
@@ -2779,9 +2851,37 @@ mrk3_nxpload (char *args,
 
   gettimeofday (&start_time, NULL);
 
-  if (target_write_memory_blocks (cbdata.requests, flash_discard,
-				  mrk3_nxpload_progress) != 0)
-    error (_("Load failed"));
+  /* Sort the section list, non-loadable sections first, secondary sort by
+     start address.  */
+  qsort (VEC_address (memory_write_request_s, cbdata.requests),
+	 VEC_length (memory_write_request_s, cbdata.requests),
+	 sizeof (struct memory_write_request),
+	 mrk3_load_sort_write_requests);
+
+  /* Load all of the sections.  */
+  for (i = 0; VEC_iterate (memory_write_request_s, cbdata.requests, i, r); ++i)
+    {
+      char buf [1024]; /* Hack */
+      LONGEST len;
+      struct nxpload_progress_section_data *secdata =
+	(struct nxpload_progress_section_data *) r->baton;
+
+      snprintf (buf, 1024, "nxpload:%s:%s:%x:%s:%s",
+		core_addr_to_string (secdata->vma),
+		core_addr_to_string (secdata->lma),
+		secdata->flags,
+		pulongest (secdata->section_size),
+		secdata->section_name);
+      target_rcmd (buf, NULL);
+
+      len = target_write_with_progress (current_target.beneath,
+					TARGET_OBJECT_RAW_MEMORY, NULL,
+					r->data, 0, r->end - r->begin,
+					mrk3_nxpload_progress,
+					r->baton);
+      if (len < (LONGEST) (r->end - r->begin))
+	error (_("Load failed"));
+    }
 
   gettimeofday (&end_time, NULL);
 
@@ -2922,4 +3022,14 @@ _initialize_mrk3_tdep (void)
   c = add_com ("nxpload", class_files, mrk3_nxpload_command,
 	       "Customized load command for NXP");
   set_cmd_completer (c, filename_completer);
+
+  add_setshow_zinteger_cmd ("nxpload-logging", class_maintenance,
+			    &nxpload_logging,
+			    _("Set nxpload logging level."),
+			    _("Show nxpload logging level."),
+			    _("How much logging to report from nxpload command."),
+			    NULL,
+			    NULL,
+			    &setlist,
+			    &showlist);
 }
