@@ -331,7 +331,8 @@ init_mrk3_relax_info (asection *sec)
 {
   struct mrk3_relax_info *relax_info = get_mrk3_relax_info (sec);
 
-  relax_info->was_relaxed = FALSE;
+  if (relax_info)
+    relax_info->was_relaxed = FALSE;
 }
 
 static bfd_boolean

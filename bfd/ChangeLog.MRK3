@@ -1,3 +1,7 @@
+2015-03-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (init_mrk3_relax_info): Handle no relax_info case.
+
 2015-03-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (struct mrk3_relax_info): New struct.
