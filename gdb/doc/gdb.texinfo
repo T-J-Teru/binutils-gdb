@@ -20442,6 +20442,7 @@ acceptable commands.
 * M68K::                        Motorola M68K
 * MicroBlaze::			Xilinx MicroBlaze
 * MIPS Embedded::               MIPS Embedded
+* MRK3::                        NXP MRK3
 * PowerPC Embedded::            PowerPC Embedded
 * PA::                          HP PA Embedded
 * Sparclet::                    Tsqware Sparclet
@@ -20913,6 +20914,206 @@ Show the current setting of printing monitor warnings.
 @cindex send PMON command
 This command allows sending an arbitrary @var{command} string to the
 monitor.  The monitor must be in debug mode for this to work.
+@end table
+
+@node MRK3
+@subsection NXP
+@cindex NXP MRK3
+@cindex MRK3
+
+@noindent
+@value{GDBN} supports these special commands for MRK3 targets:
+
+@table @code
+@item set debug mrk3 @var{level}
+@item show debug mrk3
+@kindex set debug mrk3
+@kindex show debug mrk3
+
+Set and show the current debug level for the MRK3 target specific
+code. The following values are currently defined.  They may be ORed
+together to provide multiple sets of messages.
+
+@table @code
+@item 0x0001
+General debug messages.
+
+@item 0x0002
+Debug messages about conversion between pointers and addresses.
+
+@item 0x0004
+Debug messages about stack frame analysis.
+
+@item 0x0008
+Debug messages about memory space processing and analysis.
+
+@item 0x0010
+Debug messages about DWARF handling.
+
+@end table
+
+@item nxpload [ @var{filename} ]
+@kindex nxpload
+
+This command has the same usage as the standard @command{load} command
+(@pxref{Target Commands}).  However rather than just writing the
+contents of loadable sections to their @acronym{LMA}, it passes
+@emph{all} section contents to the target, to be processed by the
+target.  Along with the section contents, the @acronym{LMA},
+@acronym{VMA}, section name and size are provided.
+
+Non-loadable sections are sent before any loadable sections.  It is
+assumed these sections will contain information needed by the target
+to handle loadable sections, for example encryption information.
+
+@item set nxpload-logging @var{loglevel}
+@itemx show nxpload-logging
+@kindex set nxpload-logging
+@kindex show nxpload-logging
+
+Set and show the current logging level for the @command{nxpload}
+command.  A value of of 1 (the default) reports on loadable sections
+only, and reports overall start address and load size.  This is
+identical to the output of the standard @command{load} command.
+
+A value of 2 will report on all sections, not just the loadable ones.
+A value of 0 will report just the start address and load size, not the
+individual sections.
+
+@item monitor help
+@kindex monitor help
+
+Print brief information about the @samp{monitor} commands supported.
+
+@item monitor GetMemSpace
+@itemx monitor get-memspace
+@kindex monitor GetMemSpace
+@kindex monitor get-memspace
+
+Report which memory space we are currently talking to.
+
+@samp{monitor GetMemSpace} is the original command, now deprecated.
+@samp{monitor get-memspace} is a synonym which avoids issues of case
+insensitivity in MS Windows.  At some future date, support for
+@samp{GetMemSpace} will be discontinued, so all new programs should
+use @samp{get-memspace}.
+
+@item monitor SilentGetMemSpace
+@itemx monitor silent-get-memspace
+@kindex monitor SilentGetMemSpace
+@kindex monitor silent-get-memspace
+
+A version of @samp{monitor GetMemSpace}, which uses an undocumented
+feature of GDB to avoid the result being printed.  Can be used
+programmatically within GDB clients to find out the memory space.
+
+@samp{monitor SilentGetMemSpace} is the original command, now deprecated.
+@samp{monitor silent-get-memspace} is a synonym which avoids issues of case
+insensitivity in MS Windows.  At some future date, support for
+@samp{SilentGetMemSpace} will be discontinued, so all new programs should
+use @samp{silent-get-memspace}.
+
+@item monitor reset
+@kindex monitor reset
+
+Reset the target and cycle counts.
+
+@item monitor exit
+@kindex monitor exit
+
+Exit the simulator.
+
+@item monitor timeout @var{value}
+@kindex monitor timeout
+
+If a continue packet takes longer than @var{value} seconds, the
+continuation will terminate reporting a timeout exception.  Default
+value is 0, meaning no ntimeout.
+
+@item monitor disas @var{addr}
+@kindex monitor disas
+
+Disassemble the instruction at the given address.
+
+@item monitor silent-disas @var{addr}
+@kindex monitor silent-disas
+
+A version of @samp{monitor disas}, which uses an undocumented
+feature of GDB to avoid the result being printed.  Can be used
+programmatically within GDB clients to implement a disassembler.
+
+@item monitor cyclecount
+@kindex monitor cyclecount
+
+Report how many ``cycles'' have been executed since the last reset and
+the last call to @samp{monitor cyclecount}.  The interpretation of
+``cycles'' is target dependent.  For example with the ISS it is an
+estimate by the simulator of the number of cycles executed.
+
+@item monitor instrcount
+@kindex monitor instrcount
+
+Report how many ``instructions'' have been executed since the last reset and
+the last call to @samp{monitor instrcount}.  The interpretation of
+``instructions'' is target dependent, it refers to the number of calls made
+to @samp{resume (true)}.  For example with the ISS it will actually
+be the number of instructions executed.
+
+@item monitor set debug @var{value}
+@itemx monitor show debug
+@kindex monitor set debug
+@kindex monitor show debug
+
+Set and show the level of debug messaging for the target.  A
+@var{value} of 0 turns debugging off, a value of 9 sets the most
+verbose debugging.  @emph{Note.} Setting a value also enables the
+messages for all lower values.
+
+For the simulator, the values are:
+@cindex simulator debug levels
+
+@table @samp
+@item 0
+
+Turn off all messages.
+
+@item 1
+
+Fatal errors.  Behaviour like @samp{malloc} failure, which will cause
+the simulator to crash.
+
+@item 2
+
+Non-fatal errors.  This is where internal simulator inconsistency has
+been detected.
+
+@item 3
+
+Warnings.  Actions which are likely to represent problems, for example
+writing to a peripheral which is read-only.
+
+@item 4
+
+Info messages.  Additional information that might be useful.  The
+number of such messages is deliberately kept low.
+
+@item 5
+
+Debug messages.  These help debug code.  Use this level to see tracing
+of individual instructions.
+
+@item 6
+
+Trace messages.  Detailed info for the debug messages, such as backtraces.
+
+@item 7
+@itemx 8
+@itemx 9
+
+Currently undefined.
+
+@end table
+
 @end table
 
 @node PowerPC Embedded
