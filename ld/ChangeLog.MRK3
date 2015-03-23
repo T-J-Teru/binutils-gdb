@@ -1,3 +1,8 @@
+2015-03-23  Edward Jones  <ed.jones@embecosm.com>
+
+	* scripttempl/mrk3.sc (.text): Include libc strtol sections separately
+	and KEEP them. Also SORT these sections.
+
 2015-03-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* emultempl/mrk3.em (gld${EMULATION_NAME}_after_parse): New
