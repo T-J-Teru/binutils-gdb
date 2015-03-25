@@ -1,3 +1,7 @@
+2015-03-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* observer.texi (frame_cache_cleared): New event.
+
 2015-03-24  Pedro Alves  <palves@redhat.com>
 
 	* gdb.texinfo (test_step) <set scheduler-locking step>: No longer

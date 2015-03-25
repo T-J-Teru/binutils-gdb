@@ -1690,6 +1690,9 @@ reinit_frame_cache (void)
 {
   struct frame_info *fi;
 
+  /* Announce cache clearance before releasing memory.  */
+  observer_notify_frame_cache_cleared ();
+
   /* Tear down all frame caches.  */
   for (fi = current_frame; fi != NULL; fi = fi->prev)
     {
