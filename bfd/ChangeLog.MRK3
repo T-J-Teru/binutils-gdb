@@ -1,3 +1,8 @@
+2015-03-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_relax_section_filter): Don't relax sections
+	marked with the no-relax section flag (SHF_MRK3_NON_RELAX).
+
 2015-03-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (init_mrk3_relax_info): Handle no relax_info case.

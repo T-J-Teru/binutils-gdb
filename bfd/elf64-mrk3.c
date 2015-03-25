@@ -1234,6 +1234,9 @@ is_relaxable_16bit_immediate_instruction (const uint16_t insn)
 static bfd_boolean
 mrk3_relax_section_filter (bfd *abfd, asection *sec)
 {
+  if (elf_section_flags (sec) & SHF_MRK3_NON_RELAX)
+    return FALSE;
+
   relax_log ("Relaxing section `%s' from `%s'\n",
              sec->name, abfd->filename);
   return TRUE;
