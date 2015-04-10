@@ -1,6 +1,6 @@
 /* Generate a core file for the inferior process.
 
-   Copyright (C) 2001-2013 Free Software Foundation, Inc.
+   Copyright (C) 2001-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,7 +29,6 @@
 #include "completer.h"
 #include "gcore.h"
 #include "cli/cli-decode.h"
-#include "gdb_assert.h"
 #include <fcntl.h>
 #include "regcache.h"
 #include "regset.h"
@@ -61,13 +60,12 @@ create_gcore_bfd (const char *filename)
   return obfd;
 }
 
-/* write_gcore_file -- helper for gcore_command (exported).
-   Compose and write the corefile data to the core file.  */
+/* write_gcore_file_1 -- do the actual work of write_gcore_file.  */
 
-
-void
-write_gcore_file (bfd *obfd)
+static void
+write_gcore_file_1 (bfd *obfd)
 {
+  struct cleanup *cleanup;
   void *note_data = NULL;
   int note_size = 0;
   asection *note_sec = NULL;
@@ -80,6 +78,8 @@ write_gcore_file (bfd *obfd)
     note_data = target_make_corefile_notes (obfd, &note_size);
   else
     note_data = gdbarch_make_corefile_notes (target_gdbarch (), obfd, &note_size);
+
+  cleanup = make_cleanup (xfree, note_data);
 
   if (note_data == NULL || note_size == 0)
     error (_("Target does not support core file generation."));
@@ -104,6 +104,34 @@ write_gcore_file (bfd *obfd)
   /* Write out the contents of the note section.  */
   if (!bfd_set_section_contents (obfd, note_sec, note_data, 0, note_size))
     warning (_("writing note section (%s)"), bfd_errmsg (bfd_get_error ()));
+
+  do_cleanups (cleanup);
+}
+
+/* write_gcore_file -- helper for gcore_command (exported).
+   Compose and write the corefile data to the core file.  */
+
+void
+write_gcore_file (bfd *obfd)
+{
+  struct gdb_exception except = exception_none;
+
+  target_prepare_to_generate_core ();
+
+  TRY
+    {
+      write_gcore_file_1 (obfd);
+    }
+  CATCH (e, RETURN_MASK_ALL)
+    {
+      except = e;
+    }
+  END_CATCH
+
+  target_done_generating_core ();
+
+  if (except.reason < 0)
+    throw_exception (except);
 }
 
 static void
@@ -268,13 +296,13 @@ call_target_sbrk (int sbrk_arg)
   struct value *sbrk_fn, *ret;
   bfd_vma tmp;
 
-  if (lookup_minimal_symbol ("sbrk", NULL, NULL) != NULL)
+  if (lookup_minimal_symbol ("sbrk", NULL, NULL).minsym != NULL)
     {
       sbrk_fn = find_function_in_inferior ("sbrk", &sbrk_objf);
       if (sbrk_fn == NULL)
 	return (bfd_vma) 0;
     }
-  else if (lookup_minimal_symbol ("_sbrk", NULL, NULL) != NULL)
+  else if (lookup_minimal_symbol ("_sbrk", NULL, NULL).minsym != NULL)
     {
       sbrk_fn = find_function_in_inferior ("_sbrk", &sbrk_objf);
       if (sbrk_fn == NULL)
@@ -366,9 +394,9 @@ make_output_phdrs (bfd *obfd, asection *osec, void *ignored)
   int p_type = 0;
 
   /* FIXME: these constants may only be applicable for ELF.  */
-  if (strncmp (bfd_section_name (obfd, osec), "load", 4) == 0)
+  if (startswith (bfd_section_name (obfd, osec), "load"))
     p_type = PT_LOAD;
-  else if (strncmp (bfd_section_name (obfd, osec), "note", 4) == 0)
+  else if (startswith (bfd_section_name (obfd, osec), "note"))
     p_type = PT_NOTE;
   else
     p_type = PT_NULL;
@@ -471,8 +499,9 @@ gcore_create_callback (CORE_ADDR vaddr, unsigned long size, int read,
   return 0;
 }
 
-static int
-objfile_find_memory_regions (find_memory_region_ftype func, void *obfd)
+int
+objfile_find_memory_regions (struct target_ops *self,
+			     find_memory_region_ftype func, void *obfd)
 {
   /* Use objfile data to create memory sections.  */
   struct objfile *objfile;
@@ -540,7 +569,7 @@ gcore_copy_callback (bfd *obfd, asection *osec, void *ignored)
     return;
 
   /* Only interested in "load" sections.  */
-  if (strncmp ("load", bfd_section_name (obfd, osec), 4) != 0)
+  if (!startswith (bfd_section_name (obfd, osec), "load"))
     return;
 
   size = min (total_size, MAX_COPY_BYTES);
@@ -607,5 +636,4 @@ Save a core file with the current state of the debugged process.\n\
 Argument is optional filename.  Default filename is 'core.<process_id>'."));
 
   add_com_alias ("gcore", "generate-core-file", class_files, 1);
-  exec_set_find_memory_regions (objfile_find_memory_regions);
 }

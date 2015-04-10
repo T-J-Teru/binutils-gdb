@@ -7,7 +7,7 @@ Contents
 - Common Makefile Support
 - TAGS support
 - Generating "configure" files
-- tconfig.in
+- tconfig.h
 - C Language Assumptions
 - "dump" commands under gdb
 
@@ -159,12 +159,12 @@ To add the entries to an alternative ChangeLog file, use:
 	$  make ChangeLog=MyChangeLog ....
 
 
-tconfig.in
+tconfig.h
 ==========
 
-File tconfig.in defines one or more target configuration macros
+File tconfig.h defines one or more target configuration macros
 (e.g. a tm.h file).  There are very few that need defining.
-For a list of all of them, see common/tconfig.in.
+For a list of all of them, see common/tconfig.h.
 It contains them all, commented out.
 The intent is that a new port can just copy this file and
 define the ones it needs.
@@ -175,9 +175,7 @@ C Language Assumptions
 The programmer may assume that the simulator is being built using an
 ANSI C compiler that supports a 64 bit data type.  Consequently:
 
-	o	prototypes can be used (although using
-		PARAMS() and K&R declarations wouldn't
-		go astray).
+	o	prototypes can be used
 
 	o	If sim-types.h is included, the two
 		types signed64 and unsigned64 are

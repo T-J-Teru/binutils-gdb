@@ -1,6 +1,5 @@
 /* d10v-opc.c -- D10V opcode list
-   Copyright 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2005, 2007, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1996-2015 Free Software Foundation, Inc.
    Written by Martin Hunt, Cygnus Support
 
    This file is part of the GNU opcodes library.
@@ -91,7 +90,7 @@ const struct pd_reg d10v_predefined_registers[] =
 };
 
 int 
-d10v_reg_name_cnt()
+d10v_reg_name_cnt (void)
 {
   return (sizeof(d10v_predefined_registers) / sizeof(struct pd_reg));
 }

@@ -1,6 +1,6 @@
 // gc.h -- garbage collection of unused sections
 
-// Copyright 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+// Copyright (C) 2009-2015 Free Software Foundation, Inc.
 // Written by Sriraman Tallam <tmsriram@google.com>.
 
 // This file is part of gold.
@@ -109,11 +109,8 @@ class Garbage_collection
   {
     Section_id src_id(src_object, src_shndx);
     Section_id dst_id(dst_object, dst_shndx);
-    Section_ref::iterator p = this->section_reloc_map_.find(src_id);
-    if (p == this->section_reloc_map_.end())
-      this->section_reloc_map_[src_id].insert(dst_id);
-    else
-      p->second.insert(dst_id);
+    Sections_reachable& reachable = this->section_reloc_map_[src_id];
+    reachable.insert(dst_id);
   }
 
  private:

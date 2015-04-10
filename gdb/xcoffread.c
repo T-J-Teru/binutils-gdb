@@ -1,5 +1,5 @@
 /* Read AIX xcoff symbol tables and convert to internal format, for GDB.
-   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+   Copyright (C) 1986-2015 Free Software Foundation, Inc.
    Derived from coffread.c, dbxread.c, and a lot of hacking.
    Contributed by IBM Corporation.
 
@@ -24,8 +24,6 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <ctype.h>
-#include <string.h>
-
 #ifdef HAVE_SYS_FILE_H
 #include <sys/file.h>
 #endif
@@ -120,11 +118,6 @@ static CORE_ADDR first_object_file_end;
 /* Initial symbol-table-debug-string vector length.  */
 
 #define	INITIAL_STABVECTOR_LENGTH	40
-
-/* Nonzero if within a function (so symbols should be local,
-   if nothing says specifically).  */
-
-int within_function;
 
 /* Size of a COFF symbol.  I think it is always 18, so I'm not sure
    there is any reason not to just use a #define, but might as well
@@ -771,7 +764,7 @@ process_linenos (CORE_ADDR start, CORE_ADDR end)
 	     fool it.  */
 
 #if 0
-	  start_subfile (inclTable[ii].name, (char *) 0);
+	  start_subfile (inclTable[ii].name);
 #else
 	  {
 	    /* Pick a fake name that will produce the same results as this
@@ -781,7 +774,7 @@ process_linenos (CORE_ADDR start, CORE_ADDR end)
 
 	    if (fakename == NULL)
 	      fakename = " ?";
-	    start_subfile (fakename, (char *) 0);
+	    start_subfile (fakename);
 	    xfree (current_subfile->name);
 	  }
 	  current_subfile->name = xstrdup (inclTable[ii].name);
@@ -803,7 +796,7 @@ process_linenos (CORE_ADDR start, CORE_ADDR end)
 
 	  current_subfile->line_vector_length =
 	    current_subfile->line_vector->nitems;
-	  start_subfile (pop_subfile (), (char *) 0);
+	  start_subfile (pop_subfile ());
 	}
     }
 
@@ -811,9 +804,6 @@ return_after_cleanup:
 
   /* We don't want to keep alloc/free'ing the global include file table.  */
   inclIndx = 0;
-
-  /* Start with a fresh subfile structure for the next file.  */
-  memset (&main_subfile, '\0', sizeof (struct subfile));
 }
 
 static void
@@ -948,7 +938,6 @@ record_minimal_symbol (const char *name, CORE_ADDR address,
   if (name[0] == '.')
     ++name;
 
-  address += ANOFFSET (objfile->section_offsets, section);
   prim_record_minimal_symbol_and_info (name, address, ms_type,
 				       secnum_to_section (n_scnum, objfile),
 				       objfile);
@@ -1039,7 +1028,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 
   /* fcn_cs_saved is global because process_xcoff_symbol needs it.  */
   union internal_auxent fcn_aux_saved = main_aux;
-  struct context_stack *new;
+  struct context_stack *newobj;
 
   char *filestring = " _start_ ";	/* Name of the current file.  */
 
@@ -1056,7 +1045,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
   last_csect_name = 0;
 
   start_stabs ();
-  start_symtab (filestring, (char *) NULL, file_start_addr);
+  start_symtab (objfile, filestring, (char *) NULL, file_start_addr);
   record_debugformat (debugfmt);
   symnum = ((struct symloc *) pst->read_symtab_private)->first_symnum;
   max_symnum =
@@ -1142,13 +1131,13 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 	{
 	  if (get_last_source_file ())
 	    {
-	      pst->symtab = end_symtab (cur_src_end_addr, objfile,
-					SECT_OFF_TEXT (objfile));
+	      pst->compunit_symtab = end_symtab (cur_src_end_addr,
+						 SECT_OFF_TEXT (objfile));
 	      end_stabs ();
 	    }
 
 	  start_stabs ();
-	  start_symtab ("_globals_", (char *) NULL, (CORE_ADDR) 0);
+	  start_symtab (objfile, "_globals_", (char *) NULL, (CORE_ADDR) 0);
 	  record_debugformat (debugfmt);
 	  cur_src_end_addr = first_object_file_end;
 	  /* Done with all files, everything from here on is globals.  */
@@ -1200,13 +1189,13 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 			{
 			  complete_symtab (filestring, file_start_addr);
 			  cur_src_end_addr = file_end_addr;
-			  end_symtab (file_end_addr, objfile,
-				      SECT_OFF_TEXT (objfile));
+			  end_symtab (file_end_addr, SECT_OFF_TEXT (objfile));
 			  end_stabs ();
 			  start_stabs ();
 			  /* Give all csects for this source file the same
 			     name.  */
-			  start_symtab (filestring, NULL, (CORE_ADDR) 0);
+			  start_symtab (objfile, filestring, NULL,
+					(CORE_ADDR) 0);
 			  record_debugformat (debugfmt);
 			}
 
@@ -1322,7 +1311,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 
 	  complete_symtab (filestring, file_start_addr);
 	  cur_src_end_addr = file_end_addr;
-	  end_symtab (file_end_addr, objfile, SECT_OFF_TEXT (objfile));
+	  end_symtab (file_end_addr, SECT_OFF_TEXT (objfile));
 	  end_stabs ();
 
 	  /* XCOFF, according to the AIX 3.2 documentation, puts the
@@ -1341,7 +1330,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 	    filestring = cs->c_name;
 
 	  start_stabs ();
-	  start_symtab (filestring, (char *) NULL, (CORE_ADDR) 0);
+	  start_symtab (objfile, filestring, (char *) NULL, (CORE_ADDR) 0);
 	  record_debugformat (debugfmt);
 	  last_csect_name = 0;
 
@@ -1366,13 +1355,13 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 
 	      within_function = 1;
 
-	      new = push_context (0, fcn_start_addr + off);
+	      newobj = push_context (0, fcn_start_addr + off);
 
-	      new->name = define_symbol
+	      newobj->name = define_symbol
 		(fcn_cs_saved.c_value + off,
 		 fcn_stab_saved.c_name, 0, 0, objfile);
-	      if (new->name != NULL)
-		SYMBOL_SECTION (new->name) = SECT_OFF_TEXT (objfile);
+	      if (newobj->name != NULL)
+		SYMBOL_SECTION (newobj->name) = SECT_OFF_TEXT (objfile);
 	    }
 	  else if (strcmp (cs->c_name, ".ef") == 0)
 	    {
@@ -1390,22 +1379,21 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 		  within_function = 0;
 		  break;
 		}
-	      new = pop_context ();
+	      newobj = pop_context ();
 	      /* Stack must be empty now.  */
-	      if (context_stack_depth > 0 || new == NULL)
+	      if (context_stack_depth > 0 || newobj == NULL)
 		{
 		  ef_complaint (cs->c_symnum);
 		  within_function = 0;
 		  break;
 		}
 
-	      finish_block (new->name, &local_symbols, new->old_blocks,
-			    new->start_addr,
+	      finish_block (newobj->name, &local_symbols, newobj->old_blocks,
+			    newobj->start_addr,
 			    (fcn_cs_saved.c_value
 			     + fcn_aux_saved.x_sym.x_misc.x_fsize
 			     + ANOFFSET (objfile->section_offsets,
-					 SECT_OFF_TEXT (objfile))),
-			    objfile);
+					 SECT_OFF_TEXT (objfile))));
 	      within_function = 0;
 	    }
 	  break;
@@ -1471,7 +1459,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 	  if (strcmp (cs->c_name, ".bb") == 0)
 	    {
 	      depth++;
-	      new = push_context (depth,
+	      newobj = push_context (depth,
 				  (cs->c_value
 				   + ANOFFSET (objfile->section_offsets,
 					       SECT_OFF_TEXT (objfile))));
@@ -1483,8 +1471,8 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 		  eb_complaint (cs->c_symnum);
 		  break;
 		}
-	      new = pop_context ();
-	      if (depth-- != new->depth)
+	      newobj = pop_context ();
+	      if (depth-- != newobj->depth)
 		{
 		  eb_complaint (cs->c_symnum);
 		  break;
@@ -1492,14 +1480,13 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 	      if (local_symbols && context_stack_depth > 0)
 		{
 		  /* Make a block for the local symbols within.  */
-		  finish_block (new->name, &local_symbols, new->old_blocks,
-				new->start_addr,
+		  finish_block (newobj->name, &local_symbols, newobj->old_blocks,
+				newobj->start_addr,
 				(cs->c_value
 				 + ANOFFSET (objfile->section_offsets,
-					     SECT_OFF_TEXT (objfile))),
-				objfile);
+					     SECT_OFF_TEXT (objfile))));
 		}
-	      local_symbols = new->locals;
+	      local_symbols = newobj->locals;
 	    }
 	  break;
 
@@ -1511,17 +1498,17 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 
   if (get_last_source_file ())
     {
-      struct symtab *s;
+      struct compunit_symtab *cust;
 
       complete_symtab (filestring, file_start_addr);
       cur_src_end_addr = file_end_addr;
-      s = end_symtab (file_end_addr, objfile, SECT_OFF_TEXT (objfile));
+      cust = end_symtab (file_end_addr, SECT_OFF_TEXT (objfile));
       /* When reading symbols for the last C_FILE of the objfile, try
-         to make sure that we set pst->symtab to the symtab for the
+         to make sure that we set pst->compunit_symtab to the symtab for the
          file, not to the _globals_ symtab.  I'm not sure whether this
          actually works right or when/if it comes up.  */
-      if (pst->symtab == NULL)
-	pst->symtab = s;
+      if (pst->compunit_symtab == NULL)
+	pst->compunit_symtab = cust;
       end_stabs ();
     }
 }
@@ -1567,7 +1554,7 @@ process_xcoff_symbol (struct coff_symbol *cs, struct objfile *objfile)
   if (name[0] == '.')
     ++name;
 
-  initialize_symbol (sym);
+  initialize_objfile_symbol (sym);
 
   /* default assumptions */
   SYMBOL_VALUE_ADDRESS (sym) = cs->c_value + off;
@@ -2114,7 +2101,7 @@ xcoff_end_psymtab (struct objfile *objfile, struct partial_symtab *pst,
 	subpst->n_static_syms = 0;
 
       subpst->readin = 0;
-      subpst->symtab = 0;
+      subpst->compunit_symtab = NULL;
       subpst->read_symtab = pst->read_symtab;
     }
 
@@ -2649,7 +2636,7 @@ scan_xcoff_symtab (struct objfile *objfile)
 	case C_DECL:
 	case C_STSYM:
 	  {
-	    char *p;
+	    const char *p;
 
 	    swap_sym (&symbol, &main_aux[0], &namestring, &sraw_symbol,
 		      &ssymnum, objfile);
@@ -2776,7 +2763,7 @@ scan_xcoff_symtab (struct objfile *objfile)
 		       Accept either.  */
 		    while (*p && *p != ';' && *p != ',')
 		      {
-			char *q;
+			const char *q;
 
 			/* Check for and handle cretinous dbx symbol name
 			   continuation!  */
@@ -2852,7 +2839,7 @@ scan_xcoff_symtab (struct objfile *objfile)
 		   loader-generated definitions.  Keeping the global
 		   symbols leads to "in psymbols but not in symbols"
 		   errors.  */
-		if (strncmp (namestring, "@FIX", 4) == 0)
+		if (startswith (namestring, "@FIX"))
 		  continue;
 
 		symbol.n_value += ANOFFSET (objfile->section_offsets,

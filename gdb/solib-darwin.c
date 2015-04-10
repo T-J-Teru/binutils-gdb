@@ -1,6 +1,6 @@
 /* Handle Darwin shared libraries for GDB, the GNU Debugger.
 
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -30,8 +30,6 @@
 #include "gdbthread.h"
 #include "gdb_bfd.h"
 
-#include "gdb_assert.h"
-
 #include "solist.h"
 #include "solib.h"
 #include "solib-svr4.h"
@@ -40,7 +38,6 @@
 #include "elf-bfd.h"
 #include "exec.h"
 #include "auxv.h"
-#include "exceptions.h"
 #include "mach-o.h"
 #include "mach-o/external.h"
 
@@ -70,7 +67,7 @@ struct gdb_dyld_all_image_infos
 
 /* Current all_image_infos version.  */
 #define DYLD_VERSION_MIN 1
-#define DYLD_VERSION_MAX 12
+#define DYLD_VERSION_MAX 14
 
 /* Per PSPACE specific data.  */
 struct darwin_info
@@ -103,7 +100,7 @@ get_darwin_info (void)
   if (info != NULL)
     return info;
 
-  info = XZALLOC (struct darwin_info);
+  info = XCNEW (struct darwin_info);
   set_program_space_data (current_program_space,
 			  solib_darwin_pspace_data, info);
   return info;
@@ -274,7 +271,7 @@ darwin_current_sos (void)
       char *file_path;
       int errcode;
       struct darwin_so_list *dnew;
-      struct so_list *new;
+      struct so_list *newobj;
       struct cleanup *old_chain;
 
       /* Read image info from inferior.  */
@@ -304,23 +301,23 @@ darwin_current_sos (void)
 	break;
 
       /* Create and fill the new so_list element.  */
-      dnew = XZALLOC (struct darwin_so_list);
-      new = &dnew->sl;
+      dnew = XCNEW (struct darwin_so_list);
+      newobj = &dnew->sl;
       old_chain = make_cleanup (xfree, dnew);
 
-      new->lm_info = &dnew->li;
+      newobj->lm_info = &dnew->li;
 
-      strncpy (new->so_name, file_path, SO_NAME_MAX_PATH_SIZE - 1);
-      new->so_name[SO_NAME_MAX_PATH_SIZE - 1] = '\0';
-      strcpy (new->so_original_name, new->so_name);
+      strncpy (newobj->so_name, file_path, SO_NAME_MAX_PATH_SIZE - 1);
+      newobj->so_name[SO_NAME_MAX_PATH_SIZE - 1] = '\0';
+      strcpy (newobj->so_original_name, newobj->so_name);
       xfree (file_path);
-      new->lm_info->lm_addr = load_addr;
+      newobj->lm_info->lm_addr = load_addr;
 
       if (head == NULL)
-	head = new;
+	head = newobj;
       else
-	tail->next = new;
-      tail = new;
+	tail->next = newobj;
+      tail = newobj;
 
       discard_cleanups (old_chain);
     }
@@ -513,7 +510,10 @@ darwin_solib_create_inferior_hook (int from_tty)
   darwin_load_image_infos (info);
 
   if (!darwin_dyld_version_ok (info))
-    return;
+    {
+      warning (_("unhandled dyld version (%d)"), info->all_image.version);
+      return;
+    }
 
   create_solib_event_breakpoint (target_gdbarch (), info->all_image.notifier);
 
@@ -521,26 +521,10 @@ darwin_solib_create_inferior_hook (int from_tty)
   load_addr = darwin_read_exec_load_addr (info);
   if (load_addr != 0 && symfile_objfile != NULL)
     {
-      CORE_ADDR vmaddr = 0;
-      struct mach_o_data_struct *md = bfd_mach_o_get_data (exec_bfd);
-      unsigned int i, num;
+      CORE_ADDR vmaddr;
 
       /* Find the base address of the executable.  */
-      for (i = 0; i < md->header.ncmds; i++)
-	{
-	  struct bfd_mach_o_load_command *cmd = &md->commands[i];
-
-	  if (cmd->type != BFD_MACH_O_LC_SEGMENT
-	      && cmd->type != BFD_MACH_O_LC_SEGMENT_64)
-	    continue;
-	  if (cmd->command.segment.fileoff == 0
-	      && cmd->command.segment.vmaddr != 0
-	      && cmd->command.segment.filesize != 0)
-	    {
-	      vmaddr = cmd->command.segment.vmaddr;
-	      break;
-	    }
-	}
+      vmaddr = bfd_mach_o_get_base_address (exec_bfd);
 
       /* Relocate.  */
       if (vmaddr != load_addr)
@@ -586,7 +570,7 @@ darwin_relocate_section_addresses (struct so_list *so,
 }
 
 static struct symbol *
-darwin_lookup_lib_symbol (const struct objfile *objfile,
+darwin_lookup_lib_symbol (struct objfile *objfile,
 			  const char *name,
 			  const domain_enum domain)
 {
@@ -617,6 +601,12 @@ darwin_bfd_open (char *pathname)
       error (_("`%s': not a shared-library: %s"),
 	     bfd_get_filename (abfd), bfd_errmsg (bfd_get_error ()));
     }
+
+  /* The current filename for fat-binary BFDs is a name generated
+     by BFD, usually a string containing the name of the architecture.
+     Reset its value to the actual filename.  */
+  xfree (bfd_get_filename (res));
+  res->filename = xstrdup (pathname);
 
   gdb_bfd_unref (abfd);
   return res;

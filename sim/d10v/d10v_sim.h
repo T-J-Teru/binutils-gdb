@@ -278,10 +278,6 @@ struct _state
 extern host_callback *d10v_callback;
 extern uint16 OP[4];
 extern struct simops Simops[];
-extern asection *text;
-extern bfd_vma text_start;
-extern bfd_vma text_end;
-extern bfd *prog_bfd;
 
 enum
 {
@@ -397,6 +393,12 @@ enum
 #define SIG_D10V_EXIT	-2
 #define SIG_D10V_BUS    -3
 
+/* TODO: Resolve conflicts with common headers.  */
+#undef SEXT8
+#undef SEXT16
+#undef SEXT32
+#undef MASK32
+
 #define SEXT3(x)	((((x)&0x7)^(~3))+4)	
 
 /* sign-extend a 4-bit number */
@@ -442,8 +444,8 @@ do \
 while (0)
 
 extern uint8 *dmem_addr (uint16 offset);
-extern uint8 *imem_addr PARAMS ((uint32));
-extern bfd_vma decode_pc PARAMS ((void));
+extern uint8 *imem_addr (uint32);
+extern bfd_vma decode_pc (void);
 
 #define	RB(x)	(*(dmem_addr(x)))
 #define SB(addr,data)	( RB(addr) = (data & 0xff))
@@ -454,12 +456,12 @@ extern bfd_vma decode_pc PARAMS ((void));
 #undef ENDIAN_INLINE
 
 #else
-extern uint32 get_longword PARAMS ((uint8 *));
-extern uint16 get_word PARAMS ((uint8 *));
-extern int64 get_longlong PARAMS ((uint8 *));
-extern void write_word PARAMS ((uint8 *addr, uint16 data));
-extern void write_longword PARAMS ((uint8 *addr, uint32 data));
-extern void write_longlong PARAMS ((uint8 *addr, int64 data));
+extern uint32 get_longword (uint8 *);
+extern uint16 get_word (uint8 *);
+extern int64 get_longlong (uint8 *);
+extern void write_word (uint8 *addr, uint16 data);
+extern void write_longword (uint8 *addr, uint32 data);
+extern void write_longlong (uint8 *addr, int64 data);
 #endif
 
 #define SW(addr,data)		write_word(dmem_addr(addr),data)

@@ -1,5 +1,5 @@
 /* Host file transfer support for gdbserver.
-   Copyright (C) 2007-2013 Free Software Foundation, Inc.
+   Copyright (C) 2007-2015 Free Software Foundation, Inc.
 
    Contributed by CodeSourcery.
 
@@ -25,6 +25,9 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include "common-remote-fileio.h"
 
 extern int remote_debug;
 
@@ -412,6 +415,42 @@ handle_pwrite (char *own_buf, int packet_len)
 }
 
 static void
+handle_fstat (char *own_buf, int *new_packet_len)
+{
+  int fd, bytes_sent;
+  char *p;
+  struct stat st;
+  struct fio_stat fst;
+
+  p = own_buf + strlen ("vFile:fstat:");
+
+  if (require_int (&p, &fd)
+      || require_valid_fd (fd)
+      || require_end (p))
+    {
+      hostio_packet_error (own_buf);
+      return;
+    }
+
+  if (fstat (fd, &st) == -1)
+    {
+      hostio_error (own_buf);
+      return;
+    }
+
+  remote_fileio_to_fio_stat (&st, &fst);
+
+  bytes_sent = hostio_reply_with_data (own_buf,
+				       (char *) &fst, sizeof (fst),
+				       new_packet_len);
+
+  /* If the response does not fit into a single packet, do not attempt
+     to return a partial response, but simply fail.  */
+  if (bytes_sent < sizeof (fst))
+    write_enn (own_buf);
+}
+
+static void
 handle_close (char *own_buf)
 {
   int fd, ret;
@@ -478,7 +517,6 @@ handle_unlink (char *own_buf)
 static void
 handle_readlink (char *own_buf, int *new_packet_len)
 {
-#if defined (HAVE_READLINK)
   char filename[HOSTIO_PATH_MAX], linkname[HOSTIO_PATH_MAX];
   char *p;
   int ret, bytes_sent;
@@ -505,9 +543,6 @@ handle_readlink (char *own_buf, int *new_packet_len)
      to return a partial response, but simply fail.  */
   if (bytes_sent < ret)
     sprintf (own_buf, "F-1,%x", FILEIO_ENAMETOOLONG);
-#else /* ! HAVE_READLINK */
-    sprintf (own_buf, "F-1,%x", FILEIO_ENOSYS);
-#endif
 }
 
 /* Handle all the 'F' file transfer packets.  */
@@ -515,17 +550,19 @@ handle_readlink (char *own_buf, int *new_packet_len)
 int
 handle_vFile (char *own_buf, int packet_len, int *new_packet_len)
 {
-  if (strncmp (own_buf, "vFile:open:", 11) == 0)
+  if (startswith (own_buf, "vFile:open:"))
     handle_open (own_buf);
-  else if (strncmp (own_buf, "vFile:pread:", 11) == 0)
+  else if (startswith (own_buf, "vFile:pread:"))
     handle_pread (own_buf, new_packet_len);
-  else if (strncmp (own_buf, "vFile:pwrite:", 12) == 0)
+  else if (startswith (own_buf, "vFile:pwrite:"))
     handle_pwrite (own_buf, packet_len);
-  else if (strncmp (own_buf, "vFile:close:", 12) == 0)
+  else if (startswith (own_buf, "vFile:fstat:"))
+    handle_fstat (own_buf, new_packet_len);
+  else if (startswith (own_buf, "vFile:close:"))
     handle_close (own_buf);
-  else if (strncmp (own_buf, "vFile:unlink:", 13) == 0)
+  else if (startswith (own_buf, "vFile:unlink:"))
     handle_unlink (own_buf);
-  else if (strncmp (own_buf, "vFile:readlink:", 15) == 0)
+  else if (startswith (own_buf, "vFile:readlink:"))
     handle_readlink (own_buf, new_packet_len);
   else
     return 0;

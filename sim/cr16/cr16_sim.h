@@ -1,5 +1,5 @@
 /* Simulation code for the CR16 processor.
-   Copyright (C) 2008-2013 Free Software Foundation, Inc.
+   Copyright (C) 2008-2015 Free Software Foundation, Inc.
    Contributed by M Ranga Swami Reddy <MR.Swami.Reddy@nsc.com>
 
    This file is part of GDB, the GNU debugger.
@@ -285,10 +285,6 @@ extern host_callback *cr16_callback;
 extern uint32 OP[4];
 extern uint32 sign_flag;
 extern struct simops Simops[];
-extern asection *text;
-extern bfd_vma text_start;
-extern bfd_vma text_end;
-extern bfd *prog_bfd;
 
 enum
 {
@@ -403,6 +399,11 @@ enum
 #define SIG_CR16_BUS    -3
 #define SIG_CR16_IAD    -4
 
+/* TODO: Resolve conflicts with common headers.  */
+#undef SEXT8
+#undef SEXT16
+#undef SEXT32
+
 #define SEXT3(x)	((((x)&0x7)^(~3))+4)	
 
 /* sign-extend a 4-bit number */
@@ -421,8 +422,8 @@ enum
 #define SEXT32(x)	((((x)&0xffffffff)^(~0x7fffffff))+0x80000000)
 
 extern uint8 *dmem_addr (uint32 offset);
-extern uint8 *imem_addr PARAMS ((uint32));
-extern bfd_vma decode_pc PARAMS ((void));
+extern uint8 *imem_addr (uint32);
+extern bfd_vma decode_pc (void);
 
 #define	RB(x)	(*(dmem_addr(x)))
 #define SB(addr,data)	( RB(addr) = (data & 0xff))
@@ -433,12 +434,12 @@ extern bfd_vma decode_pc PARAMS ((void));
 #undef ENDIAN_INLINE
 
 #else
-extern uint32 get_longword PARAMS ((uint8 *));
-extern uint16 get_word PARAMS ((uint8 *));
-extern int64 get_longlong PARAMS ((uint8 *));
-extern void write_word PARAMS ((uint8 *addr, uint16 data));
-extern void write_longword PARAMS ((uint8 *addr, uint32 data));
-extern void write_longlong PARAMS ((uint8 *addr, int64 data));
+extern uint32 get_longword (uint8 *);
+extern uint16 get_word (uint8 *);
+extern int64 get_longlong (uint8 *);
+extern void write_word (uint8 *addr, uint16 data);
+extern void write_longword (uint8 *addr, uint32 data);
+extern void write_longlong (uint8 *addr, int64 data);
 #endif
 
 #define SW(addr,data)		write_word(dmem_addr(addr),data)

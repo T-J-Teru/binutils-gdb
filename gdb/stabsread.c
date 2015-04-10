@@ -1,6 +1,6 @@
 /* Support routines for decoding "stabs" debugging information format.
 
-   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+   Copyright (C) 1986-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -24,7 +24,6 @@
    Avoid placing any object file format specific code in this file.  */
 
 #include "defs.h"
-#include <string.h>
 #include "bfd.h"
 #include "gdb_obstack.h"
 #include "symtab.h"
@@ -44,8 +43,6 @@
 #include "doublest.h"
 #include "cp-abi.h"
 #include "cp-support.h"
-#include "gdb_assert.h"
-
 #include <ctype.h>
 
 /* Ask stabsread.h to define the vars it normally declares `extern'.  */
@@ -56,6 +53,24 @@
 
 extern void _initialize_stabsread (void);
 
+struct nextfield
+{
+  struct nextfield *next;
+
+  /* This is the raw visibility from the stab.  It is not checked
+     for being one of the visibilities we recognize, so code which
+     examines this field better be able to deal.  */
+  int visibility;
+
+  struct field field;
+};
+
+struct next_fnfieldlist
+{
+  struct next_fnfieldlist *next;
+  struct fn_fieldlist fn_fieldlist;
+};
+
 /* The routines that read and process a complete stabs for a C struct or 
    C++ class pass lists of data member fields and lists of member function
    fields in an instance of a field_info structure, as defined below.
@@ -64,24 +79,8 @@ extern void _initialize_stabsread (void);
 
 struct field_info
   {
-    struct nextfield
-      {
-	struct nextfield *next;
-
-	/* This is the raw visibility from the stab.  It is not checked
-	   for being one of the visibilities we recognize, so code which
-	   examines this field better be able to deal.  */
-	int visibility;
-
-	struct field field;
-      }
-     *list;
-    struct next_fnfieldlist
-      {
-	struct next_fnfieldlist *next;
-	struct fn_fieldlist fn_fieldlist;
-      }
-     *fnlist;
+    struct nextfield *list;
+    struct next_fnfieldlist *fnlist;
   };
 
 static void
@@ -678,6 +677,9 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
       SYMBOL_LINE (sym) = 0;	/* unknown */
     }
 
+  SYMBOL_SET_LANGUAGE (sym, current_subfile->language,
+		       &objfile->objfile_obstack);
+
   if (is_cplus_marker (string[0]))
     {
       /* Special GNU C++ names.  */
@@ -713,8 +715,6 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
   else
     {
     normal:
-      SYMBOL_SET_LANGUAGE (sym, current_subfile->language,
-			   &objfile->objfile_obstack);
       if (SYMBOL_LANGUAGE (sym) == language_cplus)
 	{
 	  char *name = alloca (p - string + 1);
@@ -863,9 +863,9 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
 	    /* NULL terminate the string.  */
 	    string_local[ind] = 0;
 	    range_type
-	      = create_range_type (NULL,
-				   objfile_type (objfile)->builtin_int,
-				   0, ind);
+	      = create_static_range_type (NULL,
+					  objfile_type (objfile)->builtin_int,
+					  0, ind);
 	    SYMBOL_TYPE (sym) = create_array_type (NULL,
 				  objfile_type (objfile)->builtin_char,
 				  range_type);
@@ -1168,17 +1168,17 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
 					    SYMBOL_LINKAGE_NAME (sym))
 	     != SYMBOL_LINKAGE_NAME (sym))
 	{
-	  struct minimal_symbol *msym;
+	  struct bound_minimal_symbol msym;
 
 	  msym = lookup_minimal_symbol (SYMBOL_LINKAGE_NAME (sym),
 					NULL, objfile);
-	  if (msym != NULL)
+	  if (msym.minsym != NULL)
 	    {
 	      const char *new_name = gdbarch_static_transform_name
 		(gdbarch, SYMBOL_LINKAGE_NAME (sym));
 
 	      SYMBOL_SET_LINKAGE_NAME (sym, new_name);
-	      SYMBOL_VALUE_ADDRESS (sym) = SYMBOL_VALUE_ADDRESS (msym);
+	      SYMBOL_VALUE_ADDRESS (sym) = BMSYMBOL_VALUE_ADDRESS (msym);
 	    }
 	}
       SYMBOL_DOMAIN (sym) = VAR_DOMAIN;
@@ -1360,17 +1360,17 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
 					    SYMBOL_LINKAGE_NAME (sym))
 	     != SYMBOL_LINKAGE_NAME (sym))
 	{
-	  struct minimal_symbol *msym;
+	  struct bound_minimal_symbol msym;
 
 	  msym = lookup_minimal_symbol (SYMBOL_LINKAGE_NAME (sym), 
 					NULL, objfile);
-	  if (msym != NULL)
+	  if (msym.minsym != NULL)
 	    {
 	      const char *new_name = gdbarch_static_transform_name
 		(gdbarch, SYMBOL_LINKAGE_NAME (sym));
 
 	      SYMBOL_SET_LINKAGE_NAME (sym, new_name);
-	      SYMBOL_VALUE_ADDRESS (sym) = SYMBOL_VALUE_ADDRESS (msym);
+	      SYMBOL_VALUE_ADDRESS (sym) = BMSYMBOL_VALUE_ADDRESS (msym);
 	    }
 	}
       SYMBOL_DOMAIN (sym) = VAR_DOMAIN;
@@ -1809,10 +1809,10 @@ again:
         while (**pp && **pp != '#')
           {
             struct type *arg_type = read_type (pp, objfile);
-            struct type_list *new = alloca (sizeof (*new));
-            new->type = arg_type;
-            new->next = arg_types;
-            arg_types = new;
+            struct type_list *newobj = alloca (sizeof (*newobj));
+            newobj->type = arg_type;
+            newobj->next = arg_types;
+            arg_types = newobj;
             num_args++;
           }
         if (**pp == '#')
@@ -2378,14 +2378,21 @@ read_member_functions (struct field_info *fip, char **pp, struct type *type,
 	      p++;
 	    }
 
-	  /* If this is just a stub, then we don't have the real name here.  */
+	  /* These are methods, not functions.  */
+	  if (TYPE_CODE (new_sublist->fn_field.type) == TYPE_CODE_FUNC)
+	    TYPE_CODE (new_sublist->fn_field.type) = TYPE_CODE_METHOD;
+	  else
+	    gdb_assert (TYPE_CODE (new_sublist->fn_field.type)
+			== TYPE_CODE_METHOD);
 
+	  /* If this is just a stub, then we don't have the real name here.  */
 	  if (TYPE_STUB (new_sublist->fn_field.type))
 	    {
-	      if (!TYPE_DOMAIN_TYPE (new_sublist->fn_field.type))
-		TYPE_DOMAIN_TYPE (new_sublist->fn_field.type) = type;
+	      if (!TYPE_SELF_TYPE (new_sublist->fn_field.type))
+		set_type_self_type (new_sublist->fn_field.type, type);
 	      new_sublist->fn_field.is_stub = 1;
 	    }
+
 	  new_sublist->fn_field.physname = savestring (*pp, p - *pp);
 	  *pp = p + 1;
 
@@ -2994,7 +3001,7 @@ read_struct_fields (struct field_info *fip, char **pp, struct type *type,
 		    struct objfile *objfile)
 {
   char *p;
-  struct nextfield *new;
+  struct nextfield *newobj;
 
   /* We better set p right now, in case there are no fields at all...    */
 
@@ -3010,11 +3017,11 @@ read_struct_fields (struct field_info *fip, char **pp, struct type *type,
     {
       STABS_CONTINUE (pp, objfile);
       /* Get space to record the next field's data.  */
-      new = (struct nextfield *) xmalloc (sizeof (struct nextfield));
-      make_cleanup (xfree, new);
-      memset (new, 0, sizeof (struct nextfield));
-      new->next = fip->list;
-      fip->list = new;
+      newobj = (struct nextfield *) xmalloc (sizeof (struct nextfield));
+      make_cleanup (xfree, newobj);
+      memset (newobj, 0, sizeof (struct nextfield));
+      newobj->next = fip->list;
+      fip->list = newobj;
 
       /* Get the field name.  */
       p = *pp;
@@ -3092,7 +3099,7 @@ read_baseclasses (struct field_info *fip, char **pp, struct type *type,
 		  struct objfile *objfile)
 {
   int i;
-  struct nextfield *new;
+  struct nextfield *newobj;
 
   if (**pp != '!')
     {
@@ -3132,12 +3139,12 @@ read_baseclasses (struct field_info *fip, char **pp, struct type *type,
 
   for (i = 0; i < TYPE_N_BASECLASSES (type); i++)
     {
-      new = (struct nextfield *) xmalloc (sizeof (struct nextfield));
-      make_cleanup (xfree, new);
-      memset (new, 0, sizeof (struct nextfield));
-      new->next = fip->list;
-      fip->list = new;
-      FIELD_BITSIZE (new->field) = 0;	/* This should be an unpacked
+      newobj = (struct nextfield *) xmalloc (sizeof (struct nextfield));
+      make_cleanup (xfree, newobj);
+      memset (newobj, 0, sizeof (struct nextfield));
+      newobj->next = fip->list;
+      fip->list = newobj;
+      FIELD_BITSIZE (newobj->field) = 0;	/* This should be an unpacked
 					   field!  */
 
       STABS_CONTINUE (pp, objfile);
@@ -3159,8 +3166,8 @@ read_baseclasses (struct field_info *fip, char **pp, struct type *type,
 	}
       ++(*pp);
 
-      new->visibility = *(*pp)++;
-      switch (new->visibility)
+      newobj->visibility = *(*pp)++;
+      switch (newobj->visibility)
 	{
 	case VISIBILITY_PRIVATE:
 	case VISIBILITY_PROTECTED:
@@ -3172,8 +3179,8 @@ read_baseclasses (struct field_info *fip, char **pp, struct type *type,
 	  {
 	    complaint (&symfile_complaints,
 		       _("Unknown visibility `%c' for baseclass"),
-		       new->visibility);
-	    new->visibility = VISIBILITY_PUBLIC;
+		       newobj->visibility);
+	    newobj->visibility = VISIBILITY_PUBLIC;
 	  }
 	}
 
@@ -3184,7 +3191,7 @@ read_baseclasses (struct field_info *fip, char **pp, struct type *type,
 	   corresponding to this baseclass.  Always zero in the absence of
 	   multiple inheritance.  */
 
-	SET_FIELD_BITPOS (new->field, read_huge_number (pp, ',', &nbits, 0));
+	SET_FIELD_BITPOS (newobj->field, read_huge_number (pp, ',', &nbits, 0));
 	if (nbits != 0)
 	  return 0;
       }
@@ -3193,8 +3200,8 @@ read_baseclasses (struct field_info *fip, char **pp, struct type *type,
          base class.  Read it, and remember it's type name as this
          field's name.  */
 
-      new->field.type = read_type (pp, objfile);
-      new->field.name = type_name_no_tag (new->field.type);
+      newobj->field.type = read_type (pp, objfile);
+      newobj->field.name = type_name_no_tag (newobj->field.type);
 
       /* Skip trailing ';' and bump count of number of fields seen.  */
       if (**pp == ';')
@@ -3262,7 +3269,7 @@ read_tilde_fields (struct field_info *fip, char **pp, struct type *type,
 	      return 0;
 	    }
 
-	  TYPE_VPTR_BASETYPE (type) = t;
+	  set_type_vptr_basetype (type, t);
 	  if (type == t)	/* Our own class provides vtbl ptr.  */
 	    {
 	      for (i = TYPE_NFIELDS (t) - 1;
@@ -3274,7 +3281,7 @@ read_tilde_fields (struct field_info *fip, char **pp, struct type *type,
 		  if (!strncmp (name, vptr_name, sizeof (vptr_name) - 2)
 		      && is_cplus_marker (name[sizeof (vptr_name) - 2]))
 		    {
-		      TYPE_VPTR_FIELDNO (type) = i;
+		      set_type_vptr_fieldno (type, i);
 		      goto gotit;
 		    }
 		}
@@ -3287,7 +3294,7 @@ read_tilde_fields (struct field_info *fip, char **pp, struct type *type,
 	    }
 	  else
 	    {
-	      TYPE_VPTR_FIELDNO (type) = TYPE_VPTR_FIELDNO (t);
+	      set_type_vptr_fieldno (type, TYPE_VPTR_FIELDNO (t));
 	    }
 
 	gotit:
@@ -3615,7 +3622,7 @@ read_array_type (char **pp, struct type *type,
     }
 
   range_type =
-    create_range_type ((struct type *) NULL, index_type, lower, upper);
+    create_static_range_type ((struct type *) NULL, index_type, lower, upper);
   type = create_array_type (type, element_type, range_type);
 
   return type;
@@ -4245,7 +4252,8 @@ handle_true_range:
       index_type = objfile_type (objfile)->builtin_int;
     }
 
-  result_type = create_range_type ((struct type *) NULL, index_type, n2, n3);
+  result_type
+    = create_static_range_type ((struct type *) NULL, index_type, n2, n3);
   return (result_type);
 }
 
@@ -4344,7 +4352,7 @@ common_block_end (struct objfile *objfile)
      symbol for the common block name for later fixup.  */
   int i;
   struct symbol *sym;
-  struct pending *new = 0;
+  struct pending *newobj = 0;
   struct pending *next;
   int j;
 
@@ -4367,7 +4375,7 @@ common_block_end (struct objfile *objfile)
        next = next->next)
     {
       for (j = 0; j < next->nsyms; j++)
-	add_symbol_to_list (next->symbol[j], &new);
+	add_symbol_to_list (next->symbol[j], &newobj);
     }
 
   /* Copy however much of COMMON_BLOCK we need.  If COMMON_BLOCK is
@@ -4376,9 +4384,9 @@ common_block_end (struct objfile *objfile)
 
   if (common_block != NULL)
     for (j = common_block_i; j < common_block->nsyms; j++)
-      add_symbol_to_list (common_block->symbol[j], &new);
+      add_symbol_to_list (common_block->symbol[j], &newobj);
 
-  SYMBOL_TYPE (sym) = (struct type *) new;
+  SYMBOL_TYPE (sym) = (struct type *) newobj;
 
   /* Should we be putting local_symbols back to what it was?
      Does it matter?  */
@@ -4548,9 +4556,9 @@ cleanup_undefined_types_1 (void)
 		struct pending *ppt;
 		int i;
 		/* Name of the type, without "struct" or "union".  */
-		const char *typename = TYPE_TAG_NAME (*type);
+		const char *type_name = TYPE_TAG_NAME (*type);
 
-		if (typename == NULL)
+		if (type_name == NULL)
 		  {
 		    complaint (&symfile_complaints, _("need a type name"));
 		    break;
@@ -4568,7 +4576,7 @@ cleanup_undefined_types_1 (void)
 			    && (TYPE_INSTANCE_FLAGS (*type) ==
 				TYPE_INSTANCE_FLAGS (SYMBOL_TYPE (sym)))
 			    && strcmp (SYMBOL_LINKAGE_NAME (sym),
-				       typename) == 0)
+				       type_name) == 0)
                           replace_type (*type, SYMBOL_TYPE (sym));
 		      }
 		  }
@@ -4654,11 +4662,11 @@ scan_file_globals (struct objfile *objfile)
 	  /* Get the hash index and check all the symbols
 	     under that hash index.  */
 
-	  hash = hashname (SYMBOL_LINKAGE_NAME (msymbol));
+	  hash = hashname (MSYMBOL_LINKAGE_NAME (msymbol));
 
 	  for (sym = global_sym_chain[hash]; sym;)
 	    {
-	      if (strcmp (SYMBOL_LINKAGE_NAME (msymbol),
+	      if (strcmp (MSYMBOL_LINKAGE_NAME (msymbol),
 			  SYMBOL_LINKAGE_NAME (sym)) == 0)
 		{
 		  /* Splice this symbol out of the hash chain and
@@ -4680,14 +4688,15 @@ scan_file_globals (struct objfile *objfile)
 		      if (SYMBOL_CLASS (sym) == LOC_BLOCK)
 			{
 			  fix_common_block (sym,
-					    SYMBOL_VALUE_ADDRESS (msymbol));
+					    MSYMBOL_VALUE_ADDRESS (resolve_objfile,
+								   msymbol));
 			}
 		      else
 			{
 			  SYMBOL_VALUE_ADDRESS (sym)
-			    = SYMBOL_VALUE_ADDRESS (msymbol);
+			    = MSYMBOL_VALUE_ADDRESS (resolve_objfile, msymbol);
 			}
-		      SYMBOL_SECTION (sym) = SYMBOL_SECTION (msymbol);
+		      SYMBOL_SECTION (sym) = MSYMBOL_SECTION (msymbol);
 		    }
 
 		  if (prev)

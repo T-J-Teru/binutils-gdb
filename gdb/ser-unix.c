@@ -1,6 +1,6 @@
 /* Serial interface for local (hardwired) serial ports on Un*x like systems
 
-   Copyright (C) 1992-2013 Free Software Foundation, Inc.
+   Copyright (C) 1992-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,7 +29,6 @@
 #include <sys/time.h>
 
 #include "gdb_select.h"
-#include <string.h>
 #include "gdbcmd.h"
 #include "filestuff.h"
 
@@ -84,6 +83,7 @@ static int hardwire_readchar (struct serial *scb, int timeout);
 static int do_hardwire_readchar (struct serial *scb, int timeout);
 static int rate_to_code (int rate);
 static int hardwire_setbaudrate (struct serial *scb, int rate);
+static int hardwire_setparity (struct serial *scb, int parity);
 static void hardwire_close (struct serial *scb);
 static int get_tty_state (struct serial *scb,
 			  struct hardwire_ttystate * state);
@@ -410,7 +410,7 @@ hardwire_raw (struct serial *scb)
   state.termios.c_iflag = 0;
   state.termios.c_oflag = 0;
   state.termios.c_lflag = 0;
-  state.termios.c_cflag &= ~(CSIZE | PARENB);
+  state.termios.c_cflag &= ~CSIZE;
   state.termios.c_cflag |= CLOCAL | CS8;
 #ifdef CRTSCTS
   /* h/w flow control.  */
@@ -433,7 +433,7 @@ hardwire_raw (struct serial *scb)
   state.termio.c_iflag = 0;
   state.termio.c_oflag = 0;
   state.termio.c_lflag = 0;
-  state.termio.c_cflag &= ~(CSIZE | PARENB);
+  state.termio.c_cflag &= ~CSIZE;
   state.termio.c_cflag |= CLOCAL | CS8;
   state.termio.c_cc[VMIN] = 0;
   state.termio.c_cc[VTIME] = 0;
@@ -894,6 +894,51 @@ hardwire_setstopbits (struct serial *scb, int num)
   return set_tty_state (scb, &state);
 }
 
+/* Implement the "setparity" serial_ops callback.  */
+
+static int
+hardwire_setparity (struct serial *scb, int parity)
+{
+  struct hardwire_ttystate state;
+  int newparity = 0;
+
+  if (get_tty_state (scb, &state))
+    return -1;
+
+  switch (parity)
+    {
+    case GDBPARITY_NONE:
+      newparity = 0;
+      break;
+    case GDBPARITY_ODD:
+      newparity = PARENB | PARODD;
+      break;
+    case GDBPARITY_EVEN:
+      newparity = PARENB;
+      break;
+    default:
+      internal_warning (__FILE__, __LINE__,
+			"Incorrect parity value: %d", parity);
+      return -1;
+    }
+
+#ifdef HAVE_TERMIOS
+  state.termios.c_cflag &= ~(PARENB | PARODD);
+  state.termios.c_cflag |= newparity;
+#endif
+
+#ifdef HAVE_TERMIO
+  state.termio.c_cflag &= ~(PARENB | PARODD);
+  state.termio.c_cflag |= newparity;
+#endif
+
+#ifdef HAVE_SGTTY
+  return 0;            /* sgtty doesn't support this */
+#endif
+  return set_tty_state (scb, &state);
+}
+
+
 static void
 hardwire_close (struct serial *scb)
 {
@@ -905,37 +950,42 @@ hardwire_close (struct serial *scb)
 }
 
 
-void
-_initialize_ser_hardwire (void)
-{
-  struct serial_ops *ops = XMALLOC (struct serial_ops);
 
-  memset (ops, 0, sizeof (struct serial_ops));
-  ops->name = "hardwire";
-  ops->next = 0;
-  ops->open = hardwire_open;
-  ops->close = hardwire_close;
+/* The hardwire ops.  */
+
+static const struct serial_ops hardwire_ops =
+{
+  "hardwire",
+  hardwire_open,
+  hardwire_close,
+  NULL,
   /* FIXME: Don't replace this with the equivalent ser_base*() until
      the old TERMIOS/SGTTY/... timer code has been flushed.  cagney
      1999-09-16.  */
-  ops->readchar = hardwire_readchar;
-  ops->write = ser_base_write;
-  ops->flush_output = hardwire_flush_output;
-  ops->flush_input = hardwire_flush_input;
-  ops->send_break = hardwire_send_break;
-  ops->go_raw = hardwire_raw;
-  ops->get_tty_state = hardwire_get_tty_state;
-  ops->copy_tty_state = hardwire_copy_tty_state;
-  ops->set_tty_state = hardwire_set_tty_state;
-  ops->print_tty_state = hardwire_print_tty_state;
-  ops->noflush_set_tty_state = hardwire_noflush_set_tty_state;
-  ops->setbaudrate = hardwire_setbaudrate;
-  ops->setstopbits = hardwire_setstopbits;
-  ops->drain_output = hardwire_drain_output;
-  ops->async = ser_base_async;
-  ops->read_prim = ser_unix_read_prim;
-  ops->write_prim = ser_unix_write_prim;
-  serial_add_interface (ops);
+  hardwire_readchar,
+  ser_base_write,
+  hardwire_flush_output,
+  hardwire_flush_input,
+  hardwire_send_break,
+  hardwire_raw,
+  hardwire_get_tty_state,
+  hardwire_copy_tty_state,
+  hardwire_set_tty_state,
+  hardwire_print_tty_state,
+  hardwire_noflush_set_tty_state,
+  hardwire_setbaudrate,
+  hardwire_setstopbits,
+  hardwire_setparity,
+  hardwire_drain_output,
+  ser_base_async,
+  ser_unix_read_prim,
+  ser_unix_write_prim
+};
+
+void
+_initialize_ser_hardwire (void)
+{
+  serial_add_interface (&hardwire_ops);
 
 #ifdef HAVE_TERMIOS
 #ifdef CRTSCTS

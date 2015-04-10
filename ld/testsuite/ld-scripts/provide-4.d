@@ -2,9 +2,8 @@
 #ld: -T provide-4.t
 #PROG: nm
 #map: provide-4-map.d
-
-0000000000000003 A baz
-0000000000002000 D foo
-0000000000002010 D loc2
-0000000000002030 A loc4
-
+#...
+0+3 A baz
+0+2000 D foo
+0+2010 D loc2
+0+2030 A loc4

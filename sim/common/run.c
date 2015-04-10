@@ -1,5 +1,5 @@
 /* run front end support for all the simulators.
-   Copyright (C) 1992-2013 Free Software Foundation, Inc.
+   Copyright (C) 1992-2015 Free Software Foundation, Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,7 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #ifdef HAVE_CONFIG_H
 #include "cconfig.h"
-#include "tconfig.h"
 #endif
 
 #include <signal.h>
@@ -50,8 +49,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "run-sim.h"
 #include "version.h"
 
-static void usage PARAMS ((int help));
-static void print_version PARAMS ((void));
+#ifdef SIM_USE_DEPRECATED_RUN_FRONTEND
+# warning "This sim is using the deprecated run.c; please migrate to nrun.c."
+#else
+# error "Please do not create new sim ports using run.c; use nrun.c instead." \
+        "New submissions using run.c will not be accepted."
+#endif
+
+static void usage (int help);
+static void print_version (void);
 extern int optind;
 extern char *optarg;
 
@@ -63,7 +69,7 @@ extern int getopt ();
 
 #ifdef NEED_UI_LOOP_HOOK
 /* Gdb foolery. This is only needed for gdb using a gui.  */
-int (*deprecated_ui_loop_hook) PARAMS ((int signo));
+int (*deprecated_ui_loop_hook) (int signo);
 #endif
 
 static SIM_DESC sd;
@@ -79,9 +85,7 @@ cntrl_c (int sig ATTRIBUTE_UNUSED)
 }
 
 int
-main (ac, av)
-     int ac;
-     char **av;
+main (int ac, char **av)
 {
   RETSIGTYPE (*prev_sigint) ();
   bfd *abfd;
@@ -351,7 +355,7 @@ usage (int help)
 }
 
 static void
-print_version ()
+print_version (void)
 {
   printf ("GNU simulator %s%s\n", PKGVERSION, version);
 }

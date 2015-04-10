@@ -30,7 +30,6 @@
 #include <sys/file.h>
 #include <unistd.h>
 #include "sis.h"
-#include "end.h"
 #include "sim-config.h"
 
 extern int      ctrl_c;
@@ -256,52 +255,52 @@ int erareg;
 
 /* Forward declarations */
 
-static void	decode_ersr PARAMS ((void));
+static void	decode_ersr (void);
 #ifdef ERRINJ
-static void	iucomperr PARAMS ((void));
+static void	iucomperr (void);
 #endif
-static void	mecparerror PARAMS ((void));
-static void	decode_memcfg PARAMS ((void));
-static void	decode_wcr PARAMS ((void));
-static void	decode_mcr PARAMS ((void));
-static void	close_port PARAMS ((void));
-static void	mec_reset PARAMS ((void));
-static void	mec_intack PARAMS ((int32 level));
-static void	chk_irq PARAMS ((void));
-static void	mec_irq PARAMS ((int32 level));
-static void	set_sfsr PARAMS ((uint32 fault, uint32 addr,
-				  uint32 asi, uint32 read));
-static int32	mec_read PARAMS ((uint32 addr, uint32 asi, uint32 *data));
-static int	mec_write PARAMS ((uint32 addr, uint32 data));
-static void	port_init PARAMS ((void));
-static uint32	read_uart PARAMS ((uint32 addr));
-static void	write_uart PARAMS ((uint32 addr, uint32 data));
-static void	flush_uart PARAMS ((void));
-static void	uarta_tx PARAMS ((void));
-static void	uartb_tx PARAMS ((void));
-static void	uart_rx PARAMS ((caddr_t arg));
-static void	uart_intr PARAMS ((caddr_t arg));
-static void	uart_irq_start PARAMS ((void));
-static void	wdog_intr PARAMS ((caddr_t arg));
-static void	wdog_start PARAMS ((void));
-static void	rtc_intr PARAMS ((caddr_t arg));
-static void	rtc_start PARAMS ((void));
-static uint32	rtc_counter_read PARAMS ((void));
-static void	rtc_scaler_set PARAMS ((uint32 val));
-static void	rtc_reload_set PARAMS ((uint32 val));
-static void	gpt_intr PARAMS ((caddr_t arg));
-static void	gpt_start PARAMS ((void));
-static uint32	gpt_counter_read PARAMS ((void));
-static void	gpt_scaler_set PARAMS ((uint32 val));
-static void	gpt_reload_set PARAMS ((uint32 val));
-static void	timer_ctrl PARAMS ((uint32 val));
+static void	mecparerror (void);
+static void	decode_memcfg (void);
+static void	decode_wcr (void);
+static void	decode_mcr (void);
+static void	close_port (void);
+static void	mec_reset (void);
+static void	mec_intack (int32 level);
+static void	chk_irq (void);
+static void	mec_irq (int32 level);
+static void	set_sfsr (uint32 fault, uint32 addr,
+			  uint32 asi, uint32 read);
+static int32	mec_read (uint32 addr, uint32 asi, uint32 *data);
+static int	mec_write (uint32 addr, uint32 data);
+static void	port_init (void);
+static uint32	read_uart (uint32 addr);
+static void	write_uart (uint32 addr, uint32 data);
+static void	flush_uart (void);
+static void	uarta_tx (void);
+static void	uartb_tx (void);
+static void	uart_rx (caddr_t arg);
+static void	uart_intr (caddr_t arg);
+static void	uart_irq_start (void);
+static void	wdog_intr (caddr_t arg);
+static void	wdog_start (void);
+static void	rtc_intr (caddr_t arg);
+static void	rtc_start (void);
+static uint32	rtc_counter_read (void);
+static void	rtc_scaler_set (uint32 val);
+static void	rtc_reload_set (uint32 val);
+static void	gpt_intr (caddr_t arg);
+static void	gpt_start (void);
+static uint32	gpt_counter_read (void);
+static void	gpt_scaler_set (uint32 val);
+static void	gpt_reload_set (uint32 val);
+static void	timer_ctrl (uint32 val);
 static unsigned char *
-		get_mem_ptr PARAMS ((uint32 addr, uint32 size));
+		get_mem_ptr (uint32 addr, uint32 size);
 
-static void	fetch_bytes PARAMS ((int asi, unsigned char *mem,
-				     uint32 *data, int sz));
+static void	fetch_bytes (int asi, unsigned char *mem,
+			     uint32 *data, int sz);
 
-static void	store_bytes PARAMS ((unsigned char *mem, uint32 *data, int sz));
+static void	store_bytes (unsigned char *mem, uint32 *data, int sz);
 
 extern int	ext_irl;
 
@@ -733,7 +732,7 @@ mec_read(addr, asi, data)
     case MEC_UARTB:		/* 0xE4 */
 	if (asi != 0xb) {
 	    set_sfsr(MEC_ACC, addr, asi, 1);
-	    return (1);
+	    return 1;
 	}
 	*data = read_uart(addr);
 	break;
@@ -743,12 +742,20 @@ mec_read(addr, asi, data)
 	*data = read_uart(addr);
 	break;
 
+    case 0xF4:		/* simulator RAM size in bytes */
+	*data = 4096*1024;
+	break;
+
+    case 0xF8:		/* simulator ROM size in bytes */
+	*data = 1024*1024;
+	break;
+
     default:
 	set_sfsr(MEC_ACC, addr, asi, 1);
-	return (1);
+	return 1;
 	break;
     }
-    return (MOK);
+    return MOK;
 }
 
 static int
@@ -924,10 +931,10 @@ mec_write(addr, data)
 
     default:
 	set_sfsr(MEC_ACC, addr, 0xb, 0);
-	return (1);
+	return 1;
 	break;
     }
-    return (MOK);
+    return MOK;
 }
 
 
@@ -1079,7 +1086,7 @@ read_uart(addr)
 	return tmp;
 #endif
 #else
-	return(0);
+	return 0;
 #endif
 	break;
 
@@ -1111,7 +1118,7 @@ read_uart(addr)
 	return tmp;
 #endif
 #else
-	return(0);
+	return 0;
 #endif
 	break;
 
@@ -1146,12 +1153,12 @@ read_uart(addr)
 	}
 
 	Ucontrol |= 0x00060006;
-	return (Ucontrol);
+	return Ucontrol;
 #else
-	return (uart_stat_reg);
+	return uart_stat_reg;
 #endif
 #else
-	return(0x00060006);
+	return 0x00060006;
 #endif
 	break;
     default:
@@ -1159,7 +1166,7 @@ read_uart(addr)
 	    printf("Read from unimplemented MEC register (%x)\n", addr);
 
     }
-    return (0);
+    return 0;
 }
 
 static void
@@ -1421,7 +1428,7 @@ rtc_start()
 static uint32
 rtc_counter_read()
 {
-    return (rtc_counter);
+    return rtc_counter;
 }
 
 static void
@@ -1474,7 +1481,7 @@ gpt_start()
 static uint32
 gpt_counter_read()
 {
-    return (gpt_counter);
+    return gpt_counter;
 }
 
 static void
@@ -1641,6 +1648,31 @@ store_bytes (mem, data, sz)
 /* Memory emulation */
 
 int
+memory_iread (uint32 addr, uint32 *data, int32 *ws)
+{
+    uint32          asi;
+    if ((addr >= mem_ramstart) && (addr < (mem_ramstart + mem_ramsz))) {
+	memcpy (data, &ramb[addr & mem_rammask & ~3], 4);
+	*ws = mem_ramr_ws;
+	return 0;
+    } else if (addr < mem_romsz) {
+	memcpy (data, &romb[addr & ~3], 4);
+	*ws = mem_romr_ws;
+	return 0;
+    }
+
+    if (sis_verbose)
+	printf ("Memory exception at %x (illegal address)\n", addr);
+    if (sregs.psr & 0x080)
+        asi = 9;
+    else
+        asi = 8;
+    set_sfsr (UIMP_ACC, addr, asi, 1);
+    *ws = MEM_EX_WS;
+    return 1;
+}
+
+int
 memory_read(asi, addr, data, sz, ws)
     int32           asi;
     uint32          addr;
@@ -1658,14 +1690,14 @@ memory_read(asi, addr, data, sz, ws)
 	if (errmec == 5) mecparerror();
 	if (errmec == 6) iucomperr();
 	errmec = 0;
-	return(1);
+	return 1;
     }
 #endif
 
     if ((addr >= mem_ramstart) && (addr < (mem_ramstart + mem_ramsz))) {
 	fetch_bytes (asi, &ramb[addr & mem_rammask], data, sz);
 	*ws = mem_ramr_ws;
-	return (0);
+	return 0;
     } else if ((addr >= MEC_START) && (addr < MEC_END)) {
 	mexc = mec_read(addr, asi, data);
 	if (mexc) {
@@ -1674,7 +1706,7 @@ memory_read(asi, addr, data, sz, ws)
 	} else {
 	    *ws = 0;
 	}
-	return (mexc);
+	return mexc;
 
 #ifdef ERA
 
@@ -1683,32 +1715,33 @@ memory_read(asi, addr, data, sz, ws)
 	    ((addr>= 0x80000000) && (addr < 0x80100000))) {
 	    fetch_bytes (asi, &romb[addr & ROM_MASK], data, sz);
 	    *ws = 4;
-	    return (0);
+	    return 0;
 	} else if ((addr >= 0x10000000) && 
 		   (addr < (0x10000000 + (512 << (mec_iocr & 0x0f)))) &&
 		   (mec_iocr & 0x10))  {
 	    *data = erareg;
-	    return (0);
+	    return 0;
 	}
 	
     } else  if (addr < mem_romsz) {
 	    fetch_bytes (asi, &romb[addr], data, sz);
 	    *ws = mem_romr_ws;
-	    return (0);
+	    return 0;
 
 #else
     } else if (addr < mem_romsz) {
 	fetch_bytes (asi, &romb[addr], data, sz);
 	*ws = mem_romr_ws;
-	return (0);
+	return 0;
 #endif
 
     }
 
-    printf("Memory exception at %x (illegal address)\n", addr);
+    if (sis_verbose)
+	printf ("Memory exception at %x (illegal address)\n", addr);
     set_sfsr(UIMP_ACC, addr, asi, 1);
     *ws = MEM_EX_WS;
-    return (1);
+    return 1;
 }
 
 int
@@ -1735,7 +1768,7 @@ memory_write(asi, addr, data, sz, ws)
 	if (errmec == 5) mecparerror();
 	if (errmec == 6) iucomperr();
 	errmec = 0;
-	return(1);
+	return 1;
     }
 #endif
 
@@ -1757,7 +1790,7 @@ memory_write(asi, addr, data, sz, ws)
 		    printf("Memory access protection error at 0x%08x\n", addr);
 		set_sfsr(PROT_EXC, addr, asi, 0);
 		*ws = MEM_EX_WS;
-		return (1);
+		return 1;
 	    }
 	}
 
@@ -1775,12 +1808,12 @@ memory_write(asi, addr, data, sz, ws)
 	    *ws = 2 * mem_ramw_ws + STD_WS;
 	    break;
 	}
-	return (0);
+	return 0;
     } else if ((addr >= MEC_START) && (addr < MEC_END)) {
 	if ((sz != 2) || (asi != 0xb)) {
 	    set_sfsr(MEC_ACC, addr, asi, 0);
 	    *ws = MEM_EX_WS;
-	    return (1);
+	    return 1;
 	}
 	mexc = mec_write(addr, *data);
 	if (mexc) {
@@ -1789,7 +1822,7 @@ memory_write(asi, addr, data, sz, ws)
 	} else {
 	    *ws = 0;
 	}
-	return (mexc);
+	return mexc;
 
 #ifdef ERA
 
@@ -1799,12 +1832,12 @@ memory_write(asi, addr, data, sz, ws)
 	    addr &= ROM_MASK;
 	    *ws = sz == 3 ? 8 : 4;
 	    store_bytes (&romb[addr], data, sz);
-            return (0);
+            return 0;
 	} else if ((addr >= 0x10000000) && 
 		   (addr < (0x10000000 + (512 << (mec_iocr & 0x0f)))) &&
 		   (mec_iocr & 0x10))  {
 	    erareg = *data & 0x0e;
-	    return (0);
+	    return 0;
 	}
 
     } else if ((addr < mem_romsz) && (mec_memcfg & 0x10000) && (wrp) &&
@@ -1815,7 +1848,7 @@ memory_write(asi, addr, data, sz, ws)
 	if (sz == 3)
 	    *ws += mem_romw_ws + STD_WS;
 	store_bytes (&romb[addr], data, sz);
-        return (0);
+        return 0;
 
 #else
     } else if ((addr < mem_romsz) && (mec_memcfg & 0x10000) && (wrp) &&
@@ -1826,7 +1859,7 @@ memory_write(asi, addr, data, sz, ws)
 	if (sz == 3)
             *ws += mem_romw_ws + STD_WS;
 	store_bytes (&romb[addr], data, sz);
-        return (0);
+        return 0;
 
 #endif
 
@@ -1834,7 +1867,7 @@ memory_write(asi, addr, data, sz, ws)
 	
     *ws = MEM_EX_WS;
     set_sfsr(UIMP_ACC, addr, asi, 0);
-    return (1);
+    return 1;
 }
 
 static unsigned char  *
@@ -1843,19 +1876,19 @@ get_mem_ptr(addr, size)
     uint32          size;
 {
     if ((addr + size) < ROM_SZ) {
-	return (&romb[addr]);
+	return &romb[addr];
     } else if ((addr >= mem_ramstart) && ((addr + size) < mem_ramend)) {
-	return (&ramb[addr & mem_rammask]);
+	return &ramb[addr & mem_rammask];
     }
 
 #ifdef ERA
       else if ((era) && ((addr <0x100000) || 
 	((addr >= (unsigned) 0x80000000) && ((addr + size) < (unsigned) 0x80100000)))) {
-	return (&romb[addr & ROM_MASK]);
+	return &romb[addr & ROM_MASK];
     }
 #endif
 
-    return ((char *) -1);
+    return (char *) -1;
 }
 
 int
@@ -1867,10 +1900,10 @@ sis_memory_write(addr, data, length)
     char           *mem;
 
     if ((mem = get_mem_ptr(addr, length)) == ((char *) -1))
-	return (0);
+	return 0;
 
     memcpy(mem, data, length);
-    return (length);
+    return length;
 }
 
 int
@@ -1882,8 +1915,24 @@ sis_memory_read(addr, data, length)
     char           *mem;
 
     if ((mem = get_mem_ptr(addr, length)) == ((char *) -1))
-	return (0);
+	return 0;
 
     memcpy(data, mem, length);
-    return (length);
+    return length;
+}
+
+extern struct pstate sregs;
+
+void
+boot_init (void)
+{
+    mec_write(MEC_WCR, 0);	/* zero waitstates */
+    mec_write(MEC_TRAPD, 0);	/* turn off watch-dog */
+    mec_write(MEC_RTC_SCALER, sregs.freq - 1); /* generate 1 MHz RTC tick */
+    mec_write(MEC_MEMCFG, (3 << 18) | (4 << 10)); /* 1 MB ROM, 4 MB RAM */
+    sregs.wim = 2;
+    sregs.psr = 0x110010e0;
+    sregs.r[30] = RAM_END;
+    sregs.r[14] = sregs.r[30] - 96 * 4;
+    mec_mcr |= 1;		/* power-down enabled */
 }

@@ -1,5 +1,5 @@
 /* Remote serial support interface definitions for GDB, the GNU Debugger.
-   Copyright (C) 1992-2013 Free Software Foundation, Inc.
+   Copyright (C) 1992-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -186,6 +186,14 @@ extern int serial_setbaudrate (struct serial *scb, int rate);
 
 extern int serial_setstopbits (struct serial *scb, int num);
 
+#define GDBPARITY_NONE     0
+#define GDBPARITY_ODD      1
+#define GDBPARITY_EVEN     2
+
+/* Set parity for serial port. Returns 0 for success, -1 for failure.  */
+
+extern int serial_setparity (struct serial *scb, int parity);
+
 /* Asynchronous serial interface: */
 
 /* Can the serial device support asynchronous mode?  */
@@ -228,7 +236,7 @@ struct serial
        If != -1, this descriptor should be non-blocking or
        ops->avail should be non-NULL.  */
     int error_fd;               
-    struct serial_ops *ops;	/* Function vector */
+    const struct serial_ops *ops; /* Function vector */
     void *state;       		/* Local context info for open FD */
     serial_ttystate ttystate;	/* Not used (yet) */
     int bufcnt;			/* Amount of data remaining in receive
@@ -251,7 +259,6 @@ struct serial
 struct serial_ops
   {
     char *name;
-    struct serial_ops *next;
     int (*open) (struct serial *, const char *name);
     void (*close) (struct serial *);
     int (*fdopen) (struct serial *, int fd);
@@ -272,6 +279,9 @@ struct serial_ops
 				  serial_ttystate);
     int (*setbaudrate) (struct serial *, int rate);
     int (*setstopbits) (struct serial *, int num);
+    /* Set the value PARITY as parity setting for serial object.
+       Return 0 in the case of success.  */
+    int (*setparity) (struct serial *, int parity);
     /* Wait for output to drain.  */
     int (*drain_output) (struct serial *);
     /* Change the serial device into/out of asynchronous mode, call
@@ -301,11 +311,11 @@ struct serial_ops
 
 /* Add a new serial interface to the interface list.  */
 
-extern void serial_add_interface (struct serial_ops * optable);
+extern void serial_add_interface (const struct serial_ops * optable);
 
 /* File in which to record the remote debugging session.  */
 
-extern void serial_log_command (const char *);
+extern void serial_log_command (struct target_ops *self, const char *);
 
 #ifdef USE_WIN32API
 

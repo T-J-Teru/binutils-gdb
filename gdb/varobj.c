@@ -1,6 +1,6 @@
 /* Implementation of the GDB variable objects API.
 
-   Copyright (C) 1999-2013 Free Software Foundation, Inc.
+   Copyright (C) 1999-2015 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,7 +16,6 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
-#include "exceptions.h"
 #include "value.h"
 #include "expression.h"
 #include "frame.h"
@@ -24,15 +23,13 @@
 #include "gdbcmd.h"
 #include "block.h"
 #include "valprint.h"
-
-#include "gdb_assert.h"
-#include <string.h>
 #include "gdb_regex.h"
 
 #include "varobj.h"
 #include "vec.h"
 #include "gdbthread.h"
 #include "inferior.h"
+#include "varobj-iter.h"
 
 #if HAVE_PYTHON
 #include "python/python.h"
@@ -129,14 +126,14 @@ struct varobj_dynamic
 
   /* The iterator returned by the printer's 'children' method, or NULL
      if not available.  */
-  PyObject *child_iter;
+  struct varobj_iter *child_iter;
 
   /* We request one extra item from the iterator, so that we can
      report to the caller whether there are more items than we have
      already reported.  However, we don't want to install this value
      when we read it, because that will mess up future updates.  So,
      we stash it here instead.  */
-  PyObject *saved_item;
+  varobj_item *saved_item;
 };
 
 struct cpstack
@@ -169,8 +166,8 @@ static void uninstall_variable (struct varobj *);
 static struct varobj *create_child (struct varobj *, int, char *);
 
 static struct varobj *
-create_child_with_value (struct varobj *parent, int index, char *name,
-			 struct value *value);
+create_child_with_value (struct varobj *parent, int index,
+			 struct varobj_item *item);
 
 /* Utility routines */
 
@@ -196,28 +193,23 @@ static int install_new_value (struct varobj *var, struct value *value,
 
 /* Language-specific routines.  */
 
-static int number_of_children (struct varobj *);
+static int number_of_children (const struct varobj *);
 
-static char *name_of_variable (struct varobj *);
+static char *name_of_variable (const struct varobj *);
 
 static char *name_of_child (struct varobj *, int);
 
 static struct value *value_of_root (struct varobj **var_handle, int *);
 
-static struct value *value_of_child (struct varobj *parent, int index);
+static struct value *value_of_child (const struct varobj *parent, int index);
 
 static char *my_value_of_variable (struct varobj *var,
 				   enum varobj_display_formats format);
 
-static int is_root_p (struct varobj *var);
-
-#if HAVE_PYTHON
+static int is_root_p (const struct varobj *var);
 
 static struct varobj *varobj_add_child (struct varobj *var,
-					char *name,
-					struct value *value);
-
-#endif /* HAVE_PYTHON */
+					struct varobj_item *item);
 
 /* Private data */
 
@@ -238,7 +230,7 @@ static struct vlist **varobj_table;
 
 /* API Implementation */
 static int
-is_root_p (struct varobj *var)
+is_root_p (const struct varobj *var)
 {
   return (var->root->rootvar == var);
 }
@@ -246,8 +238,8 @@ is_root_p (struct varobj *var)
 #ifdef HAVE_PYTHON
 /* Helper function to install a Python environment suitable for
    use during operations on VAR.  */
-static struct cleanup *
-varobj_ensure_python_env (struct varobj *var)
+struct cleanup *
+varobj_ensure_python_env (const struct varobj *var)
 {
   return ensure_python_env (var->root->exp->gdbarch,
 			    var->root->exp->language_defn);
@@ -303,10 +295,9 @@ varobj_create (char *objname,
     {
       struct frame_info *fi;
       struct frame_id old_id = null_frame_id;
-      struct block *block;
+      const struct block *block;
       const char *p;
       struct value *value = NULL;
-      volatile struct gdb_exception except;
       CORE_ADDR pc;
 
       /* Parse and evaluate the expression, filling in as much of the
@@ -346,16 +337,17 @@ varobj_create (char *objname,
       innermost_block = NULL;
       /* Wrap the call to parse expression, so we can 
          return a sensible error.  */
-      TRY_CATCH (except, RETURN_MASK_ERROR)
+      TRY
 	{
 	  var->root->exp = parse_exp_1 (&p, pc, block, 0);
 	}
 
-      if (except.reason < 0)
+      CATCH (except, RETURN_MASK_ERROR)
 	{
 	  do_cleanups (old_chain);
 	  return NULL;
 	}
+      END_CATCH
 
       /* Don't allow variables to be created for types.  */
       if (var->root->exp->elts[0].opcode == OP_TYPE
@@ -396,12 +388,11 @@ varobj_create (char *objname,
       /* We definitely need to catch errors here.
          If evaluate_expression succeeds we got the value we wanted.
          But if it fails, we still go on with a call to evaluate_type().  */
-      TRY_CATCH (except, RETURN_MASK_ERROR)
+      TRY
 	{
 	  value = evaluate_expression (var->root->exp);
 	}
-
-      if (except.reason < 0)
+      CATCH (except, RETURN_MASK_ERROR)
 	{
 	  /* Error getting the value.  Try to at least get the
 	     right type.  */
@@ -409,14 +400,16 @@ varobj_create (char *objname,
 
 	  var->type = value_type (type_only_value);
 	}
-	else
-	  {
-	    int real_type_found = 0;
+      END_CATCH
 
-	    var->type = value_actual_type (value, 0, &real_type_found);
-	    if (real_type_found)
-	      value = value_cast (var->type, value);
-	  }
+      if (value != NULL)
+	{
+	  int real_type_found = 0;
+
+	  var->type = value_actual_type (value, 0, &real_type_found);
+	  if (real_type_found)
+	    value = value_cast (var->type, value);
+	}
 
       /* Set language info */
       var->root->lang_ops = var->root->exp->language_defn->la_varobj_ops;
@@ -495,23 +488,25 @@ varobj_get_handle (char *objname)
 /* Given the handle, return the name of the object.  */
 
 char *
-varobj_get_objname (struct varobj *var)
+varobj_get_objname (const struct varobj *var)
 {
   return var->obj_name;
 }
 
-/* Given the handle, return the expression represented by the object.  */
+/* Given the handle, return the expression represented by the object.  The
+   result must be freed by the caller.  */
 
 char *
-varobj_get_expression (struct varobj *var)
+varobj_get_expression (const struct varobj *var)
 {
   return name_of_variable (var);
 }
 
 /* Deletes a varobj and all its children if only_children == 0,
-   otherwise deletes only the children; returns a malloc'ed list of
-   all the (malloc'ed) names of the variables that have been deleted
-   (NULL terminated).  */
+   otherwise deletes only the children. If DELLIST is non-NULL, it is
+   assigned a malloc'ed list of all the (malloc'ed) names of the variables
+   that have been deleted (NULL terminated).  Returns the number of deleted
+   variables.  */
 
 int
 varobj_delete (struct varobj *var, char ***dellist, int only_children)
@@ -607,13 +602,13 @@ varobj_set_display_format (struct varobj *var,
 }
 
 enum varobj_display_formats
-varobj_get_display_format (struct varobj *var)
+varobj_get_display_format (const struct varobj *var)
 {
   return var->format;
 }
 
 char *
-varobj_get_display_hint (struct varobj *var)
+varobj_get_display_hint (const struct varobj *var)
 {
   char *result = NULL;
 
@@ -637,7 +632,7 @@ varobj_get_display_hint (struct varobj *var)
 /* Return true if the varobj has items after TO, false otherwise.  */
 
 int
-varobj_has_more (struct varobj *var, int to)
+varobj_has_more (const struct varobj *var, int to)
 {
   if (VEC_length (varobj_p, var->children) > to)
     return 1;
@@ -650,7 +645,7 @@ varobj_has_more (struct varobj *var, int to)
    inside that thread, returns GDB id of the thread -- which
    is always positive.  Otherwise, returns -1.  */
 int
-varobj_get_thread_id (struct varobj *var)
+varobj_get_thread_id (const struct varobj *var)
 {
   if (var->root->valid_block && var->root->thread_id > 0)
     return var->root->thread_id;
@@ -672,7 +667,7 @@ varobj_set_frozen (struct varobj *var, int frozen)
 }
 
 int
-varobj_get_frozen (struct varobj *var)
+varobj_get_frozen (const struct varobj *var)
 {
   return var->frozen;
 }
@@ -701,8 +696,6 @@ varobj_restrict_range (VEC (varobj_p) *children, int *from, int *to)
     }
 }
 
-#if HAVE_PYTHON
-
 /* A helper for update_dynamic_varobj_children that installs a new
    child when needed.  */
 
@@ -710,35 +703,34 @@ static void
 install_dynamic_child (struct varobj *var,
 		       VEC (varobj_p) **changed,
 		       VEC (varobj_p) **type_changed,
-		       VEC (varobj_p) **new,
+		       VEC (varobj_p) **newobj,
 		       VEC (varobj_p) **unchanged,
 		       int *cchanged,
 		       int index,
-		       char *name,
-		       struct value *value)
+		       struct varobj_item *item)
 {
   if (VEC_length (varobj_p, var->children) < index + 1)
     {
       /* There's no child yet.  */
-      struct varobj *child = varobj_add_child (var, name, value);
+      struct varobj *child = varobj_add_child (var, item);
 
-      if (new)
+      if (newobj)
 	{
-	  VEC_safe_push (varobj_p, *new, child);
+	  VEC_safe_push (varobj_p, *newobj, child);
 	  *cchanged = 1;
 	}
     }
   else
     {
       varobj_p existing = VEC_index (varobj_p, var->children, index);
-      int type_updated = update_type_if_necessary (existing, value);
+      int type_updated = update_type_if_necessary (existing, item->value);
 
       if (type_updated)
 	{
 	  if (type_changed)
 	    VEC_safe_push (varobj_p, *type_changed, existing);
 	}
-      if (install_new_value (existing, value, 0))
+      if (install_new_value (existing, item->value, 0))
 	{
 	  if (!type_updated && changed)
 	    VEC_safe_push (varobj_p, *changed, existing);
@@ -748,8 +740,10 @@ install_dynamic_child (struct varobj *var,
     }
 }
 
+#if HAVE_PYTHON
+
 static int
-dynamic_varobj_has_child_method (struct varobj *var)
+dynamic_varobj_has_child_method (const struct varobj *var)
 {
   struct cleanup *back_to;
   PyObject *printer = var->dynamic->pretty_printer;
@@ -763,63 +757,62 @@ dynamic_varobj_has_child_method (struct varobj *var)
   do_cleanups (back_to);
   return result;
 }
-
 #endif
+
+/* A factory for creating dynamic varobj's iterators.  Returns an
+   iterator object suitable for iterating over VAR's children.  */
+
+static struct varobj_iter *
+varobj_get_iterator (struct varobj *var)
+{
+#if HAVE_PYTHON
+  if (var->dynamic->pretty_printer)
+    return py_varobj_get_iterator (var, var->dynamic->pretty_printer);
+#endif
+
+  gdb_assert_not_reached (_("\
+requested an iterator from a non-dynamic varobj"));
+}
+
+/* Release and clear VAR's saved item, if any.  */
+
+static void
+varobj_clear_saved_item (struct varobj_dynamic *var)
+{
+  if (var->saved_item != NULL)
+    {
+      value_free (var->saved_item->value);
+      xfree (var->saved_item);
+      var->saved_item = NULL;
+    }
+}
 
 static int
 update_dynamic_varobj_children (struct varobj *var,
 				VEC (varobj_p) **changed,
 				VEC (varobj_p) **type_changed,
-				VEC (varobj_p) **new,
+				VEC (varobj_p) **newobj,
 				VEC (varobj_p) **unchanged,
 				int *cchanged,
 				int update_children,
 				int from,
 				int to)
 {
-#if HAVE_PYTHON
-  struct cleanup *back_to;
-  PyObject *children;
   int i;
-  PyObject *printer = var->dynamic->pretty_printer;
-
-  if (!gdb_python_initialized)
-    return 0;
-
-  back_to = varobj_ensure_python_env (var);
 
   *cchanged = 0;
-  if (!PyObject_HasAttr (printer, gdbpy_children_cst))
-    {
-      do_cleanups (back_to);
-      return 0;
-    }
 
   if (update_children || var->dynamic->child_iter == NULL)
     {
-      children = PyObject_CallMethodObjArgs (printer, gdbpy_children_cst,
-					     NULL);
+      varobj_iter_delete (var->dynamic->child_iter);
+      var->dynamic->child_iter = varobj_get_iterator (var);
 
-      if (!children)
-	{
-	  gdbpy_print_stack ();
-	  error (_("Null value returned for children"));
-	}
-
-      make_cleanup_py_decref (children);
-
-      Py_XDECREF (var->dynamic->child_iter);
-      var->dynamic->child_iter = PyObject_GetIter (children);
-      if (var->dynamic->child_iter == NULL)
-	{
-	  gdbpy_print_stack ();
-	  error (_("Could not get children iterator"));
-	}
-
-      Py_XDECREF (var->dynamic->saved_item);
-      var->dynamic->saved_item = NULL;
+      varobj_clear_saved_item (var->dynamic);
 
       i = 0;
+
+      if (var->dynamic->child_iter == NULL)
+	return 0;
     }
   else
     i = VEC_length (varobj_p, var->children);
@@ -828,102 +821,52 @@ update_dynamic_varobj_children (struct varobj *var,
      are more children.  */
   for (; to < 0 || i < to + 1; ++i)
     {
-      PyObject *item;
-      int force_done = 0;
+      varobj_item *item;
 
       /* See if there was a leftover from last time.  */
-      if (var->dynamic->saved_item)
+      if (var->dynamic->saved_item != NULL)
 	{
 	  item = var->dynamic->saved_item;
 	  var->dynamic->saved_item = NULL;
 	}
       else
-	item = PyIter_Next (var->dynamic->child_iter);
-
-      if (!item)
 	{
-	  /* Normal end of iteration.  */
-	  if (!PyErr_Occurred ())
-	    break;
-
-	  /* If we got a memory error, just use the text as the
-	     item.  */
-	  if (PyErr_ExceptionMatches (gdbpy_gdb_memory_error))
-	    {
-	      PyObject *type, *value, *trace;
-	      char *name_str, *value_str;
-
-	      PyErr_Fetch (&type, &value, &trace);
-	      value_str = gdbpy_exception_to_string (type, value);
-	      Py_XDECREF (type);
-	      Py_XDECREF (value);
-	      Py_XDECREF (trace);
-	      if (!value_str)
-		{
-		  gdbpy_print_stack ();
-		  break;
-		}
-
-	      name_str = xstrprintf ("<error at %d>", i);
-	      item = Py_BuildValue ("(ss)", name_str, value_str);
-	      xfree (name_str);
-	      xfree (value_str);
-	      if (!item)
-		{
-		  gdbpy_print_stack ();
-		  break;
-		}
-
-	      force_done = 1;
-	    }
-	  else
-	    {
-	      /* Any other kind of error.  */
-	      gdbpy_print_stack ();
-	      break;
-	    }
+	  item = varobj_iter_next (var->dynamic->child_iter);
+	  /* Release vitem->value so its lifetime is not bound to the
+	     execution of a command.  */
+	  if (item != NULL && item->value != NULL)
+	    release_value_or_incref (item->value);
 	}
 
+      if (item == NULL)
+	{
+	  /* Iteration is done.  Remove iterator from VAR.  */
+	  varobj_iter_delete (var->dynamic->child_iter);
+	  var->dynamic->child_iter = NULL;
+	  break;
+	}
       /* We don't want to push the extra child on any report list.  */
       if (to < 0 || i < to)
 	{
-	  PyObject *py_v;
-	  const char *name;
-	  struct value *v;
-	  struct cleanup *inner;
 	  int can_mention = from < 0 || i >= from;
 
-	  inner = make_cleanup_py_decref (item);
-
-	  if (!PyArg_ParseTuple (item, "sO", &name, &py_v))
-	    {
-	      gdbpy_print_stack ();
-	      error (_("Invalid item from the child list"));
-	    }
-
-	  v = convert_value_from_python (py_v);
-	  if (v == NULL)
-	    gdbpy_print_stack ();
 	  install_dynamic_child (var, can_mention ? changed : NULL,
 				 can_mention ? type_changed : NULL,
-				 can_mention ? new : NULL,
+				 can_mention ? newobj : NULL,
 				 can_mention ? unchanged : NULL,
 				 can_mention ? cchanged : NULL, i,
-				 xstrdup (name), v);
-	  do_cleanups (inner);
+				 item);
+
+	  xfree (item);
 	}
       else
 	{
-	  Py_XDECREF (var->dynamic->saved_item);
 	  var->dynamic->saved_item = item;
 
 	  /* We want to truncate the child list just before this
 	     element.  */
 	  break;
 	}
-
-      if (force_done)
-	break;
     }
 
   if (i < VEC_length (varobj_p, var->children))
@@ -942,13 +885,8 @@ update_dynamic_varobj_children (struct varobj *var,
     *cchanged = 1;
 
   var->num_children = VEC_length (varobj_p, var->children);
- 
-  do_cleanups (back_to);
 
   return 1;
-#else
-  gdb_assert_not_reached ("should never be called if Python is not enabled");
-#endif
 }
 
 int
@@ -956,7 +894,7 @@ varobj_get_num_children (struct varobj *var)
 {
   if (var->num_children == -1)
     {
-      if (var->dynamic->pretty_printer != NULL)
+      if (varobj_is_dynamic_p (var))
 	{
 	  int dummy;
 
@@ -983,7 +921,7 @@ varobj_list_children (struct varobj *var, int *from, int *to)
 
   var->dynamic->children_requested = 1;
 
-  if (var->dynamic->pretty_printer != NULL)
+  if (varobj_is_dynamic_p (var))
     {
       /* This, in theory, can result in the number of children changing without
 	 frontend noticing.  But well, calling -var-list-children on the same
@@ -1025,23 +963,20 @@ varobj_list_children (struct varobj *var, int *from, int *to)
   return var->children;
 }
 
-#if HAVE_PYTHON
-
 static struct varobj *
-varobj_add_child (struct varobj *var, char *name, struct value *value)
+varobj_add_child (struct varobj *var, struct varobj_item *item)
 {
-  varobj_p v = create_child_with_value (var, 
+  varobj_p v = create_child_with_value (var,
 					VEC_length (varobj_p, var->children), 
-					name, value);
+					item);
 
   VEC_safe_push (varobj_p, var->children, v);
   return v;
 }
 
-#endif /* HAVE_PYTHON */
-
 /* Obtain the type of an object Variable as a string similar to the one gdb
-   prints on the console.  */
+   prints on the console.  The caller is responsible for freeing the string.
+   */
 
 char *
 varobj_get_type (struct varobj *var)
@@ -1058,7 +993,7 @@ varobj_get_type (struct varobj *var)
 /* Obtain the type of an object variable.  */
 
 struct type *
-varobj_get_gdb_type (struct varobj *var)
+varobj_get_gdb_type (const struct varobj *var)
 {
   return var->type;
 }
@@ -1067,28 +1002,28 @@ varobj_get_gdb_type (struct varobj *var)
    a valid path expression?  */
 
 static int
-is_path_expr_parent (struct varobj *var)
+is_path_expr_parent (const struct varobj *var)
 {
-  struct type *type;
+  gdb_assert (var->root->lang_ops->is_path_expr_parent != NULL);
+  return var->root->lang_ops->is_path_expr_parent (var);
+}
 
-  /* "Fake" children are not path_expr parents.  */
-  if (CPLUS_FAKE_CHILD (var))
-    return 0;
+/* Is VAR a path expression parent, i.e., can it be used to construct
+   a valid path expression?  By default we assume any VAR can be a path
+   parent.  */
 
-  type = varobj_get_value_type (var);
-
-  /* Anonymous unions and structs are also not path_expr parents.  */
-  return !((TYPE_CODE (type) == TYPE_CODE_STRUCT
-	    || TYPE_CODE (type) == TYPE_CODE_UNION)
-	   && TYPE_NAME (type) == NULL);
+int
+varobj_default_is_path_expr_parent (const struct varobj *var)
+{
+  return 1;
 }
 
 /* Return the path expression parent for VAR.  */
 
-struct varobj *
-varobj_get_path_expr_parent (struct varobj *var)
+const struct varobj *
+varobj_get_path_expr_parent (const struct varobj *var)
 {
-  struct varobj *parent = var;
+  const struct varobj *parent = var;
 
   while (!is_root_p (parent) && !is_path_expr_parent (parent))
     parent = parent->parent;
@@ -1099,28 +1034,30 @@ varobj_get_path_expr_parent (struct varobj *var)
 /* Return a pointer to the full rooted expression of varobj VAR.
    If it has not been computed yet, compute it.  */
 char *
-varobj_get_path_expr (struct varobj *var)
+varobj_get_path_expr (const struct varobj *var)
 {
-  if (var->path_expr != NULL)
-    return var->path_expr;
-  else 
+  if (var->path_expr == NULL)
     {
       /* For root varobjs, we initialize path_expr
 	 when creating varobj, so here it should be
 	 child varobj.  */
+      struct varobj *mutable_var = (struct varobj *) var;
       gdb_assert (!is_root_p (var));
-      return (*var->root->lang_ops->path_expr_of_child) (var);
+
+      mutable_var->path_expr = (*var->root->lang_ops->path_expr_of_child) (var);
     }
+
+  return var->path_expr;
 }
 
 const struct language_defn *
-varobj_get_language (struct varobj *var)
+varobj_get_language (const struct varobj *var)
 {
   return var->root->exp->language_defn;
 }
 
 int
-varobj_get_attributes (struct varobj *var)
+varobj_get_attributes (const struct varobj *var)
 {
   int attributes = 0;
 
@@ -1131,8 +1068,10 @@ varobj_get_attributes (struct varobj *var)
   return attributes;
 }
 
+/* Return true if VAR is a dynamic varobj.  */
+
 int
-varobj_pretty_printed_p (struct varobj *var)
+varobj_is_dynamic_p (const struct varobj *var)
 {
   return var->dynamic->pretty_printer != NULL;
 }
@@ -1165,23 +1104,23 @@ varobj_set_value (struct varobj *var, char *expression)
   struct value *value = NULL; /* Initialize to keep gcc happy.  */
   int saved_input_radix = input_radix;
   const char *s = expression;
-  volatile struct gdb_exception except;
 
   gdb_assert (varobj_editable_p (var));
 
   input_radix = 10;		/* ALWAYS reset to decimal temporarily.  */
   exp = parse_exp_1 (&s, 0, 0, 0);
-  TRY_CATCH (except, RETURN_MASK_ERROR)
+  TRY
     {
       value = evaluate_expression (exp);
     }
 
-  if (except.reason < 0)
+  CATCH (except, RETURN_MASK_ERROR)
     {
       /* We cannot proceed without a valid expression.  */
       xfree (exp);
       return 0;
     }
+  END_CATCH
 
   /* All types that are editable must also be changeable.  */
   gdb_assert (varobj_value_is_changeable_p (var));
@@ -1200,13 +1139,16 @@ varobj_set_value (struct varobj *var, char *expression)
 
   /* The new value may be lazy.  value_assign, or
      rather value_contents, will take care of this.  */
-  TRY_CATCH (except, RETURN_MASK_ERROR)
+  TRY
     {
       val = value_assign (var->value, value);
     }
 
-  if (except.reason < 0)
-    return 0;
+  CATCH (except, RETURN_MASK_ERROR)
+    {
+      return 0;
+    }
+  END_CATCH
 
   /* If the value has changed, record it, so that next -var-update can
      report this change.  If a variable had a value of '1', we've set it
@@ -1234,7 +1176,7 @@ install_visualizer (struct varobj_dynamic *var, PyObject *constructor,
   Py_XDECREF (var->pretty_printer);
   var->pretty_printer = visualizer;
 
-  Py_XDECREF (var->child_iter);
+  varobj_iter_delete (var->child_iter);
   var->child_iter = NULL;
 }
 
@@ -1356,11 +1298,16 @@ update_type_if_necessary (struct varobj *var, struct value *new_value)
 	{
 	  struct type *new_type;
 	  char *curr_type_str, *new_type_str;
+	  int type_name_changed;
 
 	  new_type = value_actual_type (new_value, 0, 0);
 	  new_type_str = type_to_string (new_type);
 	  curr_type_str = varobj_get_type (var);
-	  if (strcmp (curr_type_str, new_type_str) != 0)
+	  type_name_changed = strcmp (curr_type_str, new_type_str) != 0;
+	  xfree (curr_type_str);
+	  xfree (new_type_str);
+
+	  if (type_name_changed)
 	    {
 	      var->type = new_type;
 
@@ -1436,7 +1383,7 @@ install_new_value (struct varobj *var, struct value *value, int initial)
      will be lazy, which means we've lost that old value.  */
   if (need_to_fetch && value && value_lazy (value))
     {
-      struct varobj *parent = var->parent;
+      const struct varobj *parent = var->parent;
       int frozen = var->frozen;
 
       for (; !frozen && parent; parent = parent->parent)
@@ -1452,20 +1399,20 @@ install_new_value (struct varobj *var, struct value *value, int initial)
 	}
       else
 	{
-	  volatile struct gdb_exception except;
 
-	  TRY_CATCH (except, RETURN_MASK_ERROR)
+	  TRY
 	    {
 	      value_fetch_lazy (value);
 	    }
 
-	  if (except.reason < 0)
+	  CATCH (except, RETURN_MASK_ERROR)
 	    {
 	      /* Set the value to NULL, so that for the next -var-update,
 		 we don't try to compare the new value with this value,
 		 that we couldn't even read.  */
 	      value = NULL;
 	    }
+	  END_CATCH
 	}
     }
 
@@ -1576,7 +1523,7 @@ install_new_value (struct varobj *var, struct value *value, int initial)
    selected sub-range of VAR.  If no range was selected using
    -var-set-update-range, then both will be -1.  */
 void
-varobj_get_child_range (struct varobj *var, int *from, int *to)
+varobj_get_child_range (const struct varobj *var, int *from, int *to)
 {
   *from = var->from;
   *to = var->to;
@@ -1638,7 +1585,7 @@ varobj_set_visualizer (struct varobj *var, const char *visualizer)
    NEW_VALUE may be NULL, if the varobj is now out of scope.  */
 
 static int
-varobj_value_has_mutated (struct varobj *var, struct value *new_value,
+varobj_value_has_mutated (const struct varobj *var, struct value *new_value,
 			  struct type *new_type)
 {
   /* If we haven't previously computed the number of children in var,
@@ -1649,7 +1596,16 @@ varobj_value_has_mutated (struct varobj *var, struct value *new_value,
     return 0;
 
   if (var->root->lang_ops->value_has_mutated)
-    return var->root->lang_ops->value_has_mutated (var, new_value, new_type);
+    {
+      /* The varobj module, when installing new values, explicitly strips
+	 references, saying that we're not interested in those addresses.
+	 But detection of mutation happens before installing the new
+	 value, so our value may be a reference that we need to strip
+	 in order to remain consistent.  */
+      if (new_value != NULL)
+	new_value = coerce_ref (new_value);
+      return var->root->lang_ops->value_has_mutated (var, new_value, new_type);
+    }
   else
     return 0;
 }
@@ -1670,11 +1626,11 @@ varobj_value_has_mutated (struct varobj *var, struct value *new_value,
    to point to the new varobj.  */
 
 VEC(varobj_update_result) *
-varobj_update (struct varobj **varp, int explicit)
+varobj_update (struct varobj **varp, int is_explicit)
 {
   int type_changed = 0;
   int i;
-  struct value *new;
+  struct value *newobj;
   VEC (varobj_update_result) *stack = NULL;
   VEC (varobj_update_result) *result = NULL;
 
@@ -1683,7 +1639,7 @@ varobj_update (struct varobj **varp, int explicit)
      changing type.  One use case for frozen varobjs is
      retaining previously evaluated expressions, and we don't
      want them to be reevaluated at all.  */
-  if (!explicit && (*varp)->frozen)
+  if (!is_explicit && (*varp)->frozen)
     return result;
 
   if (!(*varp)->root->is_valid)
@@ -1708,15 +1664,15 @@ varobj_update (struct varobj **varp, int explicit)
 	 the frame in which a local existed.  We are letting the 
 	 value_of_root variable dispose of the varobj if the type
 	 has changed.  */
-      new = value_of_root (varp, &type_changed);
-      if (update_type_if_necessary(*varp, new))
+      newobj = value_of_root (varp, &type_changed);
+      if (update_type_if_necessary(*varp, newobj))
 	  type_changed = 1;
       r.varobj = *varp;
       r.type_changed = type_changed;
-      if (install_new_value ((*varp), new, type_changed))
+      if (install_new_value ((*varp), newobj, type_changed))
 	r.changed = 1;
       
-      if (new == NULL)
+      if (newobj == NULL)
 	r.status = VAROBJ_NOT_IN_SCOPE;
       r.value_installed = 1;
 
@@ -1751,15 +1707,15 @@ varobj_update (struct varobj **varp, int explicit)
 	{
 	  struct type *new_type;
 
-	  new = value_of_child (v->parent, v->index);
-	  if (update_type_if_necessary(v, new))
+	  newobj = value_of_child (v->parent, v->index);
+	  if (update_type_if_necessary(v, newobj))
 	    r.type_changed = 1;
-	  if (new)
-	    new_type = value_type (new);
+	  if (newobj)
+	    new_type = value_type (newobj);
 	  else
 	    new_type = v->root->lang_ops->type_of_child (v->parent, v->index);
 
-	  if (varobj_value_has_mutated (v, new, new_type))
+	  if (varobj_value_has_mutated (v, newobj, new_type))
 	    {
 	      /* The children are no longer valid; delete them now.
 	         Report the fact that its type changed as well.  */
@@ -1771,20 +1727,19 @@ varobj_update (struct varobj **varp, int explicit)
 	      r.type_changed = 1;
 	    }
 
-	  if (install_new_value (v, new, r.type_changed))
+	  if (install_new_value (v, newobj, r.type_changed))
 	    {
 	      r.changed = 1;
 	      v->updated = 0;
 	    }
 	}
 
-      /* We probably should not get children of a varobj that has a
-	 pretty-printer, but for which -var-list-children was never
-	 invoked.  */
-      if (v->dynamic->pretty_printer != NULL)
+      /* We probably should not get children of a dynamic varobj, but
+	 for which -var-list-children was never invoked.  */
+      if (varobj_is_dynamic_p (v))
 	{
 	  VEC (varobj_p) *changed = 0, *type_changed = 0, *unchanged = 0;
-	  VEC (varobj_p) *new = 0;
+	  VEC (varobj_p) *newobj = 0;
 	  int i, children_changed = 0;
 
 	  if (v->frozen)
@@ -1816,14 +1771,14 @@ varobj_update (struct varobj **varp, int explicit)
 
 	  /* If update_dynamic_varobj_children returns 0, then we have
 	     a non-conforming pretty-printer, so we skip it.  */
-	  if (update_dynamic_varobj_children (v, &changed, &type_changed, &new,
+	  if (update_dynamic_varobj_children (v, &changed, &type_changed, &newobj,
 					      &unchanged, &children_changed, 1,
 					      v->from, v->to))
 	    {
-	      if (children_changed || new)
+	      if (children_changed || newobj)
 		{
 		  r.children_changed = 1;
-		  r.new = new;
+		  r.newobj = newobj;
 		}
 	      /* Push in reverse order so that the first child is
 		 popped from the work stack first, and so will be
@@ -2094,17 +2049,24 @@ uninstall_variable (struct varobj *var)
 
 }
 
-/* Create and install a child of the parent of the given name.  */
+/* Create and install a child of the parent of the given name.
+
+   The created VAROBJ takes ownership of the allocated NAME.  */
+
 static struct varobj *
 create_child (struct varobj *parent, int index, char *name)
 {
-  return create_child_with_value (parent, index, name, 
-				  value_of_child (parent, index));
+  struct varobj_item item;
+
+  item.name = name;
+  item.value = value_of_child (parent, index);
+
+  return create_child_with_value (parent, index, &item);
 }
 
 static struct varobj *
-create_child_with_value (struct varobj *parent, int index, char *name,
-			 struct value *value)
+create_child_with_value (struct varobj *parent, int index,
+			 struct varobj_item *item)
 {
   struct varobj *child;
   char *childs_name;
@@ -2112,7 +2074,7 @@ create_child_with_value (struct varobj *parent, int index, char *name,
   child = new_variable ();
 
   /* NAME is allocated by caller.  */
-  child->name = name;
+  child->name = item->name;
   child->index = index;
   child->parent = parent;
   child->root = parent->root;
@@ -2120,22 +2082,22 @@ create_child_with_value (struct varobj *parent, int index, char *name,
   if (varobj_is_anonymous_child (child))
     childs_name = xstrprintf ("%s.%d_anonymous", parent->obj_name, index);
   else
-    childs_name = xstrprintf ("%s.%s", parent->obj_name, name);
+    childs_name = xstrprintf ("%s.%s", parent->obj_name, item->name);
   child->obj_name = childs_name;
 
   install_variable (child);
 
   /* Compute the type of the child.  Must do this before
      calling install_new_value.  */
-  if (value != NULL)
+  if (item->value != NULL)
     /* If the child had no evaluation errors, var->value
        will be non-NULL and contain a valid type.  */
-    child->type = value_actual_type (value, 0, NULL);
+    child->type = value_actual_type (item->value, 0, NULL);
   else
     /* Otherwise, we must compute the type.  */
     child->type = (*child->root->lang_ops->type_of_child) (child->parent,
 							   child->index);
-  install_new_value (child, value, 1);
+  install_new_value (child, item->value, 1);
 
   return child;
 }
@@ -2209,12 +2171,12 @@ free_variable (struct varobj *var)
 
       Py_XDECREF (var->dynamic->constructor);
       Py_XDECREF (var->dynamic->pretty_printer);
-      Py_XDECREF (var->dynamic->child_iter);
-      Py_XDECREF (var->dynamic->saved_item);
       do_cleanups (cleanup);
     }
 #endif
 
+  varobj_iter_delete (var->dynamic->child_iter);
+  varobj_clear_saved_item (var->dynamic);
   value_free (var->value);
 
   /* Free the expression if this is a root variable.  */
@@ -2256,7 +2218,7 @@ make_cleanup_free_variable (struct varobj *var)
 
    For example, top-level references are always stripped.  */
 struct type *
-varobj_get_value_type (struct varobj *var)
+varobj_get_value_type (const struct varobj *var)
 {
   struct type *type;
 
@@ -2325,7 +2287,7 @@ cppop (struct cpstack **pstack)
    is the number of children that the user will see in the variable
    display.  */
 static int
-number_of_children (struct varobj *var)
+number_of_children (const struct varobj *var)
 {
   return (*var->root->lang_ops->number_of_children) (var);
 }
@@ -2333,7 +2295,7 @@ number_of_children (struct varobj *var)
 /* What is the expression for the root varobj VAR? Returns a malloc'd
    string.  */
 static char *
-name_of_variable (struct varobj *var)
+name_of_variable (const struct varobj *var)
 {
   return (*var->root->lang_ops->name_of_variable) (var);
 }
@@ -2350,7 +2312,7 @@ name_of_child (struct varobj *var, int index)
    to it and return 1.  Otherwise, return 0.  */
 
 static int
-check_scope (struct varobj *var)
+check_scope (const struct varobj *var)
 {
   struct frame_info *fi;
   int scope;
@@ -2411,14 +2373,17 @@ value_of_root_1 (struct varobj **var_handle)
 
   if (within_scope)
     {
-      volatile struct gdb_exception except;
 
       /* We need to catch errors here, because if evaluate
          expression fails we want to just return NULL.  */
-      TRY_CATCH (except, RETURN_MASK_ERROR)
+      TRY
 	{
 	  new_val = evaluate_expression (var->root->exp);
 	}
+      CATCH (except, RETURN_MASK_ERROR)
+	{
+	}
+      END_CATCH
     }
 
   do_cleanups (back_to);
@@ -2526,7 +2491,7 @@ value_of_root (struct varobj **var_handle, int *type_changed)
 
 /* What is the ``struct value *'' for the INDEX'th child of PARENT?  */
 static struct value *
-value_of_child (struct varobj *parent, int index)
+value_of_child (const struct varobj *parent, int index)
 {
   struct value *value;
 
@@ -2561,7 +2526,7 @@ varobj_formatted_print_options (struct value_print_options *opts,
 char *
 varobj_value_get_print_value (struct value *value,
 			      enum varobj_display_formats format,
-			      struct varobj *var)
+			      const struct varobj *var)
 {
   struct ui_file *stb;
   struct cleanup *old_chain;
@@ -2692,7 +2657,7 @@ varobj_value_get_print_value (struct value *value,
 }
 
 int
-varobj_editable_p (struct varobj *var)
+varobj_editable_p (const struct varobj *var)
 {
   struct type *type;
 
@@ -2720,7 +2685,7 @@ varobj_editable_p (struct varobj *var)
 /* Call VAR's value_is_changeable_p language-specific callback.  */
 
 int
-varobj_value_is_changeable_p (struct varobj *var)
+varobj_value_is_changeable_p (const struct varobj *var)
 {
   return var->root->lang_ops->value_is_changeable_p (var);
 }
@@ -2729,7 +2694,7 @@ varobj_value_is_changeable_p (struct varobj *var)
    selected frame, and not bound to thread/frame.  Such variable objects
    are created using '@' as frame specifier to -var-create.  */
 int
-varobj_floating_p (struct varobj *var)
+varobj_floating_p (const struct varobj *var)
 {
   return var->root->floating;
 }
@@ -2738,7 +2703,7 @@ varobj_floating_p (struct varobj *var)
    languages.  */
 
 int
-varobj_default_value_is_changeable_p (struct varobj *var)
+varobj_default_value_is_changeable_p (const struct varobj *var)
 {
   int r;
   struct type *type;
@@ -2779,24 +2744,6 @@ all_root_varobjs (void (*func) (struct varobj *var, void *data), void *data)
 
       (*func) (var_root->rootvar, data);
     }
-}
-
-extern void _initialize_varobj (void);
-void
-_initialize_varobj (void)
-{
-  int sizeof_table = sizeof (struct vlist *) * VAROBJ_TABLE_SIZE;
-
-  varobj_table = xmalloc (sizeof_table);
-  memset (varobj_table, 0, sizeof_table);
-
-  add_setshow_zuinteger_cmd ("debugvarobj", class_maintenance,
-			     &varobjdebug,
-			     _("Set varobj debugging."),
-			     _("Show varobj debugging."),
-			     _("When non-zero, varobj debugging is enabled."),
-			     NULL, show_varobjdebug,
-			     &setlist, &showlist);
 }
 
 /* Invalidate varobj VAR if it is tied to locals and re-create it if it is
@@ -2839,4 +2786,22 @@ void
 varobj_invalidate (void)
 {
   all_root_varobjs (varobj_invalidate_iter, NULL);
+}
+
+extern void _initialize_varobj (void);
+void
+_initialize_varobj (void)
+{
+  int sizeof_table = sizeof (struct vlist *) * VAROBJ_TABLE_SIZE;
+
+  varobj_table = xmalloc (sizeof_table);
+  memset (varobj_table, 0, sizeof_table);
+
+  add_setshow_zuinteger_cmd ("varobj", class_maintenance,
+			     &varobjdebug,
+			     _("Set varobj debugging."),
+			     _("Show varobj debugging."),
+			     _("When non-zero, varobj debugging is enabled."),
+			     NULL, show_varobjdebug,
+			     &setdebuglist, &showdebuglist);
 }

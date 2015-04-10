@@ -1,6 +1,6 @@
 /* Remote debugging interface to Xilinx MicroBlaze.
 
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -21,7 +21,6 @@
 #include "gdbcore.h"
 #include "target.h"
 #include "monitor.h"
-#include <string.h>
 #include "serial.h"
 #include "regcache.h"
 
@@ -49,7 +48,7 @@ static char *picobug_regnames[] = {
 
 
 static void
-picobug_open (char *args, int from_tty)
+picobug_open (const char *args, int from_tty)
 {
   monitor_open (args, &picobug_cmds, from_tty);
 }
@@ -84,7 +83,7 @@ picobug_dumpregs (struct regcache *regcache)
       if (strchr (p, '-'))
 	{
 	  /* Got a range.  Either r0-r7, r8-r15 or ss0-ss4.  */
-	  if (strncmp (p, "r0", 2) == 0 || strncmp (p, "r8", 2) == 0)
+	  if (startswith (p, "r0") || startswith (p, "r8"))
 	    {
 	      int rn = (p[1] == '0' ? 0 : 8);
 	      int i = 0;
@@ -98,7 +97,7 @@ picobug_dumpregs (struct regcache *regcache)
 		  i++;
 		}
 	    }
-	  else if (strncmp (p, "ss", 2) == 0)
+	  else if (startswith (p, "ss"))
 	    {
 	      /* Get the next five values, ignoring the first.  */
 	      int rn;

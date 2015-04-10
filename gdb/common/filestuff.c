@@ -1,5 +1,5 @@
 /* Low-level file-handling.
-   Copyright (C) 2012, 2013 Free Software Foundation, Inc.
+   Copyright (C) 2012-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -16,16 +16,9 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifdef GDBSERVER
-#include "server.h"
-#else
-#include "defs.h"
-#include <string.h>
-#endif
+#include "common-defs.h"
 #include "filestuff.h"
 #include "gdb_vecs.h"
-
-#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -350,10 +343,11 @@ gdb_fopen_cloexec (const char *filename, const char *opentype)
 /* See filestuff.h.  */
 
 int
-gdb_socketpair_cloexec (int namespace, int style, int protocol, int filedes[2])
+gdb_socketpair_cloexec (int domain, int style, int protocol,
+			int filedes[2])
 {
 #ifdef HAVE_SOCKETPAIR
-  int result = socketpair (namespace, style | SOCK_CLOEXEC, protocol, filedes);
+  int result = socketpair (domain, style | SOCK_CLOEXEC, protocol, filedes);
 
   if (result != -1)
     {
@@ -370,9 +364,9 @@ gdb_socketpair_cloexec (int namespace, int style, int protocol, int filedes[2])
 /* See filestuff.h.  */
 
 int
-gdb_socket_cloexec (int namespace, int style, int protocol)
+gdb_socket_cloexec (int domain, int style, int protocol)
 {
-  int result = socket (namespace, style | SOCK_CLOEXEC, protocol);
+  int result = socket (domain, style | SOCK_CLOEXEC, protocol);
 
   if (result != -1)
     socket_mark_cloexec (result);

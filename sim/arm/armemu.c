@@ -1,7 +1,7 @@
 /*  armemu.c -- Main instruction emulation:  ARM7 Instruction Emulator.
     Copyright (C) 1994 Advanced RISC Machines Ltd.
     Modifications to add arch. v4 support by <jsmith@cygnus.com>.
- 
+
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation; either version 3 of the License, or
@@ -25,6 +25,7 @@ static ARMword  GetDPSRegRHS        (ARMul_State *, ARMword);
 static void     WriteR15            (ARMul_State *, ARMword);
 static void     WriteSR15           (ARMul_State *, ARMword);
 static void     WriteR15Branch      (ARMul_State *, ARMword);
+static void     WriteR15Load        (ARMul_State *, ARMword);
 static ARMword  GetLSRegRHS         (ARMul_State *, ARMword);
 static ARMword  GetLS7RHS           (ARMul_State *, ARMword);
 static unsigned LoadWord            (ARMul_State *, ARMword, ARMword);
@@ -46,17 +47,6 @@ static void     Handle_Store_Double (ARMul_State *, ARMword);
 #define LSIGNED   (1)		/* signed operation */
 #define LDEFAULT  (0)		/* default : do nothing */
 #define LSCC      (1)		/* set condition codes on result */
-
-#ifdef NEED_UI_LOOP_HOOK
-/* How often to run the ui_loop update, when in use.  */
-#define UI_LOOP_POLL_INTERVAL 0x32000
-
-/* Counter for the ui_loop_hook update.  */
-static long ui_loop_hook_counter = UI_LOOP_POLL_INTERVAL;
-
-/* Actual hook to call to run through gdb's gui event loop.  */
-extern int (*deprecated_ui_loop_hook) (int);
-#endif /* NEED_UI_LOOP_HOOK */
 
 extern int stop_simulator;
 
@@ -271,6 +261,7 @@ extern int stop_simulator;
 /* Attempt to emulate an ARMv6 instruction.
    Returns non-zero upon success.  */
 
+#ifdef MODE32
 static int
 handle_v6_insn (ARMul_State * state, ARMword instr)
 {
@@ -313,7 +304,7 @@ handle_v6_insn (ARMul_State * state, ARMword instr)
       {
 	ARMword Rm;
 	int ror = -1;
-	  
+
 	switch (BITS (4, 11))
 	  {
 	  case 0x07: ror = 0; break;
@@ -472,6 +463,7 @@ handle_v6_insn (ARMul_State * state, ARMword instr)
   printf ("Unhandled v6 insn: UNKNOWN: %08x\n", instr);
   return 0;
 }
+#endif
 
 /* EMULATION of ARM6.  */
 
@@ -579,11 +571,20 @@ ARMul_Emulate26 (ARMul_State * state)
 
       if (state->EventSet)
 	ARMul_EnvokeEvent (state);
-#if 0 /* Enable this for a helpful bit of debugging when tracing is needed.  */
-      fprintf (stderr, "pc: %x, instr: %x\n", pc & ~1, instr);
-      if (instr == 0)
-	abort ();
-#endif
+
+      if (! TFLAG && trace)
+	{
+	  fprintf (stderr, "pc: %x, ", pc & ~1);
+	  if (! disas)
+	    fprintf (stderr, "instr: %x\n", instr);
+	}
+
+      if (instr == 0 || pc < 0x10)
+	{
+	  ARMul_Abort (state, ARMUndefinedInstrV);
+	  state->Emulate = FALSE;
+	}
+
 #if 0 /* Enable this code to help track down stack alignment bugs.  */
       {
 	static ARMword old_sp = -1;
@@ -627,8 +628,8 @@ ARMul_Emulate26 (ARMul_State * state)
 	    }
 	  if (state->Debug)
 	    {
-	      fprintf (stderr, "sim: At %08lx Instr %08lx Mode %02lx\n", pc, instr,
-		       state->Mode);
+	      fprintf (stderr, "sim: At %08lx Instr %08lx Mode %02lx\n",
+		       (long) pc, (long) instr, (long) state->Mode);
 	      (void) fgetc (stdin);
 	    }
 	}
@@ -666,6 +667,14 @@ ARMul_Emulate26 (ARMul_State * state)
 
 	    case t_decoded:
 	      /* ARM instruction available.  */
+	      if (disas || trace)
+		{
+		  fprintf (stderr, "  emulate as: ");
+		  if (trace)
+		    fprintf (stderr, "%08x ", new);
+		  if (! disas)
+		    fprintf (stderr, "\n");
+		}
 	      instr = new;
 	      /* So continue instruction decoding.  */
 	      break;
@@ -674,6 +683,8 @@ ARMul_Emulate26 (ARMul_State * state)
 	    }
 	}
 #endif
+      if (disas)
+	print_insn (instr);
 
       /* Check the condition codes.  */
       if ((temp = TOPBITS (28)) == AL)
@@ -797,10 +808,11 @@ ARMul_Emulate26 (ARMul_State * state)
 	      else
 		{
 		  ARMword cp14r1;
-		  int do_int = 0;
+		  int do_int;
 
 		  state->CP14R0_CCD = -1;
 check_PMUintr:
+		  do_int = 0;
 		  cp14r0 |= ARMul_CP14_R0_FLAG2;
 		  (void) state->CPWrite[14] (state, 0, cp14r0);
 
@@ -1653,7 +1665,6 @@ check_PMUintr:
 		{
 		  if (BITS (4, 7) == 0x7)
 		    {
-		      ARMword value;
 		      extern int SWI_vector_installed;
 
 		      /* Hardware is allowed to optionally override this
@@ -1735,7 +1746,6 @@ check_PMUintr:
 		      ARMdword op1 = state->Reg[BITS (0, 3)];
 		      ARMdword op2 = state->Reg[BITS (8, 11)];
 		      ARMdword dest;
-		      ARMdword result;
 
 		      if (BIT (5))
 			op1 >>= 16;
@@ -1876,7 +1886,6 @@ check_PMUintr:
 		      /* ElSegundo SMULxy insn.  */
 		      ARMword op1 = state->Reg[BITS (0, 3)];
 		      ARMword op2 = state->Reg[BITS (8, 11)];
-		      ARMword Rn = state->Reg[BITS (12, 15)];
 
 		      if (BIT (5))
 			op1 >>= 16;
@@ -3458,7 +3467,6 @@ check_PMUintr:
 	      FLUSHPIPE;
 	      break;
 
-
 	      /* Branch and Link forward.  */
 	    case 0xb0:
 	    case 0xb1:
@@ -3476,8 +3484,9 @@ check_PMUintr:
 #endif
 	      state->Reg[15] = pc + 8 + POSBRANCH;
 	      FLUSHPIPE;
+	      if (trace_funcs)
+		fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 	      break;
-
 
 	      /* Branch and Link backward.  */
 	    case 0xb8:
@@ -3496,8 +3505,9 @@ check_PMUintr:
 #endif
 	      state->Reg[15] = pc + 8 + NEGBRANCH;
 	      FLUSHPIPE;
+	      if (trace_funcs)
+		fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 	      break;
-
 
 	      /* Co-Processor Data Transfers.  */
 	    case 0xc4:
@@ -3861,14 +3871,6 @@ check_PMUintr:
     donext:
 #endif
 
-#ifdef NEED_UI_LOOP_HOOK
-      if (deprecated_ui_loop_hook != NULL && ui_loop_hook_counter-- < 0)
-	{
-	  ui_loop_hook_counter = UI_LOOP_POLL_INTERVAL;
-	  deprecated_ui_loop_hook (0);
-	}
-#endif /* NEED_UI_LOOP_HOOK */
-
       if (state->Emulate == ONCE)
 	state->Emulate = STOP;
       /* If we have changed mode, allow the PC to advance before stopping.  */
@@ -4149,6 +4151,8 @@ WriteR15 (ARMul_State * state, ARMword src)
 #endif
 
   FLUSHPIPE;
+  if (trace_funcs)
+    fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 }
 
 /* This routine handles writes to register 15 when the S bit is set.  */
@@ -4186,6 +4190,8 @@ WriteSR15 (ARMul_State * state, ARMword src)
   ARMul_R15Altered (state);
 #endif
   FLUSHPIPE;
+  if (trace_funcs)
+    fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 }
 
 /* In machines capable of running in Thumb mode, BX, BLX, LDR and LDM
@@ -4207,9 +4213,22 @@ WriteR15Branch (ARMul_State * state, ARMword src)
       state->Reg[15] = src & 0xfffffffc;
     }
   FLUSHPIPE;
+  if (trace_funcs)
+    fprintf (stderr, " pc changed to %x\n", state->Reg[15]);
 #else
   WriteR15 (state, src);
 #endif
+}
+
+/* Before ARM_v5 LDR and LDM of pc did not change mode.  */
+
+static void
+WriteR15Load (ARMul_State * state, ARMword src)
+{
+  if (state->is_v5)
+    WriteR15Branch (state, src);
+  else
+    WriteR15 (state, src);
 }
 
 /* This routine evaluates most Load and Store register RHS's.  It is
@@ -4724,7 +4743,7 @@ LoadMult (ARMul_State * state, ARMword instr, ARMword address, ARMword WBBase)
 
   if (BIT (15) && !state->Aborted)
     /* PC is in the reg list.  */
-    WriteR15Branch (state, PC);
+    WriteR15Load (state, PC);
 
   /* To write back the final register.  */
   ARMul_Icycles (state, 1, 0L);

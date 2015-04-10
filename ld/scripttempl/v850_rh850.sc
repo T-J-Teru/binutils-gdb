@@ -1,4 +1,16 @@
+# Copyright (C) 2014-2015 Free Software Foundation, Inc.
+# 
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.
+
 cat << EOF
+/* Copyright (C) 2014-2015 Free Software Foundation, Inc.
+
+   Copying and distribution of this script, with or without modification,
+   are permitted in any medium without royalty provided the copyright
+   notice and this notice are preserved.  */
+
 OUTPUT_FORMAT("elf32-v850-rh850", "elf32-v850-rh850",
 	      "elf32-v850-rh850")
 OUTPUT_ARCH(v850-rh850)
@@ -201,6 +213,8 @@ SECTIONS
   ${RELOCATING+_end = . ;}
   ${RELOCATING+PROVIDE (end = .);}
   ${RELOCATING+PROVIDE (_heap_start = .);}
+
+  .note.renesas 0 : { KEEP(*(.note.renesas)) }  
 
   /* Stabs debugging sections.  */
   .stab 0		: { *(.stab) }

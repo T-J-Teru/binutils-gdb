@@ -1,6 +1,6 @@
 /* Routines for name->symbol lookups in GDB.
    
-   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+   Copyright (C) 2003-2015 Free Software Foundation, Inc.
 
    Contributed by David Carlton <carlton@bactrian.org> and by Kealia,
    Inc.
@@ -25,7 +25,6 @@
 #include "gdb_obstack.h"
 #include "symtab.h"
 #include "buildsym.h"
-#include "gdb_assert.h"
 #include "dictionary.h"
 
 /* This file implements dictionaries, which are tables that associate
@@ -807,7 +806,7 @@ dict_hash (const char *string0)
   string = string0;
   if (*string == '_')
     {
-      if (strncmp (string, "_ada_", 5) == 0)
+      if (startswith (string, "_ada_"))
 	string += 5;
       else
 	return msymbol_hash_iw (string0);

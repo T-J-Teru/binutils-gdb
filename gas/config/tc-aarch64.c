@@ -1,7 +1,6 @@
 /* tc-aarch64.c -- Assemble for the AArch64 ISA
 
-   Copyright 2009, 2010, 2011, 2012, 2013
-   Free Software Foundation, Inc.
+   Copyright (C) 2009-2015 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of GAS.
@@ -43,6 +42,8 @@
 
 #define streq(a, b)	      (strcmp (a, b) == 0)
 
+#define END_OF_INSN '\0'
+
 static aarch64_feature_set cpu_variant;
 
 /* Variables that we set while parsing command-line options.  Once all
@@ -53,9 +54,6 @@ static const aarch64_feature_set *march_cpu_opt = NULL;
 
 /* Constants for known architecture features.  */
 static const aarch64_feature_set cpu_default = CPU_DEFAULT;
-
-static const aarch64_feature_set aarch64_arch_any = AARCH64_ANY;
-static const aarch64_feature_set aarch64_arch_none = AARCH64_ARCH_NONE;
 
 #ifdef OBJ_ELF
 /* Pre-defined "_GLOBAL_OFFSET_TABLE_"	*/
@@ -436,9 +434,16 @@ static symbolS *last_label_seen;
    and per-sub-section basis.  */
 
 #define MAX_LITERAL_POOL_SIZE 1024
+typedef struct literal_expression
+{
+  expressionS exp;
+  /* If exp.op == O_big then this bignum holds a copy of the global bignum value.  */
+  LITTLENUM_TYPE * bignum;
+} literal_expression;
+
 typedef struct literal_pool
 {
-  expressionS literals[MAX_LITERAL_POOL_SIZE];
+  literal_expression literals[MAX_LITERAL_POOL_SIZE];
   unsigned int next_free_entry;
   unsigned int id;
   symbolS *symbol;
@@ -1462,36 +1467,28 @@ static void mapping_state_2 (enum mstate state, int max_chars);
 /* Set the mapping state to STATE.  Only call this when about to
    emit some STATE bytes to the file.  */
 
+#define TRANSITION(from, to) (mapstate == (from) && state == (to))
 void
 mapping_state (enum mstate state)
 {
   enum mstate mapstate = seg_info (now_seg)->tc_segment_info_data.mapstate;
 
-#define TRANSITION(from, to) (mapstate == (from) && state == (to))
-
   if (mapstate == state)
     /* The mapping symbol has already been emitted.
        There is nothing else to do.  */
     return;
-  else if (TRANSITION (MAP_UNDEFINED, MAP_DATA))
+
+  if (state == MAP_INSN)
+    /* AArch64 instructions require 4-byte alignment.  When emitting
+       instructions into any section, record the appropriate section
+       alignment.  */
+    record_alignment (now_seg, 2);
+
+  if (TRANSITION (MAP_UNDEFINED, MAP_DATA))
     /* This case will be evaluated later in the next else.  */
     return;
-  else if (TRANSITION (MAP_UNDEFINED, MAP_INSN))
-    {
-      /* Only add the symbol if the offset is > 0:
-         if we're at the first frag, check it's size > 0;
-         if we're not at the first frag, then for sure
-         the offset is > 0.  */
-      struct frag *const frag_first = seg_info (now_seg)->frchainP->frch_root;
-      const int add_symbol = (frag_now != frag_first)
-	|| (frag_now_fix () > 0);
-
-      if (add_symbol)
-	make_mapping_symbol (MAP_DATA, (valueT) 0, frag_first);
-    }
 
   mapping_state_2 (state, 0);
-#undef TRANSITION
 }
 
 /* Same as mapping_state, but MAX_CHARS bytes have already been
@@ -1510,9 +1507,24 @@ mapping_state_2 (enum mstate state, int max_chars)
        There is nothing else to do.  */
     return;
 
+  if (TRANSITION (MAP_UNDEFINED, MAP_INSN))
+    {
+      /* Only add the symbol if the offset is > 0:
+	 if we're at the first frag, check it's size > 0;
+	 if we're not at the first frag, then for sure
+	 the offset is > 0.  */
+      struct frag *const frag_first = seg_info (now_seg)->frchainP->frch_root;
+      const int add_symbol = (frag_now != frag_first)
+	|| (frag_now_fix () > 0);
+
+      if (add_symbol)
+	make_mapping_symbol (MAP_DATA, (valueT) 0, frag_first);
+    }
+
   seg_info (now_seg)->tc_segment_info_data.mapstate = state;
   make_mapping_symbol (state, (valueT) frag_now_fix () - max_chars, frag_now);
 }
+#undef TRANSITION
 #else
 #define mapping_state(x)	/* nothing */
 #define mapping_state_2(x, y)	/* nothing */
@@ -1617,17 +1629,19 @@ add_to_lit_pool (expressionS *exp, int size)
   /* Check if this literal value is already in the pool.  */
   for (entry = 0; entry < pool->next_free_entry; entry++)
     {
-      if ((pool->literals[entry].X_op == exp->X_op)
+      expressionS * litexp = & pool->literals[entry].exp;
+
+      if ((litexp->X_op == exp->X_op)
 	  && (exp->X_op == O_constant)
-	  && (pool->literals[entry].X_add_number == exp->X_add_number)
-	  && (pool->literals[entry].X_unsigned == exp->X_unsigned))
+	  && (litexp->X_add_number == exp->X_add_number)
+	  && (litexp->X_unsigned == exp->X_unsigned))
 	break;
 
-      if ((pool->literals[entry].X_op == exp->X_op)
+      if ((litexp->X_op == exp->X_op)
 	  && (exp->X_op == O_symbol)
-	  && (pool->literals[entry].X_add_number == exp->X_add_number)
-	  && (pool->literals[entry].X_add_symbol == exp->X_add_symbol)
-	  && (pool->literals[entry].X_op_symbol == exp->X_op_symbol))
+	  && (litexp->X_add_number == exp->X_add_number)
+	  && (litexp->X_add_symbol == exp->X_add_symbol)
+	  && (litexp->X_op_symbol == exp->X_op_symbol))
 	break;
     }
 
@@ -1640,8 +1654,18 @@ add_to_lit_pool (expressionS *exp, int size)
 	  return FALSE;
 	}
 
-      pool->literals[entry] = *exp;
+      pool->literals[entry].exp = *exp;
       pool->next_free_entry += 1;
+      if (exp->X_op == O_big)
+	{
+	  /* PR 16688: Bignums are held in a single global array.  We must
+	     copy and preserve that value now, before it is overwritten.  */
+	  pool->literals[entry].bignum = xmalloc (CHARS_PER_LITTLENUM * exp->X_add_number);
+	  memcpy (pool->literals[entry].bignum, generic_bignum,
+		  CHARS_PER_LITTLENUM * exp->X_add_number);
+	}
+      else
+	pool->literals[entry].bignum = NULL;
     }
 
   exp->X_op = O_symbol;
@@ -1661,7 +1685,7 @@ symbol_locate (symbolS * symbolP,
 	       valueT valu,	/* Symbol value.  */
 	       fragS * frag)	/* Associated fragment.  */
 {
-  unsigned int name_length;
+  size_t name_length;
   char *preserved_copy_of_name;
 
   name_length = strlen (name) + 1;	/* +1 for \0.  */
@@ -1735,8 +1759,26 @@ s_ltorg (int ignored ATTRIBUTE_UNUSED)
       symbol_table_insert (pool->symbol);
 
       for (entry = 0; entry < pool->next_free_entry; entry++)
-	/* First output the expression in the instruction to the pool.  */
-	emit_expr (&(pool->literals[entry]), size);	/* .word|.xword  */
+	{
+	  expressionS * exp = & pool->literals[entry].exp;
+
+	  if (exp->X_op == O_big)
+	    {
+	      /* PR 16688: Restore the global bignum value.  */
+	      gas_assert (pool->literals[entry].bignum != NULL);
+	      memcpy (generic_bignum, pool->literals[entry].bignum,
+		      CHARS_PER_LITTLENUM * exp->X_add_number);
+	    }
+
+	  /* First output the expression in the instruction to the pool.  */
+	  emit_expr (exp, size);	/* .word|.xword  */
+
+	  if (exp->X_op == O_big)
+	    {
+	      free (pool->literals[entry].bignum);
+	      pool->literals[entry].bignum = NULL;
+	    }
+	}
 
       /* Mark the pool as empty.  */
       pool->next_free_entry = 0;
@@ -1879,6 +1921,7 @@ s_tlsdesccall (int ignored ATTRIBUTE_UNUSED)
 
 static void s_aarch64_arch (int);
 static void s_aarch64_cpu (int);
+static void s_aarch64_arch_extension (int);
 
 /* This table describes all the machine specific pseudo-ops the assembler
    has to support.  The fields are:
@@ -1896,6 +1939,7 @@ const pseudo_typeS md_pseudo_table[] = {
   {"pool", s_ltorg, 0},
   {"cpu", s_aarch64_cpu, 0},
   {"arch", s_aarch64_arch, 0},
+  {"arch_extension", s_aarch64_arch_extension, 0},
   {"inst", s_aarch64_inst, 0},
 #ifdef OBJ_ELF
   {"tlsdesccall", s_tlsdesccall, 0},
@@ -2273,220 +2317,282 @@ struct reloc_table_entry
 {
   const char *name;
   int pc_rel;
+  bfd_reloc_code_real_type adr_type;
   bfd_reloc_code_real_type adrp_type;
   bfd_reloc_code_real_type movw_type;
   bfd_reloc_code_real_type add_type;
   bfd_reloc_code_real_type ldst_type;
+  bfd_reloc_code_real_type ld_literal_type;
 };
 
 static struct reloc_table_entry reloc_table[] = {
   /* Low 12 bits of absolute address: ADD/i and LDR/STR */
   {"lo12", 0,
+   0,				/* adr_type */
    0,
    0,
    BFD_RELOC_AARCH64_ADD_LO12,
-   BFD_RELOC_AARCH64_LDST_LO12},
+   BFD_RELOC_AARCH64_LDST_LO12,
+   0},
 
   /* Higher 21 bits of pc-relative page offset: ADRP */
   {"pg_hi21", 1,
+   0,				/* adr_type */
    BFD_RELOC_AARCH64_ADR_HI21_PCREL,
+   0,
    0,
    0,
    0},
 
   /* Higher 21 bits of pc-relative page offset: ADRP, no check */
   {"pg_hi21_nc", 1,
+   0,				/* adr_type */
    BFD_RELOC_AARCH64_ADR_HI21_NC_PCREL,
+   0,
    0,
    0,
    0},
 
   /* Most significant bits 0-15 of unsigned address/value: MOVZ */
   {"abs_g0", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G0,
+   0,
    0,
    0},
 
   /* Most significant bits 0-15 of signed address/value: MOVN/Z */
   {"abs_g0_s", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G0_S,
+   0,
    0,
    0},
 
   /* Less significant bits 0-15 of address/value: MOVK, no check */
   {"abs_g0_nc", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G0_NC,
+   0,
    0,
    0},
 
   /* Most significant bits 16-31 of unsigned address/value: MOVZ */
   {"abs_g1", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G1,
+   0,
    0,
    0},
 
   /* Most significant bits 16-31 of signed address/value: MOVN/Z */
   {"abs_g1_s", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G1_S,
+   0,
    0,
    0},
 
   /* Less significant bits 16-31 of address/value: MOVK, no check */
   {"abs_g1_nc", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G1_NC,
+   0,
    0,
    0},
 
   /* Most significant bits 32-47 of unsigned address/value: MOVZ */
   {"abs_g2", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G2,
+   0,
    0,
    0},
 
   /* Most significant bits 32-47 of signed address/value: MOVN/Z */
   {"abs_g2_s", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G2_S,
+   0,
    0,
    0},
 
   /* Less significant bits 32-47 of address/value: MOVK, no check */
   {"abs_g2_nc", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G2_NC,
+   0,
    0,
    0},
 
   /* Most significant bits 48-63 of signed/unsigned address/value: MOVZ */
   {"abs_g3", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_MOVW_G3,
+   0,
    0,
    0},
 
   /* Get to the page containing GOT entry for a symbol.  */
   {"got", 1,
+   0,				/* adr_type */
    BFD_RELOC_AARCH64_ADR_GOT_PAGE,
+   0,
    0,
    0,
    BFD_RELOC_AARCH64_GOT_LD_PREL19},
 
   /* 12 bit offset into the page containing GOT entry for that symbol.  */
   {"got_lo12", 0,
+   0,				/* adr_type */
    0,
    0,
    0,
-   BFD_RELOC_AARCH64_LD_GOT_LO12_NC},
+   BFD_RELOC_AARCH64_LD_GOT_LO12_NC,
+   0},
 
   /* Get to the page containing GOT TLS entry for a symbol */
   {"tlsgd", 0,
+   BFD_RELOC_AARCH64_TLSGD_ADR_PREL21, /* adr_type */
    BFD_RELOC_AARCH64_TLSGD_ADR_PAGE21,
+   0,
    0,
    0,
    0},
 
   /* 12 bit offset into the page containing GOT TLS entry for a symbol */
   {"tlsgd_lo12", 0,
+   0,				/* adr_type */
    0,
    0,
    BFD_RELOC_AARCH64_TLSGD_ADD_LO12_NC,
+   0,
    0},
 
   /* Get to the page containing GOT TLS entry for a symbol */
   {"tlsdesc", 0,
+   BFD_RELOC_AARCH64_TLSDESC_ADR_PREL21, /* adr_type */
    BFD_RELOC_AARCH64_TLSDESC_ADR_PAGE21,
    0,
    0,
-   0},
+   0,
+   BFD_RELOC_AARCH64_TLSDESC_LD_PREL19},
 
   /* 12 bit offset into the page containing GOT TLS entry for a symbol */
   {"tlsdesc_lo12", 0,
+   0,				/* adr_type */
    0,
    0,
    BFD_RELOC_AARCH64_TLSDESC_ADD_LO12_NC,
-   BFD_RELOC_AARCH64_TLSDESC_LD_LO12_NC},
+   BFD_RELOC_AARCH64_TLSDESC_LD_LO12_NC,
+   0},
 
   /* Get to the page containing GOT TLS entry for a symbol */
   {"gottprel", 0,
+   0,				/* adr_type */
    BFD_RELOC_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21,
    0,
    0,
-   0},
+   0,
+   BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_PREL19},
 
   /* 12 bit offset into the page containing GOT TLS entry for a symbol */
   {"gottprel_lo12", 0,
+   0,				/* adr_type */
    0,
    0,
    0,
-   BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_LO12_NC},
+   BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_LO12_NC,
+   0},
 
   /* Get tp offset for a symbol.  */
   {"tprel", 0,
+   0,				/* adr_type */
    0,
    0,
    BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12,
+   0,
    0},
 
   /* Get tp offset for a symbol.  */
   {"tprel_lo12", 0,
+   0,				/* adr_type */
    0,
    0,
    BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12,
+   0,
    0},
 
   /* Get tp offset for a symbol.  */
   {"tprel_hi12", 0,
+   0,				/* adr_type */
    0,
    0,
    BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_HI12,
+   0,
    0},
 
   /* Get tp offset for a symbol.  */
   {"tprel_lo12_nc", 0,
+   0,				/* adr_type */
    0,
    0,
    BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12_NC,
+   0,
    0},
 
   /* Most significant bits 32-47 of address/value: MOVZ.  */
   {"tprel_g2", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G2,
+   0,
    0,
    0},
 
   /* Most significant bits 16-31 of address/value: MOVZ.  */
   {"tprel_g1", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1,
+   0,
    0,
    0},
 
   /* Most significant bits 16-31 of address/value: MOVZ, no check.  */
   {"tprel_g1_nc", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1_NC,
+   0,
    0,
    0},
 
   /* Most significant bits 0-15 of address/value: MOVZ.  */
   {"tprel_g0", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0,
+   0,
    0,
    0},
 
   /* Most significant bits 0-15 of address/value: MOVZ, no check.  */
   {"tprel_g0_nc", 0,
+   0,				/* adr_type */
    0,
    BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0_NC,
+   0,
    0,
    0},
 };
@@ -2816,7 +2922,7 @@ parse_shifter_operand_reloc (char **str, aarch64_opnd_info *operand,
       if (**str == '\0')
 	return TRUE;
 
-      /* Otherwise, we have a shifted reloc modifier, so rewind to 
+      /* Otherwise, we have a shifted reloc modifier, so rewind to
          recover the variable name and continue parsing for the shifter.  */
       *str = p;
       return parse_shifter_operand_imm (str, operand, mode);
@@ -2894,6 +3000,7 @@ parse_address_main (char **str, aarch64_opnd_info *operand, int reloc,
       skip_past_char (&p, '#');
       if (reloc && skip_past_char (&p, ':'))
 	{
+	  bfd_reloc_code_real_type ty;
 	  struct reloc_table_entry *entry;
 
 	  /* Try to parse a relocation modifier.  Anything else is
@@ -2905,7 +3012,19 @@ parse_address_main (char **str, aarch64_opnd_info *operand, int reloc,
 	      return FALSE;
 	    }
 
-	  if (entry->ldst_type == 0)
+	  switch (operand->type)
+	    {
+	    case AARCH64_OPND_ADDR_PCREL21:
+	      /* adr */
+	      ty = entry->adr_type;
+	      break;
+
+	    default:
+	      ty = entry->ld_literal_type;
+	      break;
+	    }
+
+	  if (ty == 0)
 	    {
 	      set_syntax_error
 		(_("this relocation modifier is not allowed on this "
@@ -2921,8 +3040,8 @@ parse_address_main (char **str, aarch64_opnd_info *operand, int reloc,
 	    }
 
 	  /* #:<reloc_op>:<expr>  */
-	  /* Record the load/store relocation type.  */
-	  inst.reloc.type = entry->ldst_type;
+	  /* Record the relocation type.  */
+	  inst.reloc.type = ty;
 	  inst.reloc.pc_rel = entry->pc_rel;
 	}
       else
@@ -3295,19 +3414,13 @@ parse_sys_reg (char **str, struct hash_control *sys_regs, int imple_defined_p)
 	return PARSE_FAIL;
       else
 	{
-	  /* Parse S<op0>_<op1>_<Cn>_<Cm>_<op2>, the implementation defined
-	     registers.  */
+	  /* Parse S<op0>_<op1>_<Cn>_<Cm>_<op2>.  */
 	  unsigned int op0, op1, cn, cm, op2;
-	  if (sscanf (buf, "s%u_%u_c%u_c%u_%u", &op0, &op1, &cn, &cm, &op2) != 5)
+
+	  if (sscanf (buf, "s%u_%u_c%u_c%u_%u", &op0, &op1, &cn, &cm, &op2)
+	      != 5)
 	    return PARSE_FAIL;
-	  /* The architecture specifies the encoding space for implementation
-	     defined registers as:
-	     op0  op1  CRn   CRm   op2
-	     1x   xxx  1x11  xxxx  xxx
-	     For convenience GAS accepts a wider encoding space, as follows:
-	     op0  op1  CRn   CRm   op2
-	     1x   xxx  xxxx  xxxx  xxx  */
-	  if ((op0 != 2 && op0 != 3) || op1 > 7 || cn > 15 || cm > 15 || op2 > 7)
+	  if (op0 > 3 || op1 > 7 || cn > 15 || cm > 15 || op2 > 7)
 	    return PARSE_FAIL;
 	  value = (op0 << 14) | (op1 << 11) | (cn << 7) | (cm << 3) | op2;
 	}
@@ -3517,9 +3630,9 @@ fix_new_aarch64 (fragS * frag,
 
 /* Diagnostics on operands errors.  */
 
-/* By default, output one-line error message only.
-   Enable the verbose error message by -merror-verbose.  */
-static int verbose_error_p = 0;
+/* By default, output verbose error message.
+   Disable the verbose error message by -mno-verbose-error.  */
+static int verbose_error_p = 1;
 
 #ifdef DEBUG_AARCH64
 /* N.B. this is only for the purpose of debugging.  */
@@ -3907,11 +4020,11 @@ output_info (const char *format, ...)
 static void
 output_operand_error_record (const operand_error_record *record, char *str)
 {
-  int idx = record->detail.index;
-  const aarch64_opcode *opcode = record->opcode;
-  enum aarch64_opnd opd_code = (idx != -1 ? opcode->operands[idx]
-				: AARCH64_OPND_NIL);
   const aarch64_operand_error *detail = &record->detail;
+  int idx = detail->index;
+  const aarch64_opcode *opcode = record->opcode;
+  enum aarch64_opnd opd_code = (idx >= 0 ? opcode->operands[idx]
+				: AARCH64_OPND_NIL);
 
   switch (detail->kind)
     {
@@ -3923,20 +4036,22 @@ output_operand_error_record (const operand_error_record *record, char *str)
     case AARCH64_OPDE_RECOVERABLE:
     case AARCH64_OPDE_FATAL_SYNTAX_ERROR:
     case AARCH64_OPDE_OTHER_ERROR:
-      gas_assert (idx >= 0);
       /* Use the prepared error message if there is, otherwise use the
 	 operand description string to describe the error.  */
       if (detail->error != NULL)
 	{
-	  if (detail->index == -1)
+	  if (idx < 0)
 	    as_bad (_("%s -- `%s'"), detail->error, str);
 	  else
 	    as_bad (_("%s at operand %d -- `%s'"),
-		    detail->error, detail->index + 1, str);
+		    detail->error, idx + 1, str);
 	}
       else
-	as_bad (_("operand %d should be %s -- `%s'"), idx + 1,
+	{
+	  gas_assert (idx >= 0);
+	  as_bad (_("operand %d should be %s -- `%s'"), idx + 1,
 		aarch64_get_operand_desc (opd_code), str);
+	}
       break;
 
     case AARCH64_OPDE_INVALID_VARIANT:
@@ -4041,28 +4156,28 @@ output_operand_error_record (const operand_error_record *record, char *str)
       if (detail->data[0] != detail->data[1])
 	as_bad (_("%s out of range %d to %d at operand %d -- `%s'"),
 		detail->error ? detail->error : _("immediate value"),
-		detail->data[0], detail->data[1], detail->index + 1, str);
+		detail->data[0], detail->data[1], idx + 1, str);
       else
 	as_bad (_("%s expected to be %d at operand %d -- `%s'"),
 		detail->error ? detail->error : _("immediate value"),
-		detail->data[0], detail->index + 1, str);
+		detail->data[0], idx + 1, str);
       break;
 
     case AARCH64_OPDE_REG_LIST:
       if (detail->data[0] == 1)
 	as_bad (_("invalid number of registers in the list; "
 		  "only 1 register is expected at operand %d -- `%s'"),
-		detail->index + 1, str);
+		idx + 1, str);
       else
 	as_bad (_("invalid number of registers in the list; "
 		  "%d registers are expected at operand %d -- `%s'"),
-	      detail->data[0], detail->index + 1, str);
+	      detail->data[0], idx + 1, str);
       break;
 
     case AARCH64_OPDE_UNALIGNED:
       as_bad (_("immediate value should be a multiple of "
 		"%d at operand %d -- `%s'"),
-	      detail->data[0], detail->index + 1, str);
+	      detail->data[0], idx + 1, str);
       break;
 
     default:
@@ -4412,9 +4527,7 @@ process_movw_reloc_info (void)
       case BFD_RELOC_AARCH64_MOVW_G1_S:
       case BFD_RELOC_AARCH64_MOVW_G2_S:
       case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0:
-      case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0_NC:
       case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1:
-      case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1_NC:
       case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G2:
 	set_syntax_error
 	  (_("the specified relocation type is not allowed for MOVK"));
@@ -4607,6 +4720,7 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 	case AARCH64_OPND_Rs:
 	case AARCH64_OPND_Ra:
 	case AARCH64_OPND_Rt_SYS:
+	case AARCH64_OPND_PAIRREG:
 	  po_int_reg_or_fail (1, 0);
 	  break;
 
@@ -5266,6 +5380,37 @@ failure:
       if (! backtrack_pos)
 	goto parse_operands_return;
 
+      {
+	/* We reach here because this operand is marked as optional, and
+	   either no operand was supplied or the operand was supplied but it
+	   was syntactically incorrect.  In the latter case we report an
+	   error.  In the former case we perform a few more checks before
+	   dropping through to the code to insert the default operand.  */
+
+	char *tmp = backtrack_pos;
+	char endchar = END_OF_INSN;
+
+	if (i != (aarch64_num_of_operands (opcode) - 1))
+	  endchar = ',';
+	skip_past_char (&tmp, ',');
+
+	if (*tmp != endchar)
+	  /* The user has supplied an operand in the wrong format.  */
+	  goto parse_operands_return;
+
+	/* Make sure there is not a comma before the optional operand.
+	   For example the fifth operand of 'sys' is optional:
+
+	     sys #0,c0,c0,#0,  <--- wrong
+	     sys #0,c0,c0,#0   <--- correct.  */
+	if (comma_skipped_p && i && endchar == END_OF_INSN)
+	  {
+	    set_fatal_syntax_error
+	      (_("unexpected comma before the omitted optional operand"));
+	    goto parse_operands_return;
+	  }
+      }
+
       /* Reaching here means we are dealing with an optional operand that is
 	 omitted from the assembly line.  */
       gas_assert (optional_operand_p (opcode, i));
@@ -5275,15 +5420,6 @@ failure:
       /* Try again, skipping the optional operand at backtrack_pos.  */
       str = backtrack_pos;
       backtrack_pos = 0;
-
-      /* If this is the last operand that is optional and omitted, but without
-	 the presence of a comma.  */
-      if (i && comma_skipped_p && i == aarch64_num_of_operands (opcode) - 1)
-	{
-	  set_fatal_syntax_error
-	    (_("unexpected comma before the omitted optional operand"));
-	  goto parse_operands_return;
-	}
 
       /* Clear any error record after the omitted optional operand has been
 	 successfully handled.  */
@@ -5431,6 +5567,49 @@ programmer_friendly_fixup (aarch64_instruction *instr)
   return TRUE;
 }
 
+/* Check for loads and stores that will cause unpredictable behavior.  */
+
+static void
+warn_unpredictable_ldst (aarch64_instruction *instr, char *str)
+{
+  aarch64_inst *base = &instr->base;
+  const aarch64_opcode *opcode = base->opcode;
+  const aarch64_opnd_info *opnds = base->operands;
+  switch (opcode->iclass)
+    {
+    case ldst_pos:
+    case ldst_imm9:
+    case ldst_unscaled:
+    case ldst_unpriv:
+      /* Loading/storing the base register is unpredictable if writeback.  */
+      if ((aarch64_get_operand_class (opnds[0].type)
+	   == AARCH64_OPND_CLASS_INT_REG)
+	  && opnds[0].reg.regno == opnds[1].addr.base_regno
+	  && opnds[1].addr.base_regno != REG_SP
+	  && opnds[1].addr.writeback)
+	as_warn (_("unpredictable transfer with writeback -- `%s'"), str);
+      break;
+    case ldstpair_off:
+    case ldstnapair_offs:
+    case ldstpair_indexed:
+      /* Loading/storing the base register is unpredictable if writeback.  */
+      if ((aarch64_get_operand_class (opnds[0].type)
+	   == AARCH64_OPND_CLASS_INT_REG)
+	  && (opnds[0].reg.regno == opnds[2].addr.base_regno
+	    || opnds[1].reg.regno == opnds[2].addr.base_regno)
+	  && opnds[2].addr.base_regno != REG_SP
+	  && opnds[2].addr.writeback)
+	    as_warn (_("unpredictable transfer with writeback -- `%s'"), str);
+      /* Load operations must load different registers.  */
+      if ((opcode->opcode & (1 << 22))
+	  && opnds[0].reg.regno == opnds[1].reg.regno)
+	    as_warn (_("unpredictable load of register pair -- `%s'"), str);
+      break;
+    default:
+      break;
+    }
+}
+
 /* A wrapper function to interface with libopcodes on encoding and
    record the error message if there is any.
 
@@ -5531,14 +5710,6 @@ md_assemble (char *str)
 	dump_opcode_operands (opcode);
 #endif /* DEBUG_AARCH64 */
 
-      /* Check that this instruction is supported for this CPU.  */
-      if (!opcode->avariant
-	  || !AARCH64_CPU_HAS_FEATURE (cpu_variant, *opcode->avariant))
-	{
-	  as_bad (_("selected processor does not support `%s'"), str);
-	  return;
-	}
-
       mapping_state (MAP_INSN);
 
       inst_base = &inst.base;
@@ -5563,6 +5734,16 @@ md_assemble (char *str)
 	  && programmer_friendly_fixup (&inst)
 	  && do_encode (inst_base->opcode, &inst.base, &inst_base->value))
 	{
+	  /* Check that this instruction is supported for this CPU.  */
+	  if (!opcode->avariant
+	      || !AARCH64_CPU_HAS_FEATURE (cpu_variant, *opcode->avariant))
+	    {
+	      as_bad (_("selected processor does not support `%s'"), str);
+	      return;
+	    }
+
+	  warn_unpredictable_ldst (&inst, str);
+
 	  if (inst.reloc.type == BFD_RELOC_UNUSED
 	      || !inst.reloc.need_libopcodes_p)
 	    output_inst (NULL);
@@ -5768,7 +5949,24 @@ md_section_align (segT segment ATTRIBUTE_UNUSED, valueT size)
 }
 
 /* This is called from HANDLE_ALIGN in write.c.	 Fill in the contents
-   of an rs_align_code fragment.  */
+   of an rs_align_code fragment.
+
+   Here we fill the frag with the appropriate info for padding the
+   output stream.  The resulting frag will consist of a fixed (fr_fix)
+   and of a repeating (fr_var) part.
+
+   The fixed content is always emitted before the repeating content and
+   these two parts are used as follows in constructing the output:
+   - the fixed part will be used to align to a valid instruction word
+     boundary, in case that we start at a misaligned address; as no
+     executable instruction can live at the misaligned location, we
+     simply fill with zeros;
+   - the variable part will be used to cover the remaining padding and
+     we fill using the AArch64 NOP instruction.
+
+   Note that the size of a RS_ALIGN_CODE fragment is always 7 to provide
+   enough storage space for up to 3 bytes for padding the back to a valid
+   instruction alignment and exactly 4 bytes to store the NOP pattern.  */
 
 void
 aarch64_handle_align (fragS * fragP)
@@ -5779,69 +5977,33 @@ aarch64_handle_align (fragS * fragP)
 
   int bytes, fix, noop_size;
   char *p;
-  const char *noop;
 
   if (fragP->fr_type != rs_align_code)
     return;
 
   bytes = fragP->fr_next->fr_address - fragP->fr_address - fragP->fr_fix;
   p = fragP->fr_literal + fragP->fr_fix;
-  fix = 0;
-
-  if (bytes > MAX_MEM_FOR_RS_ALIGN_CODE)
-    bytes &= MAX_MEM_FOR_RS_ALIGN_CODE;
 
 #ifdef OBJ_ELF
   gas_assert (fragP->tc_frag_data.recorded);
 #endif
 
-  noop = aarch64_noop;
   noop_size = sizeof (aarch64_noop);
-  fragP->fr_var = noop_size;
 
-  if (bytes & (noop_size - 1))
+  fix = bytes & (noop_size - 1);
+  if (fix)
     {
-      fix = bytes & (noop_size - 1);
 #ifdef OBJ_ELF
       insert_data_mapping_symbol (MAP_INSN, fragP->fr_fix, fragP, fix);
 #endif
       memset (p, 0, fix);
       p += fix;
-      bytes -= fix;
+      fragP->fr_fix += fix;
     }
 
-  while (bytes >= noop_size)
-    {
-      memcpy (p, noop, noop_size);
-      p += noop_size;
-      bytes -= noop_size;
-      fix += noop_size;
-    }
-
-  fragP->fr_fix += fix;
-}
-
-/* Called from md_do_align.  Used to create an alignment
-   frag in a code section.  */
-
-void
-aarch64_frag_align_code (int n, int max)
-{
-  char *p;
-
-  /* We assume that there will never be a requirement
-     to support alignments greater than x bytes.  */
-  if (max > MAX_MEM_FOR_RS_ALIGN_CODE)
-    as_fatal (_
-	      ("alignments greater than %d bytes not supported in .text sections"),
-	      MAX_MEM_FOR_RS_ALIGN_CODE + 1);
-
-  p = frag_var (rs_align_code,
-		MAX_MEM_FOR_RS_ALIGN_CODE,
-		1,
-		(relax_substateT) max,
-		(symbolS *) NULL, (offsetT) n, (char *) NULL);
-  *p = 0;
+  if (noop_size)
+    memcpy (p, aarch64_noop, noop_size);
+  fragP->fr_var = noop_size;
 }
 
 /* Perform target specific initialisation of a frag.
@@ -5906,12 +6068,15 @@ tc_aarch64_regname_to_dw2regnum (char *regname)
     case REG_TYPE_SP_64:
     case REG_TYPE_R_32:
     case REG_TYPE_R_64:
+      return reg->number;
+
     case REG_TYPE_FP_B:
     case REG_TYPE_FP_H:
     case REG_TYPE_FP_S:
     case REG_TYPE_FP_D:
     case REG_TYPE_FP_Q:
-      return reg->number;
+      return reg->number + 64;
+
     default:
       break;
     }
@@ -6550,13 +6715,17 @@ md_apply_fix (fixS * fixP, valueT * valP, segT seg)
 
     case BFD_RELOC_AARCH64_TLSDESC_ADD_LO12_NC:
     case BFD_RELOC_AARCH64_TLSDESC_ADR_PAGE21:
+    case BFD_RELOC_AARCH64_TLSDESC_ADR_PREL21:
     case BFD_RELOC_AARCH64_TLSDESC_LD32_LO12_NC:
     case BFD_RELOC_AARCH64_TLSDESC_LD64_LO12_NC:
+    case BFD_RELOC_AARCH64_TLSDESC_LD_PREL19:
     case BFD_RELOC_AARCH64_TLSGD_ADD_LO12_NC:
     case BFD_RELOC_AARCH64_TLSGD_ADR_PAGE21:
+    case BFD_RELOC_AARCH64_TLSGD_ADR_PREL21:
     case BFD_RELOC_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21:
     case BFD_RELOC_AARCH64_TLSIE_LD32_GOTTPREL_LO12_NC:
     case BFD_RELOC_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC:
+    case BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_PREL19:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_HI12:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12_NC:
@@ -6603,6 +6772,10 @@ md_apply_fix (fixS * fixP, valueT * valP, segT seg)
     case BFD_RELOC_AARCH64_TLSDESC_ADD:
     case BFD_RELOC_AARCH64_TLSDESC_LDR:
     case BFD_RELOC_AARCH64_TLSDESC_CALL:
+      break;
+
+    case BFD_RELOC_UNUSED:
+      /* An error will already have been reported.  */
       break;
 
     default:
@@ -6745,13 +6918,17 @@ aarch64_force_relocation (struct fix *fixp)
     case BFD_RELOC_AARCH64_LDST8_LO12:
     case BFD_RELOC_AARCH64_TLSDESC_ADD_LO12_NC:
     case BFD_RELOC_AARCH64_TLSDESC_ADR_PAGE21:
+    case BFD_RELOC_AARCH64_TLSDESC_ADR_PREL21:
     case BFD_RELOC_AARCH64_TLSDESC_LD32_LO12_NC:
     case BFD_RELOC_AARCH64_TLSDESC_LD64_LO12_NC:
+    case BFD_RELOC_AARCH64_TLSDESC_LD_PREL19:
     case BFD_RELOC_AARCH64_TLSGD_ADD_LO12_NC:
     case BFD_RELOC_AARCH64_TLSGD_ADR_PAGE21:
+    case BFD_RELOC_AARCH64_TLSGD_ADR_PREL21:
     case BFD_RELOC_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21:
     case BFD_RELOC_AARCH64_TLSIE_LD32_GOTTPREL_LO12_NC:
     case BFD_RELOC_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC:
+    case BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_PREL19:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_HI12:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12:
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_LO12_NC:
@@ -7119,6 +7296,8 @@ static struct aarch64_option_table aarch64_opts[] = {
 #endif /* DEBUG_AARCH64 */
   {"mverbose-error", N_("output verbose error messages"), &verbose_error_p, 1,
    NULL},
+  {"mno-verbose-error", N_("do not output verbose error messages"),
+   &verbose_error_p, 0, NULL},
   {NULL, NULL, NULL, 0, NULL}
 };
 
@@ -7135,14 +7314,21 @@ struct aarch64_cpu_option_table
    recognized by GCC.  */
 static const struct aarch64_cpu_option_table aarch64_cpus[] = {
   {"all", AARCH64_ANY, NULL},
-  {"cortex-a53",	AARCH64_ARCH_V8, "Cortex-A53"},
-  {"cortex-a57",	AARCH64_ARCH_V8, "Cortex-A57"},
+  {"cortex-a53", AARCH64_FEATURE (AARCH64_ARCH_V8,
+				  AARCH64_FEATURE_CRC), "Cortex-A53"},
+  {"cortex-a57", AARCH64_FEATURE (AARCH64_ARCH_V8,
+				  AARCH64_FEATURE_CRC), "Cortex-A57"},
+  {"cortex-a72", AARCH64_FEATURE (AARCH64_ARCH_V8,
+				  AARCH64_FEATURE_CRC), "Cortex-A72"},
+  {"thunderx", AARCH64_ARCH_V8, "Cavium ThunderX"},
+  /* The 'xgene-1' name is an older name for 'xgene1', which was used
+     in earlier releases and is superseded by 'xgene1' in all
+     tools.  */
+  {"xgene-1", AARCH64_ARCH_V8, "APM X-Gene 1"},
+  {"xgene1", AARCH64_ARCH_V8, "APM X-Gene 1"},
+  {"xgene2", AARCH64_FEATURE (AARCH64_ARCH_V8,
+			      AARCH64_FEATURE_CRC), "APM X-Gene 2"},
   {"generic", AARCH64_ARCH_V8, NULL},
-
-  /* These two are example CPUs supported in GCC, once we have real
-     CPUs they will be removed.  */
-  {"example-1",	AARCH64_ARCH_V8, NULL},
-  {"example-2",	AARCH64_ARCH_V8, NULL},
 
   {NULL, AARCH64_ARCH_NONE, NULL}
 };
@@ -7172,6 +7358,7 @@ static const struct aarch64_option_cpu_value_table aarch64_features[] = {
   {"crc",		AARCH64_FEATURE (AARCH64_FEATURE_CRC, 0)},
   {"crypto",		AARCH64_FEATURE (AARCH64_FEATURE_CRYPTO, 0)},
   {"fp",		AARCH64_FEATURE (AARCH64_FEATURE_FP, 0)},
+  {"lse",		AARCH64_FEATURE (AARCH64_FEATURE_LSE, 0)},
   {"simd",		AARCH64_FEATURE (AARCH64_FEATURE_SIMD, 0)},
   {NULL,		AARCH64_ARCH_NONE}
 };
@@ -7185,7 +7372,8 @@ struct aarch64_long_option_table
 };
 
 static int
-aarch64_parse_features (char *str, const aarch64_feature_set **opt_p)
+aarch64_parse_features (char *str, const aarch64_feature_set **opt_p,
+			bfd_boolean ext_only)
 {
   /* We insist on extensions being added before being removed.  We achieve
      this by using the ADDING_VALUE variable to indicate whether we are
@@ -7201,17 +7389,19 @@ aarch64_parse_features (char *str, const aarch64_feature_set **opt_p)
   while (str != NULL && *str != 0)
     {
       const struct aarch64_option_cpu_value_table *opt;
-      char *ext;
+      char *ext = NULL;
       int optlen;
 
-      if (*str != '+')
+      if (!ext_only)
 	{
-	  as_bad (_("invalid architectural extension"));
-	  return 0;
-	}
+	  if (*str != '+')
+	    {
+	      as_bad (_("invalid architectural extension"));
+	      return 0;
+	    }
 
-      str++;
-      ext = strchr (str, '+');
+	  ext = strchr (++str, '+');
+	}
 
       if (ext != NULL)
 	optlen = ext - str;
@@ -7291,7 +7481,7 @@ aarch64_parse_cpu (char *str)
       {
 	mcpu_cpu_opt = &opt->value;
 	if (ext != NULL)
-	  return aarch64_parse_features (ext, &mcpu_cpu_opt);
+	  return aarch64_parse_features (ext, &mcpu_cpu_opt, FALSE);
 
 	return 1;
       }
@@ -7323,7 +7513,7 @@ aarch64_parse_arch (char *str)
       {
 	march_cpu_opt = &opt->value;
 	if (ext != NULL)
-	  return aarch64_parse_features (ext, &march_cpu_opt);
+	  return aarch64_parse_features (ext, &march_cpu_opt, FALSE);
 
 	return 1;
       }
@@ -7506,7 +7696,7 @@ s_aarch64_cpu (int ignored ATTRIBUTE_UNUSED)
       {
 	mcpu_cpu_opt = &opt->value;
 	if (ext != NULL)
-	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt))
+	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt, FALSE))
 	    return;
 
 	cpu_variant = *mcpu_cpu_opt;
@@ -7552,7 +7742,7 @@ s_aarch64_arch (int ignored ATTRIBUTE_UNUSED)
       {
 	mcpu_cpu_opt = &opt->value;
 	if (ext != NULL)
-	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt))
+	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt, FALSE))
 	    return;
 
 	cpu_variant = *mcpu_cpu_opt;
@@ -7565,6 +7755,28 @@ s_aarch64_arch (int ignored ATTRIBUTE_UNUSED)
   as_bad (_("unknown architecture `%s'\n"), name);
   *input_line_pointer = saved_char;
   ignore_rest_of_line ();
+}
+
+/* Parse a .arch_extension directive.  */
+
+static void
+s_aarch64_arch_extension (int ignored ATTRIBUTE_UNUSED)
+{
+  char saved_char;
+  char *ext = input_line_pointer;;
+
+  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
+    input_line_pointer++;
+  saved_char = *input_line_pointer;
+  *input_line_pointer = 0;
+
+  if (!aarch64_parse_features (ext, &mcpu_cpu_opt, TRUE))
+    return;
+
+  cpu_variant = *mcpu_cpu_opt;
+
+  *input_line_pointer = saved_char;
+  demand_empty_rest_of_line ();
 }
 
 /* Copy symbol information.  */

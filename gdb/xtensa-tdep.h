@@ -1,6 +1,6 @@
 /* Target-dependent code for the Xtensa port of GDB, the GNU debugger.
 
-   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+   Copyright (C) 2003-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -84,7 +84,7 @@ typedef enum
 /* Xtensa ELF core file register set representation ('.reg' section).
    Copied from target-side ELF header <xtensa/elf.h>.  */
 
-typedef unsigned long xtensa_elf_greg_t;
+typedef uint32_t xtensa_elf_greg_t;
 
 typedef struct
 {
@@ -162,6 +162,13 @@ typedef enum
 } call_abi_t;
 
 
+struct ctype_cache
+{
+  struct ctype_cache *next;
+  int size;
+  struct type *virtual_type;
+};
+
 /*  Xtensa-specific target dependencies.  */
 
 struct gdbarch_tdep
@@ -228,12 +235,7 @@ struct gdbarch_tdep
   unsigned long *gregmap;
 
   /* Cached register types.  */
-  struct ctype_cache
-    {
-      struct ctype_cache *next;
-      int size;
-      struct type *virtual_type;
-    } *type_entries;
+  struct ctype_cache *type_entries;
 };
 
 /* Macro to instantiate a gdbarch_tdep structure.  */

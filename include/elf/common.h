@@ -1,5 +1,5 @@
 /* ELF support for BFD.
-   Copyright 1991-2013 Free Software Foundation, Inc.
+   Copyright (C) 1991-2015 Free Software Foundation, Inc.
 
    Written by Fred Fish @ Cygnus Support, from information published
    in "UNIX System V Release 4, Programmers Guide: ANSI C and
@@ -73,6 +73,7 @@
 #define ELFOSABI_NSK	     14	/* Hewlett-Packard Non-Stop Kernel */
 #define ELFOSABI_AROS	     15	/* AROS */
 #define ELFOSABI_FENIXOS     16 /* FenixOS */
+#define ELFOSABI_CLOUDABI    17 /* Nuxi CloudABI */
 #define ELFOSABI_C6000_ELFABI 64 /* Bare-metal TMS320C6000 */
 #define ELFOSABI_C6000_LINUX 65 /* Linux TMS320C6000 */
 #define ELFOSABI_ARM	     97	/* ARM */
@@ -192,7 +193,7 @@
 #define EM_MN10300	 89	/* Matsushita MN10300 */
 #define EM_MN10200	 90	/* Matsushita MN10200 */
 #define EM_PJ		 91	/* picoJava */
-#define EM_OPENRISC	 92	/* OpenRISC 32-bit embedded processor */
+#define EM_OR1K		 92	/* OpenRISC 1000 32-bit embedded processor */
 #define EM_ARC_A5	 93	/* ARC Cores Tangent-A5 */
 #define EM_XTENSA	 94	/* Tensilica Xtensa Architecture */
 #define EM_VIDEOCORE	 95	/* Alphamosaic VideoCore processor */
@@ -301,6 +302,9 @@
 #define EM_INTEL207	207	/* Reserved by Intel */
 #define EM_INTEL208	208	/* Reserved by Intel */
 #define EM_INTEL209	209	/* Reserved by Intel */
+#define EM_VISIUM	221	/* Controls and Data Services VISIUMcore processor */
+#define EM_FT32         222     /* FTDI Chip FT32 high performance 32-bit RISC architecture */
+#define EM_MOXIE        223     /* Moxie processor family */
 
 /* If it is necessary to assign new unofficial EM_* values, please pick large
    random numbers (0x8523, 0xa7f2, etc.) to minimize the chances of collision
@@ -339,9 +343,6 @@
 /* FR30 magic number - no EABI available.  */
 #define EM_CYGNUS_FR30		0x3330
 
-/* OpenRISC magic number.  Written in the absense of an ABI.  */
-#define EM_OPENRISC_OLD		0x3426
-
 /* DLX magic number.  Written in the absense of an ABI.  */
 #define EM_DLX			0x5aa5
 
@@ -359,9 +360,6 @@
 
 /* Ubicom IP2xxx;   Written in the absense of an ABI.  */
 #define EM_IP2K_OLD		0x8217
-
-/* (Deprecated) Temporary number for the OpenRISC processor.  */
-#define EM_OR32			0x8472
 
 /* Cygnus PowerPC ELF backend.  Written in the absence of an ABI.  */
 #define EM_CYGNUS_POWERPC	0x9025
@@ -399,7 +397,8 @@
 
 #define EM_CYGNUS_MEP		0xF00D  /* Toshiba MeP */
 
-#define EM_MOXIE                0xFEED  /* Moxie */
+/* Old, unofficial value for Moxie.  */
+#define EM_MOXIE_OLD            0xFEED
 
 /* Old Sunplus S+core7 backend magic number. Written in the absence of an ABI.  */
 #define EM_SCORE_OLD            95
@@ -410,6 +409,9 @@
 
 /* Randomly selected value for MRK3 microcontroller.  */
 #define EM_MRK3		       0xca98
+
+/* Old constant that might be in use by some software. */
+#define EM_OPENRISC		EM_OR1K
 
 /* See the above comment before you add a new EM_* value here.  */
 
@@ -508,6 +510,7 @@
 #define SHF_OS_NONCONFORMING (1 << 8)	/* OS specific processing required */
 #define SHF_GROUP	(1 << 9)	/* Member of a section group */
 #define SHF_TLS		(1 << 10)	/* Thread local storage section */
+#define SHF_COMPRESSED	(1 << 11)	/* Section with compressed data */
 
 /* #define SHF_MASKOS	0x0F000000    *//* OS-specific semantics */
 #define SHF_MASKOS	0x0FF00000	/* New value, Oct 4, 1999 Draft */
@@ -521,6 +524,13 @@
 					   builds when those objects
 					   are not to be further
 					   relocated.  */
+
+/* Compression types */
+#define ELFCOMPRESS_ZLIB   1		/* Compressed with zlib.  */
+#define ELFCOMPRESS_LOOS   0x60000000	/* OS-specific semantics, lo */
+#define ELFCOMPRESS_HIOS   0x6FFFFFFF	/* OS-specific semantics, hi */
+#define ELFCOMPRESS_LOPROC 0x70000000	/* Processor-specific semantics, lo */
+#define ELFCOMPRESS_HIPROC 0x7FFFFFFF	/* Processor-specific semantics, hi */
 
 /* Values of note segment descriptor types for core files.  */
 
@@ -558,6 +568,10 @@
 #define NT_S390_SYSTEM_CALL     0x307   /* S390 system call restart data */
 					/*   note name must be "LINUX".  */
 #define NT_S390_TDB	0x308		/* S390 transaction diagnostic block */
+					/*   note name must be "LINUX".  */
+#define NT_S390_VXRS_LOW	0x309	/* S390 vector registers 0-15 upper half */
+					/*   note name must be "LINUX".  */
+#define NT_S390_VXRS_HIGH	0x30a	/* S390 vector registers 16-31 */
 					/*   note name must be "LINUX".  */
 #define NT_ARM_VFP	0x400		/* ARM VFP registers */
 /* The following definitions should really use NT_AARCH_..., but defined
@@ -962,6 +976,7 @@
 #define AT_BASE_PLATFORM 24		/* String identifying real platform,
 					   may differ from AT_PLATFORM.  */
 #define AT_RANDOM	25		/* Address of 16 random bytes.  */
+#define AT_HWCAP2	26		/* Extension of AT_HWCAP.  */
 #define AT_EXECFN	31		/* Filename of executable.  */
 /* Pointer to the global system page used for system calls and other
    nice things.  */

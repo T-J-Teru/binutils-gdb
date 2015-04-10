@@ -1,6 +1,6 @@
 /* Everything about catch/throw catchpoints, for GDB.
 
-   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+   Copyright (C) 1986-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -29,7 +29,6 @@
 #include "completer.h"
 #include "gdb_obstack.h"
 #include "mi/mi-common.h"
-#include "exceptions.h"
 #include "linespec.h"
 #include "probe.h"
 #include "objfiles.h"
@@ -106,25 +105,25 @@ fetch_probe_arguments (struct value **arg0, struct value **arg1)
 {
   struct frame_info *frame = get_selected_frame (_("No frame selected"));
   CORE_ADDR pc = get_frame_pc (frame);
-  struct probe *pc_probe;
+  struct bound_probe pc_probe;
   const struct sym_probe_fns *pc_probe_fns;
   unsigned n_args;
 
   pc_probe = find_probe_by_pc (pc);
-  if (pc_probe == NULL
-      || strcmp (pc_probe->provider, "libstdcxx") != 0
-      || (strcmp (pc_probe->name, "catch") != 0
-	  && strcmp (pc_probe->name, "throw") != 0
-	  && strcmp (pc_probe->name, "rethrow") != 0))
+  if (pc_probe.probe == NULL
+      || strcmp (pc_probe.probe->provider, "libstdcxx") != 0
+      || (strcmp (pc_probe.probe->name, "catch") != 0
+	  && strcmp (pc_probe.probe->name, "throw") != 0
+	  && strcmp (pc_probe.probe->name, "rethrow") != 0))
     error (_("not stopped at a C++ exception catchpoint"));
 
-  n_args = get_probe_argument_count (pc_probe);
+  n_args = get_probe_argument_count (pc_probe.probe, frame);
   if (n_args < 2)
     error (_("C++ exception catchpoint has too few arguments"));
 
   if (arg0 != NULL)
-    *arg0 = evaluate_probe_argument (pc_probe, 0);
-  *arg1 = evaluate_probe_argument (pc_probe, 1);
+    *arg0 = evaluate_probe_argument (pc_probe.probe, 0, frame);
+  *arg1 = evaluate_probe_argument (pc_probe.probe, 1, frame);
 
   if ((arg0 != NULL && *arg0 == NULL) || *arg1 == NULL)
     error (_("error computing probe argument at c++ exception catchpoint"));
@@ -163,8 +162,7 @@ check_status_exception_catchpoint (struct bpstats *bs)
 {
   struct exception_catchpoint *self
     = (struct exception_catchpoint *) bs->breakpoint_at;
-  char *typename = NULL;
-  volatile struct gdb_exception e;
+  char *type_name = NULL;
 
   bkpt_breakpoint_ops.check_status (bs);
   if (bs->stop == 0)
@@ -173,28 +171,34 @@ check_status_exception_catchpoint (struct bpstats *bs)
   if (self->pattern == NULL)
     return;
 
-  TRY_CATCH (e, RETURN_MASK_ERROR)
+  TRY
     {
       struct value *typeinfo_arg;
       char *canon;
 
       fetch_probe_arguments (NULL, &typeinfo_arg);
-      typename = cplus_typename_from_type_info (typeinfo_arg);
+      type_name = cplus_typename_from_type_info (typeinfo_arg);
 
-      canon = cp_canonicalize_string (typename);
+      canon = cp_canonicalize_string (type_name);
       if (canon != NULL)
 	{
-	  xfree (typename);
-	  typename = canon;
+	  xfree (type_name);
+	  type_name = canon;
 	}
     }
+  CATCH (e, RETURN_MASK_ERROR)
+    {
+      exception_print (gdb_stderr, e);
+    }
+  END_CATCH
 
-  if (e.reason < 0)
-    exception_print (gdb_stderr, e);
-  else if (regexec (self->pattern, typename, 0, NULL, 0) != 0)
-    bs->stop = 0;
+  if (type_name != NULL)
+    {
+      if (regexec (self->pattern, type_name, 0, NULL, 0) != 0)
+	bs->stop = 0;
 
-  xfree (typename);
+      xfree (type_name);
+    }
 }
 
 /* Implement the 're_set' method.  */
@@ -204,33 +208,38 @@ re_set_exception_catchpoint (struct breakpoint *self)
 {
   struct symtabs_and_lines sals = {0};
   struct symtabs_and_lines sals_end = {0};
-  volatile struct gdb_exception e;
   struct cleanup *cleanup;
   enum exception_event_kind kind = classify_exception_breakpoint (self);
-  int pass;
 
-  for (pass = 0; sals.sals == NULL && pass < 2; ++pass)
+  /* We first try to use the probe interface.  */
+  TRY
     {
-      TRY_CATCH (e, RETURN_MASK_ERROR)
-	{
-	  char *spec;
+      char *spec = ASTRDUP (exception_functions[kind].probe);
 
-	  if (pass == 0)
-	    {
-	      spec = ASTRDUP (exception_functions[kind].probe);
-	      sals = parse_probes (&spec, NULL);
-	    }
-	  else
-	    {
-	      spec = ASTRDUP (exception_functions[kind].function);
-	      self->ops->decode_linespec (self, &spec, &sals);
-	    }
-	}
-      /* NOT_FOUND_ERROR just means the breakpoint will be pending, so
-	 let it through.  */
-      if (e.reason < 0 && e.error != NOT_FOUND_ERROR)
-	throw_exception (e);
+      sals = parse_probes (&spec, NULL);
     }
+
+  CATCH (e, RETURN_MASK_ERROR)
+    {
+
+      /* Using the probe interface failed.  Let's fallback to the normal
+	 catchpoint mode.  */
+      TRY
+	{
+	  char *spec = ASTRDUP (exception_functions[kind].function);
+
+	  self->ops->decode_linespec (self, &spec, &sals);
+	}
+      CATCH (ex, RETURN_MASK_ERROR)
+	{
+	  /* NOT_FOUND_ERROR just means the breakpoint will be
+	     pending, so let it through.  */
+	  if (ex.error != NOT_FOUND_ERROR)
+	    throw_exception (ex);
+	}
+      END_CATCH
+    }
+  END_CATCH
 
   cleanup = make_cleanup (xfree, sals.sals);
   update_breakpoint_locations (self, sals, sals_end);

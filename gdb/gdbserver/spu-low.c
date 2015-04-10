@@ -1,5 +1,5 @@
 /* Low level interface to SPUs, for the remote server for GDB.
-   Copyright (C) 2006-2013 Free Software Foundation, Inc.
+   Copyright (C) 2006-2015 Free Software Foundation, Inc.
 
    Contributed by Ulrich Weigand <uweigand@de.ibm.com>.
 
@@ -21,13 +21,9 @@
 #include "server.h"
 
 #include "gdb_wait.h"
-#include <stdio.h>
 #include <sys/ptrace.h>
 #include <fcntl.h>
-#include <string.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <errno.h>
 #include <sys/syscall.h>
 #include "filestuff.h"
 #include "hostio.h"
@@ -659,8 +655,13 @@ static struct target_ops spu_target_ops = {
   spu_look_up_symbols,
   spu_request_interrupt,
   NULL,
+  NULL,  /* supports_z_point_type */
   NULL,
   NULL,
+  NULL, /* stopped_by_sw_breakpoint */
+  NULL, /* supports_stopped_by_sw_breakpoint */
+  NULL, /* stopped_by_hw_breakpoint */
+  NULL, /* supports_stopped_by_hw_breakpoint */
   NULL,
   NULL,
   NULL,

@@ -1,6 +1,6 @@
 /* TUI window generic functions.
 
-   Copyright (C) 1998-2013 Free Software Foundation, Inc.
+   Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -32,8 +32,10 @@
 #include "cli/cli-cmds.h"
 #include "top.h"
 #include "source.h"
+#include "event-loop.h"
 
 #include "tui/tui.h"
+#include "tui/tui-io.h"
 #include "tui/tui-data.h"
 #include "tui/tui-wingeneral.h"
 #include "tui/tui-stack.h"
@@ -45,8 +47,6 @@
 #include "tui/tui-win.h"
 
 #include "gdb_curses.h"
-
-#include <string.h>
 #include <ctype.h>
 #include "readline/readline.h"
 
@@ -333,7 +333,7 @@ tui_command (char *args, int from_tty)
 {
   printf_unfiltered (_("\"tui\" must be followed by the name of a "
                      "tui command.\n"));
-  help_list (tuilist, "tui ", -1, gdb_stdout);
+  help_list (tuilist, "tui ", all_commands, gdb_stdout);
 }
 
 struct cmd_list_element **
@@ -344,6 +344,15 @@ tui_get_cmd_list (void)
                     _("Text User Interface commands."),
                     &tuilist, "tui ", 0, &cmdlist);
   return &tuilist;
+}
+
+/* The set_func hook of "set tui ..." commands that affect the window
+   borders on the TUI display.  */
+void
+tui_set_var_cmd (char *null_args, int from_tty, struct cmd_list_element *c)
+{
+  if (tui_update_variables () && tui_active)
+    tui_rehighlight_all ();
 }
 
 /* Function to initialize gdb commands, for tui window
@@ -403,10 +412,10 @@ Usage: + [win] [n]\n"));
 Scroll window backward.\n\
 Usage: - [win] [n]\n"));
   add_com ("<", class_tui, tui_scroll_left_command, _("\
-Scroll window forward.\n\
+Scroll window text to the left.\n\
 Usage: < [win] [n]\n"));
   add_com (">", class_tui, tui_scroll_right_command, _("\
-Scroll window backward.\n\
+Scroll window text to the right.\n\
 Usage: > [win] [n]\n"));
   if (xdb_commands)
     add_com ("w", class_xdb, tui_xdb_set_win_height_command, _("\
@@ -422,7 +431,7 @@ This variable controls the border of TUI windows:\n\
 space           use a white space\n\
 ascii           use ascii characters + - | for the border\n\
 acs             use the Alternate Character Set"),
-			NULL,
+			tui_set_var_cmd,
 			show_tui_border_kind,
 			&tui_setlist, &tui_showlist);
 
@@ -438,7 +447,7 @@ half            use half bright\n\
 half-standout   use half bright and standout mode\n\
 bold            use extra bright or bold\n\
 bold-standout   use extra bright or bold with standout mode"),
-			NULL,
+			tui_set_var_cmd,
 			show_tui_border_mode,
 			&tui_setlist, &tui_showlist);
 
@@ -454,7 +463,7 @@ half            use half bright\n\
 half-standout   use half bright and standout mode\n\
 bold            use extra bright or bold\n\
 bold-standout   use extra bright or bold with standout mode"),
-			NULL,
+			tui_set_var_cmd,
 			show_tui_active_border_mode,
 			&tui_setlist, &tui_showlist);
 }
@@ -619,7 +628,7 @@ tui_scroll (enum tui_scroll_direction direction,
 void
 tui_refresh_all_win (void)
 {
-  enum tui_win_type type;
+  int type;
 
   clearok (curscr, TRUE);
   tui_refresh_all (tui_win_list);
@@ -648,6 +657,14 @@ tui_refresh_all_win (void)
   tui_show_locator_content ();
 }
 
+void
+tui_rehighlight_all (void)
+{
+  int type;
+
+  for (type = SRC_WIN; type < MAX_MAJOR_WINDOWS; type++)
+    tui_check_and_display_highlight_if_needed (tui_win_list[type]);
+}
 
 /* Resize all the windows based on the terminal size.  This function
    gets called from within the readline sinwinch handler.  */
@@ -667,7 +684,7 @@ tui_resize_all (void)
       struct tui_win_info *first_win;
       struct tui_win_info *second_win;
       struct tui_gen_win_info *locator = tui_locator_win_info_ptr ();
-      enum tui_win_type win_type;
+      int win_type;
       int new_height, split_diff, cmd_split_diff, num_wins_displayed = 2;
 
 #ifdef HAVE_RESIZE_TERM
@@ -814,32 +831,62 @@ tui_resize_all (void)
 }
 
 #ifdef SIGWINCH
-/* SIGWINCH signal handler for the tui.  This signal handler is always
-   called, even when the readline package clears signals because it is
-   set as the old_sigwinch() (TUI only).  */
+/* Token for use by TUI's asynchronous SIGWINCH handler.  */
+static struct async_signal_handler *tui_sigwinch_token;
+
+/* TUI's SIGWINCH signal handler.  */
 static void
 tui_sigwinch_handler (int signal)
 {
-  /* Say that a resize was done so that the readline can do it later
-     when appropriate.  */
+  /* Set win_resized to TRUE and asynchronously invoke our resize callback.  If
+     the callback is invoked while TUI is active then it ought to successfully
+     resize the screen, resetting win_resized to FALSE.  Of course, if the
+     callback is invoked while TUI is inactive then it will do nothing; in that
+     case, win_resized will remain TRUE until we get a chance to synchronously
+     resize the screen from tui_enable().  */
+  mark_async_signal_handler (tui_sigwinch_token);
   tui_set_win_resized_to (TRUE);
+}
+
+/* Callback for asynchronously resizing TUI following a SIGWINCH signal.  */
+static void
+tui_async_resize_screen (gdb_client_data arg)
+{
+  if (!tui_active)
+    return;
+
+  tui_resize_all ();
+  tui_refresh_all_win ();
+  tui_update_gdb_sizes ();
+  tui_set_win_resized_to (FALSE);
+  tui_redisplay_readline ();
 }
 #endif
 
-/* Initializes SIGWINCH signal handler for the tui.  */
+/* Initialize TUI's SIGWINCH signal handler.  Note that the handler is not
+   uninstalled when we exit TUI, so the handler should not assume that TUI is
+   always active.  */
 void
 tui_initialize_win (void)
 {
 #ifdef SIGWINCH
-#ifdef HAVE_SIGACTION
-  struct sigaction old_winch;
+  tui_sigwinch_token
+    = create_async_signal_handler (tui_async_resize_screen, NULL);
 
-  memset (&old_winch, 0, sizeof (old_winch));
-  old_winch.sa_handler = &tui_sigwinch_handler;
-  sigaction (SIGWINCH, &old_winch, NULL);
-#else
-  signal (SIGWINCH, &tui_sigwinch_handler);
+  {
+#ifdef HAVE_SIGACTION
+    struct sigaction old_winch;
+
+    memset (&old_winch, 0, sizeof (old_winch));
+    old_winch.sa_handler = &tui_sigwinch_handler;
+#ifdef SA_RESTART
+    old_winch.sa_flags = SA_RESTART;
 #endif
+    sigaction (SIGWINCH, &old_winch, NULL);
+#else
+    signal (SIGWINCH, &tui_sigwinch_handler);
+#endif
+  }
 #endif
 }
 
@@ -960,7 +1007,7 @@ tui_set_focus_command (char *arg, int from_tty)
 static void
 tui_all_windows_info (char *arg, int from_tty)
 {
-  enum tui_win_type type;
+  int type;
   struct tui_win_info *win_with_focus = tui_win_with_focus ();
 
   for (type = SRC_WIN; (type < MAX_MAJOR_WINDOWS); type++)
@@ -989,7 +1036,7 @@ tui_refresh_all_command (char *arg, int from_tty)
 }
 
 
-/* Set the height of the specified window.  */
+/* Set the tab width of the specified window.  */
 static void
 tui_set_tab_width_command (char *arg, int from_tty)
 {
@@ -1001,7 +1048,27 @@ tui_set_tab_width_command (char *arg, int from_tty)
 
       ts = atoi (arg);
       if (ts > 0)
-	tui_set_default_tab_len (ts);
+	{
+	  tui_set_default_tab_len (ts);
+	  /* We don't really change the height of any windows, but
+	     calling these 2 functions causes a complete regeneration
+	     and redisplay of the window's contents, which will take
+	     the new tab width into account.  */
+	  if (tui_win_list[SRC_WIN]
+	      && tui_win_list[SRC_WIN]->generic.is_visible)
+	    {
+	      make_invisible_and_set_new_height (TUI_SRC_WIN,
+						 TUI_SRC_WIN->generic.height);
+	      make_visible_with_new_height (TUI_SRC_WIN);
+	    }
+	  if (tui_win_list[DISASSEM_WIN]
+	      && tui_win_list[DISASSEM_WIN]->generic.is_visible)
+	    {
+	      make_invisible_and_set_new_height (TUI_DISASM_WIN,
+						 TUI_DISASM_WIN->generic.height);
+	      make_visible_with_new_height (TUI_DISASM_WIN);
+	    }
+	}
       else
 	warning (_("Tab widths greater than 0 must be specified."));
     }
@@ -1388,7 +1455,7 @@ make_visible_with_new_height (struct tui_win_info *win_info)
 	  struct frame_info *frame = deprecated_safe_get_selected_frame ();
 	  struct gdbarch *gdbarch = get_frame_arch (frame);
 
-	  s = find_pc_symtab (get_frame_pc (frame));
+	  s = find_pc_line_symtab (get_frame_pc (frame));
 	  if (win_info->generic.type == SRC_WIN)
 	    {
 	      line.loa = LOA_LINE;

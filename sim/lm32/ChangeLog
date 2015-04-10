@@ -1,3 +1,39 @@
+2015-03-24  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-03-23  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-03-23  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+	* Makefile.in (SIM_OBJS): Delete @SIM_DV_SOCKSER_O@.
+
+2015-03-16  Mike Frysinger  <vapier@gentoo.org>
+
+	* aclocal.m4, config.in, configure: Regenerate.
+	* tconfig.in: Rename file ...
+	* tconfig.h: ... here.
+
+2015-03-15  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in (SIM_OBJS): Add @SIM_DV_SOCKSER_O@.
+
+2015-03-14  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in (SIM_RUN_OBJS): Delete.
+
+2014-08-19  Alan Modra  <amodra@gmail.com>
+
+	* configure: Regenerate.
+
+2014-08-15  Roland McGrath  <mcgrathr@google.com>
+
+	* configure: Regenerate.
+	* config.in: Regenerate.
+
 2013-12-07  Mike Frysinger  <vapier@gentoo.org>
 
 	* ChangeLog: Remove +x file mode.

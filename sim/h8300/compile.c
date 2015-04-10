@@ -1859,15 +1859,6 @@ init_pointers (SIM_DESC sd)
     }
 }
 
-/* Grotty global variable for use by control_c signal handler.  */
-static SIM_DESC control_c_sim_desc;
-
-static void
-control_c (int sig)
-{
-  sim_engine_set_run_state (control_c_sim_desc, sim_stopped, SIGINT);
-}
-
 int
 sim_stop (SIM_DESC sd)
 {
@@ -1901,7 +1892,6 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
   int cycles = 0;
   int insts = 0;
   int tick_start = get_now ();
-  void (*prev) ();
   int poll_count = 0;
   int res;
   int tmp;
@@ -1916,9 +1906,6 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
   int sigrc;
 
   init_pointers (sd);
-
-  control_c_sim_desc = sd;
-  prev = signal (SIGINT, control_c);
 
   if (step)
     {
@@ -3075,7 +3062,8 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	    stat_ptr = (h8300hmode && !h8300_normal_mode) ? GET_L_REG (1) : GET_W_REG (1);
 
 	    /* Callback stat and return.  */
-	    fstat_return = sim_callback->fstat (sim_callback, fd, &stat_rec);
+	    fstat_return = sim_callback->to_fstat (sim_callback, fd,
+						   &stat_rec);
 
 	    /* Have stat_ptr point to starting of stat_rec.  */
 	    temp_stat_ptr = (char *) (&stat_rec);
@@ -3149,7 +3137,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 
 	    /* Callback stat and return.  */
 	    stat_return =
-	      sim_callback->stat (sim_callback, filename, &stat_rec);
+	      sim_callback->to_stat (sim_callback, filename, &stat_rec);
 
 	    /* Have stat_ptr point to starting of stat_rec.  */
 	    temp_stat_ptr = (char *) (&stat_rec);
@@ -4604,16 +4592,6 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
     h8_set_exr (sd, (trace<<7) | intMask);
 
   h8_set_mask (sd, oldmask);
-  signal (SIGINT, prev);
-}
-
-int
-sim_trace (SIM_DESC sd)
-{
-  /* FIXME: Unfinished.  */
-  (*sim_callback->printf_filtered) (sim_callback,
-				    "sim_trace: trace not supported.\n");
-  return 1;	/* Done.  */
 }
 
 int
@@ -4803,14 +4781,6 @@ sim_stop_reason (SIM_DESC sd, enum sim_stop *reason, int *sigrc)
   sim_engine_get_run_state (sd, reason, sigrc);
 }
 
-/* FIXME: Rename to sim_set_mem_size.  */
-
-void
-sim_size (int n)
-{
-  /* Memory size is fixed.  */
-}
-
 static void
 set_simcache_size (SIM_DESC sd, int n)
 {
@@ -4988,7 +4958,7 @@ sim_close (SIM_DESC sd, int quitting)
 /* Called by gdb to load a program into memory.  */
 
 SIM_RC
-sim_load (SIM_DESC sd, char *prog, bfd *abfd, int from_tty)
+sim_load (SIM_DESC sd, const char *prog, bfd *abfd, int from_tty)
 {
   bfd *prog_bfd;
 
@@ -5106,10 +5076,4 @@ sim_create_inferior (SIM_DESC sd, struct bfd *abfd, char **argv, char **env)
     }
   
   return SIM_RC_OK;
-}
-
-void
-sim_set_callbacks (struct host_callback_struct *ptr)
-{
-  sim_callback = ptr;
 }

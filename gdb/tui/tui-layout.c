@@ -1,6 +1,6 @@
 /* TUI layout window management.
 
-   Copyright (C) 1998-2013 Free Software Foundation, Inc.
+   Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -37,8 +37,6 @@
 #include "tui/tui-winsource.h"
 #include "tui/tui-disasm.h"
 #include "tui/tui-layout.h"
-
-#include <string.h>
 #include "gdb_curses.h"
 
 /*******************************
@@ -618,7 +616,7 @@ tui_layout_command (char *arg, int from_tty)
 static enum tui_layout_type
 next_layout (void)
 {
-  enum tui_layout_type new_layout;
+  int new_layout;
 
   new_layout = tui_current_layout ();
   if (new_layout == UNDEFINED_LAYOUT)
@@ -630,7 +628,7 @@ next_layout (void)
 	new_layout = SRC_COMMAND;
     }
 
-  return new_layout;
+  return (enum tui_layout_type) new_layout;
 }
 
 
@@ -638,7 +636,7 @@ next_layout (void)
 static enum tui_layout_type
 prev_layout (void)
 {
-  enum tui_layout_type new_layout;
+  int new_layout;
 
   new_layout = tui_current_layout ();
   if (new_layout == SRC_COMMAND)
@@ -650,7 +648,7 @@ prev_layout (void)
 	new_layout = DISASSEM_DATA_COMMAND;
     }
 
-  return new_layout;
+  return (enum tui_layout_type) new_layout;
 }
 
 

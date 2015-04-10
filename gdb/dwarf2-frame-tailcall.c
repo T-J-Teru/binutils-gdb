@@ -1,6 +1,6 @@
 /* Virtual tail call frames unwinder for GDB.
 
-   Copyright (C) 2010-2013 Free Software Foundation, Inc.
+   Copyright (C) 2010-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -18,14 +18,12 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
-#include "gdb_assert.h"
 #include "frame.h"
 #include "dwarf2-frame-tailcall.h"
 #include "dwarf2loc.h"
 #include "frame-unwind.h"
 #include "block.h"
 #include "hashtab.h"
-#include "exceptions.h"
 #include "gdbtypes.h"
 #include "regcache.h"
 #include "value.h"
@@ -370,7 +368,6 @@ dwarf2_tailcall_sniffer_first (struct frame_info *this_frame,
   struct gdbarch *prev_gdbarch;
   struct call_site_chain *chain = NULL;
   struct tailcall_cache *cache;
-  volatile struct gdb_exception except;
 
   gdb_assert (*tailcall_cachep == NULL);
 
@@ -379,7 +376,7 @@ dwarf2_tailcall_sniffer_first (struct frame_info *this_frame,
   this_pc = get_frame_address_in_block (this_frame);
 
   /* Catch any unwinding errors.  */
-  TRY_CATCH (except, RETURN_MASK_ERROR)
+  TRY
     {
       int sp_regnum;
 
@@ -399,12 +396,13 @@ dwarf2_tailcall_sniffer_first (struct frame_info *this_frame,
       prev_sp = frame_unwind_register_unsigned (this_frame, sp_regnum);
       prev_sp_p = 1;
     }
-  if (except.reason < 0)
+  CATCH (except, RETURN_MASK_ERROR)
     {
       if (entry_values_debug)
 	exception_print (gdb_stdout, except);
       return;
     }
+  END_CATCH
 
   /* Ambiguous unwind or unambiguous unwind verified as matching.  */
   if (chain == NULL || chain->length == 0)

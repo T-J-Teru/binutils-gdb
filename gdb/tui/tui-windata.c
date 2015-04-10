@@ -1,6 +1,6 @@
 /* Data/register window display.
 
-   Copyright (C) 1998-2013 Free Software Foundation, Inc.
+   Copyright (C) 1998-2015 Free Software Foundation, Inc.
 
    Contributed by Hewlett-Packard Company.
 
@@ -25,8 +25,6 @@
 #include "tui/tui-wingeneral.h"
 #include "tui/tui-regs.h"
 #include "tui/tui-windata.h"
-
-#include <string.h>
 #include "gdb_curses.h"
 
 
@@ -255,7 +253,7 @@ tui_check_data_values (struct frame_info *frame)
 	    has changed (data_element_ptr, frame, &new_value)
 	    {
 	      data_element_ptr->value = new_value;
-	      update the display with the new value, hiliting it.
+	      update the display with the newobj value, hiliting it.
 	    }
 #endif
 	}

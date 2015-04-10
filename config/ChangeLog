@@ -1,3 +1,59 @@
+2015-03-31  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* zlib.m4 (AM_ZLIB): Replace --with-zlib with --with-system-zlib.
+
+2015-03-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* isl.m4: Sync with GCC tree.
+
+2015-03-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	Sync with GCC
+	2015-02-18  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* elf.m4 (ACX_ELF_TARGET_IFELSE): nvptx-*-none isn't ELF.
+
+2015-03-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	Sync with GCC
+	2014-11-17  Bob Dunlop  <bob.dunlop@xyzzy.org.uk>
+
+	* mt-ospace (CFLAGS_FOR_TARGET): Append -g -Os rather than
+	overwriting.
+	(CXXFLAGS_FOR_TARGET): Similarly.
+
+2015-03-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	Sync with GCC
+	2014-04-25  Marc Glisse  <marc.glisse@inria.fr>
+
+	PR target/43538
+	* mt-gnu: Don't reset CXXFLAGS_FOR_TARGET.
+
+2015-03-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* bootstrap-asan.mk: Sync with GCC tree.
+	* bootstrap-lto.mk: Likewise.
+
+2015-03-16  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* cloog.m4: Removed.
+
+2014-08-19  Alan Modra  <amodra@gmail.com>
+
+	* plugins.m4 (AC_PLUGINS): If plugins are enabled, add -ldl to
+	LIBS via AC_SEARCH_LIBS.
+
+2014-08-14  Alan Modra  <amodra@gmail.com>
+
+	* plugins.m4: Test for dlfcn.h or windows.h here to set default
+	for --enable-plugins.  Report error if someone tries to enable
+	plugins on a host we don't support.
+
+2014-05-14  Sandra Loosemore  <sandra@codesourcery.com>
+
+	* mt-nios2-elf: New file.
+
 2013-12-07  Mike Frysinger  <vapier@gentoo.org>
 
 	* acinclude.m4: Remove +x file mode.

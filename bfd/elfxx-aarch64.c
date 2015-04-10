@@ -1,5 +1,5 @@
 /* AArch64-specific support for ELF.
-   Copyright 2009-2013  Free Software Foundation, Inc.
+   Copyright (C) 2009-2015 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -20,50 +20,10 @@
 
 #include "sysdep.h"
 #include "elfxx-aarch64.h"
+#include <stdarg.h>
+#include <string.h>
 
 #define MASK(n) ((1u << (n)) - 1)
-
-/* Decode the 26-bit offset of unconditional branch.  */
-static inline uint32_t
-decode_branch_ofs_26 (uint32_t insn)
-{
-  return insn & MASK (26);
-}
-
-/* Decode the 19-bit offset of conditional branch and compare & branch.  */
-static inline uint32_t
-decode_cond_branch_ofs_19 (uint32_t insn)
-{
-  return (insn >> 5) & MASK (19);
-}
-
-/* Decode the 19-bit offset of load literal.  */
-static inline uint32_t
-decode_ld_lit_ofs_19 (uint32_t insn)
-{
-  return (insn >> 5) & MASK (19);
-}
-
-/* Decode the 14-bit offset of test & branch.  */
-static inline uint32_t
-decode_tst_branch_ofs_14 (uint32_t insn)
-{
-  return (insn >> 5) & MASK (14);
-}
-
-/* Decode the 16-bit imm of move wide.  */
-static inline uint32_t
-decode_movw_imm (uint32_t insn)
-{
-  return (insn >> 5) & MASK (16);
-}
-
-/* Decode the 12-bit imm of add immediate.  */
-static inline uint32_t
-decode_add_imm (uint32_t insn)
-{
-  return (insn >> 10) & MASK (12);
-}
 
 /* Reencode the imm field of add immediate.  */
 static inline uint32_t
@@ -185,6 +145,8 @@ _bfd_aarch64_elf_put_addend (bfd *abfd,
   size = bfd_get_reloc_size (howto);
   switch (size)
     {
+    case 0:
+      return status;
     case 2:
       contents = bfd_get_16 (abfd, address);
       break;
@@ -237,8 +199,10 @@ _bfd_aarch64_elf_put_addend (bfd *abfd,
       contents = reencode_tst_branch_ofs_14 (contents, addend);
       break;
 
+    case BFD_RELOC_AARCH64_TLSDESC_LD_PREL19:
     case BFD_RELOC_AARCH64_LD_LO19_PCREL:
     case BFD_RELOC_AARCH64_GOT_LD_PREL19:
+    case BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_PREL19:
       if (old_addend & ((1 << howto->rightshift) - 1))
 	return bfd_reloc_overflow;
       contents = reencode_ld_lit_ofs_19 (contents, addend);
@@ -247,6 +211,8 @@ _bfd_aarch64_elf_put_addend (bfd *abfd,
     case BFD_RELOC_AARCH64_TLSDESC_CALL:
       break;
 
+    case BFD_RELOC_AARCH64_TLSDESC_ADR_PREL21:
+    case BFD_RELOC_AARCH64_TLSGD_ADR_PREL21:
     case BFD_RELOC_AARCH64_TLSGD_ADR_PAGE21:
     case BFD_RELOC_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21:
     case BFD_RELOC_AARCH64_TLSDESC_ADR_PAGE21:
@@ -296,9 +262,7 @@ _bfd_aarch64_elf_put_addend (bfd *abfd,
 
     case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G2:
     case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1:
-    case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1_NC:
     case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0:
-    case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0_NC:
     case BFD_RELOC_AARCH64_MOVW_G0_S:
     case BFD_RELOC_AARCH64_MOVW_G1_S:
     case BFD_RELOC_AARCH64_MOVW_G2_S:
@@ -319,6 +283,8 @@ _bfd_aarch64_elf_put_addend (bfd *abfd,
       /* Group relocations to create a 16, 32, 48 or 64 bit unsigned
          data or abs address inline.  */
 
+    case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0_NC:
+    case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G1_NC:
     case BFD_RELOC_AARCH64_MOVW_G0:
     case BFD_RELOC_AARCH64_MOVW_G0_NC:
     case BFD_RELOC_AARCH64_MOVW_G1:
@@ -372,6 +338,10 @@ _bfd_aarch64_elf_resolve_relocation (bfd_reloc_code_real_type r_type,
     case BFD_RELOC_AARCH64_NONE:
       break;
 
+    case BFD_RELOC_AARCH64_TLSDESC_ADR_PREL21:
+    case BFD_RELOC_AARCH64_TLSDESC_LD_PREL19:
+    case BFD_RELOC_AARCH64_TLSGD_ADR_PREL21:
+    case BFD_RELOC_AARCH64_TLSIE_LD_GOTTPREL_PREL19:
     case BFD_RELOC_AARCH64_ADR_LO21_PCREL:
     case BFD_RELOC_AARCH64_BRANCH19:
     case BFD_RELOC_AARCH64_LD_LO19_PCREL:
@@ -448,7 +418,9 @@ _bfd_aarch64_elf_resolve_relocation (bfd_reloc_code_real_type r_type,
       value = (value + addend) & (bfd_vma) 0xffff0000;
       break;
     case BFD_RELOC_AARCH64_TLSLE_ADD_TPREL_HI12:
-      value = (value + addend) & (bfd_vma) 0xfff000;
+      /* Mask off low 12bits, keep all other high bits, so that the later
+	 generic code could check whehter there is overflow.  */
+      value = (value + addend) & ~(bfd_vma) 0xfff;
       break;
 
     case BFD_RELOC_AARCH64_TLSLE_MOVW_TPREL_G0:
@@ -479,9 +451,10 @@ _bfd_aarch64_elf_add_symbol_hook (bfd *abfd, struct bfd_link_info *info,
 				  asection **secp ATTRIBUTE_UNUSED,
 				  bfd_vma *valp ATTRIBUTE_UNUSED)
 {
-  if ((abfd->flags & DYNAMIC) == 0
-      && (ELF_ST_TYPE (sym->st_info) == STT_GNU_IFUNC
-	  || ELF_ST_BIND (sym->st_info) == STB_GNU_UNIQUE))
+  if ((ELF_ST_TYPE (sym->st_info) == STT_GNU_IFUNC
+       || ELF_ST_BIND (sym->st_info) == STB_GNU_UNIQUE)
+      && (abfd->flags & DYNAMIC) == 0
+      && bfd_get_flavour (info->output_bfd) == bfd_target_elf_flavour)
     elf_tdata (info->output_bfd)->has_gnu_symbols = TRUE;
 
   return TRUE;
@@ -519,4 +492,83 @@ _bfd_aarch64_elf_grok_prstatus (bfd *abfd, Elf_Internal_Note *note)
   /* Make a ".reg/999" section.  */
   return _bfd_elfcore_make_pseudosection (abfd, ".reg",
 					  size, note->descpos + offset);
+}
+
+bfd_boolean
+_bfd_aarch64_elf_grok_psinfo (bfd *abfd, Elf_Internal_Note *note)
+{
+  switch (note->descsz)
+    {
+    default:
+      return FALSE;
+
+    case 136:        /* This is sizeof(struct elf_prpsinfo) on Linux/aarch64.  */
+      elf_tdata (abfd)->core->pid = bfd_get_32 (abfd, note->descdata + 24);
+      elf_tdata (abfd)->core->program
+	= _bfd_elfcore_strndup (abfd, note->descdata + 40, 16);
+      elf_tdata (abfd)->core->command
+	= _bfd_elfcore_strndup (abfd, note->descdata + 56, 80);
+    }
+
+  /* Note that for some reason, a spurious space is tacked
+     onto the end of the args in some (at least one anyway)
+     implementations, so strip it off if it exists.  */
+
+  {
+    char *command = elf_tdata (abfd)->core->command;
+    int n = strlen (command);
+
+    if (0 < n && command[n - 1] == ' ')
+      command[n - 1] = '\0';
+  }
+
+  return TRUE;
+}
+
+char *
+_bfd_aarch64_elf_write_core_note (bfd *abfd, char *buf, int *bufsiz, int note_type,
+				  ...)
+{
+  switch (note_type)
+    {
+    default:
+      return NULL;
+
+    case NT_PRPSINFO:
+      {
+        char data[136];
+        va_list ap;
+
+        va_start (ap, note_type);
+        memset (data, 0, sizeof (data));
+        strncpy (data + 40, va_arg (ap, const char *), 16);
+        strncpy (data + 56, va_arg (ap, const char *), 80);
+        va_end (ap);
+
+        return elfcore_write_note (abfd, buf, bufsiz, "CORE",
+				   note_type, data, sizeof (data));
+      }
+
+    case NT_PRSTATUS:
+      {
+        char data[392];
+        va_list ap;
+        long pid;
+        int cursig;
+        const void *greg;
+
+        va_start (ap, note_type);
+        memset (data, 0, sizeof (data));
+        pid = va_arg (ap, long);
+        bfd_put_32 (abfd, pid, data + 32);
+        cursig = va_arg (ap, int);
+        bfd_put_16 (abfd, cursig, data + 12);
+        greg = va_arg (ap, const void *);
+        memcpy (data + 112, greg, 272);
+        va_end (ap);
+
+        return elfcore_write_note (abfd, buf, bufsiz, "CORE",
+				   note_type, data, sizeof (data));
+      }
+    }
 }

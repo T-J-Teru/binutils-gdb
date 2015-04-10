@@ -1,7 +1,6 @@
 // gold.cc -- main linker functions
 
-// Copyright 2006, 2007, 2008, 2009, 2010, 2011, 2012
-// Free Software Foundation, Inc.
+// Copyright (C) 2006-2015 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -553,6 +552,9 @@ queue_middle_tasks(const General_options& options,
       plugins->layout_deferred_objects();
     }
 
+  // Finalize the .eh_frame section.
+  layout->finalize_eh_frame_section();
+
   /* If plugins have specified a section order, re-arrange input sections
      according to a specified section order.  If --section-ordering-file is
      also specified, do not do anything here.  */
@@ -809,6 +811,8 @@ queue_final_tasks(const General_options& options,
   if (!any_postprocessing_sections)
     {
       input_sections_blocker = new Task_token(true);
+      // Write_symbols_task, Relocate_tasks.
+      input_sections_blocker->add_blocker();
       input_sections_blocker->add_blockers(input_objects->number_of_relobjs());
     }
 
@@ -837,6 +841,7 @@ queue_final_tasks(const General_options& options,
 
   // Queue a task to write out the output sections.
   workqueue->queue(new Write_sections_task(layout, of, output_sections_blocker,
+					   input_sections_blocker,
 					   final_blocker));
 
   // Queue a task to write out everything else.
