@@ -45,6 +45,10 @@ show max-completions
   to avoid generating large completion lists, the computation of
   which can cause the debugger to become temporarily unresponsive.
 
+maint set bfd-sharing
+maint show bfd-sharing
+  Control the reuse of bfd objects.
+
 maint set symbol-cache-size
 maint show symbol-cache-size
   Control the size of the symbol cache.

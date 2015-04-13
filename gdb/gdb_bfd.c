@@ -102,6 +102,11 @@ DEFINE_REGISTRY (bfd, GDB_BFD_DATA_ACCESSOR)
 
 static htab_t gdb_bfd_cache;
 
+/* When true gdb will reuse an existing bfd object if the filename,
+   modification time, and file size all match.  */
+
+static int bfd_sharing;
+
 /* The type of an object being looked up in gdb_bfd_cache.  We use
    htab's capability of storing one kind of object (BFD in this case)
    and using a different sort of object for searching.  */
@@ -186,7 +191,7 @@ gdb_bfd_open (const char *name, const char *target, int fd)
      opening the BFD may fail; and this would violate hashtab
      invariants.  */
   abfd = htab_find_with_hash (gdb_bfd_cache, &search, hash);
-  if (abfd != NULL)
+  if (bfd_sharing && abfd != NULL)
     {
       close (fd);
       gdb_bfd_ref (abfd);
@@ -197,9 +202,12 @@ gdb_bfd_open (const char *name, const char *target, int fd)
   if (abfd == NULL)
     return NULL;
 
-  slot = htab_find_slot_with_hash (gdb_bfd_cache, &search, hash, INSERT);
-  gdb_assert (!*slot);
-  *slot = abfd;
+  if (bfd_sharing)
+    {
+      slot = htab_find_slot_with_hash (gdb_bfd_cache, &search, hash, INSERT);
+      gdb_assert (!*slot);
+      *slot = abfd;
+    }
 
   gdb_bfd_ref (abfd);
   return abfd;
@@ -720,4 +728,17 @@ _initialize_gdb_bfd (void)
   add_cmd ("bfds", class_maintenance, maintenance_info_bfds, _("\
 List the BFDs that are currently open."),
 	   &maintenanceinfolist);
+
+  add_setshow_boolean_cmd ("bfd-sharing", no_class,
+			   &bfd_sharing, _("\
+Set whether gdb will share bfds that appear to be the same file."), _("\
+Show whether gdb will share bfds that appear to be the same file."), _("\
+Tells gdb whether to share bfds that appear to be the same file.  The\n\
+modification time and file size are used to determine if a file on\n\
+disc has changed."),
+			   NULL,
+			   NULL,
+			   &maintenance_set_cmdlist,
+			   &maintenance_show_cmdlist);
+  bfd_sharing = 1;
 }

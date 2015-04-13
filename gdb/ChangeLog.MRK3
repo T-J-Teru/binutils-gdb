@@ -1,5 +1,12 @@
 2015-04-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb_bfd.c (bfd_sharing): New variable.
+	(gdb_bfd_open): Check bfd_sharing variable.
+	(_initialize_gdb_bfd): Add new set/show command.
+	* NEWS: Mention new command.
+
+2015-04-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb_bfd.c (struct gdb_bfd_data): Add size field.
 	(struct gdb_bfd_cache_search): Likewise.
 	(eq_bfd): Compare the size fields.
