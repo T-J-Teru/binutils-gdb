@@ -66,6 +66,9 @@ struct gdb_bfd_data
   /* The mtime of the BFD at the point the cache entry was made.  */
   time_t mtime;
 
+  /* The file size (in bytes) at the point the cache entry was made.  */
+  off_t size;
+
   /* This is true if we have determined whether this BFD has any
      sections requiring relocation.  */
   unsigned int relocation_computed : 1;
@@ -109,6 +112,8 @@ struct gdb_bfd_cache_search
   const char *filename;
   /* The mtime.  */
   time_t mtime;
+  /* The file size (in bytes).  */
+  off_t size;
 };
 
 /* A hash function for BFDs.  */
@@ -133,6 +138,7 @@ eq_bfd (const void *a, const void *b)
   struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
 
   return (gdata->mtime == s->mtime
+	  && gdata->size == s->size
 	  && strcmp (bfd_get_filename (abfd), s->filename) == 0);
 }
 
@@ -166,9 +172,13 @@ gdb_bfd_open (const char *name, const char *target, int fd)
     {
       /* Weird situation here.  */
       search.mtime = 0;
+      search.size = 0;
     }
   else
-    search.mtime = st.st_mtime;
+    {
+      search.mtime = st.st_mtime;
+      search.size = st.st_size;
+    }
 
   /* Note that this must compute the same result as hash_bfd.  */
   hash = htab_hash_string (name);
@@ -263,6 +273,7 @@ gdb_bfd_ref (struct bfd *abfd)
   gdata = bfd_zalloc (abfd, sizeof (struct gdb_bfd_data));
   gdata->refc = 1;
   gdata->mtime = bfd_get_mtime (abfd);
+  gdata->size = bfd_get_size (abfd);
   gdata->archive_bfd = NULL;
   bfd_usrdata (abfd) = gdata;
 
@@ -303,6 +314,7 @@ gdb_bfd_unref (struct bfd *abfd)
       void **slot;
 
       search.mtime = gdata->mtime;
+      search.size = gdata->size;
       slot = htab_find_slot_with_hash (gdb_bfd_cache, &search, hash,
 				       NO_INSERT);
 
