@@ -1,5 +1,14 @@
 2015-04-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb_bfd.c (debug_bfd_cache): New variable.
+	(gdb_bfd_open): Add debug logging.
+	(gdb_bfd_ref): Likewise.
+	(gdb_bfd_unref): Likewise.
+	(_initialize_gdb_bfd): Add new set/show command.
+	* NEWS: Mention new command.
+
+2015-04-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb_bfd.c (bfd_sharing): New variable.
 	(gdb_bfd_open): Check bfd_sharing variable.
 	(_initialize_gdb_bfd): Add new set/show command.

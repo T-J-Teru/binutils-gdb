@@ -38,6 +38,10 @@ record bts
 
 * New options
 
+set debug bfd-cache
+show debug bfd-cache
+  Control display of debugging info regarding bfd caching.
+
 set max-completions
 show max-completions
   Set the maximum number of candidates to be considered during
