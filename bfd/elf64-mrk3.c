@@ -1907,9 +1907,9 @@ mrk3_elf_relax_section (bfd *abfd,
   return answer;
 }
 
-#define TARGET_LITTLE_SYM   bfd_elf64_mrk3_vec
+#define TARGET_LITTLE_SYM   mrk3_elf64_vec
 #define TARGET_LITTLE_NAME  "elf64-mrk3"
-/*#define TARGET_BIG_SYM      bfd_elf64_mrk3_vec*/
+/*#define TARGET_BIG_SYM      mrk3_elf64_vec*/
 /*#define TARGET_BIG_NAME     "elf64-mrk3"*/
 
 #define ELF_ARCH            bfd_arch_mrk3

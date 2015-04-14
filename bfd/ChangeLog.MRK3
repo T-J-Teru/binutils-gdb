@@ -1,3 +1,11 @@
+2015-04-14  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* config.bfd: Rename bfd_elf64_mrk3_vec to mrk3_elf64_vec.
+	* configure: Likewise.
+	* configure.ac: Likewise.
+	* elf64-mrk3.c: Likewise.
+	* targets.c: Likewise.
+
 2015-03-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_relax_section_filter): Don't relax sections
