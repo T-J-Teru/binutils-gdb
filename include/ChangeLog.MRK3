@@ -1,3 +1,8 @@
+2015-04-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf/mrk3.h: Add R_MRK3_TBEQ_ADDR9, R_MRK3_TBEQ_TGT,
+	R_MRK3_TBEQ_IMM8, and R_MRK3_DIRECT9 relocation types.
+
 2015-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	Switch to 64-bit ELF format.

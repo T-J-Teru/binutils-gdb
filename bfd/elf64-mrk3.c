@@ -233,6 +233,58 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          0,                     /* Src_mask.  */
          0x78,                  /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_TBEQ_ADDR9,     /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         9,                     /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         8,                     /* Bitpos. */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_TBEQ_ADDR9",   /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0x0,                   /* Src_mask.  */
+         0xff000100,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_TBEQ_TGT,       /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         8,                     /* Bitsize.  */
+         TRUE,                  /* PC_relative.  */
+         0,                     /* Bitpos. */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_TBEQ_TGT",     /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0x0,                   /* Src_mask.  */
+         0xff,                  /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_TBEQ_IMM8,      /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         8,                     /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         16,                    /* Bitpos. */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_TBEQ_IMM8",    /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0x0,                   /* Src_mask.  */
+         0xff0000,              /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_DIRECT9,        /* Type.  */
+         0,                     /* Rightshift.  */
+         1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         9,                     /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         4,                     /* Bitpos. */
+         complain_overflow_bitfield, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_DIRECT9",      /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0,                     /* Src_mask.  */
+         0x3bf0,                /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
@@ -581,6 +633,48 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
       && !howto->pc_relative
       && (howto->bitsize == 32 || howto->bitsize == 64))
     relocation = MRK3_BUILD_ADDRESS (relocation_memory_id, relocation);
+
+  /* Handle relocations for which patching the value in is non trivial.
+     These can't be resolved using the standard function as that will only
+     cope with code where the value to be patched in is a continuous series
+     of bits.  */
+  if (howto->type == R_MRK3_TBEQ_ADDR9
+      || howto->type == R_MRK3_DIRECT9)
+    {
+      bfd_vma x;
+      bfd_byte *location = contents + offset;
+
+      /* Overflow check.  Would be nice if this could be shared from the
+         common bfd code, however, currently the overflow check is tied
+         into the patching in code.  */
+      if ((relocation >> 9) != 0)
+        return bfd_reloc_overflow;
+
+      x = bfd_get_16 (input_bfd, location);
+      x &= ~howto->dst_mask;
+
+      switch (howto->type)
+        {
+        case R_MRK3_TBEQ_ADDR9:
+          /* Mask out bits to be patched, and merge in relocation.  */
+          x |= ((relocation & 0xff) << 24) | (relocation & 0x100);
+          break;
+
+        case R_MRK3_DIRECT9:
+          x |= ((((relocation >> 6) & 0x7) << 11)
+                | (((relocation >> 0) & 0x3f) << 4));
+          break;
+
+        default:
+          /* This is really an error in the tools.  */
+          return bfd_reloc_notsupported;
+          break;
+        }
+
+      bfd_put_16 (input_bfd, x, location);
+
+      return bfd_reloc_ok;
+    }
 
   /* Now call the standard bfd routine to handle a single relocation.  */
   return _bfd_relocate_contents (howto, input_bfd, relocation,
