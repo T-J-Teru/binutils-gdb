@@ -60,7 +60,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 bfd_elf_generic_reloc, /* Special_function.  */
 	 "R_MRK3_8",            /* Name.  */
 	 TRUE,                  /* Partial_inplace.  */
-	 0xff,                  /* Src_mask.  */
+	 0,                     /* Src_mask.  */
 	 0xff,                  /* Dst_mask.  */
 	 FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_16,             /* Type.  */
@@ -73,7 +73,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 bfd_elf_generic_reloc, /* Special_function.  */
 	 "R_MRK3_16",           /* Name.  */
 	 TRUE,                  /* Partial_inplace.  */
-	 0xffff,                /* Src_mask.  */
+	 0,                     /* Src_mask.  */
 	 0xffff,                /* Dst_mask.  */
 	 FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_32,             /* Type.  */
@@ -86,7 +86,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_32",           /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xffffffff,            /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0xffffffff,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_64,             /* Type.  */
@@ -99,7 +99,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_64",           /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xffffffffffffffff,    /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0xffffffffffffffff,    /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   /* This relocation is for the target for a CALL instruction. */
@@ -113,7 +113,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
 	 bfd_elf_generic_reloc, /* Special_function.  */
 	 "R_MRK3_CALL16",       /* Name.  */
 	 TRUE,                  /* Partial_inplace.  */
-	 0xffff0000,            /* Src_mask.  */
+	 0,                     /* Src_mask.  */
 	 0xffff0000,            /* Dst_mask.  */
 	 FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_CALL14,         /* Type.  */
@@ -126,7 +126,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_CALL14",       /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0x3fff,                /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0x3fff,                /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_HIGH16,         /* Type.  */
@@ -139,7 +139,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_HIGH16",       /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xffff0000,            /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0xffff0000,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_ABS_HI,         /* Type.  */
@@ -152,7 +152,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_ABS_HI",       /* Name.  */
          FALSE,                 /* Partial_inplace.  */
-         0xffff0000,            /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0xffff0000,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_ABS_LO,         /* Type.  */
@@ -165,7 +165,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_ABS_LO",       /* Name.  */
          FALSE,                 /* Partial_inplace.  */
-         0xffff0000,            /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0xffff0000,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_PCREL16,        /* Type.  */
@@ -178,7 +178,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_PCREL16",      /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xffff,                /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0xffff0000,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_PCREL8,         /* Type.  */
@@ -191,7 +191,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_PCREL8",       /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xff,                  /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0x00ff,                /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_FORCEPCREL16,   /* Type.  */
@@ -204,7 +204,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_FORCEPCREL16", /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xffff,                /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0xffff0000,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_FORCEPCREL8,    /* Type.  */
@@ -217,7 +217,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_FORCEPCREL8",  /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xff,                  /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0x00ff,                /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
   HOWTO (R_MRK3_CONST4,         /* Type.  */
@@ -230,7 +230,7 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          bfd_elf_generic_reloc, /* Special_function.  */
          "R_MRK3_CONST4",       /* Name.  */
          TRUE,                  /* Partial_inplace.  */
-         0xf,                   /* Src_mask.  */
+         0,                     /* Src_mask.  */
          0x78,                  /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
 };

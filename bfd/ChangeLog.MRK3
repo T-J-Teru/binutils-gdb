@@ -1,3 +1,8 @@
+2015-04-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (elf_mrk3_howto_table): Change src_mask to 0 in all
+	cases.
+
 2015-04-14  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* config.bfd: Rename bfd_elf64_mrk3_vec to mrk3_elf64_vec.
