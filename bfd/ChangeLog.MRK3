@@ -1,3 +1,8 @@
+2015-04-21  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (is_relaxable_abs16_mov_instruction): New function.
+	(mrk3_relax_handle_relocation): Handle mov with abs16 parameter.
+
 2015-04-17  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (elf_mrk3_howto_table): Add R_MRK3_TBEQ_ADDR9,

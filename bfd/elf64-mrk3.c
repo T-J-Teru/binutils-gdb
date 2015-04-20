@@ -1320,6 +1320,15 @@ is_relaxable_16bit_immediate_instruction (const uint16_t insn)
   return is_match;
 }
 
+/* Return true if the 16 bits of INSN are for a mov instruction taking an
+   abs16 parameter.  */
+
+static bfd_boolean
+is_relaxable_abs16_mov_instruction (const uint16_t insn)
+{
+  return ((insn & 0xfbf0) == 0x6810);
+}
+
 /* Is SEC from ABFD one that should be processed during the relax phase of
    linker relaxation.  Return true if it is, otherwise return false.  The
    majority of the checks we require are actually done in common code, so
@@ -1486,6 +1495,7 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
         bfd_byte *contents;
         uint16_t insn;
         bfd_signed_vma imm_value;
+        unsigned int new_reloc_type;
 
         /* Get the instruction code for relaxing.  Only some of the
            16-bit immediate instructions have 4-bit immediate versions,
@@ -1493,30 +1503,52 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
         contents = retrieve_contents (abfd, sec, link_info->keep_memory);
         insn = bfd_get_16 (abfd, contents + irel->r_offset);
         relax_log ("    Instruction encoding is %#08x\n", insn);
-        if (!is_relaxable_16bit_immediate_instruction (insn))
-          {
-            release_contents (sec, contents);
-            return TRUE;
-          }
 
-        /* Only select values can be encoded in a 4-bit immediate.  */
         imm_value = (symval + irel->r_addend);
-        if (imm_value < -1
-            || (imm_value > 10
-                && imm_value != 16
-                && imm_value != 32
-                && imm_value != 64
-                && imm_value != 128))
+        relax_log ("    Immediate value is %#08lx\n", imm_value);
+
+        if (is_relaxable_abs16_mov_instruction (insn))
+          {
+            /* Will this fit in a direct9 encoding?  */
+            imm_value = (symval + irel->r_addend);
+            if ((MRK3_GET_ADDRESS_LOCATION (imm_value) >> 9) != 0)
+              {
+                release_contents (sec, contents);
+                return TRUE;
+              }
+
+            /* Clear some bits.  */
+            relax_log ("    Convert to direct9 instruction.\n");
+            insn = ((insn & 0x040f) | 0xc000);
+            new_reloc_type = R_MRK3_DIRECT9;
+          }
+        else if (is_relaxable_16bit_immediate_instruction (insn))
+          {
+            /* Only select values can be encoded in a 4-bit immediate.  */
+            if (imm_value < -1
+                || (imm_value > 10
+                    && imm_value != 16
+                    && imm_value != 32
+                    && imm_value != 64
+                    && imm_value != 128))
+              {
+                release_contents (sec, contents);
+                return TRUE;
+              }
+
+            /* Set bit 7 to convert to the 4-bit constant version of
+               the instruction.  */
+            relax_log ("    Convert to 4-bit constant instruction.\n");
+            insn |= (1 << 7);
+            new_reloc_type = R_MRK3_CONST4;
+          }
+        else
           {
             release_contents (sec, contents);
             return TRUE;
           }
 
-        /* Set bit 7 to convert to the 4-bit constant version of
-           the instruction.  */
-        relax_log ("    Immediate value is %d\n", imm_value);
-        relax_log ("    Convert to 4-bit constant instruction.\n");
-        insn |= (1 << 7);
+        /* Write out updated instruction.  */
         bfd_put_16 (abfd, insn, contents + irel->r_offset);
 
         /* Note that we've changed the relocs, section contents,
@@ -1526,7 +1558,7 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
 
         /* Fix the relocation's type.  */
         irel->r_info = ELF64_R_INFO (ELF64_R_SYM (irel->r_info),
-                                     R_MRK3_CONST4);
+                                     new_reloc_type);
 
         /* Actually delete the bytes.  */
         if (!mrk3_elf_relax_delete_bytes (abfd, sec,
