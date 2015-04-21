@@ -10897,6 +10897,8 @@ Intel hex format.
 Motorola S-record format.
 @item tekhex
 Tektronix Hex format.
+@item verilog
+Verilog Hex format.
 @end table
 
 @value{GDBN} uses the same definitions of these formats as the
