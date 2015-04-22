@@ -1,5 +1,16 @@
 2015-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* verilog.c (verilog_get_byte): New function.
+	(verilog_skip_comment): New function.
+	(verilog_read_address): New function.
+	(verilog_scan): New function.
+	(verilog_object_p): New function.
+	(verilog_read_section): New function.
+	(verilog_get_section_contents): New function.
+	(verilog_vec): Use verilog_object_p and verilog_read_section.
+
+2015-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* verilog.c (verilog_write_address): Allow 64-bit addresses to be
 	dumped.
 

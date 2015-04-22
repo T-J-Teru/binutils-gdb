@@ -300,6 +300,285 @@ verilog_mkobject (bfd *abfd)
   return TRUE;
 }
 
+/* Read a byte from a verilog hex file.  Set *ERRORPTR if an error
+   occurred.  Return EOF on error or end of file.  */
+
+static int
+verilog_get_byte (bfd *abfd, bfd_boolean *errorptr)
+{
+  bfd_byte c;
+
+  if (bfd_bread (&c, (bfd_size_type) 1, abfd) != 1)
+    {
+      if (bfd_get_error () != bfd_error_file_truncated)
+	*errorptr = TRUE;
+      return EOF;
+    }
+
+  return (int) (c & 0xff);
+}
+
+/* Helper function used when reading a Verilog file.  Having already read a
+   '/' character, which can only indicate the start of a comment, process
+   the remainder of the comment, either a single like '//' comment, or a
+   block comment in C/C++ style.  Return TRUE if the comment is parsed
+   successfully, otherwise return FALSE.  */
+
+static bfd_boolean
+verilog_skip_comment (bfd *abfd)
+{
+  int c;
+  bfd_boolean error = FALSE;
+
+  /* Have already seen first '/' now looking for rest of the comment.  */
+  c = verilog_get_byte (abfd, &error);
+  switch (c)
+    {
+    default:
+    case EOF:
+      return FALSE;
+
+    case '/':
+      /* Single line comment.  */
+      do
+        {
+          c = verilog_get_byte (abfd, &error);
+          if (error)
+            return FALSE;
+          if (c == '\n' || c == EOF)
+            return TRUE;
+        }
+      while (TRUE);
+
+    case '*':
+      /* Multiline comment.  */
+      do
+        {
+          c = verilog_get_byte (abfd, &error);
+          if (error || c == EOF)
+            return FALSE;
+          if (c == '*')
+            {
+              /* Is next character '/'?  */
+              c = verilog_get_byte (abfd, &error);
+              if (error || c == EOF)
+                return FALSE;
+              else if (c == '/')
+                return TRUE;
+            }
+        }
+      while (TRUE);
+    }
+
+  return FALSE;
+}
+
+static bfd_boolean
+verilog_read_address (bfd *abfd, bfd_vma *address)
+{
+  bfd_boolean error = FALSE;
+  char buffer [17], *dst;
+  int c;
+  unsigned long value;
+
+  dst = buffer;
+  while ((c = verilog_get_byte (abfd, &error)) != EOF)
+    {
+      if (error)
+        return FALSE;
+      else if  (!ISXDIGIT (c))
+        break;
+      *dst = (char) c;
+      dst++;
+    }
+
+  if ((dst - buffer) == 0)
+    return FALSE;
+
+  *dst = '\0';
+  value = strtoul (buffer, NULL, 16);
+  *address = (bfd_vma) value;
+  return TRUE;
+}
+
+/* Read the verilog hex file and turn it into sections.  We create a new
+   section for each contiguous set of bytes.  */
+
+static bfd_boolean
+verilog_scan (bfd *abfd)
+{
+  int c;
+  bfd_boolean error = FALSE;
+  bfd_vma address = 0;
+  asection *sec = NULL;
+
+  if (bfd_seek (abfd, (file_ptr) 0, SEEK_SET) != 0)
+      goto error_return;
+
+  while ((c = verilog_get_byte (abfd, &error)) != EOF)
+    {
+      /* Skip whitespace.  */
+      if (ISSPACE (c))
+        continue;
+
+      if (c == '/')
+        {
+          if (!verilog_skip_comment (abfd))
+            goto error_return;
+          continue;
+        }
+
+      if (c == '@')
+        {
+          char secbuf[20];
+          char *secname;
+          bfd_size_type amt;
+          flagword flags;
+          file_ptr pos;
+
+          if (!verilog_read_address (abfd, &address))
+            goto error_return;
+
+          if (sec)
+            sec = NULL;
+
+          pos = bfd_tell (abfd) - 1;
+          sprintf (secbuf, ".sec%d", bfd_count_sections (abfd) + 1);
+          amt = strlen (secbuf) + 1;
+          secname = (char *) bfd_alloc (abfd, amt);
+          strcpy (secname, secbuf);
+          flags = SEC_HAS_CONTENTS | SEC_LOAD | SEC_ALLOC;
+          sec = bfd_make_section_with_flags (abfd, secname, flags);
+          sec->vma = address;
+          sec->lma = address;
+          sec->size = /* TODO */ 0;
+          sec->filepos = pos;
+
+          continue;
+        }
+
+      if (ISXDIGIT (c))
+        {
+          int buf[2] = { c, 0 };
+          buf [1] = verilog_get_byte (abfd, &error);
+          if (error || buf [1]  == EOF || !ISXDIGIT (buf [1]))
+            goto error_return;
+
+          sec->size++;
+          continue;
+        }
+
+      /* Unknown input.  */
+      goto error_return;
+    }
+
+  if (error)
+    goto error_return;
+
+  if (sec)
+    sec = NULL;
+  return TRUE;
+ error_return:
+  if (sec)
+    sec = NULL;
+  return FALSE;
+}
+
+/* Check whether an existing file is a verilog hex file.  */
+
+static const bfd_target *
+verilog_object_p (bfd *abfd)
+{
+  void * tdata_save;
+
+  verilog_init ();
+
+  tdata_save = abfd->tdata.any;
+  if (!verilog_mkobject (abfd) || ! verilog_scan (abfd))
+    {
+      if (abfd->tdata.any != tdata_save && abfd->tdata.any != NULL)
+	bfd_release (abfd, abfd->tdata.any);
+      abfd->tdata.any = tdata_save;
+      return NULL;
+    }
+
+  return abfd->xvec;
+}
+
+/* Read the contents of a section in a Verilog Hex file.  */
+
+static bfd_boolean
+verilog_read_section (bfd *abfd, asection *section, bfd_byte *contents)
+{
+  int c;
+  bfd_byte *dst;
+  bfd_boolean error = FALSE;
+
+  if (bfd_seek (abfd, section->filepos, SEEK_SET) != 0)
+    goto error_return;
+
+  dst = contents;
+  while ((c = verilog_get_byte (abfd, &error)) != EOF)
+    {
+      /* Skip whitespace.  */
+      if (ISSPACE (c))
+        continue;
+
+      if (c == '/')
+        {
+          if (!verilog_skip_comment (abfd))
+            goto error_return;
+          continue;
+        }
+
+      if (c == '@')
+        break;
+
+      if (ISXDIGIT (c))
+        {
+          int buf[2] = { c, 0 }, value;
+          buf [1] = verilog_get_byte (abfd, &error);
+          if (error || buf [1]  == EOF || !ISXDIGIT (buf [1]))
+            goto error_return;
+          value = HEX (buf);
+          *dst = (bfd_byte) value;
+          dst++;
+          if ((bfd_size_type) (dst - contents) >= section->size)
+            /* We've read everything in the section.  */
+            return TRUE;
+          continue;
+        }
+    }
+
+ error_return:
+  return FALSE;
+}
+
+/* Get the contents of a section in an Verilog Hex file.  */
+
+static bfd_boolean
+verilog_get_section_contents (bfd *abfd,
+                              asection *section,
+                              void * location,
+                              file_ptr offset,
+                              bfd_size_type count)
+{
+  if (section->used_by_bfd == NULL)
+    {
+      section->used_by_bfd = bfd_alloc (abfd, section->size);
+      if (section->used_by_bfd == NULL)
+	return FALSE;
+      if (! verilog_read_section (abfd, section,
+                                  (bfd_byte *) section->used_by_bfd))
+	return FALSE;
+    }
+
+  memcpy (location, (bfd_byte *) section->used_by_bfd + offset,
+	  (size_t) count);
+
+  return TRUE;
+}
+
 #define	verilog_close_and_cleanup                    _bfd_generic_close_and_cleanup
 #define verilog_bfd_free_cached_info                 _bfd_generic_bfd_free_cached_info
 #define verilog_new_section_hook                     _bfd_generic_new_section_hook
@@ -348,9 +627,9 @@ const bfd_target verilog_vec =
   bfd_getb32, bfd_getb_signed_32, bfd_putb32,
   bfd_getb16, bfd_getb_signed_16, bfd_putb16,	/* Hdrs.  */
 
-  {
+  {				/* bfd_check_format.  */
     _bfd_dummy_target,
-    _bfd_dummy_target,
+    verilog_object_p,
     _bfd_dummy_target,
     _bfd_dummy_target,
   },
@@ -367,7 +646,7 @@ const bfd_target verilog_vec =
     bfd_false,
   },
 
-  BFD_JUMP_TABLE_GENERIC (_bfd_generic),
+  BFD_JUMP_TABLE_GENERIC (verilog),
   BFD_JUMP_TABLE_COPY (_bfd_generic),
   BFD_JUMP_TABLE_CORE (_bfd_nocore),
   BFD_JUMP_TABLE_ARCHIVE (_bfd_noarchive),
