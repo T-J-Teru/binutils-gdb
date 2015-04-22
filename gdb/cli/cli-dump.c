@@ -768,13 +768,13 @@ to the specified FILE in intel hex format."),
   add_cmd ("memory", all_commands, dump_verilog_memory, _("\
 Write contents of memory to a verilog hex file.\n\
 Arguments are FILE START STOP.  Writes the contents of memory within\n\
-the range [START .. STOP) to the specified FILE in intel hex format."),
+the range [START .. STOP) to the specified FILE in verilog hex format."),
 	   &verilog_cmdlist);
 
   add_cmd ("value", all_commands, dump_verilog_value, _("\
 Write the value of an expression to a verilog hex file.\n\
 Arguments are FILE EXPRESSION.  Writes the value of EXPRESSION\n\
-to the specified FILE in intel hex format."),
+to the specified FILE in verilog hex format."),
 	   &verilog_cmdlist);
 
   add_cmd ("memory", all_commands, dump_tekhex_memory, _("\

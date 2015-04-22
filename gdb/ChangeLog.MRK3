@@ -1,3 +1,8 @@
+2015-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cli/cli-dump.c (_initialize_cli_dump): Fix doc string for
+	verilog dump commands.
+
 2015-04-21  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* cli/cli-dump.c (verilog_cmdlist): New variable.
