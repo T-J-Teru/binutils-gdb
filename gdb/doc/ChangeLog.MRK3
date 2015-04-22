@@ -1,4 +1,4 @@
-2015-03-21  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+2015-03-21  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.texinfo (Dump/Restore Files): Add detail about verilog dump
 	format.
