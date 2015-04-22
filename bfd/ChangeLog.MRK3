@@ -1,3 +1,8 @@
+2015-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* verilog.c (verilog_write_address): Allow 64-bit addresses to be
+	dumped.
+
 2015-04-21  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (is_relaxable_abs16_mov_instruction): New function.
