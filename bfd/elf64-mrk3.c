@@ -285,6 +285,19 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          0,                     /* Src_mask.  */
          0x3bf0,                /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_ECALL20,        /* Type.  */
+   0,                     /* Rightshift.  */
+   2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+   20,                    /* Bitsize.  */
+   FALSE,                 /* PC_relative.  */
+   0,                    /* Bitpos.  */
+   complain_overflow_dont,/* Complain_on_overflow.  */
+   bfd_elf_generic_reloc, /* Special_function.  */
+   "R_MRK3_ECALL20",       /* Name.  */
+   TRUE,                  /* Partial_inplace.  */
+   0,                     /* Src_mask.  */
+   0xffff000f,            /* Dst_mask.  */
+   FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
@@ -676,6 +689,37 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
       return bfd_reloc_ok;
     }
 
+  if (howto->type == R_MRK3_ECALL20)
+    {
+      bfd_vma x;
+      bfd_byte *location = contents + offset;
+
+      /* Overflow check.  Would be nice if this could be shared from the
+         common bfd code, however, currently the overflow check is tied
+         into the patching in code.  */
+      if ((relocation >> 20) != 0)
+        return bfd_reloc_overflow;
+
+      x = bfd_get_32 (input_bfd, location);
+      x &= ~howto->dst_mask;
+
+      switch (howto->type)
+        {
+        case R_MRK3_ECALL20:
+          /* Mask out bits to be patched, and merge in relocation.  */
+          x |= ((relocation & 0xffff) << 16) | (relocation >> 16);
+          break;
+
+        default:
+          /* This is really an error in the tools.  */
+          return bfd_reloc_notsupported;
+          break;
+        }
+
+      bfd_put_32 (input_bfd, x, location);
+
+      return bfd_reloc_ok;
+    }
   /* Now call the standard bfd routine to handle a single relocation.  */
   return _bfd_relocate_contents (howto, input_bfd, relocation,
 				 contents + offset);
