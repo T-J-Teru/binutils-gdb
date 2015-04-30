@@ -1,3 +1,12 @@
+2015-04-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_pseudo_register_read): Use MRK3_R4_REGNUM for
+	clarity.  Fixes for big endian and little endian register access
+	for the LONG register forms.  Fixes for the bit mask used when
+	accessing fields from the PSW.
+	(mrk3_pseudo_register_write): Likewise, but reversed to handle the
+	write mode.
+
 2015-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* cli/cli-dump.c (_initialize_cli_dump): Fix doc string for

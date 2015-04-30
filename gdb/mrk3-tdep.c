@@ -690,10 +690,10 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
     case MRK3_R5LONG_REGNUM:
     case MRK3_R6LONG_REGNUM:
       /*  LO reg */
-      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R0_REGNUM + 4;
+      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R4_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
-	memcpy (buf, raw_buf + 2, 2);
+	memcpy (buf + 2, raw_buf, 2);
       else
 	memcpy (buf, raw_buf, 2);
       /*  HI reg */
@@ -702,7 +702,7 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (buf, raw_buf, 2);
       else
-	memcpy (buf, raw_buf + 2, 2);
+	memcpy (buf + 2, raw_buf, 2);
       return REG_VALID;
 
     case MRK3_SYS_REGNUM:
@@ -736,27 +736,27 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
       raw_regnum = MRK3_PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
-	buf[0] = (raw_buf[1] & 0x08) >> 2;
+	buf[0] = (raw_buf[1] & 0x04) >> 2;
       else
-	buf[0] = (raw_buf[0] & 0x08) >> 2;
+	buf[0] = (raw_buf[0] & 0x04) >> 2;
       return REG_VALID;
 
     case MRK3_OVERFLOW_REGNUM:
       raw_regnum = MRK3_PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
-	buf[0] = (raw_buf[1] & 0x08) >> 1;
+	buf[0] = (raw_buf[1] & 0x02) >> 1;
       else
-	buf[0] = (raw_buf[0] & 0x08) >> 1;
+	buf[0] = (raw_buf[0] & 0x02) >> 1;
       return REG_VALID;
 
     case MRK3_CARRY_REGNUM:
       raw_regnum = MRK3_PSW_REGNUM;
       regcache_raw_read (regcache, raw_regnum, raw_buf);
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
-	buf[0] = (raw_buf[1] & 0x08) >> 0;
+	buf[0] = (raw_buf[1] & 0x01) >> 0;
       else
-	buf[0] = (raw_buf[0] & 0x08) >> 0;
+	buf[0] = (raw_buf[0] & 0x01) >> 0;
       return REG_VALID;
 
     default:
@@ -831,16 +831,16 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
     case MRK3_R6LONG_REGNUM:
       /*  LO reg */
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
-	memcpy (raw_buf + 2, buf, 2);
+	memcpy (raw_buf, buf + 2, 2);
       else
 	memcpy (raw_buf, buf, 2);
-      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R0_REGNUM + 4;
+      raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R4_REGNUM;
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       /*  HI reg */
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	memcpy (raw_buf, buf, 2);
       else
-	memcpy (raw_buf + 2, buf, 2);
+	memcpy (raw_buf, buf + 2, 2);
       raw_regnum = cooked_regnum - MRK3_R4LONG_REGNUM + MRK3_R4E_REGNUM;
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
@@ -883,12 +883,12 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	{
 	  raw_buf[1] &= 0xf7;
-	  raw_buf[1] |= (buf[0] & 0x08) << 3;
+	  raw_buf[1] |= (buf[0] & 0x01) << 3;
 	}
       else
 	{
 	  raw_buf[0] &= 0xf7;
-	  raw_buf[0] |= (buf[0] & 0x08) << 3;
+	  raw_buf[0] |= (buf[0] & 0x01) << 3;
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
@@ -899,12 +899,12 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	{
 	  raw_buf[1] &= 0xfb;
-	  raw_buf[1] |= (buf[0] & 0x08) << 2;
+	  raw_buf[1] |= (buf[0] & 0x01) << 2;
 	}
       else
 	{
 	  raw_buf[0] &= 0xfb;
-	  raw_buf[0] |= (buf[0] & 0x08) << 2;
+	  raw_buf[0] |= (buf[0] & 0x01) << 2;
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
@@ -915,12 +915,12 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	{
 	  raw_buf[1] &= 0xfd;
-	  raw_buf[1] |= (buf[0] & 0x08) << 1;
+	  raw_buf[1] |= (buf[0] & 0x01) << 1;
 	}
       else
 	{
 	  raw_buf[0] &= 0xfd;
-	  raw_buf[0] |= (buf[0] & 0x08) << 1;
+	  raw_buf[0] |= (buf[0] & 0x01) << 1;
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
@@ -931,12 +931,12 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	{
 	  raw_buf[1] &= 0xfe;
-	  raw_buf[1] |= (buf[0] & 0x08) << 0;
+	  raw_buf[1] |= (buf[0] & 0x01) << 0;
 	}
       else
 	{
 	  raw_buf[0] &= 0xfe;
-	  raw_buf[0] |= (buf[0] & 0x08) << 0;
+	  raw_buf[0] |= (buf[0] & 0x01) << 0;
 	}
       regcache_raw_write (regcache, raw_regnum, raw_buf);
       return;
