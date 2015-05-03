@@ -1285,7 +1285,9 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
     fprintf_unfiltered (gdb_stdlog, _("MRK3 breakpoint: requested at %s.\n"),
 			print_core_address (gdbarch, *pcptr));
 
-  gdb_assert ((pc & 1) == 0);
+  if ((pc & 1) != 0)
+    error ("Attempt to set breakpoint at misaligned pc %s",
+	   print_core_address (gdbarch, *pcptr));
   *pcptr = pc;
 
   if (mrk3_debug_general ())
