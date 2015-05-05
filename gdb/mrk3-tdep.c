@@ -2474,7 +2474,7 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   gdbarch = gdbarch_alloc (&info, NULL);
   set_gdbarch_address_class_type_flags (gdbarch,
 					mrk3_address_class_type_flags);
-  set_gdbarch_short_bit (gdbarch, 1 * TARGET_CHAR_BIT);
+  set_gdbarch_short_bit (gdbarch, 2 * TARGET_CHAR_BIT);
   set_gdbarch_int_bit (gdbarch, 2 * TARGET_CHAR_BIT);
   set_gdbarch_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);
   set_gdbarch_long_long_bit (gdbarch, 8 * TARGET_CHAR_BIT);
