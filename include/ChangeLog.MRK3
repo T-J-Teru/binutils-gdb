@@ -1,3 +1,8 @@
+2015-05-11  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf/mrk3.h: Add R_MRK3_ABS_JT16, R_MRK3_ABS_BYTE1, R_MRK3_ABS_BYTE2,
+	R_MRK3_ABS_BYTE3, R_MRK3_ABS_BYTE4 relocation types.
+
 2015-04-30  Simon Cook  <simon.cook@embecosm.com>
 
 	* elf/mrk3.h: Add R_MRK3_ABS12 relocation type.

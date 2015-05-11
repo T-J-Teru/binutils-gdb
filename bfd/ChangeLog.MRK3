@@ -1,3 +1,9 @@
+2015-05-11  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_howto_table): Add R_MRK3_ABS_JT16,
+	R_MRK3_ABS_BYTE1, R_MRK3_ABS_BYTE2, R_MRK3_ABS_BYTE3,
+	R_MRK3_ABS_BYTE4 relocations.
+
 2015-05-01  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_relocate_section): Update the addend in
