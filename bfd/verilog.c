@@ -461,7 +461,7 @@ verilog_scan (bfd *abfd)
         {
           int buf[2] = { c, 0 };
           buf [1] = verilog_get_byte (abfd, &error);
-          if (error || buf [1]  == EOF || !ISXDIGIT (buf [1]))
+          if (error || buf [1]  == EOF || !ISXDIGIT (buf [1]) || sec == NULL)
             goto error_return;
 
           sec->size++;
