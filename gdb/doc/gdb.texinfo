@@ -21643,6 +21643,27 @@ the last call to @samp{monitor instrcount}.  The interpretation of
 to @samp{resume (true)}.  For example with the ISS it will actually
 be the number of instructions executed.
 
+@item monitor nxpload:@var{lma}:@var{vma}:@var{flags}:@var{size}:@var{name}
+@cindex @samp{monitor nxpload}
+
+Complete a client @command{nxpload} command. The section has the given
+LMA, VMA, section flags, size and name.
+
+@emph{Caution}. This command should never be used from the command
+line.  It is provided solely for programmatic use by the GDB client.
+It is included here for completeness.
+
+@anchor{monitor-passthrough}
+@item monitor passthrough @var{text}
+@cindex @samp{monitor passthrough}
+
+The supplied text is passed untouched to the target using the
+@code{command} method of the ITarget
+API. @xref{target-api-command,,TargetAPI command method}.
+This provides a mechanism to pass arbitrary commands straight through
+to the target.  Any output from the command is echoed back to the GDB
+console.
+
 @item monitor set debug @var{value}
 @itemx monitor show debug
 @kindex monitor set debug
