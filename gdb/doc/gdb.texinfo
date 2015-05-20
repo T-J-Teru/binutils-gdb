@@ -21505,6 +21505,16 @@ monitor.  The monitor must be in debug mode for this to work.
 @cindex NXP MRK3
 @cindex MRK3
 
+@menu
+* Specific Commands::      MRK3 Specific Commands
+* Monitor Commands::       MRK3 Specific Monitor Commands
+* Stimulation Functions::  MRK3 Stimulation Functions
+@end menu
+
+@node Specific Commands
+@subsubsection MRK3 Specific Commands
+@cindex  MRK3 specific commands
+
 @noindent
 @value{GDBN} supports these special commands for MRK3 targets:
 
@@ -21564,6 +21574,13 @@ A value of 2 will report on all sections, not just the loadable ones.
 A value of 0 will report just the start address and load size, not the
 individual sections.
 
+@end table
+
+@node Monitor Commands
+@subsubsection MRK3 Specific Monitor Commands
+@cindex  MRK3 specific monitor commands
+
+@table @code
 @item monitor help
 @kindex monitor help
 
@@ -21718,6 +21735,64 @@ Currently undefined.
 @end table
 
 @end table
+
+@node Stimulation Functions
+@subsubsection MRK3 Stimulation Functions
+@cindex MRK3 stimulation functions
+
+MRK3 targets typically incorporate elements to represent external
+stimuli, such as connection to a power supply, or presence of a
+wireless signal.  This may be through physical hardware or simulation.
+
+It is convenient for such stimuli to be controlled through the
+debugger (which in turn may be under control of an IDE such as
+Eclipse).
+
+However GDB for MRK3 operates in strictly synchronous all-stop mode.
+There is no concept of setting the program running and then starting a
+stimulation function.
+
+GDB does support asynchronous operation, but this is a much more
+complex system to implement and support.  It could be considered for
+the future, but it is not essential for stimulation functions.
+Instead we write stimulation functions with their own asynchronous
+behavior.
+
+There is no separate command for MRK3 stimulus functions.  The
+behaviour must be provided by the target itself, so we can use the
+@samp{monitor passthrough} command for this
+purpose. @xref{monitor-passthrough,,@samp{monitor passthrough}
+command}.
+
+The simplest way to request the stimulation is triggering after a defined
+time.
+
+@example
+(gdb) monitor passthrough stimulation power-connect 5s
+(gdb) continue
+@end example
+
+This would pass the string @samp{stimulation power-connect 5s} through
+to the target, where it could trigger the stimulation of power
+connecting after a delay of 5s.
+
+More complex stimulation functions could rely on other actions, such
+as a value appearing at a location to trigger behavior.  There is
+really no limit to what the target may implement.
+
+For very fast stimuli, it will be convenient to combine the
+stimulation command with the continue, using one of GDB's scripting
+facilities: user-defined commands, command files or Python scripting.
+For example the previous simple power-connect stimulus could be made
+into a user-defined command as follows:
+
+@example
+(gdb) define power_trigger
+monitor passthrough stimulation power-connect $arg1
+continue
+end
+(gdb) power_trigger 5s
+@end example
 
 @node PowerPC Embedded
 @subsection PowerPC Embedded

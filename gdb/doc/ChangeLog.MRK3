@@ -1,5 +1,13 @@
 2015-03-16  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	Move documentation of NXP GDB commands from GDBserver.
+
+	* gdb.texinfo (MRK3 Specific Commands)
+	(MRK3 Specific MonitorCommands, MRK3 Stimulation Functions):  New
+	subsubsections within NXP subsection.
+
+2015-03-16  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* gdb.texinfo (NXP): Remove invalid cross-reference.
 
 2015-03-16  Jeremy Bennett  <jeremy.bennett@embecosm.com>
