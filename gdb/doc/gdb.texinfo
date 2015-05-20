@@ -21657,12 +21657,10 @@ It is included here for completeness.
 @item monitor passthrough @var{text}
 @cindex @samp{monitor passthrough}
 
-The supplied text is passed untouched to the target using the
-@code{command} method of the ITarget
-API. @xref{target-api-command,,TargetAPI command method}.
-This provides a mechanism to pass arbitrary commands straight through
-to the target.  Any output from the command is echoed back to the GDB
-console.
+The supplied text is passed untouched to the target (simulation or
+hardware).  This provides a mechanism to pass arbitrary commands
+straight through to the target.  Any output from the command is echoed
+back to the GDB console.
 
 @item monitor set debug @var{value}
 @itemx monitor show debug

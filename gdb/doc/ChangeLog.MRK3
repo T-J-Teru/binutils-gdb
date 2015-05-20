@@ -1,5 +1,9 @@
 2015-03-16  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* gdb.texinfo (NXP): Remove invalid cross-reference.
+
+2015-03-16  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* gdb.texinfo (NXP): Update NXP specific monitor subcommands.
 
 2015-03-21  Andrew Burgess  <andrew.burgess@embecosm.com>
