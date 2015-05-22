@@ -21679,17 +21679,35 @@ hardware).  This provides a mechanism to pass arbitrary commands
 straight through to the target.  Any output from the command is echoed
 back to the GDB console.
 
+The meaning of specific @samp{@w{monitor passthrough}} commands is
+target specific.  The target specific documentation should be consulted
+for details.
+
 @item monitor set debug @var{value}
+@itemx monitor set debug @var{dest} @var{component} @var{level}
 @itemx monitor show debug
 @kindex monitor set debug
 @kindex monitor show debug
 
-Set and show the level of debug messaging for the target.  A
+The first variant sets and shows the level of debug messaging for the target.  A
 @var{value} of 0 turns debugging off, a value of 9 sets the most
-verbose debugging.  @emph{Note.} Setting a value also enables the
-messages for all lower values.
+verbose debugging.
 
-For the simulator, the values are:
+@emph{Note.} Setting a value also enables the messages for all lower
+values.
+
+The second variant is target specfic and is used to set debug levels
+for different parts of the target and to redirect debug output.
+@var{dest} specifies where the debug output should go, @var{component}
+specifies which component is affected, and @var{level} specifies the
+debug level.  The permitted values of each parameter are target
+specific, and the target specific documentation should be consulted
+for details.
+
+@emph{Note:} For this second variant, debug levels may be specified
+symbolically rather than numerically.
+
+Where numerical levels are used, their meanings are:
 @cindex simulator debug levels
 
 @table @samp
