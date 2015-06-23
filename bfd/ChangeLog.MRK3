@@ -1,3 +1,11 @@
+2015-06-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* verilog.c (MRK3_VERILOG_HACKS): Define.
+	(verilog_write_address): Handle MRK3 specifc 32-bit addresses.
+	(verilog_write_section): Handle MRK3 specific file layout.
+	(verilog_scan): Merge adjacent lines for MRK3.
+	(verilog_read_section): Handle MRK3 specific file layout.
+
 2015-05-12  Simon Cook  <simon.cook@embecosm.com>
 
 	* verilog.c (verilog_scan): Add test for section when parsing hex.

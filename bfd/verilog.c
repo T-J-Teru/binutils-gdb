@@ -58,6 +58,25 @@
 #include "libiberty.h"
 #include "safe-ctype.h"
 
+/* For MRK3 the file format is slightly different to the one defined here.
+   Without an "official" verilog specification I am not going to try and
+   push these changes upstream.  All MRK3 specific changes then are guarded
+   with the following define.
+
+   The format changes are as follows:
+
+   - The addresses written to output files are 32-bit, despite mrk3 using
+     64-bit elf format.  A result of this is that it is harder to reload a
+     verilog DAT file, a base address must always be provided.
+
+   - The address is written onto the same line as the data (at the start
+     of the line), and an address is written on every line rather than
+     just at the start of the section.  As a result the loading code
+     attempts to merge adjacent lines into a single section if the
+     addresses are such that the content forms a continuous block.  */
+
+#define MRK3_VERILOG_HACKS
+
 /* Macros for converting between hex and binary.  */
 
 static const char digs[] = "0123456789ABCDEF";
@@ -167,7 +186,7 @@ verilog_write_address (bfd *abfd, bfd_vma address)
 
   /* Write the address.  */
   *dst++ = '@';
-#ifdef BFD_HOST_64_BIT
+#if defined BFD_HOST_64_BIT && !defined MRK3_VERILOG_HACKS
   TOHEX (dst, (address >> 56));
   dst += 2;
   TOHEX (dst, (address >> 48));
@@ -185,8 +204,14 @@ verilog_write_address (bfd *abfd, bfd_vma address)
   dst += 2;
   TOHEX (dst, (address));
   dst += 2;
+
+#ifdef MRK3_VERILOG_HACKS
+  *dst++ = ' ';
+#else
   *dst++ = '\r';
   *dst++ = '\n';
+#endif
+
   wrlen = dst - buffer;
 
   return bfd_bwrite ((void *) buffer, wrlen, abfd) == wrlen;
@@ -228,7 +253,9 @@ verilog_write_section (bfd *abfd,
   unsigned int octets_written = 0;
   bfd_byte *location = list->data;
 
+#ifndef MRK3_VERILOG_HACKS
   verilog_write_address (abfd, list->where);
+#endif
   while (octets_written < list->size)
     {
       unsigned int octets_this_chunk = list->size - octets_written;
@@ -236,6 +263,9 @@ verilog_write_section (bfd *abfd,
       if (octets_this_chunk > 16)
 	octets_this_chunk = 16;
 
+#ifdef MRK3_VERILOG_HACKS
+      verilog_write_address (abfd, list->where + octets_written);
+#endif
       if (! verilog_write_record (abfd,
 				  location,
 				  location + octets_this_chunk))
@@ -439,20 +469,27 @@ verilog_scan (bfd *abfd)
           if (!verilog_read_address (abfd, &address))
             goto error_return;
 
-          if (sec)
+          if (sec
+#ifdef MRK3_VERILOG_HACKS
+              && (sec->vma + sec->size) != address
+#endif
+              )
             sec = NULL;
 
-          pos = bfd_tell (abfd) - 1;
-          sprintf (secbuf, ".sec%d", bfd_count_sections (abfd) + 1);
-          amt = strlen (secbuf) + 1;
-          secname = (char *) bfd_alloc (abfd, amt);
-          strcpy (secname, secbuf);
-          flags = SEC_HAS_CONTENTS | SEC_LOAD | SEC_ALLOC;
-          sec = bfd_make_section_with_flags (abfd, secname, flags);
-          sec->vma = address;
-          sec->lma = address;
-          sec->size = /* TODO */ 0;
-          sec->filepos = pos;
+          if (sec == NULL)
+            {
+              pos = bfd_tell (abfd) - 1;
+              sprintf (secbuf, ".sec%d", bfd_count_sections (abfd) + 1);
+              amt = strlen (secbuf) + 1;
+              secname = (char *) bfd_alloc (abfd, amt);
+              strcpy (secname, secbuf);
+              flags = SEC_HAS_CONTENTS | SEC_LOAD | SEC_ALLOC;
+              sec = bfd_make_section_with_flags (abfd, secname, flags);
+              sec->vma = address;
+              sec->lma = address;
+              sec->size = 0;
+              sec->filepos = pos;
+            }
 
           continue;
         }
@@ -532,7 +569,21 @@ verilog_read_section (bfd *abfd, asection *section, bfd_byte *contents)
         }
 
       if (c == '@')
-        break;
+        {
+#ifdef MRK3_VERILOG_HACKS
+          bfd_vma address = 0;
+
+          if (!verilog_read_address (abfd, &address))
+            goto error_return;
+
+          if (section->vma + (dst - contents) != address)
+            goto error_return;
+
+          continue;
+#else
+          break;
+#endif
+        }
 
       if (ISXDIGIT (c))
         {
