@@ -202,6 +202,13 @@ typedef struct {
 
 extern args_type command_line;
 
+enum orphan_handling_enum {
+  orphan_handling_place = 0,
+  orphan_handling_discard,
+  orphan_handling_warn,
+  orphan_handling_error,
+};
+
 typedef int token_code_type;
 
 typedef struct {
@@ -277,6 +284,9 @@ typedef struct {
 
   /* The common page size for ELF.  */
   bfd_vma commonpagesize;
+
+  /* How to deal with orphan sections.  */
+  enum orphan_handling_enum orphan_handling;
 } ld_config_type;
 
 extern ld_config_type config;

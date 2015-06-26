@@ -519,6 +519,9 @@ static const struct ld_option ld_options[] =
   { {"pop-state", no_argument, NULL, OPTION_POP_STATE},
     '\0', NULL, N_("Pop state of flags governing input file handling"),
     TWO_DASHES },
+  { {"orphan-handling", required_argument, NULL, OPTION_ORPHAN_HANDLING},
+    '\0', N_("=MODE"), N_("Control how orphan sections are handled."),
+    TWO_DASHES },
 };
 
 #define OPTION_COUNT ARRAY_SIZE (ld_options)
@@ -1479,6 +1482,20 @@ parse_args (unsigned argc, char **argv)
 	      memcpy (&input_flags, oldp, sizeof (input_flags));
 	      free (oldp);
 	    }
+	  break;
+
+	case OPTION_ORPHAN_HANDLING:
+	  if (strcasecmp (optarg, "place") == 0)
+	    config.orphan_handling = orphan_handling_place;
+	  else if (strcasecmp (optarg, "warn") == 0)
+	    config.orphan_handling = orphan_handling_warn;
+	  else if (strcasecmp (optarg, "error") == 0)
+	    config.orphan_handling = orphan_handling_error;
+	  else if (strcasecmp (optarg, "discard") == 0)
+	    config.orphan_handling = orphan_handling_discard;
+	  else
+	    einfo (_("%P%F: invalid argument to option"
+		     " \"--orphan-handling\"\n"));
 	  break;
 	}
     }

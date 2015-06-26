@@ -1,3 +1,18 @@
+2015-06-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ld.h (enum orphan_handling_enum): New.
+	(struct ld_config_type): Add orphan_handling field.
+	* ld.texinfo (Options): Add --orphan-handling section.
+	(Orphan Sections): Add reference to command line options.
+	* ldlang.c (ldlang_place_orphan): New function.
+	(lang_place_orphans): Call ldlang_place_orphan.
+	* ldlex.h (enum option_values): Add OPTION_ORPHAN_HANDLING.
+	* lexsup.c (struct ld_option ld_options): Add orphan-handling
+	entry.
+	(parse_args): Handle OPTION_ORPHAN_HANDLING.
+	* scripttempl/mrk3.sc: Handle debug sections, and add default
+	discard list.
+
 2015-03-23  Edward Jones  <ed.jones@embecosm.com>
 
 	* scripttempl/mrk3.sc (.text): Include libc strtol sections separately
