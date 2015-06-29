@@ -217,10 +217,11 @@ code addresses.
 /* Memory spaces. A total of 4 bits are allocated for this. */
 static const CORE_ADDR MRK3_MEM_SPACE_MASK = MRK3_MEM_SPACE_BYTE(0xf0);
 static const CORE_ADDR MRK3_MEM_SPACE_NONE = MRK3_MEM_SPACE_BYTE(0x00);
-static const CORE_ADDR MRK3_MEM_SPACE_SYS  = MRK3_MEM_SPACE_BYTE(0x10);
-static const CORE_ADDR MRK3_MEM_SPACE_APP1 = MRK3_MEM_SPACE_BYTE(0x20);
-static const CORE_ADDR MRK3_MEM_SPACE_APP2 = MRK3_MEM_SPACE_BYTE(0x30);
-static const CORE_ADDR MRK3_MEM_SPACE_SSYS = MRK3_MEM_SPACE_BYTE(0x40);
+static const CORE_ADDR MRK3_MEM_SPACE_UMA  = MRK3_MEM_SPACE_BYTE(0x20);
+static const CORE_ADDR MRK3_MEM_SPACE_UMB  = MRK3_MEM_SPACE_BYTE(0x30);
+static const CORE_ADDR MRK3_MEM_SPACE_SMA  = MRK3_MEM_SPACE_BYTE(0x10);
+static const CORE_ADDR MRK3_MEM_SPACE_SMB  = MRK3_MEM_SPACE_BYTE(0x50);
+static const CORE_ADDR MRK3_MEM_SPACE_SSM  = MRK3_MEM_SPACE_BYTE(0x40);
 
 /* Memory types. One bit to indicate code or data. */
 static const CORE_ADDR MRK3_MEM_TYPE_MASK = MRK3_MEM_SPACE_BYTE(0x01);
@@ -416,7 +417,7 @@ mrk3_get_memspace (void)
       warning (_("MRK3: using default memory space (supersystem)."));
       do_cleanups (old_chain);
       /* Don't cache in this circumstance. */
-      return MRK3_MEM_SPACE_SSYS;
+      return MRK3_MEM_SPACE_SSM;
     }
   else
     {
@@ -441,7 +442,7 @@ static int
 mrk3_is_ssys_memspace (void)
 {
   CORE_ADDR ms = mrk3_get_memspace ();
-  return ms == MRK3_MEM_SPACE_SSYS;
+  return ms == MRK3_MEM_SPACE_SSM;
 }
 
 
@@ -450,7 +451,7 @@ static int
 mrk3_is_sys_memspace (void)
 {
   CORE_ADDR ms = mrk3_get_memspace ();
-  return ms == MRK3_MEM_SPACE_SYS;
+  return (ms == MRK3_MEM_SPACE_SMA) || (ms == MRK3_MEM_SPACE_SMB);
 }
 
 
@@ -459,7 +460,7 @@ static int
 mrk3_is_usr_memspace (void)
 {
   CORE_ADDR ms = mrk3_get_memspace ();
-  return (ms == MRK3_MEM_SPACE_APP1) || (ms == MRK3_MEM_SPACE_APP2);
+  return (ms == MRK3_MEM_SPACE_UMA) || (ms == MRK3_MEM_SPACE_UMB);
 }
 
 

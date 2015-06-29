@@ -1,3 +1,21 @@
+2015-06-29  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	Add missing System Mode for Card B and provide general renaming of
+	cards/modes for consistency with other tools and documentation.
+
+	* mrk3-tdep.c: Rename MRK3_MEM_SPACE_APP1 as MRK3_MEM_SPACE_UMA
+	and MRK3_MEM_SPACE_APP2 as MRK3_MEM_SPACE_UMB. Rename
+	MRK3_MEM_SPACE_SYS as MRK3_MEM_SPACE_SMA and add
+	MRK3_MEM_SPACE_SMB. Rename MRK3_MEM_SPACE_SSYS as
+	MRK3_MEM_SPACE_SSM.
+	(mrk3_get_memspace): Rename MRK3_MEM_SPACE_SSYS as
+	MRK3_MEM_SPACE_SSM.
+	(mrk3_is_ssys_memspace): Likewise.
+	(mrk3_is_sys_memspace): Modify to be TRUE if we are in either SMA
+	or SMB.
+	(mrk3_is_usr_memspace): Rename MRK3_MEM_SPACE_APP1 as
+	MRK3_MEM_SPACE_UMA and MRK3_MEM_SPACE_APP2 as MRK3_MEM_SPACE_UMB.
+
 2015-05-05  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_gdbarch_init): Short is 2 bytes long.
