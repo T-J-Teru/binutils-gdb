@@ -1,0 +1,30 @@
+# Copyright 2015 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if { [prepare_for_testing create-frame.exp "create-frame" {create-frame.c} {debug nowarnings}] } {
+    return -1
+}
+set srcfile create-frame.c
+
+runto_main
+gdb_breakpoint frame_2
+gdb_continue_to_breakpoint frame_2
+
+gdb_test "bt" "#0.*#1.*#2.*" "backtrace at breakpoint"
+
+gdb_test_no_output "select-frame 3"
+
+gdb_test "info frame" "Stack level 0, frame at 0x3:.*" \
+    "info frame for created frame"

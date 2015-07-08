@@ -1,3 +1,7 @@
+2015-07-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* frame.c (frame_find_by_id): Also check the selected frame.
+
 2015-07-23  Yao Qi  <yao.qi@linaro.org>
 
 	* aarch64-linux-nat.c (aarch64_linux_can_use_hw_breakpoint): If

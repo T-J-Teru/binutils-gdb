@@ -732,7 +732,7 @@ frame_id_inner (struct gdbarch *gdbarch, struct frame_id l, struct frame_id r)
 struct frame_info *
 frame_find_by_id (struct frame_id id)
 {
-  struct frame_info *frame, *prev_frame;
+  struct frame_info *frame, *prev_frame, *selected_frame;
 
   /* ZERO denotes the null frame, let the caller decide what to do
      about it.  Should it instead return get_current_frame()?  */
@@ -761,7 +761,7 @@ frame_find_by_id (struct frame_id id)
 
       prev_frame = get_prev_frame (frame);
       if (!prev_frame)
-	return NULL;
+	break;
 
       /* As a safety net to avoid unnecessary backtracing while trying
 	 to find an invalid ID, we check for a common situation where
@@ -772,8 +772,20 @@ frame_find_by_id (struct frame_id id)
 	  && !frame_id_inner (get_frame_arch (frame), id, self)
 	  && frame_id_inner (get_frame_arch (prev_frame), id,
 			     get_frame_id (prev_frame)))
-	return NULL;
+	break;
     }
+
+  /* We check the selected frame specifically here to handle the case where
+     the selected frame is not an ancestor of the current frame.  */
+  selected_frame = get_selected_frame_if_set ();
+  if (selected_frame)
+    {
+      struct frame_id selected_frame_id = get_frame_id (selected_frame);
+
+      if (frame_id_eq (id, selected_frame_id))
+	return frame;
+    }
+
   return NULL;
 }
 
