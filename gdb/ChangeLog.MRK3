@@ -1,3 +1,7 @@
+2015-07-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* frame.c (frame_find_by_id): Also check the selected frame.
+
 2015-06-29  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	Add missing System Mode for Card B and provide general renaming of
