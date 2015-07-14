@@ -1,3 +1,8 @@
+2015-08-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ld.texinfo (MEMORY): Explain that multiple MEMORY commands are
+	acceptable.
+
 2015-06-26  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ld.h (enum orphan_handling_enum): New.
