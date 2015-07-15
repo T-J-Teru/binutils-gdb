@@ -729,8 +729,7 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
      These can't be resolved using the standard function as that will only
      cope with code where the value to be patched in is a continuous series
      of bits.  */
-  if (howto->type == R_MRK3_TBEQ_ADDR9
-      || howto->type == R_MRK3_DIRECT9)
+  if (howto->type == R_MRK3_DIRECT9)
     {
       bfd_vma x;
       bfd_byte *location = contents + offset;
@@ -746,11 +745,6 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
 
       switch (howto->type)
         {
-        case R_MRK3_TBEQ_ADDR9:
-          /* Mask out bits to be patched, and merge in relocation.  */
-          x |= ((relocation & 0xff) << 24) | (relocation & 0x100);
-          break;
-
         case R_MRK3_DIRECT9:
           x |= ((((relocation >> 6) & 0x7) << 11)
                 | (((relocation >> 0) & 0x3f) << 4));
@@ -763,6 +757,38 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
         }
 
       bfd_put_16 (input_bfd, x, location);
+
+      return bfd_reloc_ok;
+    }
+
+  if (howto->type == R_MRK3_TBEQ_ADDR9)
+    {
+      bfd_vma x;
+      bfd_byte *location = contents + offset;
+
+      /* Overflow check.  Would be nice if this could be shared from the
+         common bfd code, however, currently the overflow check is tied
+         into the patching in code.  */
+      if ((relocation >> 9) != 0)
+        return bfd_reloc_overflow;
+
+      x = bfd_get_32 (input_bfd, location);
+      x &= ~howto->dst_mask;
+
+      switch (howto->type)
+        {
+        case R_MRK3_TBEQ_ADDR9:
+          /* Mask out bits to be patched, and merge in relocation.  */
+          x |= ((relocation & 0xff) << 24) | (relocation & 0x100);
+          break;
+
+        default:
+          /* This is really an error in the tools.  */
+          return bfd_reloc_notsupported;
+          break;
+        }
+
+      bfd_put_32 (input_bfd, x, location);
 
       return bfd_reloc_ok;
     }
