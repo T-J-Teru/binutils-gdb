@@ -1,3 +1,14 @@
+2015-07-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/disasm-end-cu-1.c: Deleted.
+	* gdb.base/disasm-end-cu-2.c: Deleted.
+	* gdb.base/disasm-end-cu.exp: Deleted.
+	* gdb.base/disasm-multi-cu-1.c: New file.
+	* gdb.base/disasm-multi-cu-2.c: New file.
+	* gdb.base/disasm-multi-cu-3.c: New file.
+	* gdb.base/disasm-multi-cu.exp: New file.
+	* gdb.base/disasm-multi-cu.h: New file.
+
 2018-01-19  Tom Tromey  <tom@tromey.com>
 
 	* gdb.rust/modules.rs (TWENTY_THREE): New global.

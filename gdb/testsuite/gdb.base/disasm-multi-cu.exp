@@ -1,0 +1,124 @@
+# Copyright (C) 2010-2015 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This test checks the ability of gdb to disassemble out of one
+# compilation unit and into another, especially when one of the
+# compilation units has debug infomration, and one of them does not.
+
+standard_testfile disasm-multi-cu-1.c disasm-multi-cu-2.c disasm-multi-cu-3.c
+
+set possible_debug_flags [list debug ""]
+set counter 0
+
+foreach srcfile_debug $possible_debug_flags {
+    foreach srcfile2_debug $possible_debug_flags {
+	foreach srcfile3_debug $possible_debug_flags {
+
+	    incr counter
+	    set testname "${testfile}.${counter}"
+
+	    verbose -log "Starting sub-test ${testname}: { $srcfile_debug , $srcfile2_debug , $srcfile3_debug }"
+	    with_test_prefix "${testname}" {
+
+		if { [prepare_for_testing_full "failed to prepare" \
+			  [list ${testname} debug \
+			       $srcfile [list $srcfile_debug] \
+			       $srcfile2 [list $srcfile2_debug] \
+			       $srcfile3 [list $srcfile3_debug]]]} {
+		    continue
+		}
+
+		if ![runto_main] {
+		    fail "Failed to runto main"
+		    continue
+		}
+
+		set main_addr [get_hexadecimal_valueof "&main" "0"]
+		set func_1_addr [get_hexadecimal_valueof "&function_1" "0"]
+		set func_2_addr [get_hexadecimal_valueof "&function_2" "0"]
+		set marker_addr [get_hexadecimal_valueof "&marker" "0"]
+
+		if {$main_addr == 0 || $func_1_addr == 0 || $func_2_addr == 0 \
+			|| $marker_addr <= $main_addr \
+			|| $marker_addr <= $func_1_addr \
+			|| $marker_addr <= $func_2_addr \
+			|| $func_2_addr <= $main_addr \
+			|| $func_2_addr <= $func_1_addr \
+			|| $func_1_addr <= $main_addr } {
+		    fail "Unable to extract required addresses, or addresses out of order"
+		    continue
+		}
+
+		set main_pattern [string replace "${main_addr}" 0 1 "0x0*"]
+		if {$srcfile_debug == "debug"} {
+		    set best_main_pattern "${main_pattern}.*debug: main"
+		} else {
+		    set best_main_pattern ${main_pattern}
+		}
+		set func_1_pattern [string replace "${func_1_addr}" 0 1 "0x0*"]
+		if {$srcfile2_debug == "debug"} {
+		    set best_func_1_pattern "${func_1_pattern}.*debug: function_1"
+		} else {
+		    set best_func_1_pattern ${func_1_pattern}
+		}
+		set func_2_pattern [string replace "${func_2_addr}" 0 1 "0x0*"]
+		if {$srcfile3_debug == "debug"} {
+		    set best_func_2_pattern "${func_2_pattern}.*debug: function_2"
+		} else {
+		    set best_func_2_pattern ${func_2_pattern}
+		}
+
+		with_test_prefix "with source code" {
+		    verbose -log "Expecting:\nDump of assembler code from ${main_addr} to ${marker_addr}:.*\r\n *${best_main_pattern}.*\r\n *${best_func_1_pattern}.*\r\n *${best_func_2_pattern}.*\r\nEnd of assembler dump\.\r\n$gdb_prompt $"
+		    gdb_test_multiple "disassemble /m ${main_addr},${marker_addr}" "Disassemble address range with source" {
+			-re "Dump of assembler code from ${main_addr} to ${marker_addr}:\r\nEnd of assembler dump\.\r\n$gdb_prompt $" {
+			    fail "No output from the disassemble command"
+			}
+			-re "Dump of assembler code from ${main_addr} to ${marker_addr}:.*\r\n *${best_main_pattern}.*\r\n *${best_func_1_pattern}.*\r\n *${best_func_2_pattern}.*\r\nEnd of assembler dump\.\r\n$gdb_prompt $" {
+			    pass "disassembly output looks correct"
+			}
+			-re "Dump of assembler code from ${main_addr} to ${marker_addr}:.*\r\n *${main_pattern}.*\r\n *${func_1_pattern}.*\r\n *${func_2_pattern}.*\r\nEnd of assembler dump\.\r\n$gdb_prompt $" {
+			    fail "missing intermixed source code"
+			}
+			-re "Dump of assembler code from ${main_addr} to ${marker_addr}:.*\r\n *${main_pattern}.*\r\nEnd of assembler dump\.\r\n$gdb_prompt $" {
+			    fail "disassembly output truncated ater main function"
+			}
+			-re ".*$gdb_prompt $" {
+			    fail "Unexpected output from disassemble command"
+			}
+		    }
+		}
+
+		with_test_prefix "without source code" {
+		    verbose -log "Expecting:\nDump of assembler code from ${main_addr} to ${marker_addr}:.*\r\n *${main_pattern}.*\r\n *${func_1_pattern}.*\r\n *${func_2_pattern}.*\r\nEnd of assembler dump\.\r\n$gdb_prompt $"
+		    gdb_test_multiple "disassemble ${main_addr},${marker_addr}" "Disassemble address range without source" {
+			-re "Dump of assembler code from ${main_addr} to ${marker_addr}:\r\nEnd of assembler dump\.\r\n$gdb_prompt $" {
+			    fail "No output from the disassemble command (without source)"
+			}
+			-re "Dump of assembler code from ${main_addr} to ${marker_addr}:.*\r\n *${main_pattern}.*\r\n *${func_1_pattern}.*\r\n *${func_2_pattern}.*\r\nEnd of assembler dump\.\r\n$gdb_prompt $" {
+			    pass "disassembly output looks correct (without source)"
+			}
+			-re "Dump of assembler code from ${main_addr} to ${marker_addr}:.*\r\n *${main_pattern}.*\r\nEnd of assembler dump\.\r\n$gdb_prompt $" {
+			    fail "disassembly output truncated ater main function"
+			}
+			-re ".*$gdb_prompt $" {
+			    fail "Unexpected output from disassemble command"
+			}
+		    }
+		}
+	    }
+	}
+    }
+}
