@@ -1,5 +1,10 @@
 2015-07-23  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.base/create-frame.exp: Add test for 'info frame' with
+	specific address.
+
+2015-07-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.mi/mi-var-frame.c: New file.
 	* gdb.mi/mi-var-frame.exp: New file.
 	* gdb.base/create-frame.c: New file.

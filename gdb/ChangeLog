@@ -1,5 +1,14 @@
 2015-07-23  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* frame.h (make_restore_selected_frame_cleanup): Declare new
+	function.
+	* frame.c (do_restore_selected_frame): New function.
+	(make_restore_selected_frame_cleanup): Define new function.
+	* stack.c (frame_info): Temporarily select frame for duration of
+	this function.
+
+2015-07-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* frame.c (frame_find_by_id): Also check the selected frame.
 
 2015-07-23  Yao Qi  <yao.qi@linaro.org>

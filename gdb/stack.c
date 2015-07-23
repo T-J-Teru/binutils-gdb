@@ -1434,6 +1434,16 @@ frame_info (char *addr_exp, int from_tty)
   fi = parse_frame_specification_1 (addr_exp, "No stack.", &selected_frame_p);
   gdbarch = get_frame_arch (fi);
 
+  /* During the following value will be created and then displayed.
+     Displaying a value can require using frame_find_by_id, so we must make
+     sure that the frame FI is findable using frame_find_by_id.  As it is
+     possible that the frame specification caused a new frame to be
+     created, one outside of the current stack trace, and different to the
+     currently selected frame, then the only way to ensure that we can find
+     this frame again later is if we temporarily select this new frame.  */
+  make_restore_selected_frame_cleanup ();
+  select_frame (fi);
+
   /* Name of the value returned by get_frame_pc().  Per comments, "pc"
      is not a good name.  */
   if (gdbarch_pc_regnum (gdbarch) >= 0)

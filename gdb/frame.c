@@ -2711,6 +2711,27 @@ frame_prepare_for_sniffer (struct frame_info *frame,
   return make_cleanup (frame_cleanup_after_sniffer, frame);
 }
 
+/* Used as a clean-up to restore the selected frame.  */
+
+static void
+do_restore_selected_frame (void *arg)
+{
+  struct frame_info *fi = (struct frame_info *) arg;
+
+  select_frame (fi);
+}
+
+/* See frame.h.  */
+
+struct cleanup *
+make_restore_selected_frame_cleanup (void)
+{
+  struct frame_info *fi;
+
+  fi = get_selected_frame_if_set ();
+  return make_cleanup (do_restore_selected_frame, fi);
+}
+
 extern initialize_file_ftype _initialize_frame; /* -Wmissing-prototypes */
 
 static struct cmd_list_element *set_backtrace_cmdlist;

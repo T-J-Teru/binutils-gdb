@@ -814,4 +814,9 @@ extern struct frame_info *create_new_frame (CORE_ADDR base, CORE_ADDR pc);
 extern int frame_unwinder_is (struct frame_info *fi,
 			      const struct frame_unwind *unwinder);
 
+/* Create a clean-up to restore the selected frame.  This includes
+   restoring the selected frame to NULL if that is its current value.  */
+
+extern struct cleanup * make_restore_selected_frame_cleanup (void);
+
 #endif /* !defined (FRAME_H)  */

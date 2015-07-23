@@ -27,4 +27,10 @@ gdb_test "bt" "#0.*#1.*#2.*" "backtrace at breakpoint"
 gdb_test_no_output "select-frame 3"
 
 gdb_test "info frame" "Stack level 0, frame at 0x3:.*" \
-    "info frame for created frame"
+    "info frame for currently selected frame, at 0x3"
+
+gdb_test "info frame 4" "Stack frame at 0x4:.*" \
+    "info frame for specific frame, created at 0x4"
+
+gdb_test "info frame" "Stack level 0, frame at 0x3:.*" \
+    "info frame for currently selected frame (again), at 0x3"
