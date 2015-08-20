@@ -1,3 +1,8 @@
+2015-08-20  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_relocate_section): For section symbols
+	use the section base address, and discard the symbol value.
+
 2015-07-15  Simon Cook  <simon.cook@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_final_link_relocate): Read/write 32-bits for

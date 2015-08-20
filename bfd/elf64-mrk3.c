@@ -947,7 +947,17 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 						      rel->r_addend);
 	    }
 
-	  relocation = BASEADDR (sec) + sym->st_value;
+          /* APB 20-Aug-2015: The following has been adjusted in an attempt
+             to better handle reprocessing of relocations, in the case
+             where relocations are preserved using --emit-relocs.  After a
+             non-relocatable link, the symbol value for a section symbol
+             becomes the VMA of the section.  As a result, adding the
+             symbol value to the section base address results in an
+             incorrect (double) value for the address being patched in.  */
+          if (ELF_ST_TYPE (sym->st_info) == STT_SECTION)
+            relocation = BASEADDR (sec);
+          else
+            relocation = BASEADDR (sec) + sym->st_value;
 
 	  name = bfd_elf_string_from_elf_section
 	    (input_bfd, symtab_hdr->sh_link, sym->st_name);
