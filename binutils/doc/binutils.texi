@@ -1075,6 +1075,7 @@ objcopy [@option{-F} @var{bfdname}|@option{--target=}@var{bfdname}]
         [@option{--interleave-width=}@var{width}]
         [@option{-j} @var{sectionpattern}|@option{--only-section=}@var{sectionpattern}]
         [@option{-R} @var{sectionpattern}|@option{--remove-section=}@var{sectionpattern}]
+        [@option{--remove-relocations=}@var{sectionpattern}]
         [@option{-p}|@option{--preserve-dates}]
         [@option{-D}|@option{--enable-deterministic-archives}]
         [@option{-U}|@option{--disable-deterministic-archives}]
@@ -1229,6 +1230,12 @@ inappropriately may make the output file unusable.  Wildcard
 characters are accepted in @var{sectionpattern}.  Using both the
 @option{-j} and @option{-R} options together results in undefined
 behaviour.
+
+@item --remove-relocations=@var{sectionpattern}
+Remove relocations from the output file for any section matching
+@var{sectionpattern}.  This option may be given more than once.  Note
+that using this option inappropriately may make the output file
+unusable.  Wildcard characters are accepted in @var{sectionpattern}.
 
 @item -S
 @itemx --strip-all
@@ -2895,6 +2902,7 @@ strip [@option{-F} @var{bfdname} |@option{--target=}@var{bfdname}]
       [@option{-w}|@option{--wildcard}]
       [@option{-x}|@option{--discard-all}] [@option{-X} |@option{--discard-locals}]
       [@option{-R} @var{sectionname} |@option{--remove-section=}@var{sectionname}]
+      [@option{--remove-relocations=}@var{sectionpattern}]
       [@option{-o} @var{file}] [@option{-p}|@option{--preserve-dates}]
       [@option{-D}|@option{--enable-deterministic-archives}]
       [@option{-U}|@option{--disable-deterministic-archives}]
@@ -2951,6 +2959,12 @@ option may be given more than once.  Note that using this option
 inappropriately may make the output file unusable.  The wildcard
 character @samp{*} may be given at the end of @var{sectionname}.  If
 so, then any section starting with @var{sectionname} will be removed.
+
+@item --remove-relocations=@var{sectionpattern}
+Remove relocations from the output file for any section matching
+@var{sectionpattern}.  This option may be given more than once.  Note
+that using this option inappropriately may make the output file
+unusable.  Wildcard characters are accepted in @var{sectionpattern}.
 
 @item -s
 @itemx --strip-all
