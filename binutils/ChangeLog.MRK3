@@ -1,3 +1,8 @@
+2015-08-24  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* objcopy.c (find_section_list): Handle section patterns starting
+	with '!' being a non-matching pattern.
+
 2015-08-21  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* doc/binutils.texi (objcopy): Document 'remove-relocations'.
