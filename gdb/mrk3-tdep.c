@@ -86,14 +86,34 @@ registers.
 Memory
 ------
 
-MRK3 has up to 16 address spaces, of which two are special, the System address
-space and the Supersystem address space.  Each of these address spaces is
-further divided into data and code spaces.  The code space is word addressed,
-and can be only accessed by the program counter.
+MRK3 has multiple address spaces.  The system is divided in three ways.
+
+- It has one or more logical cards: A, B, C etc.
+
+- Each card may run code in one of three security modes: supersystem mode,
+  system mode or user mode.
+
+- Within each card and mode, there is one or more processes: 1, 2, 3 etc.
+
+Each card/mode/process combination has its own pair of address spaces, one for
+code (20-bit word-addressed) and one for data (32-bit byte-addressed).
+Supersystem mode (the most secure mode) is special - it is common to all cards
+and runs a single process.
+
+For clarity, the nomenclature is as follows:
+
+- SSM, SM and UM to refer to supersystem mode, system mode and user mode
+  respectively;
+- A, B, C, etc. to refer to logical cards; and
+- 1, 2, 3, ... to refer to processes.
+
+Thus SMA1 refers to system mode process 1 on logical card A.  Supersystem
+mode, being common to all cards, and having a single process is referred to as
+SSM.
 
 GDB expects a single unified byte addressed memory. For Harvard architectures,
-and/or those with word addressing, this means that addresses on the target
-need mapping.
+and/or those with word addressing, such as MRK3, this means that addresses on
+the target need mapping.
 
 To avoid confusion, GDB refers to "addresses" to mean the unified byte address
 space used internally within GDB and "pointers" to refer to the values used on
@@ -114,13 +134,39 @@ wants pointers converted to addresses, but without any higher order bits.
 @note Therefore, the purpose of this address <-> pointer manipulation should
       be purely for presentation to the user.
 
-We use this mechanism for MRK3. Although the PC is 32 bits, the achitecture
-has a maximum addressability of 20-bits (word addressing). We use the top
-8-bits to identify the address space (top 4 bits) and within the address
-space, its code and data spaces (bit 24).  Code pointers are shifted to be
-code addresses.
+We use this mechanism for MRK3.  All GDB addresses are extended to 64 bits,
+with the least-signficant 32 bits used to refer to the *byte* address in a
+particular address space and the most-significant 32-bits used as flags to
+identify card, mode, process and code/data as follows:
 
-*/
+  MMMM_CCCC_PPPP_PPPP_XXXX_XXXX_XXXX_AAAA
+
+  - MMMM. bits 63-60.  Mode
+    - 0000: Unused/invalid
+    - 0001: Supersystem mode
+    - 0010: System mode
+    - 0011: User mode
+
+  - CCCC. bits 59-56.  Card
+    - 0000: Unused/invalid
+    - 0001: Card A
+    - 0010: Card B
+    - ...
+    - 1111: Card O
+
+  - PPPP_PPPP. bits 55-48.  Process ID
+    - 0000_0000: Unused/invalid
+    - bbbb_bbbb: Process number (range 1 - 65,535)
+
+  - XXXX. bits 47-36.  Unused bits (reserved)
+
+  - AAAA. bits 35-32.  Code/data
+    - 0000: Unused/invalid
+    - 0001: Data
+    - 0010: Code
+
+Any unused bits should be set to zero. For SSM, this includes card and process
+bits. */
 
 
 #include "defs.h"
@@ -212,27 +258,39 @@ code addresses.
 #define NUM_REGS        (NUM_REAL_REGS + NUM_PSEUDO_REGS)
 
 #define MRK3_ELF_ADDRESS_SIZE 8
+#define MRK3_FLAG_SHIFT ((MRK3_ELF_ADDRESS_SIZE - 4) * 8)
+#define MRK3_MEM_FLAGS(B) (((CORE_ADDR) B) << MRK3_FLAG_SHIFT)
 
-#define MRK3_MEM_SPACE_BYTE(B) (((CORE_ADDR) B) << ((MRK3_ELF_ADDRESS_SIZE - 1) * 8))
-/* Memory spaces. A total of 4 bits are allocated for this. */
-static const CORE_ADDR MRK3_MEM_SPACE_MASK = MRK3_MEM_SPACE_BYTE(0xf0);
-static const CORE_ADDR MRK3_MEM_SPACE_NONE = MRK3_MEM_SPACE_BYTE(0x00);
-static const CORE_ADDR MRK3_MEM_SPACE_UMA  = MRK3_MEM_SPACE_BYTE(0x20);
-static const CORE_ADDR MRK3_MEM_SPACE_UMB  = MRK3_MEM_SPACE_BYTE(0x30);
-static const CORE_ADDR MRK3_MEM_SPACE_SMA  = MRK3_MEM_SPACE_BYTE(0x10);
-static const CORE_ADDR MRK3_MEM_SPACE_SMB  = MRK3_MEM_SPACE_BYTE(0x50);
-static const CORE_ADDR MRK3_MEM_SPACE_SSM  = MRK3_MEM_SPACE_BYTE(0x40);
+/* Constant shifts for the various flag fields. */
+static const int MRK3_MODE_SHIFT = MRK3_FLAG_SHIFT + 28;
+static const int MRK3_CARD_SHIFT = MRK3_FLAG_SHIFT + 24;
+static const int MRK3_PROC_SHIFT = MRK3_FLAG_SHIFT + 16;
+static const int MRK3_TYPE_SHIFT = MRK3_FLAG_SHIFT + 0;
 
-/* Memory types. One bit to indicate code or data. */
-static const CORE_ADDR MRK3_MEM_TYPE_MASK = MRK3_MEM_SPACE_BYTE(0x01);
-static const CORE_ADDR MRK3_MEM_TYPE_DATA = MRK3_MEM_SPACE_BYTE(0x00);
-static const CORE_ADDR MRK3_MEM_TYPE_CODE = MRK3_MEM_SPACE_BYTE(0x01);
+/* Memory spaces. A total of 32 bits are allocated for this.  See preamble
+   for description.  */
+static const CORE_ADDR MRK3_MEM_MODE_MASK = MRK3_MEM_FLAGS (0xf0000000);
+static const CORE_ADDR MRK3_MEM_MODE_NONE = MRK3_MEM_FLAGS (0x00000000);
+static const CORE_ADDR MRK3_MEM_MODE_SSM  = MRK3_MEM_FLAGS (0x10000000);
+static const CORE_ADDR MRK3_MEM_MODE_SM   = MRK3_MEM_FLAGS (0x20000000);
+static const CORE_ADDR MRK3_MEM_MODE_UM   = MRK3_MEM_FLAGS (0x30000000);
 
-/* General mask */
-static const CORE_ADDR MRK3_MEM_MASK = MRK3_MEM_SPACE_BYTE(0xff);
-#undef MRK3_MEM_SPACE_BYTE
+static const CORE_ADDR MRK3_MEM_CARD_MASK = MRK3_MEM_FLAGS (0x0f000000);
+static const CORE_ADDR MRK3_MEM_CARD_ALL  = MRK3_MEM_FLAGS (0x00000000);
 
-#define PRIxMEM_SPACE "08lx"
+static const CORE_ADDR MRK3_MEM_PROC_MASK = MRK3_MEM_FLAGS (0x00ff0000);
+static const CORE_ADDR MRK3_MEM_PROC_ALL  = MRK3_MEM_FLAGS (0x00000000);
+
+static const CORE_ADDR MRK3_MEM_TYPE_MASK = MRK3_MEM_FLAGS (0x0000000f);
+static const CORE_ADDR MRK3_MEM_TYPE_NONE = MRK3_MEM_FLAGS (0x00000000);
+static const CORE_ADDR MRK3_MEM_TYPE_DATA = MRK3_MEM_FLAGS (0x00000001);
+static const CORE_ADDR MRK3_MEM_TYPE_CODE = MRK3_MEM_FLAGS (0x00000002);
+
+static const CORE_ADDR MRK3_MEM_MASK      = MRK3_MEM_FLAGS(0xffffffff);
+
+#undef MRK3_ELF_ADDRESS_SIZE
+#undef MRK3_FLAG_SHIFT
+#undef MRK3_MEM_FLAGS
 
 /* Define the breakpoint instruction which is inserted by GDB into the target
    code. This must be exactly the same as the simulator expects.
@@ -270,6 +328,35 @@ int  mrk3_memspace_valid_p;
 
 /* Global, logging level for nxpload command.  */
 int nxpload_logging = 1;
+
+
+/*! Enumeration to identify memory modes. These match the values in the bit
+    field. */
+enum mrk3_addr_mode {
+  MODE_NONE = 0,
+  MODE_SSM  = 1,
+  MODE_SM   = 2,
+  MODE_UM   = 3
+};
+
+/*! Enumeration to identify memory type (code/data). These match the values
+    in the bit field. */
+enum mrk3_addr_type {
+  TYPE_NONE = 0,
+  TYPE_DATA = 1,
+  TYPE_CODE = 2
+};
+
+/*! Struct to record broken down information about a MRK3 address.  Not all
+    fields need be used. */
+struct mrk3_addr_info {
+  enum mrk3_addr_mode  mode;
+  uint8_t              card;
+  uint16_t             proc;
+  enum mrk3_addr_type  type;
+  uint32_t             ptr;		/* Native value (GDB pointer) */
+};
+
 
 /*! Opaque data for nxpload_section_callback.  Reused from symfile.c */
 struct nxpload_section_data {
@@ -388,10 +475,12 @@ mrk3_invalidate_memspace_cache (void)
 /*! Get the current memory space from the target.
 
    TODO: Is RCmd the best way to do this? */
-static CORE_ADDR
+static struct mrk3_addr_info
 mrk3_get_memspace (void)
 {
-  static CORE_ADDR cached_memspace;
+  static struct mrk3_addr_info cached_memspace = {
+    MODE_NONE, 0x0, 0x0, TYPE_NONE
+  };
   struct ui_file *mf;
   struct cleanup *old_chain;
   char buf[64];
@@ -414,54 +503,143 @@ mrk3_get_memspace (void)
     {
       /* TODO: We are presumably not connected to a target. Should we warn? Or
          should we return a default? */
-      warning (_("MRK3: using default memory space (supersystem)."));
+      warning (_("MRK3: no memory space found, using previous value"));
       do_cleanups (old_chain);
-      /* Don't cache in this circumstance. */
-      return MRK3_MEM_SPACE_SSM;
+      /* Don't update cache in this circumstance. */
+      return cached_memspace;
     }
   else
     {
-      /* The value is returned as a 32 bit value, with the flags in the top 4
+      /* The value is returned as a 64 bit value, with the flags in the top 32
 	 bits. */
-      CORE_ADDR res =
-	(CORE_ADDR) strtoll (buf, NULL, 16);
+      CORE_ADDR res = (CORE_ADDR) strtoll (buf, NULL, 16);
+
       if (mrk3_debug_memspace ())
 	fprintf_unfiltered (gdb_stdlog, _("MRK3: memory space buf "
-					  "\"%s\", val 0x%" PRIxMEM_SPACE
-					  ".\n"), buf, res);
+					  "\"%s\", val %s.\n"),
+			    buf, paddress (target_gdbarch (), res));
       do_cleanups (old_chain);
-      cached_memspace = res & MRK3_MEM_SPACE_MASK;
+
+      /* This way we can check for nonsense values */
+      if (MRK3_MEM_MODE_NONE == (res & MRK3_MEM_MODE_MASK))
+	cached_memspace.mode = MODE_NONE;
+      else if (MRK3_MEM_MODE_SSM == (res & MRK3_MEM_MODE_MASK))
+	cached_memspace.mode = MODE_SSM;
+      else if (MRK3_MEM_MODE_SM == (res & MRK3_MEM_MODE_MASK))
+	cached_memspace.mode = MODE_SM;
+      else if (MRK3_MEM_MODE_UM == (res & MRK3_MEM_MODE_MASK))
+	cached_memspace.mode = MODE_UM;
+      else
+	{
+	  warning (_("MRK3: Invalid mode flags: %s.\n"),
+		   paddress (target_gdbarch (), res));
+	  cached_memspace.mode = MODE_NONE;
+	}
+
+      /* All card and proc values are valid */
+      cached_memspace.card = (uint8_t)  (res >> MRK3_CARD_SHIFT) & 0xf;
+      cached_memspace.proc = (uint16_t) (res >> MRK3_PROC_SHIFT) & 0xffff;
+
+      /* This way we can check for nonsense values */
+      if (MRK3_MEM_TYPE_NONE == (res & MRK3_MEM_TYPE_MASK))
+	cached_memspace.type = TYPE_NONE;
+      else if (MRK3_MEM_TYPE_DATA == (res & MRK3_MEM_TYPE_MASK))
+	cached_memspace.type = TYPE_DATA;
+      else if (MRK3_MEM_TYPE_CODE == (res & MRK3_MEM_TYPE_MASK))
+	cached_memspace.type = TYPE_CODE;
+      else
+	{
+	  warning (_("MRK3: Invalid type flags: %s.\n"),
+		   paddress (target_gdbarch (), res));
+	  cached_memspace.type = TYPE_NONE;
+	}
+
       mrk3_memspace_valid_p = 1;
       return cached_memspace;
     }
 }	/* mrk3_get_memspace () */
 
 
+/*! Turn a memory info struct into flag representation
+
+    @param[in] info  Details of the memory
+    @return  Flags for ORing to create a GDB address. */
+
+static CORE_ADDR
+mrk3_make_addr_flags (struct mrk3_addr_info  info)
+{
+  CORE_ADDR res = 0;
+
+  res |= ((CORE_ADDR) info.mode) << (MRK3_MODE_SHIFT);
+  res |= ((CORE_ADDR) info.card) << (MRK3_CARD_SHIFT);
+  res |= ((CORE_ADDR) info.proc) << (MRK3_PROC_SHIFT);
+  res |= ((CORE_ADDR) info.type) << (MRK3_TYPE_SHIFT);
+
+  return res;
+
+}	/* mrk3_make_addr_flags () */
+
+
+/*! Convenience function to print current  memory space as string. */
+static char *
+mrk3_print_memspace (void)
+{
+  /* Big enough for "{MODE, CARD, 0xPROC, CODE/DATA}.  Largest posssible is
+     "{NONE, ALL, 0xffff, NONE}" (25 chars excl EOS char). */
+  static char str [26];
+  struct mrk3_addr_info info = mrk3_get_memspace ();
+  const char *mode = (MODE_NONE == info.mode) ? "NONE"
+    : (MODE_SSM == info.mode) ? "SSM"
+    : (MODE_SM  == info.mode) ? "SM"
+    : (MODE_UM  == info.mode) ? "UM" : "?";
+  char card [4];			/* Large enough for "ALL" */
+  const char *type = (TYPE_NONE == info.type) ? "NONE"
+    : (TYPE_DATA == info.type) ? "DATA"
+    : (TYPE_CODE== info.type) ? "CODE" : "?";
+
+  if (0 == info.card)
+    strcpy (card, "ALL");
+  else
+    {
+      card[0] = 'A' + info.card - 1;
+      card[1] = '\0';
+    }
+
+  if (0 == info.proc)
+    sprintf (str, "{%s, %s, ALL, %s}", mode, card, type);
+  else
+    sprintf (str, "{%s, %s, 0x%hx, %s}", mode, card, info.proc, type);
+
+  return (char *) str;
+
+}	/* mrk3_print_memspace () */
+
+
 /*! Convenience function for the super system memory space. */
 static int
-mrk3_is_ssys_memspace (void)
+mrk3_is_ssm_memspace (void)
 {
-  CORE_ADDR ms = mrk3_get_memspace ();
-  return ms == MRK3_MEM_SPACE_SSM;
-}
+  return mrk3_get_memspace ().mode == MODE_SSM;
+
+}	/* mrk3_is_ssm_memspace () */
 
 
 /*! Convenience function for the system memory space. */
 static int
-mrk3_is_sys_memspace (void)
+mrk3_is_sm_memspace (void)
 {
-  CORE_ADDR ms = mrk3_get_memspace ();
-  return (ms == MRK3_MEM_SPACE_SMA) || (ms == MRK3_MEM_SPACE_SMB);
-}
+  return mrk3_get_memspace ().mode == MODE_SM;
+
+}	/* mrk3_is_sm_memspace () */
 
 
 /*! Convenience function for the user memory space. */
 static int
-mrk3_is_usr_memspace (void)
+mrk3_is_um_memspace (void)
 {
-  CORE_ADDR ms = mrk3_get_memspace ();
-  return (ms == MRK3_MEM_SPACE_UMA) || (ms == MRK3_MEM_SPACE_UMB);
-}
+  return mrk3_get_memspace ().mode == MODE_UM;
+
+}	/* mrk3_is_um_memspace () */
 
 
 /*! Convenience function for the code memory type */
@@ -645,18 +823,18 @@ mrk3_pseudo_register_read (struct gdbarch *gdbarch,
 
       if (mrk3_debug_memspace ())
 	fprintf_unfiltered (gdb_stdlog,
-			    _("MRK3: memspace for SP read is 0x%"
-			      PRIxMEM_SPACE ".\n"), mrk3_get_memspace ());
-      if (mrk3_is_ssys_memspace ())
+			    _("MRK3: memspace for SP read is %s.\n"),
+			      mrk3_print_memspace ());
+      if (mrk3_is_ssm_memspace ())
 	raw_regnum = MRK3_SSSP_REGNUM;
-      else if (mrk3_is_sys_memspace ())
+      else if (mrk3_is_sm_memspace ())
 	raw_regnum = MRK3_SSP_REGNUM;
-      else if (mrk3_is_usr_memspace ())
+      else if (mrk3_is_um_memspace ())
 	raw_regnum = MRK3_USP_REGNUM;
       else
 	{
-	  warning (_("MRK3: invalid SP read mem space 0x%"
-		     PRIxMEM_SPACE "."), mrk3_get_memspace ());
+	  warning (_("MRK3: invalid SP read mem space %s"),
+		     mrk3_print_memspace ());
 	  raw_regnum = MRK3_SSSP_REGNUM;
 	}
 
@@ -782,19 +960,19 @@ mrk3_pseudo_register_write (struct gdbarch *gdbarch,
     {
       if (mrk3_debug_memspace ())
 	fprintf_unfiltered (gdb_stdlog,
-			    _("MRK3: memspace for SP write is 0x%"
-			      PRIxMEM_SPACE ".\n"), mrk3_get_memspace ());
+			    _("MRK3: memspace for SP write is %s.\n"),
+			    mrk3_print_memspace ());
     case MRK3_SP_REGNUM:
-      if (mrk3_is_ssys_memspace ())
+      if (mrk3_is_ssm_memspace ())
 	raw_regnum = MRK3_SSSP_REGNUM;
-      else if (mrk3_is_sys_memspace ())
+      else if (mrk3_is_sm_memspace ())
 	raw_regnum = MRK3_SSP_REGNUM;
-      else if (mrk3_is_usr_memspace ())
+      else if (mrk3_is_um_memspace ())
 	raw_regnum = MRK3_USP_REGNUM;
       else
 	{
-	  warning (_("MRK3: invalid SP write mem space 0x%"
-		     PRIxMEM_SPACE "."), mrk3_get_memspace ());
+	  warning (_("MRK3: invalid SP write mem space %s"),
+		     mrk3_print_memspace ());
 	  raw_regnum = MRK3_SSSP_REGNUM;
 	}
 
@@ -1015,19 +1193,20 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
 
   @param[in] gdbarch    The current architecture
   @param[in] is_code    Non-zero (TRUE) if this is a code pointer
-  @param[in] memspace  Memory space flags
+  @param[in] memspace   Memory space info
   @param[in] ptr        The pointer to convert
   @return  The address. */
 
 static CORE_ADDR
 mrk3_p2a (struct gdbarch *gdbarch, int is_code,
-	  CORE_ADDR memspace, CORE_ADDR ptr)
+	  struct mrk3_addr_info memspace, CORE_ADDR ptr)
 {
   CORE_ADDR addr;
 
   ptr  &= ~MRK3_MEM_MASK;		/* Just in case */
   addr  = is_code ? (ptr << 1) : ptr;
-  addr |= memspace | (is_code ? MRK3_MEM_TYPE_CODE : MRK3_MEM_TYPE_DATA);
+  memspace.type = is_code ? TYPE_CODE : TYPE_DATA;
+  addr |= mrk3_make_addr_flags (memspace);
 
   if (mrk3_debug_ptraddr ())
     {
@@ -1092,11 +1271,12 @@ mrk3_a2p (struct gdbarch *gdbarch,
 
    @return  Address withouts its address space and code/data bits. */
 static CORE_ADDR
-mrk3_addr_bits_add (int is_code, CORE_ADDR memspace,
+mrk3_addr_bits_add (int is_code,
+		    struct mrk3_addr_info memspace,
 		    CORE_ADDR addr)
 {
-  return (addr & ~MRK3_MEM_MASK) | memspace
-    | (is_code ? MRK3_MEM_TYPE_CODE : MRK3_MEM_TYPE_DATA);
+  memspace.type = is_code ? TYPE_CODE : TYPE_DATA;
+  return (addr & ~MRK3_MEM_MASK) | mrk3_make_addr_flags (memspace);
 
 }	/* mrk3_addr_bits_add () */
 
@@ -1159,7 +1339,7 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
   int  is_code = TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
     || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
     || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type));
-  CORE_ADDR memspace = mrk3_get_memspace ();
+  struct mrk3_addr_info memspace = mrk3_get_memspace ();
   CORE_ADDR ptr = mrk3_a2p (gdbarch,
 			    mrk3_addr_bits_add (is_code, memspace, addr));
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
@@ -1188,7 +1368,7 @@ mrk3_read_pc (struct regcache *regcache)
   CORE_ADDR pcaddr;
 
   struct gdbarch *gdbarch = get_regcache_arch (regcache);
-  CORE_ADDR memspace = mrk3_get_memspace ();
+  struct mrk3_addr_info memspace = mrk3_get_memspace ();
   regcache_cooked_read_unsigned (regcache, MRK3_PC_REGNUM, &pcptr);
   pcaddr = mrk3_p2a (gdbarch, 1, memspace, pcptr);
 
@@ -1455,7 +1635,7 @@ mrk3_analyze_prologue (struct frame_info *this_frame,
 		       struct mrk3_frame_cache *this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
-  CORE_ADDR memspace = mrk3_get_memspace ();
+  struct mrk3_addr_info memspace = mrk3_get_memspace ();
 
   /* Function starts are symbols, so GDB addresses, _without_ flag bits. */
   CORE_ADDR  func_start = get_frame_func (this_frame);
@@ -1818,7 +1998,7 @@ mrk3_frame_this_id (struct frame_info *this_frame,
 
   if (base)
     {
-      CORE_ADDR memspace = mrk3_get_memspace ();
+      struct mrk3_addr_info memspace = mrk3_get_memspace ();
       CORE_ADDR pc = get_frame_func (this_frame);
 
       /* Frame ID's always use full GDB addresses */
