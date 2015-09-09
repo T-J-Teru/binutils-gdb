@@ -1,35 +1,3 @@
-2015-08-19  Jeremy Bennett  <jeremy.bennett@embecosm.com>
-
-	Implement the new flag structure to differentiate address spaces.
-
-	* mrk3-tdep.c: Update commentary to explain new flags, define new
-	constants to support this, remove PRIxMEM, since GDB provides a
-	function to do this anyway.
-	(enum mrk3_addr_mode): Created.
-	(enum mrk3_addr_type): Created.
-	(struct mrk3_addr_info): Created.
-	(mrk3_get_memspace): Rewritten to use address info structure and
-	allow for processes.
-	(mrk3_make_addr_flags): Created.
-	(mrk3_print_memspace): Rewritten to use address info structure and
-	allow for processes.
-	(mrk3_is_ssm_memspace): Use address info structure.
-	(mrk3_is_sm_memspace): Likewise.
-	(mrk3_is_um_memspace): Likewise.
-	(mrk3_pseudo_register_read): Rename mrk3_is_ssys_memspace to
-	mrk3_is_ssm_memspace, rename mrk3_is_sys_memspace to
-	mrk3_is_sm_memspace, rename mrk3_is_usr_memspace to
-	mrk3_is_um_memspace, update print formats for memspaces.
-	(mrk3_pseudo_register_write): Likewise.
-	(mrk3_dwarf2_reg_to_regnum): Use address info structure for memspace.
-	(mrk3_p2a): Rewrite to use address info structure.
-	(mrk3_a2p): Likewise.
-	(mrk3_addr_bits_add): Likewise.
-	(mrk3_address_to_pointer): Use address info structure for memspace.
-	(mrk3_read_pc): Likewise.
-	(mrk3_analyze_prologue): Likewise.
-	(mrk3_frame_this_id): Likewise.
-
 2015-07-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* frame.c (frame_find_by_id): Also check the selected frame.
