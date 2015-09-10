@@ -1055,7 +1055,7 @@ mrk3_elf_relocate_section (bfd *output_bfd,
 	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
 					 rel, 1, relend, howto, 0, contents);
 
-      if (info->relocatable)
+      if (info->relocatable || info->emitrelocations)
         {
 	  /* This is a relocatable link.  We don't have to change
 	     anything, unless the reloc is against a section symbol,
@@ -1063,7 +1063,9 @@ mrk3_elf_relocate_section (bfd *output_bfd,
 	     section symbol winds up in the output section.  */
 	  if (sym != NULL && ELF_ST_TYPE (sym->st_info) == STT_SECTION)
 	    rel->r_addend += sec->output_offset;
-	  continue;
+
+          if (info->relocatable)
+            continue;
         }
 
       /* Finally, the sole MRK3-specific part.  */
