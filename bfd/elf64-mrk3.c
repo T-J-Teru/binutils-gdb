@@ -1055,67 +1055,69 @@ mrk3_elf_relocate_section (bfd *output_bfd,
 	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
 					 rel, 1, relend, howto, 0, contents);
 
-      if (info->relocatable || info->emitrelocations)
+      if (!info->relocatable)
         {
-	  /* This is a relocatable link.  We don't have to change
-	     anything, unless the reloc is against a section symbol,
-	     in which case we have to adjust according to where the
-	     section symbol winds up in the output section.  */
-	  if (sym != NULL && ELF_ST_TYPE (sym->st_info) == STT_SECTION)
-	    rel->r_addend += sec->output_offset;
+          /* Patch in the relocation.  This is not needed if we are
+	     performing a relocatable link.  */
+          r = mrk3_final_link_relocate (output_bfd, howto, input_bfd,
+					input_section, contents, rel,
+					relocation, sec, name, h);
 
-          if (info->relocatable)
-            continue;
-        }
-
-      /* Finally, the sole MRK3-specific part.  */
-      r = mrk3_final_link_relocate (output_bfd, howto, input_bfd, input_section,
-                                    contents, rel, relocation, sec, name, h);
-
-      if (r != bfd_reloc_ok)
-	{
-	  const char * msg = NULL;
-
-	  switch (r)
+	  /* Handle ant errors.  */
+	  if (r != bfd_reloc_ok)
 	    {
-	    case bfd_reloc_overflow:
-	      r = info->callbacks->reloc_overflow
-		(info, (h ? &h->root : NULL), name, howto->name,
-		 (bfd_vma) 0, input_bfd, input_section, rel->r_offset);
-	      break;
+	      const char * msg = NULL;
 
-	    case bfd_reloc_undefined:
-	      r = info->callbacks->undefined_symbol
-		(info, name, input_bfd, input_section, rel->r_offset, TRUE);
-	      break;
+	      switch (r)
+		{
+		case bfd_reloc_overflow:
+		  r = info->callbacks->reloc_overflow
+		    (info, (h ? &h->root : NULL), name, howto->name,
+		     (bfd_vma) 0, input_bfd, input_section, rel->r_offset);
+		  break;
 
-	    case bfd_reloc_outofrange:
-	      msg = _("internal error: out of range error");
-	      break;
+		case bfd_reloc_undefined:
+		  r = info->callbacks->undefined_symbol
+		    (info, name, input_bfd, input_section, rel->r_offset, TRUE);
+		  break;
 
-	      /* This is how mrk3_final_link_relocate tells us of a
-		 non-kosher reference between insn & data address spaces.  */
-	    case bfd_reloc_notsupported:
-	      if (sym != NULL) /* Only if it's not an unresolved symbol.  */
-		 msg = _("unsupported relocation between data/insn address spaces");
-	      break;
+		case bfd_reloc_outofrange:
+		  msg = _("internal error: out of range error");
+		  break;
 
-	    case bfd_reloc_dangerous:
-	      msg = _("internal error: dangerous relocation");
-	      break;
+		  /* This is how mrk3_final_link_relocate tells us of a
+		     non-kosher reference between insn & data address spaces.  */
+		case bfd_reloc_notsupported:
+		  if (sym != NULL) /* Only if it's not an unresolved symbol.  */
+		    msg = _("unsupported relocation between data/insn address spaces");
+		  break;
 
-	    default:
-	      msg = _("internal error: unknown error");
-	      break;
+		case bfd_reloc_dangerous:
+		  msg = _("internal error: dangerous relocation");
+		  break;
+
+		default:
+		  msg = _("internal error: unknown error");
+		  break;
+		}
+
+	      if (msg)
+		r = info->callbacks->warning
+		  (info, msg, name, input_bfd, input_section, rel->r_offset);
+
+	      if (! r)
+		return FALSE;
 	    }
-
-	  if (msg)
-	    r = info->callbacks->warning
-	      (info, msg, name, input_bfd, input_section, rel->r_offset);
-
-	  if (! r)
-	    return FALSE;
 	}
+
+      /* If we plan to emit the relocations then we should adjust the
+         addend here if the relocation is against a section symbol.
+         However, if it's safe to adjust the relocation in the case of
+         emit relocations, then it should also be safe to adjust the
+         relocation in all cases.  Doing this in all cases should mean
+         bugs are revealed earlier.  */
+      if (sym != NULL && ELF_ST_TYPE (sym->st_info) == STT_SECTION)
+        rel->r_addend += sec->output_offset;
     }
 
   return TRUE;

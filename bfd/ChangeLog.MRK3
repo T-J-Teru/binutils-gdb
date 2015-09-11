@@ -1,3 +1,8 @@
+2015-09-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_relocate_section): Move the addend
+	adjustment to after the relocations have been patched.
+
 2015-09-10  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_relocate_section): Update relocation
