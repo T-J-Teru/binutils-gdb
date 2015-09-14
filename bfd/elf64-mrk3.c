@@ -28,6 +28,17 @@
 #include "elf/mrk3.h"
 #include "bfd_stdint.h"
 
+/* PLT design:
+  [..]   sub.w r7, #2
+  [....] mov.w @r7, #FOO@LO
+  [..]   sub.w r7, #2
+  [....] mov.w @r7, #FOO@HI
+  [..]   eret
+  Spaces where this PLT is used are noted with NOTE: PLTENC */
+
+#define PLT_ENTRY_SIZE 14
+
+
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
 
 #define MRK3_GET_MEMORY_SPACE_ID(ADDR) (((ADDR) >> (64 - 8)) & 0xff)
@@ -376,6 +387,19 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          0,                     /* Src_mask.  */
          0x00ff0000,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_PIC,            /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         16,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         16,                    /* Bitpos. */
+         complain_overflow_dont, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_PIC",          /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0,                     /* Src_mask.  */
+         0xffff0000,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
@@ -568,6 +592,49 @@ mrk3_final_link_relocate_const4 (bfd *input_bfd,
   return ((bfd_vma) val);
 }
 
+/* Helper function for MRK3_FINAL_LINK_RELOCATE. Called to adjust the
+   value being patched into a R_MRK3_PIC relocation. This relocation points
+   to the functions entry in the per-address-mode procedure linkage table.
+
+   This function also allocates the symbols location in the procedure
+   linkage table, according to the address passed to it in RELOCATION. */
+
+static bfd_vma
+mrk3_final_link_relocate_pic (bfd *   output_bfd,
+                              bfd_vma relocation)
+{
+  unsigned int i;
+  bfd_vma contents;
+  asection *s;
+
+  s = bfd_get_section_by_name (output_bfd, ".plt");
+  BFD_ASSERT (s != 0);
+
+  /* Find the entry corresponding to the function, or fill in next entry.
+     Note, i is a memory offset, also assumes relocation cannot be zero.
+     For speedy comparisons, we store RELOCATION in the first 4 bytes of
+     the PLT entry. This will be moved into the final location by
+     MRK3_ELF_FINISH_DYNAMIC_SECTIONS. */
+  for (i = 0; i < s->size; i += PLT_ENTRY_SIZE)
+    {
+      contents = bfd_get_32 (output_bfd, s->contents + i);
+      if (contents == 0)
+        {
+          bfd_put_32 (output_bfd, relocation, s->contents + i);
+          return s->vma + i;
+        }
+      else if (contents == relocation)
+        {
+          return s->vma + i;
+        }
+    }
+
+  /* If we have reached this point, we ran out of PLT */
+  _bfd_error_handler
+    (_("warning: Ran out of PLT space!"));
+  return ((bfd_vma) 0);
+}
+
 /* Perform a single relocation.
 
    The bulk of this function is a direct copy of the standard bfd routine
@@ -578,7 +645,8 @@ mrk3_final_link_relocate_const4 (bfd *input_bfd,
    The SYMBOL_NAME is passed only for a debugging aid.  */
 
 static bfd_reloc_status_type
-mrk3_final_link_relocate (reloc_howto_type *  howto,
+mrk3_final_link_relocate (bfd * output_bfd,
+        reloc_howto_type *  howto,
 			  bfd *               input_bfd,
 			  asection *          input_section,
 			  bfd_byte *          contents,
@@ -656,6 +724,12 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
   if (howto->type == R_MRK3_CONST4)
     relocation = mrk3_final_link_relocate_const4 (input_bfd, input_section,
                                                   offset, relocation);
+
+  /* The special R_MRK3_PIC relocation requires a mapping to it's location in
+     the address space PLT. The call of this function also allocates the
+     functions real address to the PLT. */
+  if (howto->type == R_MRK3_PIC)
+    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation);
 
   /* If the relocation is PC relative, we want to set RELOCATION to
      the distance between the symbol (currently in RELOCATION) and the
@@ -892,7 +966,7 @@ mrk3_final_link_relocate (reloc_howto_type *  howto,
    accordingly.  */
 
 static bfd_boolean
-mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
+mrk3_elf_relocate_section (bfd *output_bfd,
 			       struct bfd_link_info *info,
 			       bfd *input_bfd,
 			       asection *input_section,
@@ -981,65 +1055,69 @@ mrk3_elf_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
 	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
 					 rel, 1, relend, howto, 0, contents);
 
-      if (info->relocatable)
+      if (!info->relocatable)
         {
-	  /* This is a relocatable link.  We don't have to change
-	     anything, unless the reloc is against a section symbol,
-	     in which case we have to adjust according to where the
-	     section symbol winds up in the output section.  */
-	  if (sym != NULL && ELF_ST_TYPE (sym->st_info) == STT_SECTION)
-	    rel->r_addend += sec->output_offset;
-	  continue;
-        }
+          /* Patch in the relocation.  This is not needed if we are
+	     performing a relocatable link.  */
+          r = mrk3_final_link_relocate (output_bfd, howto, input_bfd,
+					input_section, contents, rel,
+					relocation, sec, name, h);
 
-      /* Finally, the sole MRK3-specific part.  */
-      r = mrk3_final_link_relocate (howto, input_bfd, input_section,
-                                    contents, rel, relocation, sec, name, h);
-
-      if (r != bfd_reloc_ok)
-	{
-	  const char * msg = NULL;
-
-	  switch (r)
+	  /* Handle ant errors.  */
+	  if (r != bfd_reloc_ok)
 	    {
-	    case bfd_reloc_overflow:
-	      r = info->callbacks->reloc_overflow
-		(info, (h ? &h->root : NULL), name, howto->name,
-		 (bfd_vma) 0, input_bfd, input_section, rel->r_offset);
-	      break;
+	      const char * msg = NULL;
 
-	    case bfd_reloc_undefined:
-	      r = info->callbacks->undefined_symbol
-		(info, name, input_bfd, input_section, rel->r_offset, TRUE);
-	      break;
+	      switch (r)
+		{
+		case bfd_reloc_overflow:
+		  r = info->callbacks->reloc_overflow
+		    (info, (h ? &h->root : NULL), name, howto->name,
+		     (bfd_vma) 0, input_bfd, input_section, rel->r_offset);
+		  break;
 
-	    case bfd_reloc_outofrange:
-	      msg = _("internal error: out of range error");
-	      break;
+		case bfd_reloc_undefined:
+		  r = info->callbacks->undefined_symbol
+		    (info, name, input_bfd, input_section, rel->r_offset, TRUE);
+		  break;
 
-	      /* This is how mrk3_final_link_relocate tells us of a
-		 non-kosher reference between insn & data address spaces.  */
-	    case bfd_reloc_notsupported:
-	      if (sym != NULL) /* Only if it's not an unresolved symbol.  */
-		 msg = _("unsupported relocation between data/insn address spaces");
-	      break;
+		case bfd_reloc_outofrange:
+		  msg = _("internal error: out of range error");
+		  break;
 
-	    case bfd_reloc_dangerous:
-	      msg = _("internal error: dangerous relocation");
-	      break;
+		  /* This is how mrk3_final_link_relocate tells us of a
+		     non-kosher reference between insn & data address spaces.  */
+		case bfd_reloc_notsupported:
+		  if (sym != NULL) /* Only if it's not an unresolved symbol.  */
+		    msg = _("unsupported relocation between data/insn address spaces");
+		  break;
 
-	    default:
-	      msg = _("internal error: unknown error");
-	      break;
+		case bfd_reloc_dangerous:
+		  msg = _("internal error: dangerous relocation");
+		  break;
+
+		default:
+		  msg = _("internal error: unknown error");
+		  break;
+		}
+
+	      if (msg)
+		r = info->callbacks->warning
+		  (info, msg, name, input_bfd, input_section, rel->r_offset);
+
+	      if (! r)
+		return FALSE;
 	    }
-
-	  if (msg)
-	    r = info->callbacks->warning
-	      (info, msg, name, input_bfd, input_section, rel->r_offset);
-
-	  if (! r)
-	    return FALSE;
 	}
+
+      /* If we plan to emit the relocations then we should adjust the
+         addend here if the relocation is against a section symbol.
+         However, if it's safe to adjust the relocation in the case of
+         emit relocations, then it should also be safe to adjust the
+         relocation in all cases.  Doing this in all cases should mean
+         bugs are revealed earlier.  */
+      if (sym != NULL && ELF_ST_TYPE (sym->st_info) == STT_SECTION)
+        rel->r_addend += sec->output_offset;
     }
 
   return TRUE;
@@ -2231,6 +2309,158 @@ mrk3_elf_relax_section (bfd *abfd,
   return answer;
 }
 
+/* Based on _bfd_elf_create_dynamic_sections */
+static bfd_boolean
+mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
+{
+   flagword flags;
+   struct elf_link_hash_entry *h;
+   asection *s;
+   const struct elf_backend_data *bed = get_elf_backend_data (dynobj);
+   struct elf_link_hash_table *htab = elf_hash_table (info);
+   bfd *output_bfd = info->output_bfd;
+
+   /* If .plt already exists, we don't need to recreate it */
+   if (htab->splt != NULL)
+     return TRUE;
+
+   flags  = bed->dynamic_sec_flags;
+   flags |= SEC_ALLOC | SEC_CODE | SEC_LOAD;
+   s = bfd_make_section_anyway_with_flags (dynobj, ".plt", flags);
+   if (s == NULL
+       || ! bfd_set_section_alignment (dynobj, s, bed->plt_alignment))
+     return FALSE;
+   htab->splt = s;
+
+   htab->dynobj = output_bfd;
+
+   /* Define PLT symbol */
+   h = _bfd_elf_define_linkage_sym (dynobj, info, s,
+                                    "_PROCEDURE_LINKAGE_TABLE");
+   htab->hplt = h;
+   if (h == NULL)
+     return FALSE;
+
+   return TRUE;
+ }
+
+/* Check through relocations in a section, and assign space in PLT where
+   required */
+static bfd_boolean
+mrk3_elf_check_relocs (bfd *abfd,
+                       struct bfd_link_info *info ATTRIBUTE_UNUSED,
+                       asection *sec ATTRIBUTE_UNUSED,
+                       const Elf_Internal_Rela *relocs)
+{
+  Elf_Internal_Shdr *symtab_hdr;
+  struct elf_link_hash_entry **sym_hashes;
+  const Elf_Internal_Rela *rel;
+
+  const Elf_Internal_Rela *rel_end;
+
+  symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+  sym_hashes = elf_sym_hashes (abfd);
+
+  rel_end = relocs + sec->reloc_count;
+  for (rel = relocs; rel < rel_end; rel++)
+    {
+      struct elf_link_hash_entry *h;
+      unsigned long r_symndx;
+
+      r_symndx = ELF64_R_SYM (rel->r_info);
+      if (r_symndx < symtab_hdr->sh_info)
+        h = NULL;
+      else
+        {
+          h = sym_hashes[r_symndx - symtab_hdr->sh_info];
+          while (h->root.type == bfd_link_hash_indirect
+                 || h->root.type == bfd_link_hash_warning)
+            h = (struct elf_link_hash_entry *) h->root.u.i.link;
+        }
+
+      switch (ELF64_R_TYPE (rel->r_info))
+        {
+          /* These relocs require a plt entry */
+          case R_MRK3_PIC:
+            if (h != NULL)
+              {
+                /* Create PLT section if it doesn't already exist and define
+                   the PLT symbol */
+                mrk3_elf_create_plt_section (abfd, info);
+                h->needs_plt = 1;
+                /* Enables analysis of dynamic sections */
+                h->plt.refcount += 1;
+                info->dynamic = 1;
+                /* If we have not seen this symbol before space needs
+                   allocating in the PLT */
+                if (h->plt.refcount == 0)
+                  elf_hash_table (info)->splt->size += PLT_ENTRY_SIZE;
+              }
+            break;
+          /* Do we need anything else here? */
+          default:
+            break;
+        }
+    }
+
+  return TRUE;
+}
+
+/* Allocate memory for PLT and place this new section into the final object. */
+static bfd_boolean
+mrk3_elf_size_dynamic_sections (bfd *output_bfd,
+                                struct bfd_link_info *info)
+{
+  asection *tmpplt = elf_hash_table(info)->splt;
+  asection *plt = bfd_get_section_by_name (output_bfd, ".plt");
+  plt->contents = bfd_zalloc (output_bfd, tmpplt->size);
+  plt->size = tmpplt->size;
+  elf_hash_table(info)->splt = plt;
+
+  return TRUE;
+}
+
+/* Finish PLT section */
+static bfd_boolean
+mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
+                                  struct bfd_link_info * info ATTRIBUTE_UNUSED)
+{
+  asection *plt;
+  bfd_vma i;
+  bfd_vma address;
+  bfd_vma address_lo;
+  bfd_vma address_hi;
+
+  plt = bfd_get_section_by_name (output_bfd, ".plt");
+  if (plt == NULL)
+    return TRUE;
+
+  for (i = 0; i < plt->size; i += PLT_ENTRY_SIZE)
+    {
+      /* NOTE: PLTENC
+      Additionally, mrk3_final_link_relocate_pic used the first four bytes of
+      the PLT entry to store the address of the function, so this must be moved
+      into its correct place within the entry. */
+      address = bfd_get_32 (output_bfd, plt->contents + i);
+      address = address / 2;
+      address_lo = address & 0xffff;
+      address_hi = (address >> 16) & 0xffff;
+      /* sub r7, #2   - 2b (0)  */
+      bfd_put_16 (output_bfd, 0x0497,     plt->contents + i);
+      /* mov @r7, #LO - 4b (2)  */
+      bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + i + 2);
+      bfd_put_16 (output_bfd, address_lo, plt->contents + i + 4);
+      /* sub r7, #2   - 2b (6)  */
+      bfd_put_16 (output_bfd, 0x0497,     plt->contents + i + 6);
+      /* mov @r7, #HI - 4b (8) */
+      bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + i + 8);
+      bfd_put_16 (output_bfd, address_hi, plt->contents + i + 10);
+      /* eret         - 2b (12) */
+      bfd_put_16 (output_bfd, 0x1bc7,     plt->contents + i + 12);
+    }
+  return TRUE;
+}
+
 #define TARGET_LITTLE_SYM   mrk3_elf64_vec
 #define TARGET_LITTLE_NAME  "elf64-mrk3"
 /*#define TARGET_BIG_SYM      mrk3_elf64_vec*/
@@ -2248,5 +2478,12 @@ mrk3_elf_relax_section (bfd *abfd,
 #define elf_backend_can_gc_sections         1
 #define bfd_elf64_bfd_relax_section         mrk3_elf_relax_section
 #define bfd_elf64_new_section_hook	    elf_mrk3_new_section_hook
+
+/* PLT */
+#define elf_backend_check_relocs               mrk3_elf_check_relocs
+#define elf_backend_plt_alignment              2
+#define elf_backend_size_dynamic_sections      mrk3_elf_size_dynamic_sections
+#define elf_backend_finish_dynamic_sections    mrk3_elf_finish_dynamic_sections
+
 
 #include "elf64-target.h"
