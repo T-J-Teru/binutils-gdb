@@ -31,6 +31,8 @@ SECTIONS
     {
         KEEP (*(.vectors))
         KEEP (*(SORT(.text.compiler_rt.*)))
+        KEEP (*(SORT(.text.libc.string.memcpy*)))
+        KEEP (*(SORT(.text.libc.string.memset*)))
         KEEP (*(SORT(.text.libc.strtol.*)))
         *(.text .text.*)
     } >SSM_CODE
