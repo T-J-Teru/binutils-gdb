@@ -1,0 +1,6 @@
+2015-09-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* lib/gdb.exp (skip_cplus_tests): Skip these tests for MRK3.
+	(skip_fortran_tests): Likewise.
+	(skip_ada_tests): Likewise.
+	(skip_go_tests): Likewise.

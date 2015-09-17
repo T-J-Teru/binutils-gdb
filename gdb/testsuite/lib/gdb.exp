@@ -1574,6 +1574,10 @@ proc skip_cplus_tests {} {
 	return 1
     }
 
+    if { [istarget "mrk3-*-*"] } {
+	return 1
+    }
+
     # The C++ IO streams are too large for HC11/HC12 and are thus not
     # available.  The gdb C++ tests use them and don't compile.
     if { [istarget "m6811-*-*"] } {
@@ -1600,30 +1604,45 @@ proc skip_stl_tests {} {
 # Return a 1 if I don't even want to try to test FORTRAN.
 
 proc skip_fortran_tests {} {
+    if { [istarget "mrk3-*-*"] } {
+	return 1
+    }
     return 0
 }
 
 # Return a 1 if I don't even want to try to test ada.
 
 proc skip_ada_tests {} {
+    if { [istarget "mrk3-*-*"] } {
+	return 1
+    }
     return 0
 }
 
 # Return a 1 if I don't even want to try to test GO.
 
 proc skip_go_tests {} {
+    if { [istarget "mrk3-*-*"] } {
+	return 1
+    }
     return 0
 }
 
 # Return a 1 if I don't even want to try to test java.
 
 proc skip_java_tests {} {
+    if { [istarget "mrk3-*-*"] } {
+	return 1
+    }
     return 0
 }
 
 # Return a 1 if I don't even want to try to test D.
 
 proc skip_d_tests {} {
+    if { [istarget "mrk3-*-*"] } {
+	return 1
+    }
     return 0
 }
 
