@@ -1,3 +1,27 @@
+2015-09-18  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c: Update summary commenting.
+	(enum mrk3_addr_mode): Created enumeration for memory modes.
+	(enum mrk3_addr_type): Created enumeration for address type.
+	(struct mrk3_addr_info): Created struct to capture all info about
+	a MRK4 address.
+	(mrk3_get_memspace): Change return type to struct mrk3_addr_info
+	and updated code to create this.
+	(mrk3_make_addr_flags): Created.
+	(mrk3_print_memspace): Created.
+	(mrk3_is_ssm_memspace): Renamed from mrk3_is_ssys_memspace.
+	(mrk3_is_sm_memspace): Renamed from mrk3_is_sys_memsapce.
+	(mrk3_is_um_memspace): Reanmed from mrk3_is_usr_memspace.
+	(mrk3_pseudo_register_read): Use struct mrk3_addr_info in code.
+	(mrk3_pseudo_register_write): Likewise.
+	(mrk3_p2a): Likewise.
+	(mrk3_a2p): Likewise.
+	(mrk3_addr_bits_add): Likewise.
+	(mrk3_address_to_pointer): Likewise.
+	(mrk3_read_pc): Likewise.
+	(mrk3_analyze_prologue): Likewise.
+	(mrk3_frame_this_id): Likewise.
+
 2015-07-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* frame.c (frame_find_by_id): Also check the selected frame.

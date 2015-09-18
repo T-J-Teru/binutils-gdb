@@ -1,3 +1,7 @@
+2015-09-18  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* scripttempl/mrk3.sc: Updated for new flags.
+
 2015-09-14  Joern Rennecke  <joern.rennecke@embecosm.com>
 
 	* scripttempl/mrk3.sc (.text): Add SORT clauses for
