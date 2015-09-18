@@ -41,9 +41,9 @@
 
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
 
-#define MRK3_GET_MEMORY_SPACE_ID(ADDR) (((ADDR) >> (64 - 8)) & 0xff)
+#define MRK3_GET_MEMORY_SPACE_ID(ADDR) (((ADDR) >> (32)) & 0xffffffff)
 #define MRK3_GET_ADDRESS_LOCATION(ADDR) ((ADDR) & 0xffffffff)
-#define MRK3_BUILD_ADDRESS(ID,LOC) (((ID & 0xff) << (64 - 8)) | (LOC & 0xffffffff))
+#define MRK3_BUILD_ADDRESS(ID,LOC) (((ID & 0xffffffff) << 32) | (LOC & 0xffffffff))
 
 static reloc_howto_type elf_mrk3_howto_table[] =
 {
