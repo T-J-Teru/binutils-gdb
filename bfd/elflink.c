@@ -5051,7 +5051,11 @@ elf_link_add_archive_symbols (bfd *abfd, struct bfd_link_info *info)
 	    goto error_return;
 
 	  if (! bfd_check_format (element, bfd_object))
-	    goto error_return;
+	    {
+	      /* goto error_return; */
+	      /* this might be an object understood only by an LTO plugin */
+	      bfd_elf_make_object (element);
+	    }
 
 	  undefs_tail = info->hash->undefs_tail;
 

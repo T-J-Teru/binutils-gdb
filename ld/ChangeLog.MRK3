@@ -1,3 +1,9 @@
+2015-10-14  Edward Jones  <ed.jones@embecosm.com>
+
+	* ldfile.c (ldfile_try_open_bfd): Give the plugin a chance to claim a
+	file if bfd doesn't recognize it. This is necessary for the LLVMgold
+	lto plugin.
+
 2015-10-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ld.texinfo (Options): Add information for --force-loadable.

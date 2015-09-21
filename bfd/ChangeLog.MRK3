@@ -1,3 +1,8 @@
+2015-10-14  Edward Jones  <ed.jones@embecosm.com>
+
+	* elflink.c (elf_link_add_archive_symbols): If bfd does not
+	recognize the format, it may only be understood by an lto plugin.
+
 2015-10-14  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Remove adjustment of

@@ -36,6 +36,7 @@
 #ifdef ENABLE_PLUGINS
 #include "plugin-api.h"
 #include "plugin.h"
+#include "elf-bfd.h"
 #endif /* ENABLE_PLUGINS */
 
 bfd_boolean  ldfile_assumed_script = FALSE;
@@ -171,6 +172,22 @@ ldfile_try_open_bfd (const char *attempt,
 	{
 	  if (! bfd_check_format (check, bfd_object))
 	    {
+#ifdef ENABLE_PLUGINS
+	      if (check == entry->the_bfd
+		  && bfd_get_error () == bfd_error_file_not_recognized
+		  && ! ldemul_unrecognized_file (entry))
+		{
+		  if (link_info.lto_plugin_active
+		      && !no_more_claiming)
+		    {
+		      bfd_elf_make_object (entry->the_bfd);
+		      plugin_maybe_claim (entry);
+
+		      if (entry->flags.claimed)
+			return TRUE;
+		    }
+		}
+#endif /* ENABLE_PLUGINS */
 	      if (check == entry->the_bfd
 		  && entry->flags.search_dirs
 		  && bfd_get_error () == bfd_error_file_not_recognized
@@ -306,9 +323,11 @@ success:
      bfd_object that it sets the bfd's arch and mach, which
      will be needed when and if we want to bfd_create a new
      one using this one as a template.  */
-  if (link_info.lto_plugin_active
-      && !no_more_claiming
-      && bfd_check_format (entry->the_bfd, bfd_object))
+  if ((bfd_check_format (entry->the_bfd, bfd_object)
+      || (bfd_get_format(entry->the_bfd) == bfd_unknown
+	  && bfd_get_error () == bfd_error_file_not_recognized))
+      && link_info.lto_plugin_active
+      && !no_more_claiming)
     plugin_maybe_claim (entry);
 #endif /* ENABLE_PLUGINS */
 
