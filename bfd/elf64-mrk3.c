@@ -27,6 +27,7 @@
 #include "libiberty.h"
 #include "elf/mrk3.h"
 #include "bfd_stdint.h"
+#include "elf64-mrk3.h"
 
 /* PLT design:
   [..]   sub.w r7, #2
@@ -2459,6 +2460,408 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       bfd_put_16 (output_bfd, 0x1bc7,     plt->contents + i + 12);
     }
   return TRUE;
+}
+
+/* Get the input section for a given symbol index.
+   If the symbol is:
+   . a section symbol, return the section;
+   . a common symbol, return the common section;
+   . an undefined symbol, return the undefined section;
+   . an indirect symbol, follow the links;
+   . an absolute value, return the absolute section.  */
+
+static asection *
+get_elf_r_symndx_section (bfd *abfd, unsigned long r_symndx)
+{
+  Elf_Internal_Shdr *symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+  asection *target_sec = NULL;
+  if (r_symndx < symtab_hdr->sh_info)
+    {
+      Elf_Internal_Sym *isymbuf;
+      unsigned int section_index;
+
+      isymbuf = retrieve_local_syms (abfd);
+      section_index = isymbuf[r_symndx].st_shndx;
+
+      if (section_index == SHN_UNDEF)
+	target_sec = bfd_und_section_ptr;
+      else if (section_index == SHN_ABS)
+	target_sec = bfd_abs_section_ptr;
+      else if (section_index == SHN_COMMON)
+	target_sec = bfd_com_section_ptr;
+      else
+	target_sec = bfd_section_from_elf_index (abfd, section_index);
+    }
+  else
+    {
+      unsigned long indx = r_symndx - symtab_hdr->sh_info;
+      struct elf_link_hash_entry *h = elf_sym_hashes (abfd)[indx];
+
+      while (h->root.type == bfd_link_hash_indirect
+             || h->root.type == bfd_link_hash_warning)
+        h = (struct elf_link_hash_entry *) h->root.u.i.link;
+
+      switch (h->root.type)
+	{
+	case bfd_link_hash_defined:
+	case  bfd_link_hash_defweak:
+	  target_sec = h->root.u.def.section;
+	  break;
+	case bfd_link_hash_common:
+	  target_sec = bfd_com_section_ptr;
+	  break;
+	case bfd_link_hash_undefined:
+	case bfd_link_hash_undefweak:
+	  target_sec = bfd_und_section_ptr;
+	  break;
+	default: /* New indirect warning.  */
+	  target_sec = bfd_und_section_ptr;
+	  break;
+	}
+    }
+  return target_sec;
+}
+
+/* Get the section-relative offset for a symbol number.  */
+
+static bfd_vma
+get_elf_r_symndx_offset (bfd *abfd, unsigned long r_symndx)
+{
+  Elf_Internal_Shdr *symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+  bfd_vma offset = 0;
+
+  if (r_symndx < symtab_hdr->sh_info)
+    {
+      Elf_Internal_Sym *isymbuf;
+      isymbuf = retrieve_local_syms (abfd);
+      offset = isymbuf[r_symndx].st_value;
+    }
+  else
+    {
+      unsigned long indx = r_symndx - symtab_hdr->sh_info;
+      struct elf_link_hash_entry *h =
+	elf_sym_hashes (abfd)[indx];
+
+      while (h->root.type == bfd_link_hash_indirect
+             || h->root.type == bfd_link_hash_warning)
+	h = (struct elf_link_hash_entry *) h->root.u.i.link;
+      if (h->root.type == bfd_link_hash_defined
+          || h->root.type == bfd_link_hash_defweak)
+	offset = h->root.u.def.value;
+    }
+  return offset;
+}
+
+/* Callback used by QSORT to order relocations AP and BP.  */
+
+static int
+internal_reloc_compare (const void *ap, const void *bp)
+{
+  const Elf_Internal_Rela *a = (const Elf_Internal_Rela *) ap;
+  const Elf_Internal_Rela *b = (const Elf_Internal_Rela *) bp;
+
+  if (a->r_offset != b->r_offset)
+    return (a->r_offset - b->r_offset);
+
+  /* We don't need to sort on these criteria for correctness,
+     but enforcing a more strict ordering prevents unstable qsort
+     from behaving differently with different implementations.
+     Without the code below we get correct but different results
+     on Solaris 2.7 and 2.8.  We would like to always produce the
+     same results no matter the host.  */
+
+  if (a->r_info != b->r_info)
+    return (a->r_info - b->r_info);
+
+  return (a->r_addend - b->r_addend);
+}
+
+/* Return true if ADDRESS is within the vma range of SECTION from ABFD.  */
+
+static bfd_boolean
+mrk3_is_section_for_address (bfd *abfd, asection *section, bfd_vma address)
+{
+  bfd_vma vma;
+  bfd_size_type size;
+
+  vma = bfd_get_section_vma (abfd, section);
+  if (address < vma)
+    return FALSE;
+
+  size = section->size;
+  if (address >= vma + size)
+    return FALSE;
+
+  return TRUE;
+}
+
+/* Data structure used by MRK3_FIND_SECTION_FOR_ADDRESS.  */
+
+struct mrk3_find_section_data
+{
+  /* The address we're looking for.  */
+  bfd_vma address;
+
+  /* The section we've found.  */
+  asection *section;
+};
+
+/* Helper function to locate the section holding a certain virtual memory
+   address.  This is called via bfd_map_over_sections.  The DATA is an
+   instance of STRUCT MRK3_FIND_SECTION_DATA, the address field of which
+   has been set to the address to search for, and the section field has
+   been set to NULL.  If SECTION from ABFD contains ADDRESS then the
+   section field in DATA will be set to SECTION.  As an optimisation, if
+   the section field is already non-null then this function does not
+   perform any checks, and just returns.  */
+
+static void
+mrk3_find_section_for_address (bfd *abfd,
+                              asection *section, void *data)
+{
+  struct mrk3_find_section_data *fs_data
+    = (struct mrk3_find_section_data *) data;
+
+  /* Return if already found.  */
+  if (fs_data->section != NULL)
+    return;
+
+  /* If this section isn't part of the addressable code content, skip it.  */
+  if ((bfd_get_section_flags (abfd, section) & SEC_ALLOC) == 0
+      && (bfd_get_section_flags (abfd, section) & SEC_CODE) == 0)
+    return;
+
+  if (mrk3_is_section_for_address (abfd, section, fs_data->address))
+    fs_data->section = section;
+}
+
+/* Load all of the property records from SEC, a section from ABFD.  Return
+   a STRUCT MRK3_PROPERTY_RECORD_LIST containing all the records.  The
+   memory for the returned structure, and all of the records pointed too by
+   the structure are allocated with a single call to malloc, so, only the
+   pointer returned needs to be free'd.  */
+
+static struct mrk3_property_record_list *
+elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
+{
+  bfd_byte *contents = NULL, *ptr, *tmp;
+  bfd_size_type size, mem_size;
+  bfd_byte version;
+  uint16_t record_count, i;
+  struct mrk3_property_record_list *r_list = NULL;
+  Elf_Internal_Rela *internal_relocs = NULL, *rel, *rel_end;
+  struct mrk3_find_section_data fs_data;
+
+  fs_data.section = NULL;
+
+  size = bfd_get_section_size (sec);
+  contents = retrieve_contents (abfd, sec, FALSE);
+  ptr = contents;
+
+  /* Load the relocations for the '.mrk3.records' section if there are any, and
+     sort them.  */
+  internal_relocs = retrieve_internal_relocs (abfd, sec, FALSE);
+  if (internal_relocs)
+    qsort (internal_relocs, sec->reloc_count,
+           sizeof (Elf_Internal_Rela), internal_reloc_compare);
+
+  /* There is a header at the start of the property record section SEC, the
+     format of this header is:
+       uint16_t : version number
+  */
+
+  /* Check we have at least got a headers worth of bytes.  */
+  if (size < MRK3_PROPERTY_SECTION_HEADER_SIZE)
+    goto load_failed;
+
+  version = *((uint16_t *) ptr);
+  ptr+=2;
+  BFD_ASSERT (ptr - contents == MRK3_PROPERTY_SECTION_HEADER_SIZE);
+
+  /* Now we need to calculate the number of entries in the section so that
+     we can allocate memory to hold them all.  */
+  record_count = 0;
+  for (tmp = ptr; ((bfd_size_type) (tmp - contents)) < size; )
+    {
+      bfd_byte entry_type = *((bfd_byte *) tmp);
+      switch (entry_type)
+        {
+        case RECORD_ORG:
+          tmp += 11;
+          break;
+        case RECORD_ALIGN:
+          tmp += 13;
+          break;
+        }
+      ++record_count;
+    }
+
+  /* Now allocate space for the list structure, and all of the list
+     elements in a single block.  */
+  mem_size = sizeof (struct mrk3_property_record_list)
+    + sizeof (struct mrk3_property_record) * record_count;
+  r_list = bfd_malloc (mem_size);
+  if (r_list == NULL)
+    goto load_failed;
+
+  r_list->version = version;
+  r_list->section = sec;
+  r_list->record_count = record_count;
+  r_list->records = (struct mrk3_property_record *) (&r_list [1]);
+  size -= MRK3_PROPERTY_SECTION_HEADER_SIZE;
+
+  /* Check that we understand the version number.  There is only one
+     version number right now, anything else is an error.  */
+  if (r_list->version != MRK3_PROPERTY_RECORDS_VERSION)
+    goto load_failed;
+
+  rel = internal_relocs;
+  rel_end = rel + sec->reloc_count;
+  for (i = 0; i < record_count; ++i)
+    {
+      bfd_vma address;
+
+      /* Each entry is a single byte type, followed by an 8-byte address.
+         After that is the type specific data.  */
+      if (size < 9)
+        goto load_failed;
+
+      r_list->records [i].type = *((bfd_byte *) ptr);
+      ptr += 1;
+      size -= 1;
+
+      r_list->records [i].section = NULL;
+      r_list->records [i].offset = 0;
+
+      if (rel)
+        {
+          /* The offset of the address within the .mrk3.records section.  */
+          size_t offset = ptr - contents;
+
+          while (rel < rel_end && rel->r_offset < offset)
+            ++rel;
+
+          if (rel == rel_end)
+            rel = NULL;
+          else if (rel->r_offset == offset)
+            {
+              /* Find section and section offset.  */
+              unsigned long r_symndx;
+
+              asection * rel_sec;
+              bfd_vma sec_offset;
+
+              r_symndx = ELF64_R_SYM (rel->r_info);
+              rel_sec = get_elf_r_symndx_section (abfd, r_symndx);
+              sec_offset = get_elf_r_symndx_offset (abfd, r_symndx)
+                + rel->r_addend;
+
+              r_list->records [i].section = rel_sec;
+              r_list->records [i].offset = sec_offset;
+            }
+        }
+
+      address = *((uint64_t *) ptr);
+      ptr += 8;
+      size -= 8;
+
+      if (r_list->records [i].section == NULL)
+        {
+          /* Try to find section and offset from address.  */
+          if (fs_data.section != NULL
+              && !mrk3_is_section_for_address (abfd, fs_data.section,
+                                              address))
+            fs_data.section = NULL;
+
+          if (fs_data.section == NULL)
+            {
+              fs_data.address = address;
+              bfd_map_over_sections (abfd, mrk3_find_section_for_address,
+                                     &fs_data);
+            }
+
+          if (fs_data.section == NULL)
+            {
+              fprintf (stderr, "Failed to find matching section.\n");
+              goto load_failed;
+            }
+
+          r_list->records [i].section = fs_data.section;
+          r_list->records [i].offset
+            = address - bfd_get_section_vma (abfd, fs_data.section);
+        }
+
+      switch (r_list->records [i].type)
+        {
+        case RECORD_ORG:
+          /* A 2-byte fill to load.  */
+          if (size < 2)
+            goto load_failed;
+          r_list->records [i].data.org.fill = *((uint16_t *) ptr);
+          ptr += 2;
+          break;
+        case RECORD_ALIGN:
+          /* A 2-byte alignment, and a 2-byte fill to load.  */
+          if (size < 4)
+            goto load_failed;
+          r_list->records [i].data.align.bytes = *((uint16_t *) ptr);
+          ptr += 2;
+          r_list->records [i].data.align.fill = *((uint16_t *) ptr);
+          ptr += 2;
+          size -= 4;
+          /* Just initialise PRECEDING_DELETED field, this field is
+             used during linker relaxation.  */
+          r_list->records [i].data.align.preceding_deleted = 0;
+          break;
+        default:
+          goto load_failed;
+        }
+    }
+
+  release_internal_relocs (sec, internal_relocs);
+  release_contents (sec, contents);
+  return r_list;
+
+ load_failed:
+  release_internal_relocs (sec, internal_relocs);
+  release_contents (sec, contents);
+  free (r_list);
+  return NULL;
+}
+
+/* Load all of the property records from ABFD.  See
+   ELF64_MRK3_LOAD_RECORDS_FROM_SECTION for details of the return value.  */
+
+struct mrk3_property_record_list *
+elf64_mrk3_load_property_records (bfd *abfd)
+{
+  asection *sec;
+
+  /* Find the '.mrk3.records' section and load the contents into memory.  */
+  sec = bfd_get_section_by_name (abfd, MRK3_PROPERTY_RECORD_SECTION_NAME);
+  if (sec == NULL)
+    return NULL;
+  return elf64_mrk3_load_records_from_section (abfd, sec);
+}
+
+const char *
+elf64_mrk3_property_record_name (struct mrk3_property_record *rec)
+{
+  const char *str;
+
+  switch (rec->type)
+    {
+    case RECORD_ORG:
+      str = "ORG";
+      break;
+    case RECORD_ALIGN:
+      str = "ALIGN";
+      break;
+    default:
+      str = "unknown";
+    }
+
+  return str;
 }
 
 #define TARGET_LITTLE_SYM   mrk3_elf64_vec

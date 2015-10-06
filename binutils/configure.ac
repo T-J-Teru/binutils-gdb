@@ -417,6 +417,9 @@ changequote([,])dnl
 	avr-*-*)
 	  od_vectors="$od_vectors objdump_private_desc_elf32_avr"
 	  ;;
+        mrk3-*-*)
+	  od_vectors="$od_vectors objdump_private_desc_elf64_mrk3"
+	  ;;
 	powerpc-*-aix*)
 	  od_vectors="$od_vectors objdump_private_desc_xcoff"
 	  ;;
@@ -439,6 +442,8 @@ for i in $od_vectors ; do
 	case $i in
 	objdump_private_desc_elf32_avr)
 	    od_files="$od_files od-elf32_avr" ;;
+	objdump_private_desc_elf64_mrk3)
+	    od_files="$od_files od-mrk3" ;;
 	objdump_private_desc_xcoff)
 	    od_files="$od_files od-xcoff" ;;
 	objdump_private_desc_mach_o)

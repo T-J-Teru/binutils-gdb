@@ -1,3 +1,10 @@
+2015-10-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* configure.ac: Setup private mrk3 objdump functions and files.
+	* configure: Regenerate.
+	* objdump.h (objdump_private_desc_elf64_mrk3): New declaration.
+	* od-mrk3.c: New file.
+
 2015-08-24  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* objcopy.c (find_section_list): Handle section patterns starting

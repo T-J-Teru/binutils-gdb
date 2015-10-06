@@ -1,3 +1,17 @@
+2015-10-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.h: New file.
+	* elf64-mrk3.c: Add elf64-mrk3.h include.
+	(get_elf_r_symndx_section): New function.
+	(get_elf_r_symndx_offset): New function.
+	(internal_reloc_compare): New function.
+	(mrk3_is_section_for_address): New function.
+	(struct mrk3_find_section_data): New structure.
+	(mrk3_find_section_for_address): New function.
+	(+elf64_mrk3_load_records_from_section): New function.
+	(elf64_mrk3_load_property_records): New function.
+	(elf64_mrk3_property_record_name): New function.
+
 2015-09-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (MRK3_GET_MEMORY_SPACE_ID): Upate to take account
