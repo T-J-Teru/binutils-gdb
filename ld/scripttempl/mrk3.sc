@@ -85,8 +85,8 @@ SECTIONS
     } >SSM_BASIC_CONST
 
     /* .ctor/.dtor in Super System data space. */
-    .ctor : { *(.ctor) } >SSM_DATA
-    .dtor : { *(.dtor) } >SSM_DATA
+    .ctor : { *(.ctor) } >SSM_BASIC_CONST
+    .dtor : { *(.dtor) } >SSM_BASIC_CONST
 
     PROVIDE (___heap_start = ALIGN (., 0x10));
 
