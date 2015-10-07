@@ -473,6 +473,18 @@ struct mrk3_relax_info
 
   /* The original size of the section before any relaxation took place.  */
   bfd_size_type original_size;
+
+  struct
+  {
+    /* Number of records in the list.  */
+    unsigned count;
+
+    /* How many records worth of space have we allocated.  */
+    unsigned allocated;
+
+    /* The records, only COUNT records are initialised.	 */
+    struct mrk3_property_record *items;
+  } records;
 };
 
 struct elf_mrk3_section_data
@@ -500,7 +512,12 @@ init_mrk3_relax_info (asection *sec)
   struct mrk3_relax_info *relax_info = get_mrk3_relax_info (sec);
 
   if (relax_info)
-    relax_info->was_relaxed = FALSE;
+    {
+      relax_info->was_relaxed = FALSE;
+      relax_info->records.count = 0;
+      relax_info->records.allocated = 0;
+      relax_info->records.items = NULL;
+    }
 }
 
 static bfd_boolean
@@ -663,6 +680,7 @@ mrk3_final_link_relocate (bfd * output_bfd,
                      + input_section->output_offset
                      + offset);
   bfd_vma relocation_memory_id, address_location;
+  bfd_boolean use_byte_address_for_code;
 
   /* Sanity check the address.  */
   if (offset > bfd_get_section_limit (input_bfd, input_section))
@@ -746,12 +764,22 @@ mrk3_final_link_relocate (bfd * output_bfd,
   if (howto->pc_relative)
     relocation -= address_location;
 
+  /* Usually code is word addressed.  However, in a few cases we want
+     relocations to code to use byte addresses.  The places where we want
+     byte addresses to code are debug information and the '.mrk3.records'
+     section, in both of these cases the contents of the relocations are
+     processed by tools rather than the actual CPU.  */
+  use_byte_address_for_code =
+    (((input_section->flags & SEC_DEBUGGING) != 0)
+     || (strcmp (input_section->name, MRK3_PROPERTY_RECORD_SECTION_NAME)
+         == 0));
+
   /* If the symbol being targeted is a code symbol, and the relocation is
-     NOT located inside debugging information then we should scale the
-     value to make it into a word addressed value.  */
+     NOT located inside debugging information (or similar) then we should
+     scale the value to make it into a word addressed value.  */
   if (symbol_section
       && ((symbol_section->flags & SEC_CODE) != 0)
-      && ((input_section->flags & SEC_DEBUGGING) == 0))
+      && !use_byte_address_for_code)
     {
       if (relocation & 1)
         _bfd_error_handler
@@ -795,7 +823,7 @@ mrk3_final_link_relocate (bfd * output_bfd,
          style relocations, so nothing more is required here.  */
     }
 
-  if ((input_section->flags & SEC_DEBUGGING) != 0
+  if (use_byte_address_for_code
       && !howto->pc_relative
       && (howto->bitsize == 32 || howto->bitsize == 64))
     relocation = MRK3_BUILD_ADDRESS (relocation_memory_id, relocation);
@@ -1274,6 +1302,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
   unsigned int symcount;
   struct bfd_section *isec;
   struct mrk3_relax_info *relax_info;
+  struct mrk3_property_record *prop_record = NULL;
 
   /* Mark that the section was relaxed, and record the original size.  */
   relax_info = get_mrk3_relax_info (sec);
@@ -1283,15 +1312,59 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
       relax_info->was_relaxed = TRUE;
     }
 
+  contents = retrieve_contents (abfd, sec, TRUE);
+  toaddr = sec->size;
+
+  if (relax_info->records.count > 0)
+    {
+      /* There should be no property record within the range of deleted
+         bytes, however, there might be a property record for ADDR, this is
+         how we handle alignment directives.
+         Find the next (if any) property record after the deleted bytes.  */
+      unsigned int i;
+
+      for (i = 0; i < relax_info->records.count; ++i)
+        {
+          bfd_vma offset = relax_info->records.items [i].offset;
+
+          BFD_ASSERT (offset <= addr || offset >= (addr + count));
+          if (offset >= (addr + count))
+            {
+              prop_record = &relax_info->records.items [i];
+              toaddr = offset;
+              break;
+            }
+        }
+    }
+
   /* Actually delete the bytes.  The contents will have already been
      cached by the control logic of linker relaxation, so no need to pin
      the contents here.  */
-  contents = retrieve_contents (abfd, sec, TRUE);
-  toaddr = sec->size;
   if (toaddr - addr - count > 0)
     memmove (contents + addr, contents + addr + count,
              (size_t) (toaddr - addr - count));
-  sec->size -= count;
+  if (prop_record == NULL)
+    sec->size -= count;
+  else
+    {
+      /* Use the property record to fill in the bytes we've opened up.  */
+      int fill = 0;
+      switch (prop_record->type)
+        {
+        case RECORD_ORG:
+          fill = prop_record->data.org.fill;
+          break;
+        case RECORD_ALIGN:
+          fill = prop_record->data.align.fill;
+          prop_record->data.align.preceding_deleted += count;
+          break;
+        };
+      memset (contents + toaddr - count, fill, count);
+
+      /* Adjust the TOADDR to avoid moving symbols located at the address
+         of the property record, which has not moved.  */
+      toaddr -= count;
+    }
 
   /* Adjust all the reloc addresses in SEC.  The relocations of SEC are
      already cached, so there's no need to call pin_internal_relocs.  */
@@ -2255,61 +2328,6 @@ error_return:
   return FALSE;
 }
 
-/* The entry point for linker relaxation.  Decide which phase of linker
-   relaxation we're in and call the correct worker function.  */
-
-static bfd_boolean
-mrk3_elf_relax_section (bfd *abfd,
-                        asection *sec,
-                        struct bfd_link_info *link_info,
-                        bfd_boolean *again)
-{
-  bfd_boolean answer = FALSE;
-  static int highest_pass = 0;
-
-  /* Set the contents of AGAIN to false.  The worker functions will set
-     this to true if and of the section contents are changed, and another
-     trip around is required.  */
-  *again = FALSE;
-
-  /* Due to the very strange way in which linker relaxation is triggered on
-     ELF files from `gldelf64mrk3_map_segments` the whole linker relaxation
-     process is run multiple times.  This can cause problems if we perform
-     a relax phase after a check phase.  To work around this I use this
-     highest pass mechanism to ensure that once relaxation is finished we
-     don't return to it.  */
-  if (link_info->relax_pass < highest_pass)
-    return TRUE;
-  highest_pass = link_info->relax_pass;
-
-  /* We don't have to do anything for a relocatable link, if this section
-     does not have relocs, or if this is not a code section.  */
-  if (link_info->relocatable
-      || (sec->flags & SEC_RELOC) == 0
-      || sec->reloc_count == 0
-      || (sec->flags & SEC_CODE) == 0)
-    return TRUE;
-
-  relax_log ("\n\n----- Pass = %d ----- \n", link_info->relax_pass);
-  BFD_ASSERT (link_info->relax_pass < 2);
-  switch (link_info->relax_pass)
-    {
-    case 0:
-      answer =
-        mrk3_elf_relax_section_worker (abfd, sec, link_info, again,
-                                       &mrk3_relax_hooks);
-      break;
-
-    case 1:
-      answer =
-        mrk3_elf_relax_section_worker (abfd, sec, link_info, again,
-                                       &mrk3_check_hooks);
-      break;
-    }
-
-  return answer;
-}
-
 /* Based on _bfd_elf_create_dynamic_sections */
 static bfd_boolean
 mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
@@ -2550,6 +2568,276 @@ get_elf_r_symndx_offset (bfd *abfd, unsigned long r_symndx)
 	offset = h->root.u.def.value;
     }
   return offset;
+}
+
+/* Iterate over the property records in R_LIST, and copy each record into
+   the list of records within the relaxation information for the section to
+   which the record applies.  */
+
+static void
+elf64_mrk3_assign_records_to_sections (struct mrk3_property_record_list *r_list)
+{
+  unsigned int i;
+
+  for (i = 0; i < r_list->record_count; ++i)
+    {
+      struct mrk3_relax_info *relax_info;
+
+      relax_info = get_mrk3_relax_info (r_list->records [i].section);
+      BFD_ASSERT (relax_info != NULL);
+
+      if (relax_info->records.count
+          == relax_info->records.allocated)
+        {
+          /* Allocate more space.  */
+          bfd_size_type size;
+
+          relax_info->records.allocated += 10;
+          size = (sizeof (struct mrk3_property_record)
+                  * relax_info->records.allocated);
+          relax_info->records.items
+            = bfd_realloc (relax_info->records.items, size);
+        }
+
+      memcpy (&relax_info->records.items [relax_info->records.count],
+              &r_list->records [i],
+              sizeof (struct mrk3_property_record));
+      relax_info->records.count++;
+    }
+}
+
+/* Compare two STRUCT MRK3_PROPERTY_RECORD in AP and BP, used as the
+   ordering callback from QSORT.  */
+
+static int
+mrk3_property_record_compare (const void *ap, const void *bp)
+{
+  const struct mrk3_property_record *a
+    = (struct mrk3_property_record *) ap;
+  const struct mrk3_property_record *b
+    = (struct mrk3_property_record *) bp;
+
+  if (a->offset != b->offset)
+    return (a->offset - b->offset);
+
+  if (a->section != b->section)
+    return (bfd_get_section_vma (a->section->owner, a->section)
+            - bfd_get_section_vma (b->section->owner, b->section));
+
+  return (a->type - b->type);
+}
+
+/* Load all of the mrk3 property sections from all of the bfd objects
+   referenced from LINK_INFO.  All of the records within each property
+   section are assigned to the STRUCT MRK3_RELAX_INFO within the section
+   specific data of the appropriate section.  */
+
+static void
+mrk3_elf_load_all_property_sections (struct bfd_link_info *link_info)
+{
+  bfd *abfd;
+  asection *sec;
+
+  /* Initialize the per-section relaxation info.  */
+  for (abfd = link_info->input_bfds; abfd != NULL; abfd = abfd->link.next)
+    for (sec = abfd->sections; sec != NULL; sec = sec->next)
+      {
+	init_mrk3_relax_info (sec);
+      }
+
+  /* Load the descriptor tables from .mrk3.records sections.  */
+  for (abfd = link_info->input_bfds; abfd != NULL; abfd = abfd->link.next)
+    {
+      struct mrk3_property_record_list *r_list;
+
+      r_list = elf64_mrk3_load_property_records (abfd);
+      if (r_list != NULL)
+        elf64_mrk3_assign_records_to_sections (r_list);
+
+      free (r_list);
+    }
+
+  /* Now, for every section, ensure that the descriptor list in the
+     relaxation data is sorted by ascending offset within the section.  */
+  for (abfd = link_info->input_bfds; abfd != NULL; abfd = abfd->link.next)
+    for (sec = abfd->sections; sec != NULL; sec = sec->next)
+      {
+        struct mrk3_relax_info *relax_info = get_mrk3_relax_info (sec);
+        if (relax_info && relax_info->records.count > 0)
+          {
+            unsigned int i;
+
+            qsort (relax_info->records.items,
+                   relax_info->records.count,
+                   sizeof (struct mrk3_property_record),
+                   mrk3_property_record_compare);
+
+            /* For debug purposes, list all the descriptors.  */
+            for (i = 0; i < relax_info->records.count; ++i)
+              {
+                switch (relax_info->records.items [i].type)
+                  {
+                  case RECORD_ORG:
+                    break;
+                  case RECORD_ALIGN:
+                    break;
+                  };
+              }
+          }
+      }
+}
+
+/* Perform checks of any alignment records in section SEC.  The alignment
+   records are passed from the assembler inside a meta-data section called
+   '.mrk3.records', and tells us about any '.align' directives used in the
+   assembler code.
+
+   If enough bytes have been deleted just before a '.align' directive such
+   that we can delete some bytes but still honour the required alignment,
+   then this is done here.  */
+
+static void
+mrk3_check_align_records (bfd *abfd,
+                          asection *sec,
+                          struct bfd_link_info *link_info ATTRIBUTE_UNUSED,
+                          bfd_boolean *again)
+{
+  /* We only bother to do this if we're not going to revisit this
+     section. If we plan to revisit then more bytes might be deleted,
+     which could open up additional opportunities here.  */
+  if (!*again)
+    {
+      /* Look through all the property records in this section to see if
+         there's any alignment records that can be moved.  */
+      struct mrk3_relax_info *relax_info;
+
+      relax_info = get_mrk3_relax_info (sec);
+      if (relax_info->records.count > 0)
+        {
+          unsigned int i;
+
+          relax_log ("\nChecking for '.align' records.\n");
+
+          for (i = 0; i < relax_info->records.count; ++i)
+            {
+              switch (relax_info->records.items [i].type)
+                {
+                case RECORD_ORG:
+                  break;
+                case RECORD_ALIGN:
+                  {
+                    struct mrk3_property_record *record;
+                    unsigned long bytes_to_align;
+                    int count = 0;
+
+                    /* Look for alignment directives that have had enough
+                       bytes deleted before them, such that the directive
+                       can be moved backwards and still maintain the
+                       required alignment.  */
+                    record = &relax_info->records.items [i];
+                    relax_log ("  Offset %#llx, has %d bytes space.\n",
+                               record->offset,
+                               record->data.align.preceding_deleted);
+                    bytes_to_align
+                      = (unsigned long) (1 << record->data.align.bytes);
+                    while (record->data.align.preceding_deleted >=
+                           bytes_to_align)
+                      {
+                        record->data.align.preceding_deleted
+                          -= bytes_to_align;
+                        count += bytes_to_align;
+                      }
+
+                    if (count > 0)
+                      {
+                        bfd_vma addr = record->offset;
+
+                        relax_log ("  We can delete %d bytes before the "
+                                   "'.align' at offset %#08lx\n",
+                                   count, record->offset);
+
+                        /* We can delete COUNT bytes and this alignment
+                           directive will still be correctly aligned.
+                           First move the alignment directive, then delete
+                           the bytes.  */
+                        record->offset -= count;
+                        mrk3_elf_relax_delete_bytes (abfd, sec,
+                                                     addr - count,
+                                                     count);
+                        *again = TRUE;
+                      }
+                  }
+                  break;
+                }
+            }
+        }
+    }
+}
+
+
+/* The entry point for linker relaxation.  Decide which phase of linker
+   relaxation we're in and call the correct worker function.  */
+
+static bfd_boolean
+mrk3_elf_relax_section (bfd *abfd,
+                        asection *sec,
+                        struct bfd_link_info *link_info,
+                        bfd_boolean *again)
+{
+  bfd_boolean answer = FALSE;
+  static int highest_pass = 0;
+  static bfd_boolean relaxation_initialised = FALSE;
+
+  if (!relaxation_initialised)
+    {
+      relaxation_initialised = TRUE;
+
+      /* Load entries from the .mrk3.records sections.  */
+      mrk3_elf_load_all_property_sections (link_info);
+    }
+
+  /* Set the contents of AGAIN to false.  The worker functions will set
+     this to true if and of the section contents are changed, and another
+     trip around is required.  */
+  *again = FALSE;
+
+  /* Due to the very strange way in which linker relaxation is triggered on
+     ELF files from `gldelf64mrk3_map_segments` the whole linker relaxation
+     process is run multiple times.  This can cause problems if we perform
+     a relax phase after a check phase.  To work around this I use this
+     highest pass mechanism to ensure that once relaxation is finished we
+     don't return to it.  */
+  if (link_info->relax_pass < highest_pass)
+    return TRUE;
+  highest_pass = link_info->relax_pass;
+
+  /* We don't have to do anything for a relocatable link, if this section
+     does not have relocs, or if this is not a code section.  */
+  if (link_info->relocatable
+      || (sec->flags & SEC_RELOC) == 0
+      || sec->reloc_count == 0
+      || (sec->flags & SEC_CODE) == 0)
+    return TRUE;
+
+  relax_log ("\n\n----- Pass = %d ----- \n", link_info->relax_pass);
+  BFD_ASSERT (link_info->relax_pass < 2);
+  switch (link_info->relax_pass)
+    {
+    case 0:
+      answer =
+        mrk3_elf_relax_section_worker (abfd, sec, link_info, again,
+                                       &mrk3_relax_hooks);
+      mrk3_check_align_records (abfd, sec, link_info, again);
+      break;
+
+    case 1:
+      answer =
+        mrk3_elf_relax_section_worker (abfd, sec, link_info, again,
+                                       &mrk3_check_hooks);
+      break;
+    }
+
+  return answer;
 }
 
 /* Callback used by QSORT to order relocations AP and BP.  */

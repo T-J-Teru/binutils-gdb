@@ -1,3 +1,18 @@
+2015-10-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (struct mrk3_relax_info): Add members to support
+	tracking align/org records.
+	(init_mrk3_relax_info): Initialise new struct members.
+	(mrk3_final_link_relocate): Handle patching relocations in record
+	sections.
+	(mrk3_elf_relax_delete_bytes): Take align/org records into
+	account.
+	(mrk3_elf_relax_section): Move to later in file.
+	(elf64_mrk3_assign_records_to_sections): New function.
+	(mrk3_property_record_compare): New function.
+	(mrk3_elf_load_all_property_sections): New function.
+	(mrk3_check_align_records): New function.
+
 2015-10-06  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.h: New file.
