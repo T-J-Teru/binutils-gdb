@@ -1,3 +1,8 @@
+2015-10-07  Edward Jones  <ed.jones@embecosm.com>
+
+	* scripttempl/mrk3.sc (.plt .init .fini): Place in SSYS code.
+	(.ctor .dtor): Place in SSYM data.
+
 2015-09-18  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* scripttempl/mrk3.sc: Updated for new flags.

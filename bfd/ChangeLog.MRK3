@@ -1,3 +1,7 @@
+2015-10-07  Edward Jones  <ed.jones@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_howto_table): Added R_MRK3_PIC_LO.
+
 2015-10-07  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (struct mrk3_relax_info): Add members to support

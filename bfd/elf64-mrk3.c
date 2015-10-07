@@ -401,6 +401,19 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          0,                     /* Src_mask.  */
          0xffff0000,            /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_PIC_LO,         /* Type.  */
+         0,                     /* Rightshift.  */
+         1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         16,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         0,                     /* Bitpos. */
+         complain_overflow_dont, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_PIC_LO",       /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0,                     /* Src_mask.  */
+         0xffff,                /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
@@ -747,7 +760,7 @@ mrk3_final_link_relocate (bfd * output_bfd,
   /* The special R_MRK3_PIC relocation requires a mapping to it's location in
      the address space PLT. The call of this function also allocates the
      functions real address to the PLT. */
-  if (howto->type == R_MRK3_PIC)
+  if (howto->type == R_MRK3_PIC || howto->type == R_MRK3_PIC_LO)
     relocation = mrk3_final_link_relocate_pic (output_bfd, relocation);
 
   /* If the relocation is PC relative, we want to set RELOCATION to
@@ -2401,6 +2414,7 @@ mrk3_elf_check_relocs (bfd *abfd,
         {
           /* These relocs require a plt entry */
           case R_MRK3_PIC:
+          case R_MRK3_PIC_LO:
             if (h != NULL)
               {
                 /* Create PLT section if it doesn't already exist and define

@@ -52,6 +52,10 @@ SECTIONS
         *(.text .text.*)
     } >SSM_CODE
 
+    .plt  : { *(.plt)  } >SSM_CODE
+    .init : { *(.init) } >SSM_CODE
+    .fini : { *(.fini) } >SSM_CODE
+
     /* .data in Super System data space.  */
     .data :
     {
@@ -79,6 +83,10 @@ SECTIONS
         *(.rodata.*)
         ___rodata_end = .;
     } >SSM_BASIC_CONST
+
+    /* .ctor/.dtor in Super System data space. */
+    .ctor : { *(.ctor) } >SSM_DATA
+    .dtor : { *(.dtor) } >SSM_DATA
 
     PROVIDE (___heap_start = ALIGN (., 0x10));
 
