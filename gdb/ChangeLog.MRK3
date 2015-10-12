@@ -1,3 +1,12 @@
+2015-10-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c: Add 'user-regs.h' include.
+	(value_of_mrk3_user_reg): New function.
+	(mrk3_register_aliases): New static variable.
+	(mrk3_register_names): New static variable.
+	(mrk3_register_name): Update to use mrk3_register_names.
+	(mrk3_gdbarch_init): Create user registers.
+
 2015-09-18  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c: Update summary commenting.

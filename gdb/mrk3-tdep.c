@@ -187,6 +187,7 @@ bits. */
 #include "safe-ctype.h"
 #include "completer.h"
 #include "readline/tilde.h"
+#include "user-regs.h"
 
 /*  Required for symbol switch handling. */
 #include "gdb/defs.h"
@@ -638,55 +639,51 @@ mrk3_is_code_address (CORE_ADDR addr)
 
 }	/* mrk3_is_code_address () */
 
+/* Read a user register.  We make use of this to implement register
+   aliases, the baton is the real register number that should be used.  */
+
+static struct value *
+value_of_mrk3_user_reg (struct frame_info *frame, const void *baton)
+{
+  const int *reg_p = baton;
+  return value_of_register (*reg_p, frame);
+}
+
+/* This table is used to create register aliases.  */
+
+static const struct
+{
+  const char *name;
+  int regnum;
+} mrk3_register_aliases[] = {
+  { "R7", 15 },
+};
+
+/* This table is used to map register number onto register names.  The
+   names that appear in this table are the preferred name for each
+   register.  */
+
+static const char *const mrk3_register_names [] =
+  {
+    /* The "real" registers.  */
+    "R0", "R1", "R2", "R3", "R4",		/*  0  1  2  3  4 */
+    "R5", "R6", "PC", "PSW", "SSSP",		/*  5  6  7  8  9 */
+    "SSP", "USP", "R4e", "R5e", "R6e",		/* 10 11 12 13 14 */
+
+    /* The "pseudo" registers.  */
+    "SP", "R0L", "R1L", "R2L", "R3L",		/* 15 16 17 18 19 */
+    "R0H", "R1H", "R2H", "R3H", "R4LONG",	/* 20 21 22 23 24 */
+    "R5LONG", "R6LONG", "SYS", "INT", "ZERO",	/* 25 26 27 28 29 */
+    "NEG", "OVERFLOW", "CARRY"			/* 30 31 32 */
+  };
 
 /*! Lookup the name of a register given it's number. */
 static const char *
 mrk3_register_name (struct gdbarch *gdbarch, int regnum)
 {
-  static char *regnames[NUM_REGS] = {
-    /*  CPU Registers */
-    "R0",
-    "R1",
-    "R2",
-    "R3",
-    "R4",
-    "R5",
-    "R6",
-    "PC",
-    "PSW",
-    "SSSP",
-    "SSP",
-    "USP",
-    "R4e",
-    "R5e",
-    "R6e",
-
-    /* Special Function Registers.
-       TODO: This should be done through XML description. */
-
-    /* pseudo registers: */
-    "SP",
-    "R0L",
-    "R1L",
-    "R2L",
-    "R3L",
-    "R0H",
-    "R1H",
-    "R2H",
-    "R3H",
-    "R4LONG",
-    "R5LONG",
-    "R6LONG",
-    "SYS",
-    "INT",
-    "ZERO",
-    "NEG",
-    "OVERFLOW",
-    "CARRY"
-  };
-
-  if (regnum < NUM_REGS)
-    return regnames[regnum];
+  gdb_assert (ARRAY_SIZE (mrk3_register_names) == NUM_REGS);
+  if (regnum < ARRAY_SIZE (mrk3_register_names))
+    return mrk3_register_names [regnum];
   else
     {
       /* Moan */
@@ -2627,6 +2624,7 @@ static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   struct gdbarch *gdbarch;
+  int i;
 
   /* This is a horrible temporary kludge to deal with the problem that
      the Target compiler generates a big-endian ELF file for a
@@ -2704,6 +2702,10 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_value_to_register (gdbarch, mrk3_value_to_register);
 
   set_gdbarch_unwind_stop_at_frame_p (gdbarch, mrk3_unwind_stop_at_frame_p);
+
+  for (i = 0; i < ARRAY_SIZE (mrk3_register_aliases); i++)
+    user_reg_add (gdbarch, mrk3_register_aliases[i].name,
+		  value_of_mrk3_user_reg, &mrk3_register_aliases[i].regnum);
 
   return gdbarch;
 }
