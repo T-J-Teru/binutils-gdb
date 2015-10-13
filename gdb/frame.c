@@ -1696,6 +1696,14 @@ frame_observer_target_changed (struct target_ops *target)
   reinit_frame_cache ();
 }
 
+/* Implement maintainer command to flush the frame cache.  */
+
+static void
+maintenance_flush_frame_cache (char *args, int from_tty)
+{
+  reinit_frame_cache ();
+}
+
 /* Flush the entire frame cache.  */
 
 void
@@ -2820,4 +2828,9 @@ When non-zero, frame specific internal debugging is enabled."),
 			     NULL,
 			     show_frame_debug,
 			     &setdebuglist, &showdebuglist);
+
+  add_cmd ("flush-frame-cache", class_maintenance,
+	   maintenance_flush_frame_cache,
+	   _("Flush the frame cache."),
+	   &maintenancelist);
 }

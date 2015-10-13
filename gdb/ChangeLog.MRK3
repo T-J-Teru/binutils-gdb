@@ -1,3 +1,8 @@
+2015-11-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* frame.c (maintenance_flush_frame_cache): New function.
+	(_initialize_frame): Add flush-frame-cache maintenance command.
+
 2015-10-22  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* doc/gdb.texinfo: Remove MRK3 specific information.

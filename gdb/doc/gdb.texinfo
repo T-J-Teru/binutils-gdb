@@ -34147,6 +34147,12 @@ If section was not specified, the section in which the symbol was found
 is also printed.  For dynamically linked executables, the name of
 executable or shared library containing the symbol is printed as well.
 
+@kindex maint flush-frame-cache
+@item maint flush-frame-cache
+Flush the contents of the frame cache, after this @value{GDBN} will
+recompute the frames that form the backtrace by examining the state of
+the inferior.
+
 @end table
 
 The following command is useful for non-interactive invocations of
