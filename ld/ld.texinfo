@@ -4567,6 +4567,11 @@ parentheses.  The following types are defined:
 @item NOLOAD
 The section should be marked as not loadable, so that it will not be
 loaded into memory when the program is run.
+@item LOAD
+The section should be marked as loadable, this also causes the section
+to be marked as allocatable, otherwise there'd be nothing to load.
+The use for this flag is overriding the flags on a section that would
+otherwise be marked as @code{NOLOAD} by default.
 @item DSECT
 @itemx COPY
 @itemx INFO
@@ -4589,6 +4594,21 @@ need to be loaded when the program is run.
 @group
 SECTIONS @{
   ROM 0 (NOLOAD) : @{ @dots{} @}
+  @dots{}
+@}
+@end group
+@end smallexample
+
+In the following example, an output section @code{.bss} is created to
+hold all of the @code{.bss} sections from all input files.  Normally
+the output section would be created as non-loadable, as all of the
+input @code{.bss} sections would be non-loadable.  In this case though
+the @code{LOAD} section type is used to make the output section
+loadable, the section will be created and filled with 0's.
+@smallexample
+@group
+SECTIONS @{
+  .bss (LOAD) : @{ *(.bss) @}
   @dots{}
 @}
 @end group

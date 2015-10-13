@@ -1111,6 +1111,7 @@ section:	NAME 		{ ldlex_expression(); }
 
 type:
 	   NOLOAD  { sectype = noload_section; }
+	|  LOAD    { sectype = isload_section; }
 	|  DSECT   { sectype = noalloc_section; }
 	|  COPY    { sectype = noalloc_section; }
 	|  INFO    { sectype = noalloc_section; }

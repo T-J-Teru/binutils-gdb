@@ -339,7 +339,7 @@ V_IDENTIFIER [*?.$_a-zA-Z\[\]\-\!\^\\]([*?.$_a-zA-Z0-9\[\]\-\!\^\\]|::)*
 <MRI>"BASE"                     { RTOKEN(BASE); }
 <MRI>"ALIAS"                    { RTOKEN(ALIAS); }
 <MRI>"TRUNCATE"                 { RTOKEN(TRUNCATE); }
-<MRI>"LOAD"                     { RTOKEN(LOAD); }
+<MRI,EXPRESSION>"LOAD"                     { RTOKEN(LOAD); }
 <MRI>"PUBLIC"                   { RTOKEN(PUBLIC); }
 <MRI>"ORDER"                    { RTOKEN(ORDER); }
 <MRI>"NAME"                     { RTOKEN(NAMEWORD); }

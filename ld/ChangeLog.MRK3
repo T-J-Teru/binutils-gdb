@@ -1,3 +1,13 @@
+2015-10-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ld.texinfo (Output Section Type): Add information about LOAD
+	section type.
+	* ldgram.y (type): Add LOAD type.
+	* ldlang.c (lang_add_section): Handle isload_section.
+	(map_input_to_output_sections): Likewise.
+	* ldlang.h (enum section_type): Add isload_section type.
+	* ldlex.l ("LOAD"): Make available for linker scripts.
+
 2015-10-07  Edward Jones  <ed.jones@embecosm.com>
 
 	* scripttempl/mrk3.sc: Update .ctor/.dtor to use new flags.

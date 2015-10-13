@@ -2370,6 +2370,11 @@ lang_add_section (lang_statement_list_type *ptr,
       else
 	flags &= ~SEC_ALLOC;
       break;
+    case isload_section:
+      /* Being loadable only makes sense for sections that have contents
+         and are allocatable.  */
+      flags |= SEC_LOAD | SEC_ALLOC | SEC_HAS_CONTENTS;
+      break;
     }
 
   if (output->bfd_section == NULL)
@@ -3577,6 +3582,7 @@ map_input_to_output_sections
 	  switch (os->sectype)
 	    {
 	    case normal_section:
+	    case isload_section:
 	    case overlay_section:
 	      break;
 	    case noalloc_section:

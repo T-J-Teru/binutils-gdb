@@ -117,7 +117,8 @@ enum section_type
   normal_section,
   overlay_section,
   noload_section,
-  noalloc_section
+  noalloc_section,
+  isload_section,
 };
 
 /* This structure holds a list of program headers describing
