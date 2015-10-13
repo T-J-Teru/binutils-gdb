@@ -130,6 +130,10 @@ typedef struct {
   /* 1 => do not assign addresses to common symbols.  */
   bfd_boolean inhibit_common_definition;
 
+  /* When TRUE all input sections that are marked as non-loadable are
+     converted to loadable sections, their contents become all 0's.  */
+  bfd_boolean inhibit_noload;
+
   /* If TRUE, build MIPS embedded PIC relocation tables in the output
      file.  */
   bfd_boolean embedded_relocs;

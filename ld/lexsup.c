@@ -338,6 +338,9 @@ static const struct ld_option ld_options[] =
     '\0', N_("FILE"), N_("Write a map file"), ONE_DASH },
   { {"no-define-common", no_argument, NULL, OPTION_NO_DEFINE_COMMON},
     '\0', NULL, N_("Do not define Common storage"), TWO_DASHES },
+  { {"force-loadable", no_argument, NULL, OPTION_FORCE_LOADABLE},
+    '\0', NULL, N_("Force non-loadable sections to be loadable"),
+    TWO_DASHES },
   { {"no-demangle", no_argument, NULL, OPTION_NO_DEMANGLE },
     '\0', NULL, N_("Do not demangle symbol names"), TWO_DASHES },
   { {"no-keep-memory", no_argument, NULL, OPTION_NO_KEEP_MEMORY},
@@ -861,6 +864,9 @@ parse_args (unsigned argc, char **argv)
 	  break;
 	case OPTION_NO_DEFINE_COMMON:
 	  command_line.inhibit_common_definition = TRUE;
+	  break;
+	case OPTION_FORCE_LOADABLE:
+	  command_line.inhibit_noload = TRUE;
 	  break;
 	case OPTION_NO_DEMANGLE:
 	  demangling = FALSE;

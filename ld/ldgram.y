@@ -131,7 +131,7 @@ static int error_index;
 %token SORT_BY_INIT_PRIORITY
 %token '{' '}'
 %token SIZEOF_HEADERS OUTPUT_FORMAT FORCE_COMMON_ALLOCATION OUTPUT_ARCH
-%token INHIBIT_COMMON_ALLOCATION
+%token INHIBIT_COMMON_ALLOCATION INHIBIT_NOLOAD
 %token SEGMENT_START
 %token INCLUDE
 %token MEMORY
@@ -336,6 +336,8 @@ ifile_p1:
 		  { ldfile_set_output_arch ($3, bfd_arch_unknown); }
 	|	FORCE_COMMON_ALLOCATION
 		{ command_line.force_common_definition = TRUE ; }
+	|	INHIBIT_NOLOAD
+		{ command_line.inhibit_noload = TRUE ; }
 	|	INHIBIT_COMMON_ALLOCATION
 		{ command_line.inhibit_common_definition = TRUE ; }
 	|	INPUT '(' input_list ')'

@@ -1,3 +1,16 @@
+2015-10-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ld.texinfo (Options): Add information for --force-loadable.
+	(Miscellaneous Commands): Add information for INHIBIT_NOLOAD.
+	* emultempl/elf32.em: Process 'inhibit_noload' command line flag.
+	* ld.h (struct args_type): Add inhibit_noload field.
+	* ldgram.y (INHIBIT_NOLOAD): New token.
+	(ifile_p1): Handle INHIBIT_NOLOAD.
+	* ldlex.h (enum option_values): Add OPTION_FORCE_LOADABLE.
+	* ldlex.l ("INHIBIT_NOLOAD"): Add.
+	* lexsup.c (ld_options): Add 'force-loadable' option.
+	(parse_args): Handle 'force-loadable'.
+
 2015-10-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ld.texinfo (Output Section Type): Add information about LOAD

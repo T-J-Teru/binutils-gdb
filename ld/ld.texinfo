@@ -1447,6 +1447,14 @@ option is useful when using unmodified Unix makefiles on a Microsoft
 Windows host, since some versions of Windows won't run an image unless
 it ends in a @code{.exe} suffix.
 
+@kindex --force-loadable
+@cindex loadable sections, from non-loadable
+@item --force-loadable
+This option converts non-loadable sections into loadable sections.
+This can be used to convert @code{.bss} style sections into
+@code{.data} style sections.  This option only has an effect for ELF
+input files.
+
 @kindex --gc-sections
 @kindex --no-gc-sections
 @cindex garbage collection
@@ -3487,6 +3495,14 @@ output file is specified (@samp{-r}).
 This command has the same effect as the @samp{--no-define-common}
 command-line option: to make @code{ld} omit the assignment of addresses
 to common symbols even for a non-relocatable output file.
+
+@item INHIBIT_NOLOAD
+@kindex INHIBIT_NOLOAD
+@cindex loadable sections, from non-loadable
+This command has the same effect as the @samp{--force-loadable}
+command-line option: to convert all @code{.bss} style sections into
+@code{.data} style sections.  This only has an effect for ELF input
+files.
 
 @item INSERT [ AFTER | BEFORE ] @var{output_section}
 @kindex INSERT

@@ -141,6 +141,7 @@ enum option_values
   OPTION_PUSH_STATE,
   OPTION_POP_STATE,
   OPTION_ORPHAN_HANDLING,
+  OPTION_FORCE_LOADABLE,
 };
 
 /* The initial parser states.  */

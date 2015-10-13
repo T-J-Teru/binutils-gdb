@@ -1090,6 +1090,26 @@ gld${EMULATION_NAME}_after_open (void)
 	       " --eh-frame-hdr ignored.\n");
     }
 
+  if (command_line.inhibit_noload)
+    {
+      bfd *ibfd;
+
+      for (ibfd = link_info.input_bfds; ibfd; ibfd = ibfd->link.next)
+        {
+          asection *sec;
+
+          for (sec = ibfd->sections; sec != NULL; sec = sec->next)
+            if ((sec->flags & SEC_LOAD) != SEC_LOAD
+                && (sec->flags & SEC_ALLOC) == SEC_ALLOC
+                && elf_section_type (sec) == SHT_NOBITS)
+              {
+                sec->flags |= (SEC_LOAD | SEC_ALLOC | SEC_HAS_CONTENTS);
+                ASSERT (elf_section_type (sec) == SHT_NOBITS);
+                elf_section_type (sec) = SHT_PROGBITS;
+              }
+        }
+    }
+
   /* Get the list of files which appear in DT_NEEDED entries in
      dynamic objects included in the link (often there will be none).
      For each such file, we want to track down the corresponding
