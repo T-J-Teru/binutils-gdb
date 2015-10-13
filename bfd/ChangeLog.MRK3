@@ -1,3 +1,8 @@
+2015-10-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_relax_section_worker): Add relocation
+	number to relaxation log output.
+
 2015-10-07  Edward Jones  <ed.jones@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_howto_table): Added R_MRK3_PIC_LO.

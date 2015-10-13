@@ -2218,6 +2218,7 @@ mrk3_elf_relax_section_worker (bfd *abfd,
       unsigned char sym_type;
       bfd_vma toff;
       asection *tsec;
+      unsigned reloc_num = irel - internal_relocs;
 
       /* Filter out all relocation types that we know can't be handled.  */
       if (!hooks->reloc_filter (ELF64_R_TYPE (irel->r_info)))
@@ -2225,8 +2226,8 @@ mrk3_elf_relax_section_worker (bfd *abfd,
 
       BFD_ASSERT (ELF64_R_TYPE (irel->r_info) < (unsigned int) R_MRK3_max);
       howto = &elf_mrk3_howto_table[ELF64_R_TYPE (irel->r_info)];
-      relax_log ("  Relocation type: %s at section Offset %#08lx\n",
-                 howto->name, irel->r_offset);
+      relax_log ("  Relocation #%d type: %s at section Offset %#08lx\n",
+                 reloc_num, howto->name, irel->r_offset);
 
       /* Read this BFD's local symbols if we haven't done so already.  */
       if (isymbuf == NULL)
