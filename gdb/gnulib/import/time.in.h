@@ -55,6 +55,8 @@
 #   include <sys/time.h>
 #  elif @PTHREAD_H_DEFINES_STRUCT_TIMESPEC@
 #   include <pthread.h>
+#  elif @UNISTD_H_DEFINES_STRUCT_TIMESPEC@
+#   include <unistd.h>
 /* The pthreads-win32 <pthread.h> also defines a couple of broken macros.  */
 #   undef asctime_r
 #   undef ctime_r
