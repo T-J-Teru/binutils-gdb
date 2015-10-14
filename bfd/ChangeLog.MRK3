@@ -1,5 +1,10 @@
 2015-10-14  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Remove adjustment of
+	toaddr.
+
+2015-10-14  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	Restructure the relaxation logging.
 	* elf64-mrk3.c (relax_log_depth): New variable.
 	(relax_log_nesting): New function.

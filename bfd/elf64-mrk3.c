@@ -1414,10 +1414,6 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
       relax_log ("Filling %d bytes at %#lx with %#x\n",
                  count, (toaddr - count), fill);
       memset (contents + toaddr - count, fill, count);
-
-      /* Adjust the TOADDR to avoid moving symbols located at the address
-         of the property record, which has not moved.  */
-      toaddr -= count;
     }
 
   /* Adjust all the reloc addresses in SEC.  The relocations of SEC are
