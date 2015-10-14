@@ -1,3 +1,16 @@
+2015-10-14  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	Restructure the relaxation logging.
+	* elf64-mrk3.c (relax_log_depth): New variable.
+	(relax_log_nesting): New function.
+	(relax_log): Add header comment, produce leading whitespace.
+	(mrk3_elf_relax_delete_bytes): Rework relaxation logging.
+	(mrk3_relax_handle_relocation): Likewise.
+	(mrk3_check_handle_relocation): Likewise.
+	(mrk3_elf_relax_section_worker): Likewise.
+	(mrk3_check_align_records): Likewise.
+	(mrk3_elf_relax_section): Likewise.
+
 2015-10-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_relax_section_worker): Add relocation

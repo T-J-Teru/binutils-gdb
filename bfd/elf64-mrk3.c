@@ -1266,6 +1266,33 @@ retrieve_local_syms (bfd *input_bfd)
   return isymbuf;
 }
 
+/* Amount of space to print before each line of relaxation log output.
+   This can be adjusted up or down (using RELAX_LOG_NESTING) in order to
+   provide structured output.  */
+
+static int relax_log_depth;
+
+/* Adjust RELAX_LOG_DEPTH by CHANGE, but cap RELAX_LOG_DEPTH to a sensible
+   range that should not be exceeded in normal usage.  */
+
+static void
+relax_log_nesting (int change)
+{
+  /* Change the nesting depth.  */
+  relax_log_depth += change;
+
+  /* Sanity check the result.  */
+  if (relax_log_depth < 0)
+    relax_log_depth = 0;
+  else if (relax_log_depth > 10)
+    relax_log_depth = 10;
+}
+
+/* Create a single line of relaxation log output.  The line is prefixed
+   with some amount of whitespace (see RELAX_LOG_DEPTH for details), so you
+   should not try to print multiple lines using a single call to RELAX_LOG,
+   nor should you print partial lines.  */
+
 static void
 relax_log (const char *fmt, ...)
 {
@@ -1287,6 +1314,11 @@ relax_log (const char *fmt, ...)
   if (relaxation_logging == LOGGING_OFF)
     return;
 
+  /* Print an empty string, in a field of the required width: generating a
+     space of the required length.  */
+  fprintf (stderr, "%*s", relax_log_depth, "");
+
+  /* Now print the actual log message.  */
   va_start (ap, fmt);
   vfprintf (stderr, fmt, ap);
   va_end (ap);
@@ -1316,6 +1348,8 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
   struct bfd_section *isec;
   struct mrk3_relax_info *relax_info;
   struct mrk3_property_record *prop_record = NULL;
+
+  relax_log_nesting (+2);
 
   /* Mark that the section was relaxed, and record the original size.  */
   relax_info = get_mrk3_relax_info (sec);
@@ -1354,8 +1388,13 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
      cached by the control logic of linker relaxation, so no need to pin
      the contents here.  */
   if (toaddr - addr - count > 0)
-    memmove (contents + addr, contents + addr + count,
-             (size_t) (toaddr - addr - count));
+    {
+      relax_log ("Moving %d bytes from %#lx to %#lx\n",
+                 ((size_t) (toaddr - addr - count)),
+                 (addr+count), addr);
+      memmove (contents + addr, contents + addr + count,
+               (size_t) (toaddr - addr - count));
+    }
   if (prop_record == NULL)
     sec->size -= count;
   else
@@ -1372,6 +1411,8 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
           prop_record->data.align.preceding_deleted += count;
           break;
         };
+      relax_log ("Filling %d bytes at %#lx with %#x\n",
+                 count, (toaddr - count), fill);
       memset (contents + toaddr - count, fill, count);
 
       /* Adjust the TOADDR to avoid moving symbols located at the address
@@ -1383,12 +1424,20 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
      already cached, so there's no need to call pin_internal_relocs.  */
   internal_relocs = retrieve_internal_relocs (abfd, sec, TRUE);
   irelend = internal_relocs + sec->reloc_count;
+  relax_log ("Checking relocations between %#lx and %#lx\n",
+             addr, toaddr);
+  relax_log_nesting (+2);
   for (irel = internal_relocs; irel < irelend; irel++)
     {
       /* Get the new reloc address.  */
-      if (irel->r_offset > addr && irel->r_offset < toaddr)
-        irel->r_offset -= count;
+      if (irel->r_offset >= addr && irel->r_offset < toaddr)
+        {
+          relax_log ("Moving relocation from %#lx to %#lx\n",
+                     irel->r_offset, (irel->r_offset - count));
+          irel->r_offset -= count;
+        }
     }
+  relax_log_nesting (-2);
 
    /* The reloc's own addresses are now ok. However, we need to readjust
       the reloc's addend, i.e. the reloc's value if two conditions are met:
@@ -1484,6 +1533,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
         }
     }
 
+  relax_log_nesting (-2);
   return TRUE;
 }
 
@@ -1821,14 +1871,14 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
         if ((reloc_addr & ~0x7fff) != (dest_addr & ~0x7fff))
           return TRUE;
 
-        relax_log ("    Relocation at: %#08lx\n", reloc_addr);
-        relax_log ("    Destination at %#08lx\n", dest_addr);
+        relax_log ("Relocation at: %#08lx\n", reloc_addr);
+        relax_log ("Destination at %#08lx\n", dest_addr);
 
         /* Convert to a 14-bit CALL instruction.  */
         contents = retrieve_contents (abfd, sec, link_info->keep_memory);
         insn = bfd_get_16 (abfd, contents + irel->r_offset);
-        relax_log ("    Instruction encoding is %#08x\n", insn);
-        relax_log ("    Convert to 14-bit call instruction.\n");
+        relax_log ("Instruction encoding is %#08x\n", insn);
+        relax_log ("Convert to 14-bit call instruction.\n");
         BFD_ASSERT (is_16bit_call_instruction (insn));
         insn = 0x8000;
         bfd_put_16 (abfd, insn, contents + irel->r_offset);
@@ -1865,10 +1915,10 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
            skip those that don't.  */
         contents = retrieve_contents (abfd, sec, link_info->keep_memory);
         insn = bfd_get_16 (abfd, contents + irel->r_offset);
-        relax_log ("    Instruction encoding is %#08x\n", insn);
+        relax_log ("Instruction encoding is %#08x\n", insn);
 
         imm_value = (symval + irel->r_addend);
-        relax_log ("    Immediate value is %#08lx\n", imm_value);
+        relax_log ("Immediate value is %#08lx\n", imm_value);
 
         if (is_relaxable_abs16_mov_instruction (insn))
           {
@@ -1881,7 +1931,7 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
               }
 
             /* Clear some bits.  */
-            relax_log ("    Convert to direct9 instruction.\n");
+            relax_log ("Convert to direct9 instruction.\n");
             insn = ((insn & 0x040f) | 0xc000);
             new_reloc_type = R_MRK3_DIRECT9;
           }
@@ -1901,7 +1951,7 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
 
             /* Set bit 7 to convert to the 4-bit constant version of
                the instruction.  */
-            relax_log ("    Convert to 4-bit constant instruction.\n");
+            relax_log ("Convert to 4-bit constant instruction.\n");
             insn |= (1 << 7);
             new_reloc_type = R_MRK3_CONST4;
           }
@@ -2012,13 +2062,13 @@ mrk3_check_handle_relocation (bfd *abfd, asection *sec,
         offset = ((bfd_signed_vma) (dest_addr - reloc_addr)) >> 1;
         if (offset >= -127 && offset <= 127)
           {
-            relax_log ("    Does not need reverting.\n");
+            relax_log ("Does not need reverting.\n");
             return TRUE;
           }
 
         /* This 8-bit branch is out of range and needs to
            be reverted.  */
-        relax_log ("    Reverting to 16-bit branch instruction.\n");
+        relax_log ("Reverting to 16-bit branch instruction.\n");
         contents = retrieve_contents (abfd, sec, link_info->keep_memory);
         insn = bfd_get_16 (abfd, contents + irel->r_offset);
         insn = (insn & 0xff00) | 0x80;
@@ -2073,19 +2123,19 @@ mrk3_check_handle_relocation (bfd *abfd, asection *sec,
            RELOC_ADDR to DEST_ADDR (both of which are byte
            addresses) will fit we check that everything other than
            the lower 15-bits match.  */
-        relax_log ("    Relocation at: %#08lx\n", reloc_addr);
-        relax_log ("    Destination at %#08lx\n", dest_addr);
+        relax_log ("Relocation at: %#08lx\n", reloc_addr);
+        relax_log ("Destination at %#08lx\n", dest_addr);
         if ((reloc_addr & ~0x7fff) == (dest_addr & ~0x7fff))
           {
-            relax_log ("    Does not need reverting.\n");
+            relax_log ("Does not need reverting.\n");
             return TRUE;
           }
 
         /* Convert to a 14-bit CALL instruction.  */
         contents = retrieve_contents (abfd, sec, link_info->keep_memory);
         insn = bfd_get_16 (abfd, contents + irel->r_offset);
-        relax_log ("    Instruction encoding is %#08x\n", insn);
-        relax_log ("    Reverting to 16-bit call instruction.\n");
+        relax_log ("Instruction encoding is %#08x\n", insn);
+        relax_log ("Reverting to 16-bit call instruction.\n");
         BFD_ASSERT (is_14bit_call_instruction (insn));
         insn = 0x0fc0;
         bfd_put_16 (abfd, insn, contents + irel->r_offset);
@@ -2209,10 +2259,13 @@ mrk3_elf_relax_section_worker (bfd *abfd,
   if (internal_relocs == NULL || sec->reloc_count == 0)
     return TRUE;
 
+  relax_log_nesting (+2);
+
   /* Walk through the relocs looking for relaxing opportunities.  */
   irelend = internal_relocs + sec->reloc_count;
   for (irel = internal_relocs; irel < irelend; irel++)
     {
+      bfd_boolean result;
       bfd_vma symval;
       reloc_howto_type *howto;
       unsigned char sym_type;
@@ -2226,7 +2279,7 @@ mrk3_elf_relax_section_worker (bfd *abfd,
 
       BFD_ASSERT (ELF64_R_TYPE (irel->r_info) < (unsigned int) R_MRK3_max);
       howto = &elf_mrk3_howto_table[ELF64_R_TYPE (irel->r_info)];
-      relax_log ("  Relocation #%d type: %s at section Offset %#08lx\n",
+      relax_log ("Relocation #%d type: %s at section Offset %#08lx\n",
                  reloc_num, howto->name, irel->r_offset);
 
       /* Read this BFD's local symbols if we haven't done so already.  */
@@ -2327,18 +2380,24 @@ mrk3_elf_relax_section_worker (bfd *abfd,
 
       symval = toff + tsec->output_section->vma + tsec->output_offset;
 
-      if (!hooks->handle_reloc (abfd, sec, link_info, irel, symval,
-                                internal_relocs, again))
+      relax_log_nesting (+2);
+      result = hooks->handle_reloc (abfd, sec, link_info, irel, symval,
+                                    internal_relocs, again);
+      relax_log_nesting (-2);
+
+      if (!result)
         goto error_return;
     }
 
   /* These release calls will only free the resources if they have not been
      pinned to the section or bfd.  */
   release_internal_relocs (sec, internal_relocs);
+  relax_log_nesting (-2);
   return TRUE;
 
 error_return:
   release_internal_relocs (sec, internal_relocs);
+  relax_log_nesting (-2);
   return FALSE;
 }
 
@@ -2731,7 +2790,9 @@ mrk3_check_align_records (bfd *abfd,
         {
           unsigned int i;
 
-          relax_log ("\nChecking for '.align' records.\n");
+          relax_log ("\n");
+          relax_log ("Checking for '.align' records.\n");
+          relax_log_nesting (+2);
 
           for (i = 0; i < relax_info->records.count; ++i)
             {
@@ -2750,11 +2811,13 @@ mrk3_check_align_records (bfd *abfd,
                        can be moved backwards and still maintain the
                        required alignment.  */
                     record = &relax_info->records.items [i];
-                    relax_log ("  Offset %#llx, has %d bytes space.\n",
-                               record->offset,
-                               record->data.align.preceding_deleted);
                     bytes_to_align
                       = (unsigned long) (1 << record->data.align.bytes);
+                    relax_log ("Offset %#llx, has %d bytes space, "
+                               "and wants %d byte alignment.\n",
+                               record->offset,
+                               record->data.align.preceding_deleted,
+                               bytes_to_align);
                     while (record->data.align.preceding_deleted >=
                            bytes_to_align)
                       {
@@ -2767,7 +2830,8 @@ mrk3_check_align_records (bfd *abfd,
                       {
                         bfd_vma addr = record->offset;
 
-                        relax_log ("  We can delete %d bytes before the "
+                        relax_log_nesting (+2);
+                        relax_log ("We can delete %d bytes before the "
                                    "'.align' at offset %#08lx\n",
                                    count, record->offset);
 
@@ -2780,11 +2844,13 @@ mrk3_check_align_records (bfd *abfd,
                                                      addr - count,
                                                      count);
                         *again = TRUE;
+                        relax_log_nesting (-2);
                       }
                   }
                   break;
                 }
             }
+          relax_log_nesting (-2);
         }
     }
 }
@@ -2834,7 +2900,9 @@ mrk3_elf_relax_section (bfd *abfd,
       || (sec->flags & SEC_CODE) == 0)
     return TRUE;
 
-  relax_log ("\n\n----- Pass = %d ----- \n", link_info->relax_pass);
+  relax_log ("\n");
+  relax_log ("\n");
+  relax_log ("----- Pass = %d ----- \n", link_info->relax_pass);
   BFD_ASSERT (link_info->relax_pass < 2);
   switch (link_info->relax_pass)
     {
