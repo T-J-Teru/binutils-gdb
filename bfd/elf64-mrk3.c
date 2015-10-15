@@ -2707,54 +2707,54 @@ mrk3_elf_load_all_property_sections (struct bfd_link_info *link_info)
 {
   bfd *abfd;
   asection *sec;
-
-  /* Initialize the per-section relaxation info.  */
-  for (abfd = link_info->input_bfds; abfd != NULL; abfd = abfd->link.next)
-    for (sec = abfd->sections; sec != NULL; sec = sec->next)
-      {
-	init_mrk3_relax_info (sec);
-      }
+  bfd_boolean records_found;
 
   /* Load the descriptor tables from .mrk3.records sections.  */
+  relax_log ("Loading records from .mrk3.records sections.\n");
+  relax_log_nesting (+2);
+  records_found = FALSE;
   for (abfd = link_info->input_bfds; abfd != NULL; abfd = abfd->link.next)
     {
       struct mrk3_property_record_list *r_list;
 
+      relax_log ("Loading records from `%s'\n", abfd->filename);
       r_list = elf64_mrk3_load_property_records (abfd);
       if (r_list != NULL)
-        elf64_mrk3_assign_records_to_sections (r_list);
-
-      free (r_list);
+        {
+          relax_log ("Found %d records, assigning to sections.\n",
+                     r_list->record_count);
+          records_found = TRUE;
+          elf64_mrk3_assign_records_to_sections (r_list);
+          relax_log ("Done.\n");
+          free (r_list);
+        }
     }
+  relax_log_nesting (-2);
 
-  /* Now, for every section, ensure that the descriptor list in the
-     relaxation data is sorted by ascending offset within the section.  */
-  for (abfd = link_info->input_bfds; abfd != NULL; abfd = abfd->link.next)
-    for (sec = abfd->sections; sec != NULL; sec = sec->next)
-      {
-        struct mrk3_relax_info *relax_info = get_mrk3_relax_info (sec);
-        if (relax_info && relax_info->records.count > 0)
+  if (records_found)
+    {
+      /* Now, for every section, ensure that the descriptor list in the
+         relaxation data is sorted by ascending offset within the section.  */
+      relax_log ("Sorting align/org records per section.\n");
+      relax_log_nesting (+2);
+      for (abfd = link_info->input_bfds; abfd != NULL; abfd = abfd->link.next)
+        for (sec = abfd->sections; sec != NULL; sec = sec->next)
           {
-            unsigned int i;
+            struct mrk3_relax_info *relax_info;
 
-            qsort (relax_info->records.items,
-                   relax_info->records.count,
-                   sizeof (struct mrk3_property_record),
-                   mrk3_property_record_compare);
-
-            /* For debug purposes, list all the descriptors.  */
-            for (i = 0; i < relax_info->records.count; ++i)
+            relax_info = get_mrk3_relax_info (sec);
+            if (relax_info && relax_info->records.count > 0)
               {
-                switch (relax_info->records.items [i].type)
-                  {
-                  case RECORD_ORG:
-                    break;
-                  case RECORD_ALIGN:
-                    break;
-                  };
+                relax_log ("Sorting records for section `%s' from `%s'\n",
+                           sec->name, abfd->filename);
+                qsort (relax_info->records.items,
+                       relax_info->records.count,
+                       sizeof (struct mrk3_property_record),
+                       mrk3_property_record_compare);
               }
           }
-      }
+      relax_log_nesting (-2);
+    }
 }
 
 /* Perform checks of any alignment records in section SEC.  The alignment
@@ -2868,9 +2868,14 @@ mrk3_elf_relax_section (bfd *abfd,
   if (!relaxation_initialised)
     {
       relaxation_initialised = TRUE;
+      relax_log ("Initialising linker relaxation mechanism.\n");
 
       /* Load entries from the .mrk3.records sections.  */
+      relax_log_nesting (+2);
       mrk3_elf_load_all_property_sections (link_info);
+      relax_log_nesting (-2);
+
+      relax_log ("Initialisation complete.\n");
     }
 
   /* Set the contents of AGAIN to false.  The worker functions will set

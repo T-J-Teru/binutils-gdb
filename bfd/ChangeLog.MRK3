@@ -1,3 +1,10 @@
+2015-10-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_load_all_property_sections): Add
+	additional logging, remove duplicate initialisation code, remove
+	pointless debugging loop.
+	(mrk3_elf_relax_section): Add additional logging.
+
 2015-10-14  Edward Jones  <ed.jones@embecosm.com>
 
 	* elflink.c (elf_link_add_archive_symbols): If bfd does not
