@@ -1,3 +1,8 @@
+2015-10-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dwarf2read.c (dwarf2_ranges_read): Unify and fix base address
+	reading code.
+
 2015-10-15  Yao Qi  <yao.qi@linaro.org>
 
 	* aarch64-linux-nat.c (aarch64_linux_insert_hw_breakpoint):
