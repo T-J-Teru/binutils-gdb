@@ -1,3 +1,9 @@
+2015-10-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.arch/amd64-debug-ranges-base.c: New file.
+	* gdb.arch/amd64-debug-ranges-base.exp: New file.
+	* gdb.arch/amd64-debug-ranges-base.s: New file.
+
 2015-03-27  Petr Machata  <pmachata@redhat.com>
 
 	* lib/dwarf.exp (Dwarf::_handle_DW_FORM): Handle DW_FORM_sec_offset.
