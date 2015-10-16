@@ -2808,7 +2808,7 @@ mrk3_check_align_records (bfd *abfd,
                        required alignment.  */
                     record = &relax_info->records.items [i];
                     bytes_to_align
-                      = (unsigned long) (1 << record->data.align.bytes);
+                      = (unsigned long) (record->data.align.bytes);
                     relax_log ("Offset %#llx, has %d bytes space, "
                                "and wants %d byte alignment.\n",
                                record->offset,

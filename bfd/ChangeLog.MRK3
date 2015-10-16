@@ -1,3 +1,8 @@
+2015-10-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_check_align_records): Fix calculation of
+	alignment in linker relaxation code.
+
 2015-10-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_load_all_property_sections): Add
