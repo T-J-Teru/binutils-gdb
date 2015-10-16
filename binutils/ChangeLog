@@ -1,3 +1,10 @@
+2015-10-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dwarf.c (is_max_address): New function.
+	(display_loc_list): Remove out of date comment, use
+	is_max_address.
+	(display_debug_ranges): Likewise.
+
 2015-10-15  Alan Modra  <amodra@gmail.com>
 
 	* objcopy.c (copy_object): Don't omit bfd_copy_private_bfd_data

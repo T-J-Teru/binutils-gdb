@@ -1,3 +1,9 @@
+2015-10-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* binutils-all/objdump.exp: Add test for .debug_ranges decode.
+	* binutils-all/dw2-ranges.S: New file.
+	* binutils-all/dw2-ranges.W: New file.
+
 2015-10-15  Alan Modra  <amodra@gmail.com>
 
 	* binutils-all/objcopy.exp: Delete trailing whitespace.  Use
