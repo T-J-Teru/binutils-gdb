@@ -3064,6 +3064,14 @@ elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
         case RECORD_ALIGN:
           tmp += 13;
           break;
+        default:
+          _bfd_error_handler
+            (_("error: %B: unknown record type (%d) at `%A + 0x%"BFD_VMA_FMT"x'"),
+             abfd, sec, entry_type, ((bfd_vma) (tmp - contents)));
+          /* TODO: Should really jump to load_failed here, and have some
+             other mechanism to indicate that the load failed due to an
+             error.  */
+          abort ();
         }
       ++record_count;
     }
