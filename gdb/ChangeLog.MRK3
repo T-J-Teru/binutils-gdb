@@ -1,3 +1,7 @@
+2015-10-22  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* doc/gdb.texinfo: Remove MRK3 specific information.
+
 2015-10-14  Edward Jones  <ed.jones@embecosm.com>
 
 	* gnulib/configure: Regenerated.
