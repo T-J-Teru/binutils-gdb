@@ -3055,7 +3055,7 @@ elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
   record_count = 0;
   for (tmp = ptr; ((bfd_size_type) (tmp - contents)) < size; )
     {
-      bfd_byte entry_type = *((bfd_byte *) tmp);
+      bfd_byte entry_type = *tmp;
       switch (entry_type)
         {
         case RECORD_ORG:

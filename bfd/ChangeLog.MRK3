@@ -1,5 +1,10 @@
 2015-10-24  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf64-mrk3.c (elf64_mrk3_load_records_from_section): Remove
+	unneeded cast.
+
+2015-10-24  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf64-mrk3.c (elf64_mrk3_load_records_from_section): Error on
 	unknown record types.
 
