@@ -3048,6 +3048,14 @@ elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
 
   version = *((uint16_t *) ptr);
   ptr+=2;
+
+  /* Check that we understand the version number.  There is only one
+     version number right now, anything else is an error.  */
+  if (version != MRK3_PROPERTY_RECORDS_VERSION)
+    goto load_failed;
+
+  /* Sanity check.  This should pass given that the version check has
+     passed.  */
   BFD_ASSERT (ptr - contents == MRK3_PROPERTY_SECTION_HEADER_SIZE);
 
   /* Now we need to calculate the number of entries in the section so that
@@ -3089,11 +3097,6 @@ elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
   r_list->record_count = record_count;
   r_list->records = (struct mrk3_property_record *) (&r_list [1]);
   size -= MRK3_PROPERTY_SECTION_HEADER_SIZE;
-
-  /* Check that we understand the version number.  There is only one
-     version number right now, anything else is an error.  */
-  if (r_list->version != MRK3_PROPERTY_RECORDS_VERSION)
-    goto load_failed;
 
   rel = internal_relocs;
   rel_end = rel + sec->reloc_count;
