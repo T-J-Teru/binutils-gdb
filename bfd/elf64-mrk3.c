@@ -3247,6 +3247,65 @@ elf64_mrk3_property_record_name (struct mrk3_property_record *rec)
   return str;
 }
 
+/* Update the contents of an input records section ASEC (usually called
+   '.mrk3.records') from and input bfd ABFD.  The LINK_INFO is the usual
+   linker control structure.  FSEC and FBFD are the first input records
+   section abd bfd that is being placed into the output records section.
+
+   Currently the update process does not require any changes to the content
+   of the first record section, so the FSEC and FBFD parameters are
+   ignored.
+
+   In here we remove the version number from ASEC, and shift the contents
+   of the section down, reducing the section size.  We then update the
+   locations of all relocations in ASEC.  There should be no symbols within
+   a records section, so there's no updating required there.  */
+
+bfd_boolean
+elf64_mrk3_update_records_section (bfd *fbfd ATTRIBUTE_UNUSED,
+                                   asection *fsec ATTRIBUTE_UNUSED,
+                                   bfd *abfd, asection *asec,
+                                   struct bfd_link_info *link_info)
+{
+  Elf_Internal_Rela *irel, *irelend, *internal_relocs;
+  bfd_byte *contents;
+  uint16_t version;
+  bfd_size_type sec_size;
+
+  sec_size = bfd_get_section_limit (abfd, asec);
+  if (sec_size < 2)
+    return FALSE;
+
+  contents = retrieve_contents (abfd, asec, link_info->keep_memory);
+  if (contents == NULL)
+    return FALSE;
+
+  version = *((uint16_t *) contents);
+  if (version != 1)
+    return FALSE;
+
+  /* Delete two bytes of version number.  */
+  memmove (contents, contents + 2, sec_size - 2);
+  asec->size -= 2;
+
+  /* Move all the relocations in this section.  */
+  internal_relocs = retrieve_internal_relocs (abfd, asec, TRUE);
+  irelend = internal_relocs + asec->reloc_count;
+  for (irel = internal_relocs; irel < irelend; irel++)
+    {
+      BFD_ASSERT (irel->r_offset >= 2);
+      irel->r_offset -= 2;
+    }
+
+  /* There will be no symbols for this section.  */
+
+  pin_contents (asec, contents);
+  pin_internal_relocs (asec, internal_relocs);
+  return TRUE;
+}
+
+
+
 #define TARGET_LITTLE_SYM   mrk3_elf64_vec
 #define TARGET_LITTLE_NAME  "elf64-mrk3"
 /*#define TARGET_BIG_SYM      mrk3_elf64_vec*/

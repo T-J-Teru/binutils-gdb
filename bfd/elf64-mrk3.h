@@ -101,4 +101,9 @@ extern struct mrk3_property_record_list *elf64_mrk3_load_property_records (bfd *
 /* Return a string that is the name of the property record pointed to by REC.  */
 extern const char *elf64_mrk3_property_record_name (struct mrk3_property_record *rec);
 
+/* Update the contents of a records section, used during linking.  */
+extern bfd_boolean elf64_mrk3_update_records_section (bfd *, asection *,
+                                                      bfd *, asection *,
+                                                      struct bfd_link_info *);
+
 #endif /* __ELF64_MRK3__ */

@@ -1,3 +1,8 @@
+2015-10-24  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* emultempl/mrk3.em: Add 'elf64-mrk3.h' include.
+	(mrk3_after_allocation): New function.
+
 2015-10-14  Edward Jones  <ed.jones@embecosm.com>
 
 	* ldfile.c (ldfile_try_open_bfd): Give the plugin a chance to claim a
