@@ -464,6 +464,14 @@ even if a relocatable output file is specified (with @samp{-r}).  The
 script command @code{FORCE_COMMON_ALLOCATION} has the same effect.
 @xref{Miscellaneous Commands}.
 
+@kindex --default-address-flags[=@var{SRC}]
+@item --default-address-flags[=@var{SRC}]
+Set @var{SRC} the source section or address bits for automatically placed
+sections. If @var{SRC} is an integer value, it is treated as an immediate,
+otherwise it is used as the output section name to extract flags from.
+
+The default if @samp{--default-address-flags} is not given is @code{.data}.
+
 @kindex --depaudit @var{AUDITLIB}
 @kindex -P @var{AUDITLIB}
 @item --depaudit @var{AUDITLIB}

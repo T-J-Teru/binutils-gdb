@@ -140,8 +140,111 @@ mrk3_after_allocation (void)
     }
 }
 
+/* Place .mrk3.location sections into their own output sections, setting their
+   VMA/LMA according to the address in the section name. */
+static void
+handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBUTE_UNUSED)
+{
+  lang_output_section_statement_type *os;
+  lang_output_section_statement_type *os_data;
+  char *output_secname;
+  char *address_str;
+  bfd_vma address;
+  bfd_vma flagbits;
+  struct wildcard_spec file_spec;
+  struct wildcard_spec section_spec;
+  struct wildcard_list *list;
+
+  /* Only care about sections that start with ".mrk3.location.", but there must
+     be some address characters after the initial string.  */
+  if (strncmp (asec->name, ".mrk3.location.", 15) != 0
+      || strlen (asec->name) <= 15)
+    return;
+
+  /* Now grab the address from the section name.  */
+  address = strtoull (asec->name + 15, &address_str, 16);
+  if (*address_str != '\0')
+    einfo(_("%P%F: Invalid name for location section '%s'\n"), asec->name);
+
+  /* Create a new section to place this value into. This will result in a
+     .mrk3.location section for each special section */
+  output_secname = xstrdup (".mrk3.location");
+  os = lang_output_section_statement_lookup (output_secname, SPECIAL, TRUE);
+
+  if (os->addr_tree != NULL)
+    einfo (_("%P%F: address tree already set\n"), abfd);
+
+  /* Get the flag bits based on the user's choice of value/section. */
+  if (config.default_address_flags == NULL)
+    config.default_address_flags = ".data";
+
+  /* First try reading the default_address_flags option as an integer... */
+  flagbits = strtoull (config.default_address_flags, &address_str, 0);
+  if (*address_str == '\0')
+    {
+      if ((flagbits & 0xffffffffULL) != flagbits)
+        einfo(_("%P: warning: specified flag bits truncated\n"));
+      flagbits &= 0xffffffffULL;
+      flagbits <<= 32;
+    }
+  else
+    {
+      /* ... Otherwise try reading from the specified section */
+      os_data = lang_output_section_find (config.default_address_flags);
+      if (os_data)
+        {
+          flagbits = exp_get_vma(os_data->region->origin_exp, 0, output_secname);
+          flagbits &= 0xffffffff00000000ULL;
+        }
+      else
+        {
+          flagbits = 0;
+          einfo(_("%P: warning: unable to determine flags for '%s from '%s'\n"),
+                asec->name, config.default_address_flags);
+        }
+    }
+
+  /* Set the address of this special section */
+  os->addr_tree = exp_intop (address | flagbits);
+  push_stat_ptr (&os->children);
+
+  file_spec.name = xstrdup (abfd->filename);
+  file_spec.exclude_name_list = NULL;
+  file_spec.sorted = none;
+  file_spec.section_flag_list = NULL;
+
+  section_spec.name = xstrdup (asec->name);
+  section_spec.exclude_name_list = NULL;
+  section_spec.sorted = none;
+  section_spec.section_flag_list = NULL;
+
+  list = xmalloc (sizeof (*list));
+  list->next = NULL;
+  list->spec = section_spec;
+
+  lang_add_wild (&file_spec, list, TRUE);
+
+  pop_stat_ptr ();
+
+  lang_add_section (&os->children.head->wild_statement.children, asec, NULL, os);
+}
+
+static void
+mrk3_after_open (void)
+{
+  bfd *abfd;
+
+  gld${EMULATION_NAME}_after_open ();
+
+  for (abfd = link_info.input_bfds; abfd != NULL; abfd = abfd->link.next)
+    {
+      bfd_map_over_sections (abfd, handle_special_placement_sections, NULL);
+    }
+}
+
 EOF
 
+LDEMUL_AFTER_OPEN=mrk3_after_open
 LDEMUL_FINISH=gld${EMULATION_NAME}_finish
 LDEMUL_AFTER_PARSE=gld${EMULATION_NAME}_after_parse
 LDEMUL_AFTER_ALLOCATION=mrk3_after_allocation

@@ -525,6 +525,10 @@ static const struct ld_option ld_options[] =
   { {"orphan-handling", required_argument, NULL, OPTION_ORPHAN_HANDLING},
     '\0', N_("=MODE"), N_("Control how orphan sections are handled."),
     TWO_DASHES },
+  { {"default-address-flags", required_argument, NULL,
+    OPTION_DEFAULT_ADDRESS_FLAGS}, '\0', N_("=SRC"),
+    N_("Sets the source of default address flags."),
+    TWO_DASHES },
 };
 
 #define OPTION_COUNT ARRAY_SIZE (ld_options)
@@ -1503,6 +1507,10 @@ parse_args (unsigned argc, char **argv)
 	    einfo (_("%P%F: invalid argument to option"
 		     " \"--orphan-handling\"\n"));
 	  break;
+
+  case OPTION_DEFAULT_ADDRESS_FLAGS:
+    config.default_address_flags = xstrdup(optarg);
+    break;
 	}
     }
 

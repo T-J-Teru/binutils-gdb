@@ -291,6 +291,9 @@ typedef struct {
 
   /* How to deal with orphan sections.  */
   enum orphan_handling_enum orphan_handling;
+
+  /* The section name or address for sourcing flag bits */
+  char *default_address_flags;
 } ld_config_type;
 
 extern ld_config_type config;

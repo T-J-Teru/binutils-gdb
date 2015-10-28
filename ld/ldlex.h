@@ -142,6 +142,7 @@ enum option_values
   OPTION_POP_STATE,
   OPTION_ORPHAN_HANDLING,
   OPTION_FORCE_LOADABLE,
+  OPTION_DEFAULT_ADDRESS_FLAGS,
 };
 
 /* The initial parser states.  */

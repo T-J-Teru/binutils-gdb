@@ -1,3 +1,14 @@
+2015-10-28  Simon Cook  <simon.cook@embecosm.com>
+
+	* emultempl/mrk3.em (handle_special_placement_sections): Add
+	handling of MRK3 location sections.
+	* ld.h (struct ld_config_type): Add default_address_flags field.
+	* ld.texinfo (Options): Add --default-address-flags section.
+	* ldlex.h (enum option_values): Add OPTION_DEFAULT_ADDRESS_FLAGS.
+	* lexsup.c (struct ld_option ld_options): Add default-address-flags
+	entry.
+	(parse_args): Handle 'default-address-flags'.
+
 2015-10-24  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* emultempl/mrk3.em: Add 'elf64-mrk3.h' include.
