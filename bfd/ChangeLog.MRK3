@@ -1,3 +1,7 @@
+2015-11-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_final_link_relocate_pic): Add assertion.
+
 2015-10-24  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.h (elf64_mrk3_update_records_section): Declare.

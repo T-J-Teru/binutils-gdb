@@ -646,6 +646,7 @@ mrk3_final_link_relocate_pic (bfd *   output_bfd,
      For speedy comparisons, we store RELOCATION in the first 4 bytes of
      the PLT entry. This will be moved into the final location by
      MRK3_ELF_FINISH_DYNAMIC_SECTIONS. */
+  BFD_ASSERT (s->contents != NULL);
   for (i = 0; i < s->size; i += PLT_ENTRY_SIZE)
     {
       contents = bfd_get_32 (output_bfd, s->contents + i);
