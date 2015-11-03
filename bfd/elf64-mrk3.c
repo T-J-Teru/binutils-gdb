@@ -2398,6 +2398,96 @@ error_return:
   return FALSE;
 }
 
+/* Get the input section for a given symbol index.
+   If the symbol is:
+   . a section symbol, return the section;
+   . a common symbol, return the common section;
+   . an undefined symbol, return the undefined section;
+   . an indirect symbol, follow the links;
+   . an absolute value, return the absolute section.  */
+
+static asection *
+get_elf_r_symndx_section (bfd *abfd, unsigned long r_symndx)
+{
+  Elf_Internal_Shdr *symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+  asection *target_sec = NULL;
+  if (r_symndx < symtab_hdr->sh_info)
+    {
+      Elf_Internal_Sym *isymbuf;
+      unsigned int section_index;
+
+      isymbuf = retrieve_local_syms (abfd);
+      section_index = isymbuf[r_symndx].st_shndx;
+
+      if (section_index == SHN_UNDEF)
+    target_sec = bfd_und_section_ptr;
+      else if (section_index == SHN_ABS)
+    target_sec = bfd_abs_section_ptr;
+      else if (section_index == SHN_COMMON)
+    target_sec = bfd_com_section_ptr;
+      else
+    target_sec = bfd_section_from_elf_index (abfd, section_index);
+    }
+  else
+    {
+      unsigned long indx = r_symndx - symtab_hdr->sh_info;
+      struct elf_link_hash_entry *h = elf_sym_hashes (abfd)[indx];
+
+      while (h->root.type == bfd_link_hash_indirect
+             || h->root.type == bfd_link_hash_warning)
+        h = (struct elf_link_hash_entry *) h->root.u.i.link;
+
+      switch (h->root.type)
+    {
+    case bfd_link_hash_defined:
+    case  bfd_link_hash_defweak:
+      target_sec = h->root.u.def.section;
+      break;
+    case bfd_link_hash_common:
+      target_sec = bfd_com_section_ptr;
+      break;
+    case bfd_link_hash_undefined:
+    case bfd_link_hash_undefweak:
+      target_sec = bfd_und_section_ptr;
+      break;
+    default: /* New indirect warning.  */
+      target_sec = bfd_und_section_ptr;
+      break;
+    }
+    }
+  return target_sec;
+}
+
+/* Get the section-relative offset for a symbol number.  */
+
+static bfd_vma
+get_elf_r_symndx_offset (bfd *abfd, unsigned long r_symndx)
+{
+  Elf_Internal_Shdr *symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
+  bfd_vma offset = 0;
+
+  if (r_symndx < symtab_hdr->sh_info)
+    {
+      Elf_Internal_Sym *isymbuf;
+      isymbuf = retrieve_local_syms (abfd);
+      offset = isymbuf[r_symndx].st_value;
+    }
+  else
+    {
+      unsigned long indx = r_symndx - symtab_hdr->sh_info;
+      struct elf_link_hash_entry *h =
+    elf_sym_hashes (abfd)[indx];
+
+      while (h->root.type == bfd_link_hash_indirect
+             || h->root.type == bfd_link_hash_warning)
+    h = (struct elf_link_hash_entry *) h->root.u.i.link;
+      if (h->root.type == bfd_link_hash_defined
+          || h->root.type == bfd_link_hash_defweak)
+    offset = h->root.u.def.value;
+    }
+  return offset;
+}
+
 /* Based on _bfd_elf_create_dynamic_sections */
 static bfd_boolean
 mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
@@ -2449,6 +2539,8 @@ mrk3_elf_check_relocs (bfd *abfd,
 
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
   sym_hashes = elf_sym_hashes (abfd);
+  asection *target_section;
+  bfd_vma target_offset;
 
   rel_end = relocs + sec->reloc_count;
   for (rel = relocs; rel < rel_end; rel++)
@@ -2482,9 +2574,23 @@ mrk3_elf_check_relocs (bfd *abfd,
                 h->plt.refcount += 1;
                 info->dynamic = 1;
                 /* If we have not seen this symbol before space needs
-                   allocating in the PLT */
+                   allocating in the PLT.
+                   (Refcount is initilized to -1 so a refcount of 0 indicates
+                    first use.) */
                 if (h->plt.refcount == 0)
                   elf_hash_table (info)->splt->size += PLT_ENTRY_SIZE;
+              }
+            else
+              {
+                /* PIC relocations to local symbols are not supported in this
+                   linker. Report a useful message to the user */
+                target_section = get_elf_r_symndx_section (abfd, r_symndx);
+                target_offset = get_elf_r_symndx_offset (abfd, r_symndx);
+                _bfd_error_handler
+                (_("error: PIC relocations to local symbols are not supported"
+                   " at `%A + 0x%"BFD_VMA_FMT"x'"),
+                    target_section, target_offset);
+                return FALSE;
               }
             break;
           /* Do we need anything else here? */
@@ -2549,96 +2655,6 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       bfd_put_16 (output_bfd, 0x1bc7,     plt->contents + i + 12);
     }
   return TRUE;
-}
-
-/* Get the input section for a given symbol index.
-   If the symbol is:
-   . a section symbol, return the section;
-   . a common symbol, return the common section;
-   . an undefined symbol, return the undefined section;
-   . an indirect symbol, follow the links;
-   . an absolute value, return the absolute section.  */
-
-static asection *
-get_elf_r_symndx_section (bfd *abfd, unsigned long r_symndx)
-{
-  Elf_Internal_Shdr *symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
-  asection *target_sec = NULL;
-  if (r_symndx < symtab_hdr->sh_info)
-    {
-      Elf_Internal_Sym *isymbuf;
-      unsigned int section_index;
-
-      isymbuf = retrieve_local_syms (abfd);
-      section_index = isymbuf[r_symndx].st_shndx;
-
-      if (section_index == SHN_UNDEF)
-	target_sec = bfd_und_section_ptr;
-      else if (section_index == SHN_ABS)
-	target_sec = bfd_abs_section_ptr;
-      else if (section_index == SHN_COMMON)
-	target_sec = bfd_com_section_ptr;
-      else
-	target_sec = bfd_section_from_elf_index (abfd, section_index);
-    }
-  else
-    {
-      unsigned long indx = r_symndx - symtab_hdr->sh_info;
-      struct elf_link_hash_entry *h = elf_sym_hashes (abfd)[indx];
-
-      while (h->root.type == bfd_link_hash_indirect
-             || h->root.type == bfd_link_hash_warning)
-        h = (struct elf_link_hash_entry *) h->root.u.i.link;
-
-      switch (h->root.type)
-	{
-	case bfd_link_hash_defined:
-	case  bfd_link_hash_defweak:
-	  target_sec = h->root.u.def.section;
-	  break;
-	case bfd_link_hash_common:
-	  target_sec = bfd_com_section_ptr;
-	  break;
-	case bfd_link_hash_undefined:
-	case bfd_link_hash_undefweak:
-	  target_sec = bfd_und_section_ptr;
-	  break;
-	default: /* New indirect warning.  */
-	  target_sec = bfd_und_section_ptr;
-	  break;
-	}
-    }
-  return target_sec;
-}
-
-/* Get the section-relative offset for a symbol number.  */
-
-static bfd_vma
-get_elf_r_symndx_offset (bfd *abfd, unsigned long r_symndx)
-{
-  Elf_Internal_Shdr *symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
-  bfd_vma offset = 0;
-
-  if (r_symndx < symtab_hdr->sh_info)
-    {
-      Elf_Internal_Sym *isymbuf;
-      isymbuf = retrieve_local_syms (abfd);
-      offset = isymbuf[r_symndx].st_value;
-    }
-  else
-    {
-      unsigned long indx = r_symndx - symtab_hdr->sh_info;
-      struct elf_link_hash_entry *h =
-	elf_sym_hashes (abfd)[indx];
-
-      while (h->root.type == bfd_link_hash_indirect
-             || h->root.type == bfd_link_hash_warning)
-	h = (struct elf_link_hash_entry *) h->root.u.i.link;
-      if (h->root.type == bfd_link_hash_defined
-          || h->root.type == bfd_link_hash_defweak)
-	offset = h->root.u.def.value;
-    }
-  return offset;
 }
 
 /* Iterate over the property records in R_LIST, and copy each record into

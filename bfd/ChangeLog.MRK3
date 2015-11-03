@@ -1,3 +1,8 @@
+2015-11-03  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_check_relocs): Report that PIC relocations
+	to local symbols are not supported.
+
 2015-11-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_final_link_relocate_pic): Add assertion.
