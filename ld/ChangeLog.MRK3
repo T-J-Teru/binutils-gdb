@@ -1,3 +1,11 @@
+2015-11-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ld.texinfo (Options): Add information about -emit-debug-relocs.
+	* emultempl/mrk3.em (PARSE_AND_LIST_PROLOGUE): New variable.
+	(PARSE_AND_LIST_LONGOPTS): New variable.
+	(PARSE_AND_LIST_OPTIONS): New variable.
+	(PARSE_AND_LIST_ARGS_CASES): New variable.
+
 2015-10-28  Simon Cook  <simon.cook@embecosm.com>
 
 	* emultempl/mrk3.em (handle_special_placement_sections): Add

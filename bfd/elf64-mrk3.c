@@ -3395,7 +3395,29 @@ elf64_mrk3_update_records_section (bfd *fbfd ATTRIBUTE_UNUSED,
   return TRUE;
 }
 
+/* This flag is set to true when we should only emit the relocations for
+   the debug section.  */
+static bfd_boolean mrk3_only_emit_debug_relocs = FALSE;
 
+/* Called to toggle the MRK3_ONLY_EMIT_DEBUG_RELOCS flag, pass the new
+   value in V.  */
+
+void
+mrk3_elf_set_only_emit_debug_relocs (bfd_boolean v)
+{
+  mrk3_only_emit_debug_relocs = v;
+}
+
+/* Should we emit relocations for section SEC?  Return TRUE if we should,
+   otherwise return FALSE.  */
+
+bfd_boolean
+mrk3_elf_emit_relocations (asection *sec, struct bfd_link_info *info)
+{
+  return (info->emitrelocations
+          && (!mrk3_only_emit_debug_relocs
+              || (strncmp (sec->name, ".debug_", 7) == 0)));
+}
 
 #define TARGET_LITTLE_SYM   mrk3_elf64_vec
 #define TARGET_LITTLE_NAME  "elf64-mrk3"

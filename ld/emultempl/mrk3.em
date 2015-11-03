@@ -244,6 +244,29 @@ mrk3_after_open (void)
 
 EOF
 
+# Define some shell vars to insert bits of code into the standard elf
+# parse_args and list_options functions.
+#
+PARSE_AND_LIST_PROLOGUE='
+#define OPTION_EMIT_DEBUG_RELOCS       	301
+'
+
+PARSE_AND_LIST_LONGOPTS='
+  { "emit-debug-relocs", no_argument, NULL, OPTION_EMIT_DEBUG_RELOCS},
+'
+
+PARSE_AND_LIST_OPTIONS='
+  fprintf (file, _("  --emit-debug-relocs         Like --emit-relocs, but only\n"
+                   "                              emit debug relocations.\n"));
+'
+
+PARSE_AND_LIST_ARGS_CASES='
+    case OPTION_EMIT_DEBUG_RELOCS:
+      mrk3_elf_set_only_emit_debug_relocs (TRUE);
+      link_info.emitrelocations = TRUE;
+      break;
+'
+
 LDEMUL_AFTER_OPEN=mrk3_after_open
 LDEMUL_FINISH=gld${EMULATION_NAME}_finish
 LDEMUL_AFTER_PARSE=gld${EMULATION_NAME}_after_parse

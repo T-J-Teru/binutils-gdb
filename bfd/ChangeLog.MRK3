@@ -1,3 +1,14 @@
+2015-11-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_only_emit_debug_relocs): New variable.
+	(mrk3_elf_emit_relocations): New function.
+	(mrk3_elf_set_only_emit_debug_relocs): New function.
+	* elf64-mrk3.h (mrk3_elf_emit_relocations): Declare.
+	(mrk3_elf_set_only_emit_debug_relocs): Declare.
+	* elflink.c: Add include of 'elf64-mrk3.h'.
+	(elf_link_input_bfd): Call mrk3_elf_emit_relocations.
+	(bfd_elf_final_link): Likewise.
+
 2015-11-03  Simon Cook  <simon.cook@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_create_plt_section): Do not create section

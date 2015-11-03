@@ -106,4 +106,12 @@ extern bfd_boolean elf64_mrk3_update_records_section (bfd *, asection *,
                                                       bfd *, asection *,
                                                       struct bfd_link_info *);
 
+/* Return TRUE if we should emit relocations for section SEC.  */
+extern bfd_boolean mrk3_elf_emit_relocations (asection *sec,
+                                              struct bfd_link_info *info);
+
+/* Call to control whether we only emit debug relocations when we emit
+   relocations into the produced elf file.  */
+extern void mrk3_elf_set_only_emit_debug_relocs (bfd_boolean v);
+
 #endif /* __ELF64_MRK3__ */

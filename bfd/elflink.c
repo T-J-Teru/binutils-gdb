@@ -28,6 +28,7 @@
 #include "safe-ctype.h"
 #include "libiberty.h"
 #include "objalloc.h"
+#include "elf64-mrk3.h"
 
 /* This struct is used to pass information to routines called via
    elf_link_hash_traverse which must return failure.  */
@@ -9930,7 +9931,11 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
 
 	  if (ret == 2
 	      || flinfo->info->relocatable
-	      || flinfo->info->emitrelocations)
+	      || (flinfo->info->emitrelocations
+#ifdef __ELF64_MRK3__
+                  && mrk3_elf_emit_relocations (o, flinfo->info)
+#endif /* __ELF64_MRK3__ */
+                  ))
 	    {
 	      Elf_Internal_Rela *irela;
 	      Elf_Internal_Rela *irelaend, *irelamid;
@@ -10770,7 +10775,12 @@ bfd_elf_final_link (bfd *abfd, struct bfd_link_info *info)
 		   to count particular types of relocs.  Of course,
 		   reloc sections themselves can't have relocations.  */
 		reloc_count = 0;
-	      else if (info->relocatable || info->emitrelocations)
+	      else if (info->relocatable
+                       || (info->emitrelocations
+#ifdef __ELF64_MRK3__
+                           && mrk3_elf_emit_relocations (o, info)
+#endif /* __ELF64_MRK3__ */
+                           ))
 		reloc_count = sec->reloc_count;
 	      else if (bed->elf_backend_count_relocs)
 		reloc_count = (*bed->elf_backend_count_relocs) (info, sec);

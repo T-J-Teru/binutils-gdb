@@ -876,6 +876,18 @@ in larger executables.
 
 This option is currently only supported on ELF platforms.
 
+@kindex --emit-debug-relocs
+@cindex retain debug relocations in final executable
+@item --emit-debug-relocs
+Leave debug relocation sections and contents in fully linked
+executables.  Post link analysis and optimization tools may need this
+information in order to perform correct modifications of executables.
+This results in larger executables.  This option is similar to
+@option{--emit-relocs}, however, only relocations for debug
+information are retained.
+
+This option is currently only supported on ELF platforms.
+
 @kindex --force-dynamic
 @cindex forcing the creation of dynamic sections
 @item --force-dynamic
