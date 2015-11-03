@@ -1,5 +1,17 @@
 2015-11-03  Simon Cook  <simon.cook@embecosm.com>
 
+	* elf64-mrk3.c (mrk3_elf_create_plt_section): Do not create section
+	if creating relocatable file.
+	(struct elf_mrk3_local_symdata): Added to track local symbol data info.
+	(get_local_symdata): Added.
+	(clean_localsymdata): Added.
+	(mrk3_elf_check_relocs): Add support for PLT references against local
+	symbols.
+	(mrk3_elf_finish_dynamic_sections): Clean local symbol data no longer
+	required.
+
+2015-11-03  Simon Cook  <simon.cook@embecosm.com>
+
 	* elf64-mrk3.c (mrk3_elf_check_relocs): Report that PIC relocations
 	to local symbols are not supported.
 

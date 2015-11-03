@@ -2492,6 +2492,11 @@ get_elf_r_symndx_offset (bfd *abfd, unsigned long r_symndx)
 static bfd_boolean
 mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
 {
+   /* If we are doing a relocatable link, then don't create a plt section.
+      It will instead be created during the final link. */
+   if (info->relocatable)
+     return TRUE;
+
    flagword flags;
    struct elf_link_hash_entry *h;
    asection *s;
@@ -2523,12 +2528,70 @@ mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
    return TRUE;
  }
 
+/* Architecture specific local symbol data */
+
+struct elf_mrk3_local_symdata
+{
+    /* Details identifying the symbol this record refers to */
+    bfd *abfd;
+    unsigned long r_symndx;
+
+    /* Reference counter for PLT entries */
+    unsigned long plt_refcount;
+
+    /* Pointer to next record */
+    struct elf_mrk3_local_symdata *next;
+};
+
+static struct elf_mrk3_local_symdata *local_symdata = NULL;
+
+/* Lookup for mrk3 local symbol data */
+static struct elf_mrk3_local_symdata *get_local_symdata (bfd *abfd,
+                                                         unsigned long r_symndx)
+{
+  struct elf_mrk3_local_symdata *symdata = local_symdata;
+
+  while (symdata != NULL)
+    {
+      if (symdata->abfd == abfd && symdata->r_symndx == r_symndx)
+        return symdata;
+
+      symdata = symdata->next;
+    }
+
+  /* Data not found, allocate a new object and prepend to list */
+  symdata = malloc (sizeof (struct elf_mrk3_local_symdata));
+  BFD_ASSERT (symdata != NULL);
+
+  symdata->abfd = abfd;
+  symdata->r_symndx = r_symndx;
+  symdata->plt_refcount = 0;
+  symdata->next = local_symdata;
+  local_symdata = symdata;
+  return symdata;
+}
+
+/* Clean up all elf_mrk3_local_symdata objects */
+static void clean_local_symdata(void) {
+  struct elf_mrk3_local_symdata *symdata = local_symdata;
+  struct elf_mrk3_local_symdata *next;
+
+  while (symdata)
+  {
+    next = symdata->next;
+    free (symdata);
+    symdata = next;
+  }
+
+  local_symdata = 0;
+}
+
 /* Check through relocations in a section, and assign space in PLT where
    required */
 static bfd_boolean
 mrk3_elf_check_relocs (bfd *abfd,
-                       struct bfd_link_info *info ATTRIBUTE_UNUSED,
-                       asection *sec ATTRIBUTE_UNUSED,
+                       struct bfd_link_info *info,
+                       asection *sec,
                        const Elf_Internal_Rela *relocs)
 {
   Elf_Internal_Shdr *symtab_hdr;
@@ -2539,8 +2602,11 @@ mrk3_elf_check_relocs (bfd *abfd,
 
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
   sym_hashes = elf_sym_hashes (abfd);
-  asection *target_section;
-  bfd_vma target_offset;
+  struct elf_mrk3_local_symdata *symdata;
+
+  /* Do not generate a PLT section if generating reloatable output */
+  if (info->relocatable)
+    return TRUE;
 
   rel_end = relocs + sec->reloc_count;
   for (rel = relocs; rel < rel_end; rel++)
@@ -2582,15 +2648,20 @@ mrk3_elf_check_relocs (bfd *abfd,
               }
             else
               {
-                /* PIC relocations to local symbols are not supported in this
-                   linker. Report a useful message to the user */
-                target_section = get_elf_r_symndx_section (abfd, r_symndx);
-                target_offset = get_elf_r_symndx_offset (abfd, r_symndx);
-                _bfd_error_handler
-                (_("error: PIC relocations to local symbols are not supported"
-                   " at `%A + 0x%"BFD_VMA_FMT"x'"),
-                    target_section, target_offset);
-                return FALSE;
+                /* Create PLT section if it doesn't already exist and define
+                   the PLT symbol */
+                mrk3_elf_create_plt_section (abfd, info);
+                info->dynamic = 1;
+
+                symdata = get_local_symdata (abfd, r_symndx);
+                symdata->plt_refcount += 1;
+
+                /* If we have not seen this symbol before space needs
+                   allocating in the PLT.
+                   Unlike hashes above, local symbol refcounts are initlized
+                   to 0, so 1 indicates first use */
+                if (symdata->plt_refcount == 1)
+                  elf_hash_table (info)->splt->size += PLT_ENTRY_SIZE;
               }
             break;
           /* Do we need anything else here? */
@@ -2626,6 +2697,9 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
   bfd_vma address;
   bfd_vma address_lo;
   bfd_vma address_hi;
+
+  /* We no longer need local symbol refcounting, so clean up memory. */
+  clean_local_symdata();
 
   plt = bfd_get_section_by_name (output_bfd, ".plt");
   if (plt == NULL)
