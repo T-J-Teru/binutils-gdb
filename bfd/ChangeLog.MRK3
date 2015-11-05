@@ -1,3 +1,8 @@
+2015-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Rewrite header
+	comment.
+
 2015-11-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_only_emit_debug_relocs): New variable.

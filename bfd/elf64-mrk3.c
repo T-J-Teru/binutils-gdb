@@ -1325,10 +1325,13 @@ relax_log (const char *fmt, ...)
   va_end (ap);
 }
 
-/* Delete some bytes from a section while changing the size of an instruction.
-   The parameter "addr" denotes the section-relative offset pointing just
-   behind the shrinked instruction. "addr+count" point at the first
-   byte just behind the original unshrinked instruction.  */
+/* Delete some bytes from a section, update relocations and symbols.
+
+   ABFD is the bfd object containing SEC the input section in which we are
+   deleting some bytes.
+
+   ADDR is the section relative offset of the first byte to delete, and
+   COUNT is the number of bytes to delete.  */
 
 static bfd_boolean
 mrk3_elf_relax_delete_bytes (bfd *abfd,
