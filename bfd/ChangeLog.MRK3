@@ -1,5 +1,12 @@
 2015-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Fix calculation of
+	shrinked_insn_address.  When updating relocation addends, don't
+	adjust relocations when the addend spans into a region of code
+	that was not moved.
+
+2015-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Rewrite header
 	comment.
 

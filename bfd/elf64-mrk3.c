@@ -1352,6 +1352,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
   struct bfd_section *isec;
   struct mrk3_relax_info *relax_info;
   struct mrk3_property_record *prop_record = NULL;
+  bfd_size_type original_sec_size;
 
   relax_log_nesting (+2);
 
@@ -1364,7 +1365,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
     }
 
   contents = retrieve_contents (abfd, sec, TRUE);
-  toaddr = sec->size;
+  toaddr = original_sec_size = sec->size;
 
   if (relax_info->records.count > 0)
     {
@@ -1452,14 +1453,13 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
   symtab_hdr = &elf_tdata (abfd)->symtab_hdr;
   for (isec = abfd->sections; isec; isec = isec->next)
     {
-      bfd_vma symval;
       bfd_vma shrinked_insn_address;
 
       if (isec->reloc_count == 0)
         continue;
 
       shrinked_insn_address = (sec->output_section->vma
-                               + sec->output_offset + addr - count);
+                               + sec->output_offset + addr);
 
       irel = retrieve_internal_relocs (abfd, isec, TRUE);
       for (irelend = irel + isec->reloc_count;
@@ -1479,16 +1479,54 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
 
               isym = isymbuf + ELF64_R_SYM (irel->r_info);
               sym_sec = bfd_section_from_elf_index (abfd, isym->st_shndx);
-              symval = isym->st_value;
               /* If the reloc is absolute, it will not have
                  a symbol or section associated with it.  */
               if (sym_sec == sec)
                 {
-                  symval += sym_sec->output_section->vma
-                    + sym_sec->output_offset;
+                  bfd_vma symval;
 
+                  symval = sym_sec->output_section->vma
+                    + sym_sec->output_offset + isym->st_value;
+
+                  /* This assert says that the destination of the
+                     relocation, the symbol address plus the relocation
+                     addend, should not fall in the deleted bytes.  */
+                  BFD_ASSERT (((symval + irel->r_addend)
+                               <= shrinked_insn_address)
+                              || ((symval + irel->r_addend)
+                                  >= (shrinked_insn_address + count)));
+
+                  /* This assert says that the symbol plus relocation
+                     offset should be within the range of the symbols
+		     section.  However, it's not unreasonable that a
+		     relocation might target the very end of a section,
+		     this should be allowed for.  */
+		  BFD_ASSERT (symval + irel->r_addend <=
+                              (sym_sec->output_section->vma
+                               + sym_sec->output_offset
+                               + original_sec_size));
+
+                  /* If the symbol is before the point of deletion, but the
+                     symbol plus addend is after the point of deletion,
+                     then we need to reduce the relocation addend.
+                     The complexity here is that if the symbol plus addend
+                     is after the TOADDR, which does not move then the
+                     relocation should not be adjusted.  However there's
+                     one special case, which is if the symbol plus addend
+                     reaches the very end of the section then we should
+                     adjust.  */
                   if (symval <= shrinked_insn_address
-                      && (symval + irel->r_addend) > shrinked_insn_address)
+                      && ((symval + irel->r_addend)
+                          >= (shrinked_insn_address + count))
+		      && (((symval + irel->r_addend)
+			   < (sym_sec->output_section->vma
+			      + sym_sec->output_offset
+			      + toaddr))
+			  || ((toaddr == original_sec_size)
+                              && ((symval + irel->r_addend)
+				  == (sym_sec->output_section->vma
+				      + sym_sec->output_offset
+				      + toaddr)))))
                     irel->r_addend -= count;
                 }
               /* else...Reference symbol is absolute.  No adjustment needed.  */
@@ -1498,7 +1536,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
         }
     }
 
-  /* Adjust the local symbols defined in this section.  */
+  /* Adjust the locations of local symbols defined in this section.  */
   isym = retrieve_local_syms (abfd);
   sec_shndx = _bfd_elf_section_from_bfd_section (abfd, sec);
   if (isym != NULL)
@@ -1515,7 +1553,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
 	}
     }
 
-  /* Now adjust the global symbols defined in this section.  */
+  /* Now adjust the locations of global symbols defined in this section.  */
   symcount = (symtab_hdr->sh_size / sizeof (Elf64_External_Sym)
               - symtab_hdr->sh_info);
   sym_hashes = elf_sym_hashes (abfd);
