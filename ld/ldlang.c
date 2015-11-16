@@ -5528,7 +5528,9 @@ lang_do_assignments_1 (lang_statement_union_type *s,
 	  break;
 
 	case lang_data_statement_enum:
+          expld.referenced_from_data_statement = TRUE;
 	  exp_fold_tree (s->data_statement.exp, bfd_abs_section_ptr, &dot);
+          expld.referenced_from_data_statement = FALSE;
 	  if (expld.result.valid_p)
 	    {
 	      s->data_statement.value = expld.result.value;

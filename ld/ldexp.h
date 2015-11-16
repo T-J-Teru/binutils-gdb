@@ -138,6 +138,8 @@ struct ldexp_control {
 
   /* Principally used for diagnostics.  */
   bfd_boolean assigning_to_dot;
+  bfd_boolean referenced_from_data_statement;
+
   /* If evaluating an assignment, the destination.  Cleared if an
      etree_name NAME matches this, to signal a self-assignment.
      Note that an etree_name DEFINED does not clear this field, nor

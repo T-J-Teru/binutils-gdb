@@ -1,5 +1,15 @@
 2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldexp.c (fold_name): Report error when we are evaluating a data
+	statement.
+	* ldexp.h (struct ldexp_control): Add
+	'referenced_from_data_statement' member.
+	* ldlang.c (lang_do_assignments_1): Set and clear
+	'referenced_from_data_statement' flag around the expression
+	evaluation.
+
+2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldlang.c (lang_do_assignments_1): Report expression location for
 	linker errors from data statements.
 

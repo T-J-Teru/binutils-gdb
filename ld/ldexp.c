@@ -735,7 +735,8 @@ fold_name (etree_type *tree)
 	    }
 	  else if (expld.phase == lang_final_phase_enum
 		   || (expld.phase != lang_mark_phase_enum
-		       && expld.assigning_to_dot))
+		       && (expld.assigning_to_dot
+                           || expld.referenced_from_data_statement)))
 	    einfo (_("%F%S: undefined symbol `%s'"
 		     " referenced in expression\n"),
 		   tree, tree->name.name);
