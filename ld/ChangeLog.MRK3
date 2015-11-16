@@ -1,3 +1,8 @@
+2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ldlang.c (lang_do_assignments_1): Report expression location for
+	linker errors from data statements.
+
 2015-11-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ld.texinfo (Options): Add information about -emit-debug-relocs.

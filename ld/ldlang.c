@@ -5536,7 +5536,8 @@ lang_do_assignments_1 (lang_statement_union_type *s,
 		s->data_statement.value += expld.result.section->vma;
 	    }
 	  else
-	    einfo (_("%F%P: invalid data statement\n"));
+	    einfo (_("%F%S: invalid data statement\n"),
+                   s->data_statement.exp);
 	  {
 	    unsigned int size;
 	    switch (s->data_statement.type)
