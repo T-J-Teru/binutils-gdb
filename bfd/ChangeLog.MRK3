@@ -1,3 +1,13 @@
+2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.h (struct mrk3_property_record): Add new record types
+	for ORG/ALIGN with and without FILL.
+	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Handle new record
+	types, support filling with NOP pattern.
+	(mrk3_check_align_records): Support new record types.
+	(elf64_mrk3_load_records_from_section): Support new record types.
+	(elf64_mrk3_load_records_from_section): Likewise.
+
 2015-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Fix calculation of

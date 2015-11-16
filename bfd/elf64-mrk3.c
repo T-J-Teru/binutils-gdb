@@ -1405,20 +1405,45 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
   else
     {
       /* Use the property record to fill in the bytes we've opened up.  */
-      int fill = 0;
+      int fill = 0, fill_length = 0;
       switch (prop_record->type)
         {
-        case RECORD_ORG:
+        case RECORD_ORG_AND_FILL:
           fill = prop_record->data.org.fill;
+          fill_length = 1;
+          break;
+        case RECORD_ALIGN_AND_FILL:
+          fill = prop_record->data.align.fill;
+          fill_length = 1;
+          prop_record->data.align.preceding_deleted += count;
+          break;
+        case RECORD_ORG:
+          fill = 0;
+          fill_length = 1;
           break;
         case RECORD_ALIGN:
-          fill = prop_record->data.align.fill;
+          fill = 0x7f6c; /* This is the NOP pattern.  */
+          fill_length = 2;
           prop_record->data.align.preceding_deleted += count;
           break;
         };
       relax_log ("Filling %d bytes at %#lx with %#x\n",
                  count, (toaddr - count), fill);
-      memset (contents + toaddr - count, fill, count);
+      BFD_ASSERT (fill_length > 0 && fill_length <= 2);
+      if (fill_length == 1)
+        memset (contents + toaddr - count, fill, count);
+      else
+        {
+          int i;
+          bfd_byte fill_bytes [2] =
+            {
+              ((fill >> 8) & 0xff), (fill & 0xff)
+            };
+          for (i = 0; i < count; ++i)
+            {
+              *(contents + toaddr - count + i) = fill_bytes [i % 2];
+            }
+        }
     }
 
   /* Adjust all the reloc addresses in SEC.  The relocations of SEC are
@@ -2926,8 +2951,10 @@ mrk3_check_align_records (bfd *abfd,
             {
               switch (relax_info->records.items [i].type)
                 {
+                case RECORD_ORG_AND_FILL:
                 case RECORD_ORG:
                   break;
+                case RECORD_ALIGN_AND_FILL:
                 case RECORD_ALIGN:
                   {
                     struct mrk3_property_record *record;
@@ -3198,11 +3225,17 @@ elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
       bfd_byte entry_type = *tmp;
       switch (entry_type)
         {
-        case RECORD_ORG:
+        case RECORD_ORG_AND_FILL:
           tmp += 11;
           break;
-        case RECORD_ALIGN:
+        case RECORD_ALIGN_AND_FILL:
           tmp += 13;
+          break;
+        case RECORD_ORG:
+          tmp += 9;
+          break;
+        case RECORD_ALIGN:
+          tmp += 11;
           break;
         default:
           _bfd_error_handler
@@ -3308,14 +3341,14 @@ elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
 
       switch (r_list->records [i].type)
         {
-        case RECORD_ORG:
+        case RECORD_ORG_AND_FILL:
           /* A 2-byte fill to load.  */
           if (size < 2)
             goto load_failed;
           r_list->records [i].data.org.fill = *((uint16_t *) ptr);
           ptr += 2;
           break;
-        case RECORD_ALIGN:
+        case RECORD_ALIGN_AND_FILL:
           /* A 2-byte alignment, and a 2-byte fill to load.  */
           if (size < 4)
             goto load_failed;
@@ -3324,6 +3357,25 @@ elf64_mrk3_load_records_from_section (bfd *abfd, asection *sec)
           r_list->records [i].data.align.fill = *((uint16_t *) ptr);
           ptr += 2;
           size -= 4;
+          /* Just initialise PRECEDING_DELETED field, this field is
+             used during linker relaxation.  */
+          r_list->records [i].data.align.preceding_deleted = 0;
+          break;
+        case RECORD_ORG:
+          /* No additional information.  Initialise the FILL field to zero
+             for consistency, this is never used though.  */
+          r_list->records [i].data.org.fill = 0;
+          break;
+        case RECORD_ALIGN:
+          /* A 2-byte alignment.  */
+          if (size < 2)
+            goto load_failed;
+          r_list->records [i].data.align.bytes = *((uint16_t *) ptr);
+          ptr += 2;
+          size -= 2;
+          /* Initialise the FILL field to zero for consistency, this is
+             never used though.  */
+          r_list->records [i].data.align.fill = 0;
           /* Just initialise PRECEDING_DELETED field, this field is
              used during linker relaxation.  */
           r_list->records [i].data.align.preceding_deleted = 0;
@@ -3366,6 +3418,12 @@ elf64_mrk3_property_record_name (struct mrk3_property_record *rec)
 
   switch (rec->type)
     {
+    case RECORD_ORG_AND_FILL:
+      str = "ORG+FILL";
+      break;
+    case RECORD_ALIGN_AND_FILL:
+      str = "ALIGN+FILL";
+      break;
     case RECORD_ORG:
       str = "ORG";
       break;

@@ -43,8 +43,10 @@ struct mrk3_property_record
 
   /* The type of this record.  */
   enum {
-    RECORD_ORG = 1,
-    RECORD_ALIGN = 2,
+    RECORD_ORG_AND_FILL = 1,
+    RECORD_ALIGN_AND_FILL = 2,
+    RECORD_ORG = 3,
+    RECORD_ALIGN = 4
   } type;
 
   /* Type specific data.  */

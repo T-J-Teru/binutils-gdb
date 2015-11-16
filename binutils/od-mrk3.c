@@ -86,14 +86,20 @@ elf64_mrk3_dump_records (bfd *abfd)
                + r_list->records [i].offset));
       switch (r_list->records [i].type)
         {
-        case RECORD_ORG:
-          printf ("     Fill: 0x%04lx\n",
+        case RECORD_ORG_AND_FILL:
+          printf ("     Fill: 0x%02lx\n",
                   r_list->records [i].data.org.fill);
           break;
-        case RECORD_ALIGN:
-          printf ("     Align: 0x%04lx, Fill: 0x%04lx\n",
+        case RECORD_ALIGN_AND_FILL:
+          printf ("     Align: 0x%04lx, Fill: 0x%02lx\n",
                   r_list->records [i].data.align.bytes,
                   r_list->records [i].data.align.fill);
+          break;
+        case RECORD_ORG:
+          break;
+        case RECORD_ALIGN:
+          printf ("     Align: 0x%04lx\n",
+                  r_list->records [i].data.align.bytes);
           break;
         }
     }

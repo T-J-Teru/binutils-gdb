@@ -1,3 +1,8 @@
+2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* od-mrk3.c (elf64_mrk3_dump_records): Support ORG/ALIGN with and
+	without FILL.
+
 2015-10-06  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* configure.ac: Setup private mrk3 objdump functions and files.
