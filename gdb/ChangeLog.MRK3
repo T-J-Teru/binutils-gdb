@@ -1,5 +1,11 @@
 2015-11-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_debug): Make static.
+	(mrk3_memspace_valid_p): Likewise.
+	(nxpload_logging): Likewise.
+
+2015-11-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (struct mrk3_frame_cache): Delete 'base', add
 	'frame_size', 'frame_base', and 'frame_type' members.
 	(mrk3_analyze_prologue): Forward declare.  Rewrite to not rely on

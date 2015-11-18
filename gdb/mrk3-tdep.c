@@ -328,13 +328,13 @@ struct mrk3_frame_cache
 };
 
 /*! Global debug flag */
-int  mrk3_debug;
+static int  mrk3_debug;
 
 /*! Global flag indicating if memspace is valid. */
-int  mrk3_memspace_valid_p;
+static int  mrk3_memspace_valid_p;
 
 /* Global, logging level for nxpload command.  */
-int nxpload_logging = 1;
+static int nxpload_logging = 1;
 
 
 /*! Enumeration to identify memory modes. These match the values in the bit
