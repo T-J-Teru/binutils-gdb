@@ -1,3 +1,37 @@
+2015-11-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c: Add stack.h include.
+	(enum mrk3_frame_type): New enum.
+	(struct mrk3_frame_cache): Improve comments.  New prev_sp,
+	frame_base_p, prev_sp_p members.  Rename prev_pc_on_stack to
+	prev_pc_on_stack_p.
+	(mrk3_frame_type_warnings): New variable.
+	(mrk3_frame_type_toggling): New variable.
+	(mrk3_frame_type_require_call_site): New variable.
+	(mrk3_analyze_prologue): Update for to account for
+	'prev_pc_on_stack' rename.
+	(mrk3_extract_prev_pc): New function.
+	(mrk3_get_frame_function_name): New function.
+	(mrk3_analyze_frame_type): Add code to check for a call site using
+	return address.
+	(mrk3_frame_cache): Calculating previous pc is factored out into
+	mrk3_extract_prev_pc.  Update for changes in 'struct
+	mrk3_frame_cache'.
+	(mrk3_frame_unwind_stop_reason): New function.
+	(struct frame_unwind mrk3_frame_unwind): Update to use
+	mrk3_frame_unwind_stop_reason.
+	(set_mrk3_list): New variable.
+	(show_mrk3_list): New variable.
+	(set_mrk3_command): New function.
+	(show_mrk3_command): New function.
+	(set_mrk3_frame_type_list): New variable.
+	(show_mrk3_frame_type_list): New variable.
+	(set_mrk3_frame_type_command): New function.
+	(show_mrk3_frame_type_command): New function.
+	(_initialize_mrk3_tdep): Add new 'set mrk3 frame-type ' command
+	prefix, and the 'require-call-site', 'toggling', and 'warnings'
+	settings.
+
 2015-11-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_debug): Make static.

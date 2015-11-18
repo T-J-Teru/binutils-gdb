@@ -188,6 +188,7 @@ bits. */
 #include "completer.h"
 #include "readline/tilde.h"
 #include "user-regs.h"
+#include "stack.h"
 
 /*  Required for symbol switch handling. */
 #include "gdb/defs.h"
@@ -300,28 +301,43 @@ static const int  MRK3_DEBUG_FLAG_FRAME    = 0x0004;
 static const int  MRK3_DEBUG_FLAG_MEMSPACE = 0x0008;
 static const int  MRK3_DEBUG_FLAG_DWARF    = 0x0010;
 
+/* The possible frame types.  */
+enum mrk3_frame_type
+  {
+    frame_type_unknown = 0,
+    frame_type_call,
+    frame_type_ecall
+  };
+
 /* Information extracted from frame.  */
 struct mrk3_frame_cache
 {
   /* Number of bytes of stack allocated in this frame.  */
   int frame_size;
 
-  /* Computed and cached frame base address.  This is the stack pointer on
-     entry to a function.  */
+  /* The value of stack pointer on entry to this function.  This is after
+     any artefacts written to the stack by CALL or ECALL.  This value is
+     what we use for the FRAME_BASE address of each frame.  */
   CORE_ADDR frame_base;
+
+  /* The value of stack pointer in the previous frame, at the point that
+     THIS frame was called.  The difference between PREV_SP and FRAME_BASE
+     depends on what type of call was used, CALL or ECALL.  */
+  CORE_ADDR prev_sp;
 
   /* If the previous program counter is on the stack, which is almost
      certainly the case, then we should only access it as 16-bit.  */
-  unsigned prev_pc_on_stack : 1;
+  unsigned prev_pc_on_stack_p : 1;
 
-  /* What type of frame is this, CALL or ECALL.  We start of in state
-     unknown, indicating that we need to figure out the answer.  */
-  enum
-    {
-      frame_type_unknown = 0,
-      frame_type_call,
-      frame_type_ecall
-    } frame_type;
+  /* Set to true once the FRAME_BASE has been calculated.  */
+  unsigned frame_base_p : 1;
+
+  /* Set to true one the PREV_SP has been calculated.  */
+  unsigned prev_sp_p : 1;
+
+  /* What type of frame is this, CALL or ECALL.  We start of in the unknown
+     state and try to figure out the frame type by looking at the code.  */
+  enum mrk3_frame_type frame_type;
 
   /* Table indicating the location of each and every register.  */
   struct trad_frame_saved_reg *saved_regs;
@@ -336,6 +352,19 @@ static int  mrk3_memspace_valid_p;
 /* Global, logging level for nxpload command.  */
 static int nxpload_logging = 1;
 
+/* Issue warnings when making changes, or when issues are detected while
+   analysing a frames CALL / ECALL type.  */
+static int mrk3_frame_type_warnings = 1;
+
+/* If a CALL / ECALL frame type is found by looking for a RET / ERET, but
+   the call site suggests that the alternative frame type is more
+   appropriate, should we toggle the frame type to match the call site?  */
+static int mrk3_frame_type_toggling = 1;
+
+/* If we found a CALL / ECALL frame type by looking for a RET / ERET, but
+   we could not find a call site of any kind, should the frame be forced
+   back to the unknown frame type?  */
+static int mrk3_frame_type_require_call_site = 1;
 
 /*! Enumeration to identify memory modes. These match the values in the bit
     field. */
@@ -1752,7 +1781,7 @@ mrk3_analyze_prologue (struct gdbarch *gdbarch,
       cache->frame_size = frame_size;
 
       /* PC is saved on the start of this stack.  */
-      cache->prev_pc_on_stack = 1;
+      cache->prev_pc_on_stack_p = 1;
 
       /* If we have a FP it may be pushed onto the stack. */
       if (have_fp_p)
@@ -1773,6 +1802,88 @@ mrk3_analyze_prologue (struct gdbarch *gdbarch,
   return pc;
 }	/* mrk3_analyse_prologue */
 
+/*! Extract the previous pc value from the stack.
+
+   @param[in]  gdbarch     The architecture for the frame being analysed.
+   @param[in]  frame_type  Is this a CALL or ECALL frame.
+   @param[in]  frame_base  The GDB address for the stack pointer as it was
+                           on entry to this function.
+   @param[in]  frame_pc    The address within this function.  Used to
+                           supply the upper 4 bits of address for a CALL
+                           style function.
+
+   @return                 The GDB address for the return pc.  This is
+                           generally referred to as the previous pc in GDB,
+			   but is actually the return address.  */
+
+static CORE_ADDR
+mrk3_extract_prev_pc (struct gdbarch *gdbarch,
+		      enum mrk3_frame_type frame_type,
+		      CORE_ADDR frame_base,
+		      CORE_ADDR frame_pc)
+{
+  CORE_ADDR prev_pc;
+
+  /* This function takes no responsibility for guessing.  */
+  gdb_assert (frame_type != frame_type_unknown);
+
+  if (frame_type == frame_type_ecall)
+    {
+      uint16_t pc, psw;
+
+      /* For an ECALL function we load bits [15:0] from the first stack
+	 location, while bits [19:16] are loaded from the second stack
+	 location; these bits are actually merged into the PSW value.  */
+      read_memory (frame_base + 2, (gdb_byte *) &pc, 2);
+      read_memory (frame_base + 0, (gdb_byte *) &psw, 2);
+      prev_pc = ((frame_pc & ~((CORE_ADDR) 0x1fffff))
+		 | ((CORE_ADDR) pc) << 1
+		 | (((((CORE_ADDR) psw) >> 4) & 0xf) << 17));
+    }
+  else
+    {
+      /* This handles frames of type CALL, and is also the default if
+	 we don't know what type of frame this is.  */
+      uint16_t pc;
+
+      /* For a CALL function we load bits [15:0] from the stack, while
+	 bits [19:16] are kept from the frame pc.  */
+      read_memory (frame_base + 0, (gdb_byte *) &pc, 2);
+      prev_pc = ((frame_pc & ~((CORE_ADDR) 0x1ffff))
+		 | (((CORE_ADDR) pc) << 1));
+    }
+
+  if (mrk3_debug_frame ())
+    fprintf_unfiltered (gdb_stdlog, _("MRK3 mrk3_extract_prev_pc frame_base = %s, frame_pc = %s, prev_pc = %s\n"),
+				      print_core_address (gdbarch, frame_base),
+				      print_core_address (gdbarch, frame_pc),
+				      print_core_address (gdbarch, prev_pc));
+
+  return prev_pc;
+}
+
+/*! Return a string that is the name of the function for FRAME.
+
+   @param[in]  frame       The frame for which the function name is
+                           required.
+
+   @return  A malloc'd string that is the name of the function.  This
+            string should be xfree'd when it is no longer required.  */
+
+static char *
+mrk3_get_frame_function_name (struct frame_info *frame)
+{
+  char *name = NULL;
+  enum language funlang = language_unknown;
+  struct symbol *func;
+
+  find_frame_funname (frame, &name, &funlang, &func);
+  if (name == NULL)
+    name = xstrdup ("??");
+
+  return name;
+}
+
 /*! Calculate the frame type (CALL or ECALL) by looking at frame details.
 
    @param[in]  gdbarch     The architecture for the frame being analysed.
@@ -1787,9 +1898,13 @@ mrk3_analyze_frame_type (struct gdbarch *gdbarch,
 			 struct mrk3_frame_cache *cache)
 {
   int have_func_bounds_p;	/* If we have function start/end addresses.  */
-  CORE_ADDR func_start, func_end, pc;
-  uint16_t  insn16;
+  CORE_ADDR func_start, func_end, pc, prev_pc;
+  uint16_t insn16;
+  uint32_t insn32;
+  enum mrk3_frame_type frame_type = frame_type_unknown;
+  int found_call_p, found_ecall_p;
 
+  gdb_assert (cache->frame_base_p);
   gdb_assert (cache->frame_type == frame_type_unknown);
 
   pc = get_frame_pc (this_frame);
@@ -1809,10 +1924,105 @@ mrk3_analyze_frame_type (struct gdbarch *gdbarch,
       mrk3_read_code_memory (gdbarch, func_end - 2, (gdb_byte *) &insn16,
 			     sizeof (insn16));
       if (insn16 == /* ERET */ 0x1bc7)
-	cache->frame_type = frame_type_ecall;
+	frame_type = frame_type_ecall;
       else if (insn16 == /* RET */ 0xc41b)
-	cache->frame_type = frame_type_call;
+	frame_type = frame_type_call;
     }
+
+  found_call_p = found_ecall_p = 0;
+
+  prev_pc = mrk3_extract_prev_pc (gdbarch, frame_type_ecall,
+				  cache->frame_base, pc);
+  mrk3_read_code_memory (gdbarch, prev_pc - 4,
+			 (gdb_byte *) &insn16, sizeof (insn16));
+  if ((insn16 & 0xfff0) == 0x0fe0)
+    found_ecall_p = 1;
+
+  prev_pc = mrk3_extract_prev_pc (gdbarch, frame_type_call,
+				  cache->frame_base, pc);
+  mrk3_read_code_memory (gdbarch, prev_pc - 4,
+			 (gdb_byte *) &insn16, sizeof (insn16));
+  if ((insn16 & 0xffff) == 0x0fc0)
+    found_call_p = 1;
+
+  mrk3_read_code_memory (gdbarch, prev_pc - 2,
+			 (gdb_byte *) &insn16, sizeof (insn16));
+  if (((insn16 & 0xfff8) == 0x07d0)
+      || ((insn16 & 0xc000) == 0x8000))
+    found_call_p = 1;
+
+  if ((frame_type == frame_type_ecall && found_ecall_p)
+      || (frame_type == frame_type_call && found_call_p))
+    /* Nothing to do.  */ ;
+  else if (frame_type == frame_type_ecall && found_call_p)
+    {
+      if (mrk3_frame_type_toggling)
+	{
+	  if (mrk3_frame_type_warnings)
+	    {
+	      char *name = mrk3_get_frame_function_name (this_frame);
+
+	      warning (_("Function `%s' (at %s) ends in ERET but it "
+			 "looks like\n"
+			 "it was called with CALL.  The function will "
+			 "be unwound assuming CALL."),
+		       name, print_core_address (gdbarch, pc));
+	      xfree (name);
+	    }
+
+	  frame_type = frame_type_call;
+	}
+    }
+  else if (frame_type == frame_type_call && found_ecall_p)
+    {
+      if (mrk3_frame_type_toggling)
+	{
+	  if (mrk3_frame_type_warnings)
+	    {
+	      char *name = mrk3_get_frame_function_name (this_frame);
+
+	      warning (_("Function `%s' (at %s) ends in RET but it "
+			 "looks like\n"
+			 "it was called with ECALL.  The function will "
+			 "be unwound assuming ECALL."),
+		       name, print_core_address (gdbarch, pc));
+	      xfree (name);
+	    }
+
+	  frame_type = frame_type_ecall;
+	}
+    }
+  else if (frame_type != frame_type_unknown)
+    {
+      if (mrk3_frame_type_require_call_site)
+	{
+	  if (mrk3_frame_type_warnings)
+	    {
+	      char *name = mrk3_get_frame_function_name (this_frame);
+
+	      warning (_("Function `%s' (at %s) ends in %s but no\n"
+			 "CALL or ECALL call site could be found.  The stack "
+			 "unwinding will stop here."),
+		       name,
+		       print_core_address (gdbarch, pc),
+		       (frame_type == frame_type_call ? "RET" : "ERET"));
+	      xfree (name);
+	    }
+
+	  frame_type = frame_type_unknown;
+	}
+    }
+  else if (mrk3_frame_type_warnings)
+    {
+      char *name = mrk3_get_frame_function_name (this_frame);
+
+      warning (_("Unable to determine CALL / ECALL type for `%s' (at %s)."),
+	       name, print_core_address (gdbarch, pc));
+      xfree (name);
+    }
+
+  /* Finally, update the cache.  */
+  cache->frame_type = frame_type;
 }
 
 /*! Populate the frame cache if it doesn't exist. */
@@ -1848,23 +2058,27 @@ mrk3_frame_cache (struct frame_info *this_frame,
       func_start = get_frame_func (this_frame);
       func_start = mrk3_addr_bits_add (1, memspace, func_start);
       frame_pc = get_frame_pc (this_frame);
-      mrk3_analyze_prologue (gdbarch, func_start, frame_pc, *this_cache);
-      mrk3_analyze_frame_type (gdbarch, this_frame, *this_cache);
+      mrk3_analyze_prologue (gdbarch, func_start, frame_pc, cache);
 
+      /* Compute this before we try to figure out the frame type.  */
       this_sp = get_frame_register_unsigned (this_frame, MRK3_SP_REGNUM);
       this_sp = mrk3_p2a (gdbarch, 0, memspace, this_sp);
       cache->frame_base = this_sp + cache->frame_size;
+      cache->frame_base_p = 1;
+
+      /* Now we can figure out the frame type.  */
+      mrk3_analyze_frame_type (gdbarch, this_frame, cache);
 
       if (cache->frame_type == frame_type_ecall)
 	prev_sp = cache->frame_base + 4;
       else if (cache->frame_type == frame_type_call)
 	prev_sp = cache->frame_base + 2;
       else
-	/* Not sure if this frame is CALL or ECALL.  For now, we guess
-	   that this is a CALL frame, however, we can do better than this
-	   I think.  */
-	prev_sp = cache->frame_base + 2;
+	/* TODO: Is there anything better we could do here?  */
+	prev_sp = 0;
       /* Now store the value of the previous stack pointer.  */
+      cache->prev_sp = prev_sp;
+      cache->prev_sp_p = 1;
       trad_frame_set_value (cache->saved_regs, MRK3_SP_REGNUM, prev_sp);
 
       /* Calculate actual addresses of saved registers using offsets
@@ -1873,34 +2087,16 @@ mrk3_frame_cache (struct frame_info *this_frame,
 	if (trad_frame_addr_p (cache->saved_regs, reg))
 	  cache->saved_regs[reg].addr += prev_sp;
 
-      /* We compute the previous pc differently based on whether we are a
-	 CALL or ECALL function.  If we don't know what type of frame we
-	 are then we must guess; we currently guess at CALL.  */
-      if (cache->frame_type == frame_type_ecall)
-	{
-	  uint16_t pc, psw;
-
-	  /* For an ECALL function we load bits [15:0] from the first stack
-	     location, while bits [19:16] are loaded from the second stack
-	     location; these bits are actually merged into the PSW value.  */
-	  read_memory (prev_sp - 2, (gdb_byte *) &pc, 2);
-	  read_memory (prev_sp - 4, (gdb_byte *) &psw, 2);
-	  prev_pc = ((frame_pc & ~((CORE_ADDR) 0xfffff))
-		     | ((CORE_ADDR) pc)
-		     | (((((CORE_ADDR) psw) >> 4) & 0xf) << 16));
-	}
+      /* Get the previous pc, and write it into the register cache.  */
+      if (cache->frame_type != frame_type_unknown)
+	prev_pc = mrk3_extract_prev_pc (gdbarch, cache->frame_type,
+					cache->frame_base, frame_pc);
       else
-	{
-	  /* This handles frames of type CALL, and is also the default if
-	     we don't know what type of frame this is.  */
-	  uint16_t pc;
+	/* TODO: Is there something better we could do here?  */
+	prev_pc = 0;
 
-	  /* For a CALL function we load bits [15:0] from the stack, while
-	     bits [19:16] are kept from the frame pc.  */
-	  read_memory (prev_sp - 2, (gdb_byte *) &pc, 2);
-	  prev_pc = (frame_pc & ~((CORE_ADDR) 0xffff)) | (CORE_ADDR) pc;
-	}
-      trad_frame_set_value (cache->saved_regs, MRK3_PC_REGNUM, prev_pc);
+      trad_frame_set_value (cache->saved_regs, MRK3_PC_REGNUM,
+			    mrk3_a2p (gdbarch, prev_pc));
 
       /* Some debug output.  */
       if (mrk3_debug_frame ())
@@ -1971,10 +2167,44 @@ mrk3_frame_prev_register (struct frame_info *this_frame,
   return val;
 }
 
+/* Figure out if unwinding should stop at THIS_FRAME.  Return
+   UNWIND_NO_REASON is unwinding should continue, or a suitable reason code
+   if unwinding should no go beyond THIS_FRAME.  */
+
+static enum unwind_stop_reason
+mrk3_frame_unwind_stop_reason (struct frame_info *this_frame,
+			       void **this_cache)
+{
+  struct frame_info *next_frame;
+  struct frame_id this_id = get_frame_id (this_frame);
+  struct mrk3_frame_cache *cache =
+    mrk3_frame_cache (this_frame, this_cache);
+  struct gdbarch *gdbarch = get_frame_arch (this_frame);
+
+  /* If we've hit a wall, stop.  */
+  if (cache->prev_sp == 0 || frame_id_eq (this_id, outer_frame_id))
+    return UNWIND_OUTERMOST;
+
+  if (cache->frame_type == frame_type_unknown)
+    return UNWIND_OUTERMOST;
+
+  /* This catches the error case where run into unused memory and slowly
+     creep up the stack 2 bytes at a time.  As each frame looks different
+     (different stack pointer) gdb does not stop us.  This will break if
+     we ever have a recursive function that uses no stack frame.... */
+  next_frame = get_next_frame (this_frame);
+  if (next_frame
+      && get_frame_pc (next_frame) == get_frame_pc (this_frame)
+      && (get_frame_base_address (next_frame) ==
+	  get_frame_base_address (this_frame) - 2))
+    return UNWIND_OUTERMOST;
+
+  return UNWIND_NO_REASON;
+}
 
 static const struct frame_unwind mrk3_frame_unwind = {
   .type          = NORMAL_FRAME,
-  .stop_reason   = default_frame_unwind_stop_reason,
+  .stop_reason   = mrk3_frame_unwind_stop_reason,
   .this_id       = mrk3_frame_this_id,
   .prev_register = mrk3_frame_prev_register,
   .unwind_data   = NULL,
@@ -2212,7 +2442,6 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
 
   return 0;
 }
-
 
 /*! Fancy disassembler
 
@@ -3113,6 +3342,50 @@ mrk3_nxpload_command (char *arg,
 
 }	/* mrk3_nxpload_command() */
 
+/* Command-list for the "set/show mrk3" prefix command.  */
+static struct cmd_list_element *set_mrk3_list;
+static struct cmd_list_element *show_mrk3_list;
+
+/* Implement the "set mrk3" prefix command.  */
+
+static void
+set_mrk3_command (char *arg, int from_tty)
+{
+  printf_unfiltered (_(\
+"\"set mrk3\" must be followed by the name of a setting.\n"));
+  help_list (set_mrk3_list, "set mrk3 ", all_commands, gdb_stdout);
+}
+
+/* Implement the "show mrk3" prefix command.  */
+
+static void
+show_mrk3_command (char *args, int from_tty)
+{
+  cmd_show_list (show_mrk3_list, from_tty, "");
+}
+
+/* Command-list for the "set/show mrk3 frame-type" prefix command.  */
+static struct cmd_list_element *set_mrk3_frame_type_list;
+static struct cmd_list_element *show_mrk3_frame_type_list;
+
+/* Implement the "set mrk3 frame-type" prefix command.  */
+
+static void
+set_mrk3_frame_type_command (char *arg, int from_tty)
+{
+  printf_unfiltered (_(\
+"\"set mrk3 frame-type\" must be followed by the name of a setting.\n"));
+  help_list (set_mrk3_frame_type_list, "set mrk3 frame-type ",
+	     all_commands, gdb_stdout);
+}
+
+/* Implement the "show mrk3 frame-type" prefix command.  */
+
+static void
+show_mrk3_frame_type_command (char *args, int from_tty)
+{
+  cmd_show_list (show_mrk3_frame_type_list, from_tty, "");
+}
 
 extern initialize_file_ftype _initialize_mrk3_tdep;
 
@@ -3151,4 +3424,71 @@ _initialize_mrk3_tdep (void)
 			    NULL,
 			    &setlist,
 			    &showlist);
+
+  add_prefix_cmd ("mrk3", no_class, set_mrk3_command,
+                  _("Prefix command for changing MRK3 specfic settings"),
+                  &set_mrk3_list, "set mrk3 ", 0, &setlist);
+
+  add_prefix_cmd ("mrk3", no_class, show_mrk3_command,
+                  _("Generic command for showing MRK3 specific settings."),
+                  &show_mrk3_list, "show mrk3 ", 0, &showlist);
+
+  add_prefix_cmd ("frame-type", no_class, set_mrk3_frame_type_command,
+                  _("Prefix command for changing MRK3 frame-type "
+		    "specfic settings"),
+                  &set_mrk3_frame_type_list, "set mrk3 frame-type ",
+		  0, &set_mrk3_list);
+
+  add_prefix_cmd ("frame-type", no_class, show_mrk3_frame_type_command,
+                  _("Generic command for showing MRK3 frame-type "
+		    "specific settings."),
+                  &show_mrk3_frame_type_list, "show mrk3 frame-type ",
+		  0, &show_mrk3_list);
+
+  add_setshow_boolean_cmd ("require-call-site", class_obscure,
+			   &mrk3_frame_type_require_call_site, _("\
+Enable or disable if a call site is needed to establish frame type"), _("\
+Show whether establishing frame type requires a call site"), _("\
+When establishing the CALL / ECALL type of a frame GDB will look look at\n\
+the return address on the stack, and try to find the call site.  If GDB\n\
+can't find a call site, and this option is on, then GDB will force the\n\
+frame to have unknown CALL / ECALL type.  If this option is off then GDB\n\
+will rely on any frame type information it acquired by looking for a RET /\n\
+ERET at the end of a function."),
+			/* set */ NULL,
+			/* show */ NULL,
+			&set_mrk3_frame_type_list,
+			&show_mrk3_frame_type_list);
+
+  add_setshow_boolean_cmd ("toggling", class_obscure,
+			   &mrk3_frame_type_toggling, _("\
+Enable or disable frame type toggling"), _("\
+Show whether frame type toggling is enabled"), _("\
+When establishing the CALL / ECALL type of a frame GDB will look for a RET\n\
+or ERET instruction at the end of a function.  However, GDB also looks on\n\
+the stack at the return address and then examines the call site looking for\n\
+a CALL or ECALL instruction.  If the function ends in ERET, but appears to\n\
+be called with CALL (or vice versa) then, when this option is enabled, the\n\
+frame CALL / ECALL type will be toggled to match the call site.  When this\n\
+option is off, the frame type will be left based on the RET / ERET."),
+			/* set */ NULL,
+			/* show */ NULL,
+			&set_mrk3_frame_type_list,
+			&show_mrk3_frame_type_list);
+
+  add_setshow_boolean_cmd ("warnings", class_obscure,
+                           &mrk3_frame_type_warnings, _("\
+Enable or disable warnings when analyzing frame CALL / ECALL type"), _("\
+Show whether warnings are enabled for CALL / ECALL analysis"),
+                           _("\
+When establishing the CALL / ECALL type of a frame, sometime\n\
+inconsistencies are found.  In these cases GDB tries to do what will\n\
+give the most helpful information, however, turning this option on will\n\
+cause GDB to also issue a warning whenever something unexpected is found\n\
+while establishing the CALL / ECALL type.  Turn this option off to\n\
+silence the warnings and have GDB just get on with it."),
+			   NULL, NULL,
+			   &set_mrk3_frame_type_list,
+			   &show_mrk3_frame_type_list);
+
 }
