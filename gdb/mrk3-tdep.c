@@ -2012,6 +2012,20 @@ mrk3_analyze_frame_type (struct gdbarch *gdbarch,
 	  frame_type = frame_type_unknown;
 	}
     }
+  else if ((found_ecall_p ^ found_call_p) != 0)
+    {
+      if (mrk3_frame_type_warnings)
+	{
+	  char *name = mrk3_get_frame_function_name (this_frame);
+
+	  warning (_("Function `%s' (at %s) found call-site, but no\n"
+		     "RET or ERET instruction at end."),
+		   name, print_core_address (gdbarch, pc));
+	  xfree (name);
+	}
+
+      frame_type = found_ecall_p ? frame_type_ecall : frame_type_call;
+    }
   else if (mrk3_frame_type_warnings)
     {
       char *name = mrk3_get_frame_function_name (this_frame);

@@ -1,5 +1,10 @@
 2015-11-19  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_analyze_frame_type): Support case where we
+	find a call site but no return instruction.
+
+2015-11-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c: Add stack.h include.
 	(enum mrk3_frame_type): New enum.
 	(struct mrk3_frame_cache): Improve comments.  New prev_sp,
