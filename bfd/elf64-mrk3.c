@@ -29,15 +29,19 @@
 #include "bfd_stdint.h"
 #include "elf64-mrk3.h"
 
-/* PLT design:
+/* (S)PLT design:
   [..]   sub.w r7, #2
   [....] mov.w @r7, #FOO@LO
   [..]   sub.w r7, #2
   [....] mov.w @r7, #FOO@HI
+  [..]   sub.w r7 #2          <SPLT>
+  [....] mov.w @r7, #FOO@KEY  <SPLT>
   [..]   eret
-  Spaces where this PLT is used are noted with NOTE: PLTENC */
+  Spaces where this PLT is used are noted with NOTE: PLTENC
+  Entries marked as <SPLT> are only for SPLT enteries */
 
 #define PLT_ENTRY_SIZE 14
+#define SPLT_ENTRY_SIZE 20
 
 
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
@@ -414,6 +418,32 @@ static reloc_howto_type elf_mrk3_howto_table[] =
          0,                     /* Src_mask.  */
          0xffff,                /* Dst_mask.  */
          FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_SPIC,           /* Type.  */
+         0,                     /* Rightshift.  */
+         2,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         16,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         16,                    /* Bitpos. */
+         complain_overflow_dont, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_SPIC",         /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0,                     /* Src_mask.  */
+         0xffff0000,            /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
+  HOWTO (R_MRK3_SPIC_LO,        /* Type.  */
+         0,                     /* Rightshift.  */
+         1,                     /* Size (0 = byte, 1 = short, 2 = long).  */
+         16,                    /* Bitsize.  */
+         FALSE,                 /* PC_relative.  */
+         0,                     /* Bitpos. */
+         complain_overflow_dont, /* Complain_on_overflow.  */
+         bfd_elf_generic_reloc, /* Special_function.  */
+         "R_MRK3_SPIC_LO",      /* Name.  */
+         TRUE,                  /* Partial_inplace.  */
+         0,                     /* Src_mask.  */
+         0xffff,                /* Dst_mask.  */
+         FALSE),                /* PCrel_offset.  */
 };
 
 /* Map BFD reloc types to MRK3 ELF reloc types.  */
@@ -625,6 +655,7 @@ mrk3_final_link_relocate_const4 (bfd *input_bfd,
 
 /* Helper variables for PLT/SPLT generation */
 static bfd_vma plt_entry_count = 0;
+static bfd_vma splt_entry_count = 0;
 
 /* Helper function for MRK3_FINAL_LINK_RELOCATE. Called to adjust the
    value being patched into a R_MRK3_PIC relocation. This relocation points
@@ -634,8 +665,9 @@ static bfd_vma plt_entry_count = 0;
    linkage table, according to the address passed to it in RELOCATION. */
 
 static bfd_vma
-mrk3_final_link_relocate_pic (bfd *   output_bfd,
-                              bfd_vma relocation)
+mrk3_final_link_relocate_pic (bfd *       output_bfd,
+                              bfd_vma     relocation,
+                              bfd_boolean secure)
 {
   unsigned int i;
   unsigned int offset;
@@ -651,25 +683,49 @@ mrk3_final_link_relocate_pic (bfd *   output_bfd,
      the PLT entry. This will be moved into the final location by
      MRK3_ELF_FINISH_DYNAMIC_SECTIONS. */
   BFD_ASSERT (s->contents != NULL);
-  for (i = 0; i < plt_entry_count; i += 1)
+  if (!secure)
     {
-      /* Check we haven't fallen off the non-secure PLT table */
-      if ((i * PLT_ENTRY_SIZE >= s->size) ||
-          (i * PLT_ENTRY_SIZE >= plt_entry_count * PLT_ENTRY_SIZE))
-        break;
-      offset = i * PLT_ENTRY_SIZE;
-      contents = bfd_get_32 (output_bfd, s->contents + offset);
-      if (contents == 0)
+      for (i = 0; i < plt_entry_count; i += 1)
         {
-          bfd_put_32 (output_bfd, relocation, s->contents + offset);
-          return s->vma + offset;
-        }
-      else if (contents == relocation)
-        {
-          return s->vma + offset;
+          /* Check we haven't fallen off the non-secure PLT table */
+          if ((i * PLT_ENTRY_SIZE >= s->size) ||
+              (i * PLT_ENTRY_SIZE >= plt_entry_count * PLT_ENTRY_SIZE))
+            break;
+          offset = i * PLT_ENTRY_SIZE;
+          contents = bfd_get_32 (output_bfd, s->contents + offset);
+          if (contents == 0)
+            {
+              bfd_put_32 (output_bfd, relocation, s->contents + offset);
+              return s->vma + offset;
+            }
+          else if (contents == relocation)
+            {
+              return s->vma + offset;
+            }
         }
     }
-
+  else
+    {
+      for (i = 0; i < splt_entry_count; i += 1)
+        {
+          if (((plt_entry_count * PLT_ENTRY_SIZE) +
+               (i * SPLT_ENTRY_SIZE) >= s->size) ||
+              (i * SPLT_ENTRY_SIZE >= splt_entry_count * SPLT_ENTRY_SIZE))
+          /* Check we haven't fallen off the secure PLT table */
+            break;
+          offset = (plt_entry_count * PLT_ENTRY_SIZE) + (i * SPLT_ENTRY_SIZE);
+          contents = bfd_get_32 (output_bfd, s->contents + offset);
+          if (contents == 0)
+            {
+              bfd_put_32 (output_bfd, relocation, s->contents + offset);
+              return s->vma + offset;
+            }
+          else if (contents == relocation)
+            {
+              return s->vma + offset;
+            }
+        }
+    }
   /* If we have reached this point, we ran out of PLT */
   _bfd_error_handler
     (_("warning: Ran out of PLT space!"));
@@ -771,7 +827,9 @@ mrk3_final_link_relocate (bfd * output_bfd,
      the address space PLT. The call of this function also allocates the
      functions real address to the PLT. */
   if (howto->type == R_MRK3_PIC || howto->type == R_MRK3_PIC_LO)
-    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation);
+    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation, FALSE);
+  if (howto->type == R_MRK3_SPIC || howto->type == R_MRK3_SPIC_LO)
+    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation, TRUE);
 
   /* If the relocation is PC relative, we want to set RELOCATION to
      the distance between the symbol (currently in RELOCATION) and the
@@ -2688,6 +2746,7 @@ mrk3_elf_check_relocs (bfd *abfd,
     {
       struct elf_link_hash_entry *h;
       unsigned long r_symndx;
+      bfd_boolean secure = FALSE;
 
       r_symndx = ELF64_R_SYM (rel->r_info);
       if (r_symndx < symtab_hdr->sh_info)
@@ -2703,6 +2762,10 @@ mrk3_elf_check_relocs (bfd *abfd,
       switch (ELF64_R_TYPE (rel->r_info))
         {
           /* These relocs require a plt entry */
+          case R_MRK3_SPIC:
+          case R_MRK3_SPIC_LO:
+            secure = TRUE;  /* Require Secure PLT entry */
+            /* FALLTHRU */
           case R_MRK3_PIC:
           case R_MRK3_PIC_LO:
             if (h != NULL)
@@ -2720,8 +2783,16 @@ mrk3_elf_check_relocs (bfd *abfd,
                     first use.) */
                 if (h->plt.refcount == 0)
                   {
-                    elf_hash_table (info)->splt->size += PLT_ENTRY_SIZE;
-                    plt_entry_count += 1;
+                    if (secure)
+                      {
+                        elf_hash_table (info)->splt->size += SPLT_ENTRY_SIZE;
+                        splt_entry_count += 1;
+                      }
+                    else
+                      {
+                        elf_hash_table (info)->splt->size += PLT_ENTRY_SIZE;
+                        plt_entry_count += 1;
+                      }
                   }
               }
             else
@@ -2740,8 +2811,16 @@ mrk3_elf_check_relocs (bfd *abfd,
                    to 0, so 1 indicates first use */
                 if (symdata->plt_refcount == 1)
                   {
-                    elf_hash_table (info)->splt->size += PLT_ENTRY_SIZE;
-                    plt_entry_count += 1;
+                    if (secure)
+                      {
+                        elf_hash_table (info)->splt->size += SPLT_ENTRY_SIZE;
+                        splt_entry_count += 1;
+                      }
+                    else
+                      {
+                        elf_hash_table (info)->splt->size += PLT_ENTRY_SIZE;
+                        plt_entry_count += 1;
+                      }
                   }
               }
             break;
@@ -2787,6 +2866,7 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
   if (plt == NULL)
     return TRUE;
 
+  /* Non-Secure PLT Enteries */
   for (i = 0; i < plt_entry_count; i += 1)
     {
       /* NOTE: PLTENC
@@ -2805,11 +2885,41 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       bfd_put_16 (output_bfd, address_lo, plt->contents + offset + 4);
       /* sub r7, #2   - 2b (6)  */
       bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset + 6);
-      /* mov @r7, #HI - 4b (8) */
+      /* mov @r7, #HI - 4b (8)  */
       bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + offset + 8);
       bfd_put_16 (output_bfd, address_hi, plt->contents + offset + 10);
       /* eret         - 2b (12) */
       bfd_put_16 (output_bfd, 0x1bc7,     plt->contents + offset + 12);
+    }
+  /* Secure PLT Enteries */
+  for (i = 0; i < splt_entry_count; i += 1)
+    {
+      /* NOTE: PLTENC
+      Additionally, mrk3_final_link_relocate_pic used the first four bytes of
+      the PLT entry to store the address of the function, so this must be moved
+      into its correct place within the entry. */
+      offset = plt_entry_count * PLT_ENTRY_SIZE + i * SPLT_ENTRY_SIZE;
+      address = bfd_get_32 (output_bfd, plt->contents + offset);
+      address = address / 2;
+      address_lo = address & 0xffff;
+      address_hi = (address >> 16) & 0xffff;
+      /* sub r7, #2   - 2b (0)  */
+      bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset);
+      /* mov @r7, #LO - 4b (2)  */
+      bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + offset + 2);
+      bfd_put_16 (output_bfd, address_lo, plt->contents + offset + 4);
+      /* sub r7, #2   - 2b (6)  */
+      bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset + 6);
+      /* mov @r7, #HI - 4b (8)  */
+      bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + offset + 8);
+      bfd_put_16 (output_bfd, address_hi, plt->contents + offset + 10);
+      /* sub r7, #2   - 2b (12) */
+      bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset + 12);
+      /* mov @r7, #K  - 4b (14) */
+      bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + offset + 14);
+      bfd_put_16 (output_bfd, 0x0,        plt->contents + offset + 16);
+      /* eret         - 2b (18) */
+      bfd_put_16 (output_bfd, 0x1bc7,     plt->contents + offset + 18);
     }
   return TRUE;
 }
