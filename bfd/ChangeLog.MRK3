@@ -1,3 +1,10 @@
+2015-11-21  Simon Cook  <simon.cook@embecosm.com>
+
+	* elf64-mrk3.c (plt_entry_count): Added to track plt count
+	(mrk3_final_link_relocate_pic): Use plt_entry_count.
+	(mrk3_elf_check_relocs): Likewise.
+	(mrk3_elf_finish_dynamic_sections): Likewise.
+
 2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elf64-mrk3.h (struct mrk3_property_record): Add new record types
