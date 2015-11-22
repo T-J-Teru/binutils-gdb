@@ -667,11 +667,13 @@ static bfd_vma splt_entry_count = 0;
 static bfd_vma
 mrk3_final_link_relocate_pic (bfd *       output_bfd,
                               bfd_vma     relocation,
+                              bfd_vma     reloc_space,
                               bfd_boolean secure)
 {
   unsigned int i;
   unsigned int offset;
   bfd_vma contents;
+  bfd_vma flag_contents;
   asection *s;
 
   s = bfd_get_section_by_name (output_bfd, ".plt");
@@ -693,12 +695,14 @@ mrk3_final_link_relocate_pic (bfd *       output_bfd,
             break;
           offset = i * PLT_ENTRY_SIZE;
           contents = bfd_get_32 (output_bfd, s->contents + offset);
-          if (contents == 0)
+          flag_contents = bfd_get_32 (output_bfd, s->contents + offset + 4);
+          if (contents == 0 && flag_contents == 0)
             {
               bfd_put_32 (output_bfd, relocation, s->contents + offset);
+              bfd_put_32 (output_bfd, reloc_space, s->contents + offset + 4);
               return s->vma + offset;
             }
-          else if (contents == relocation)
+          else if (contents == relocation && flag_contents == reloc_space)
             {
               return s->vma + offset;
             }
@@ -715,12 +719,14 @@ mrk3_final_link_relocate_pic (bfd *       output_bfd,
             break;
           offset = (plt_entry_count * PLT_ENTRY_SIZE) + (i * SPLT_ENTRY_SIZE);
           contents = bfd_get_32 (output_bfd, s->contents + offset);
-          if (contents == 0)
+          flag_contents = bfd_get_32 (output_bfd, s->contents + offset + 4);
+          if (contents == 0 && flag_contents == 0)
             {
               bfd_put_32 (output_bfd, relocation, s->contents + offset);
+              bfd_put_32 (output_bfd, reloc_space, s->contents + offset + 4);
               return s->vma + offset;
             }
-          else if (contents == relocation)
+          else if (contents == relocation && flag_contents == reloc_space)
             {
               return s->vma + offset;
             }
@@ -827,9 +833,11 @@ mrk3_final_link_relocate (bfd * output_bfd,
      the address space PLT. The call of this function also allocates the
      functions real address to the PLT. */
   if (howto->type == R_MRK3_PIC || howto->type == R_MRK3_PIC_LO)
-    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation, FALSE);
+    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation,
+                                               relocation_memory_id, FALSE);
   if (howto->type == R_MRK3_SPIC || howto->type == R_MRK3_SPIC_LO)
-    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation, TRUE);
+    relocation = mrk3_final_link_relocate_pic (output_bfd, relocation,
+                                               relocation_memory_id, TRUE);
 
   /* If the relocation is PC relative, we want to set RELOCATION to
      the distance between the symbol (currently in RELOCATION) and the
