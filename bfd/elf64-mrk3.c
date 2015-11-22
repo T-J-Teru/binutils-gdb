@@ -42,7 +42,7 @@
 
 #define PLT_ENTRY_SIZE 14
 #define SPLT_ENTRY_SIZE 20
-
+#define SPLT_CODESIG_SIZE 38
 
 #define BASEADDR(SEC)	((SEC)->output_section->vma + (SEC)->output_offset)
 
@@ -2629,6 +2629,8 @@ get_elf_r_symndx_offset (bfd *abfd, unsigned long r_symndx)
   return offset;
 }
 
+static asection *codesig_info_sec = NULL;
+
 /* Based on _bfd_elf_create_dynamic_sections */
 static bfd_boolean
 mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
@@ -2665,6 +2667,16 @@ mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
    htab->hplt = h;
    if (h == NULL)
      return FALSE;
+
+   /* Build a codesig metadata section for any SPLT entries */
+   flags = SEC_HAS_CONTENTS | SEC_READONLY | SEC_IN_MEMORY | SEC_LINKER_CREATED
+         | SEC_DEBUGGING; /* codesig/debug flags */
+   s = bfd_make_section_anyway_with_flags (dynobj, ".debug_codesig.plt", flags);
+
+   if (s == NULL)
+     return FALSE;
+
+   codesig_info_sec = s;
 
    return TRUE;
  }
@@ -2795,6 +2807,10 @@ mrk3_elf_check_relocs (bfd *abfd,
                       {
                         elf_hash_table (info)->splt->size += SPLT_ENTRY_SIZE;
                         splt_entry_count += 1;
+                        codesig_info_sec->size += SPLT_CODESIG_SIZE;
+                        if (codesig_info_sec->size == SPLT_CODESIG_SIZE) {
+                          codesig_info_sec->size += 4;
+                        }
                       }
                     else
                       {
@@ -2852,6 +2868,11 @@ mrk3_elf_size_dynamic_sections (bfd *output_bfd,
   plt->size = tmpplt->size;
   elf_hash_table(info)->splt = plt;
 
+  tmpplt = codesig_info_sec;
+  plt = bfd_get_section_by_name (output_bfd, ".debug_codesig.plt");
+  plt->contents = bfd_zalloc (output_bfd, tmpplt->size);
+  plt->size = tmpplt->size;
+
   return TRUE;
 }
 
@@ -2861,16 +2882,20 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
                                   struct bfd_link_info * info ATTRIBUTE_UNUSED)
 {
   asection *plt;
+  asection *metadata;
   bfd_vma i;
   bfd_vma offset;
+  bfd_vma csoffset;
   bfd_vma address;
   bfd_vma address_lo;
   bfd_vma address_hi;
+  bfd_vma full_address;
 
   /* We no longer need local symbol refcounting, so clean up memory. */
   clean_local_symdata();
 
   plt = bfd_get_section_by_name (output_bfd, ".plt");
+  metadata = bfd_get_section_by_name (output_bfd, ".debug_codesig.plt");
   if (plt == NULL)
     return TRUE;
 
@@ -2911,6 +2936,8 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       address = address / 2;
       address_lo = address & 0xffff;
       address_hi = (address >> 16) & 0xffff;
+      full_address = bfd_get_32 (output_bfd, plt->contents + offset + 4);
+      full_address = full_address << 32 | address;
       /* sub r7, #2   - 2b (0)  */
       bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset);
       /* mov @r7, #LO - 4b (2)  */
@@ -2928,7 +2955,30 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       bfd_put_16 (output_bfd, 0x0,        plt->contents + offset + 16);
       /* eret         - 2b (18) */
       bfd_put_16 (output_bfd, 0x1bc7,     plt->contents + offset + 18);
+
+      /* Build PLT Codesig Entry for this PLT function */
+      csoffset = i * SPLT_CODESIG_SIZE + 4;
+      /* Start function (indirect group)  (0) */
+      bfd_put_16 (output_bfd, 0xd,          metadata->contents + csoffset);
+      bfd_put_64 (output_bfd, plt->vma + offset,
+                                            metadata->contents + csoffset + 2);
+      bfd_put_64 (output_bfd, full_address, metadata->contents + csoffset + 10);
+      /* Place block key instream         (18)
+         (This corresponds to the #K above) */
+      bfd_put_16 (output_bfd, 0xe,          metadata->contents + csoffset + 18);
+      bfd_put_64 (output_bfd, plt->vma + offset + 16,
+                                            metadata->contents + csoffset + 20);
+      /* End function                     (28) */
+      bfd_put_16 (output_bfd, 0x2,          metadata->contents + csoffset + 28);
+      bfd_put_64 (output_bfd, plt->vma + offset + SPLT_ENTRY_SIZE,
+                                            metadata->contents + csoffset + 30);
     }
+  /* Add PLT Codesig Header */
+  if (metadata != NULL && metadata->size > 0)
+    {
+      bfd_put_32 (output_bfd, 0x005343ff, metadata->contents);
+    }
+
   return TRUE;
 }
 

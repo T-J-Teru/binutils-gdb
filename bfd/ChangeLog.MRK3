@@ -1,5 +1,13 @@
 2015-11-22  Simon Cook  <simon.cook@embecosm.com>
 
+	* elf64-mrk3.c (SPLT_CODESIG_SIZE): Defined.
+	(mrk3_elf_create_plt_section): Create PLT codesig metadata section.
+	(mrk3_elf_check_relocs): Track size of PLT codesig metadata.
+	(mrk3_elf_size_dynamic_sections): Create contents of codesig section.
+	(mrk3_elf_finish_dynamic_sections): Fill contents of codesig section.
+
+2015-11-22  Simon Cook  <simon.cook@embecosm.com>
+
 	* elf64-mrk3.c (mrk3_final_link_relocate_pic): Store and compare
 	address space bits.
 	(mrk3_final_link_relocate): Pass address space bits to PIC relocation
