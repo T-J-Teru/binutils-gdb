@@ -2937,7 +2937,7 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       address_lo = address & 0xffff;
       address_hi = (address >> 16) & 0xffff;
       full_address = bfd_get_32 (output_bfd, plt->contents + offset + 4);
-      full_address = full_address << 32 | address;
+      full_address = full_address << 32 | (address << 1);
       /* sub r7, #2   - 2b (0)  */
       bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset);
       /* mov @r7, #LO - 4b (2)  */
