@@ -2864,6 +2864,7 @@ mrk3_elf_size_dynamic_sections (bfd *output_bfd,
 {
   asection *tmpplt = elf_hash_table(info)->splt;
   asection *plt = bfd_get_section_by_name (output_bfd, ".plt");
+  BFD_ASSERT (plt != NULL);
   plt->contents = bfd_zalloc (output_bfd, tmpplt->size);
   plt->size = tmpplt->size;
   elf_hash_table(info)->splt = plt;
