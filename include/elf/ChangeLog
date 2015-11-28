@@ -1,3 +1,8 @@
+2015-11-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* arc-reloc.def: Add dst_mask attribute to all relocations.
+	* arc.h: Add dst_mask parameter to ARC_RELOC_HOWTO definition.
+
 2015-11-11  Alan Modra  <amodra@gmail.com>
 	    Peter Bergner <bergner@vnet.ibm.com>
 

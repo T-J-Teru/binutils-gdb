@@ -90,7 +90,7 @@ char * init_str = INIT_SYM_STRING;
 char * fini_str = FINI_SYM_STRING;
 
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, DST_MASK, RELOC_FUNCTION, OVERFLOW, FORMULA) \
       case VALUE: \
 	return #TYPE; \
 	break;
@@ -193,7 +193,7 @@ arc_elf_reloc (bfd *abfd ATTRIBUTE_UNUSED,
 }
 
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, DST_MASK, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   TYPE = VALUE,
 enum howto_list
 {
@@ -202,8 +202,8 @@ enum howto_list
 };
 #undef ARC_RELOC_HOWTO
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, RSIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
-  [TYPE] = HOWTO (R_##TYPE, 0, RSIZE, BITSIZE, FALSE, 0, complain_overflow_##OVERFLOW, arc_elf_reloc, #TYPE, FALSE, 0, 0, FALSE),
+#define ARC_RELOC_HOWTO(TYPE, VALUE, RSIZE, BITSIZE, DST_MASK, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+  [TYPE] = HOWTO (R_##TYPE, 0, RSIZE, BITSIZE, FALSE, 0, complain_overflow_##OVERFLOW, arc_elf_reloc, #TYPE, FALSE, 0, DST_MASK, FALSE),
 
 static struct reloc_howto_struct elf_arc_howto_table[] =
 {
@@ -228,7 +228,7 @@ static struct reloc_howto_struct elf_arc_howto_table[] =
 
 static void arc_elf_howto_init (void)
 {
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, DST_MASK, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   elf_arc_howto_table[TYPE].pc_relative = \
     (strstr (#FORMULA, " P ") != NULL || strstr (#FORMULA, " PDATA ") != NULL);
 
@@ -237,7 +237,7 @@ static void arc_elf_howto_init (void)
 #undef ARC_RELOC_HOWTO
 
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, DST_MASK, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   [TYPE] = VALUE,
 const int howto_table_lookup[] =
 {
@@ -256,7 +256,7 @@ struct arc_reloc_map
   unsigned char   elf_reloc_val;
 };
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, DST_MASK, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   { BFD_RELOC_##TYPE, R_##TYPE },
 static const struct arc_reloc_map arc_reloc_map[] =
 {
@@ -514,7 +514,7 @@ get_middle_endian_relocation (bfd_vma reloc)
 
 #define none (0)
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, DST_MASK, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   case R_##TYPE: \
     { \
       bfd_vma bitsize ATTRIBUTE_UNUSED = BITSIZE; \

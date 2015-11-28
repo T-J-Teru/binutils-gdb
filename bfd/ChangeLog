@@ -1,3 +1,9 @@
+2015-11-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-arc.c: Add dst_mask parameter to each instance of
+	ARC_RELOC_HOWTO.  When creating the elf_arc_howto_table make use
+	of the dst_mask parameter.
+
 2015-11-20  Stefan Teleman  <stefan.teleman@oracle.com>
 
 	PR ld/19260
