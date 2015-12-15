@@ -1675,6 +1675,85 @@ elf_arc_size_dynamic_sections (bfd * output_bfd, struct bfd_link_info *info)
   return TRUE;
 }
 
+/* Merge backend specific data from an object file to the output
+   object file when linking.  */
+static bfd_boolean
+arc_elf_merge_private_bfd_data (bfd *ibfd, bfd *obfd)
+{
+  unsigned short mach_ibfd;
+  static unsigned short mach_obfd = EM_NONE;
+  flagword old_flags;
+  flagword new_flags;
+
+  /* Collect ELF flags. */
+  new_flags = elf_elfheader (ibfd)->e_flags & EF_ARC_MACH_MSK;
+  old_flags = elf_elfheader (obfd)->e_flags & EF_ARC_MACH_MSK;
+
+#if DEBUG
+  (*_bfd_error_handler) ("old_flags = 0x%.8lx, new_flags = 0x%.8lx, init = %s, filename = %s",
+			 old_flags, new_flags, elf_flags_init (obfd) ? "yes" : "no",
+			 bfd_get_filename (ibfd));
+#endif
+
+  if (!elf_flags_init (obfd))			/* First call, no flags set.  */
+    {
+      elf_flags_init (obfd) = TRUE;
+      old_flags = new_flags;
+    }
+
+  if (bfd_get_flavour (ibfd) != bfd_target_elf_flavour
+      || bfd_get_flavour (obfd) != bfd_target_elf_flavour)
+    return TRUE;
+
+  if (bfd_count_sections (ibfd) == 0)
+    return TRUE ; /* For the case of empty archive files */
+
+  mach_ibfd = elf_elfheader (ibfd)->e_machine;
+
+   /* Check if we have the same endianess.  */
+  if (! _bfd_generic_verify_endian_match (ibfd, obfd))
+    {
+      _bfd_error_handler (_("\
+ERROR: Endian Match failed . Attempting to link %B with binary %s \
+of opposite endian-ness"),
+			  ibfd, bfd_get_filename (obfd));
+      return FALSE;
+    }
+
+  if (mach_obfd == EM_NONE)
+    {
+      mach_obfd = mach_ibfd;
+    }
+  else
+    {
+      if(mach_ibfd != mach_obfd)
+	{
+	  _bfd_error_handler (_("ERROR: Attempting to link %B \
+with a binary %s of different architecture"),
+			      ibfd, bfd_get_filename (obfd));
+	  return FALSE;
+	}
+      else if (new_flags != old_flags)
+	{
+	  /* Warn if different flags. */
+	  (*_bfd_error_handler)
+	    (_("%s: uses different e_flags (0x%lx) fields than previous modules (0x%lx)"),
+	     bfd_get_filename (ibfd), (long)new_flags, (long)old_flags);
+	  return FALSE;
+	}
+
+    }
+
+  /* Update the flags. */
+  elf_elfheader (obfd)->e_flags = new_flags;
+
+  if (bfd_get_mach (obfd) < bfd_get_mach (ibfd))
+    {
+      return bfd_set_arch_mach (obfd, bfd_arch_arc, bfd_get_mach(ibfd));
+    }
+
+  return TRUE;
+}
 
 #define TARGET_LITTLE_SYM   arc_elf32_le_vec
 #define TARGET_LITTLE_NAME  "elf32-littlearc"
@@ -1689,6 +1768,7 @@ elf_arc_size_dynamic_sections (bfd * output_bfd, struct bfd_link_info *info)
 #define elf_backend_object_p		     arc_elf_object_p
 #define elf_backend_final_write_processing   arc_elf_final_write_processing
 
+#define bfd_elf32_bfd_merge_private_bfd_data    arc_elf_merge_private_bfd_data
 #define elf_backend_relocate_section	     elf_arc_relocate_section
 #define elf_backend_check_relocs	     elf_arc_check_relocs
 #define elf_backend_create_dynamic_sections  _bfd_elf_create_dynamic_sections

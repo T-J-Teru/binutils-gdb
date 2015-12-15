@@ -1,3 +1,9 @@
+2015-12-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cpu-arc.c (bfd_arc_arch): Make ARC600 the default.
+	* elf32-arc.c (arc_elf_merge_private_bfd_data): New function.
+	(bfd_elf32_bfd_merge_private_bfd_data): Define.
+
 2015-12-15  Jan Beulich  <jbeulich@suse.com>
 
 	* coffgen.c (coff_write_alien_symbol): New parameter "iaux".
