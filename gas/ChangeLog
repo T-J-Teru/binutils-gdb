@@ -1,3 +1,7 @@
+2015-12-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* config/tc-arc.c (arc_mach_type): Make ARC700 the default.
+
 2015-12-15  Nick Clifton  <nickc@redhat.com>
 
 	* doc/c-msp430.texi (MSP430 Options): Remove references to a
