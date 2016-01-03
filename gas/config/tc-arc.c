@@ -263,7 +263,7 @@ static const char *arc_target_name = "<all>";
 static unsigned arc_features = 0x00;
 
 /* The default architecture.  */
-static int arc_mach_type = bfd_mach_arc_arcv2;
+static int arc_mach_type = bfd_mach_arc_arc700;
 
 /* Non-zero if the cpu type has been explicitly specified.  */
 static int mach_type_specified_p = 0;

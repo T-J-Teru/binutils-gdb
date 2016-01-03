@@ -1,4 +1,5 @@
 ARC_RELOC_HOWTO(ARC_NONE, 0, \
+                FALSE,
                 2, \
                 32, \
                 replace_none, \
@@ -6,6 +7,7 @@ ARC_RELOC_HOWTO(ARC_NONE, 0, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_8, 1, \
+                FALSE,
                 0, \
                 8, \
                 replace_bits8, \
@@ -13,6 +15,7 @@ ARC_RELOC_HOWTO(ARC_8, 1, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(ARC_16, 2, \
+                FALSE,
                 1, \
                 16, \
                 replace_bits16, \
@@ -20,6 +23,7 @@ ARC_RELOC_HOWTO(ARC_16, 2, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(ARC_24, 3, \
+                FALSE,
                 2, \
                 24, \
                 replace_bits24, \
@@ -27,6 +31,7 @@ ARC_RELOC_HOWTO(ARC_24, 3, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(ARC_32, 4, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -34,6 +39,7 @@ ARC_RELOC_HOWTO(ARC_32, 4, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(ARC_N8, 8, \
+                FALSE,
                 0, \
                 8, \
                 replace_bits8, \
@@ -41,6 +47,7 @@ ARC_RELOC_HOWTO(ARC_N8, 8, \
                 ( S - A ))
 
 ARC_RELOC_HOWTO(ARC_N16, 9, \
+                FALSE,
                 1, \
                 16, \
                 replace_bits16, \
@@ -48,6 +55,7 @@ ARC_RELOC_HOWTO(ARC_N16, 9, \
                 ( S - A ))
 
 ARC_RELOC_HOWTO(ARC_N24, 10, \
+                FALSE,
                 2, \
                 24, \
                 replace_bits24, \
@@ -55,6 +63,7 @@ ARC_RELOC_HOWTO(ARC_N24, 10, \
                 ( S - A ))
 
 ARC_RELOC_HOWTO(ARC_N32, 11, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -62,6 +71,7 @@ ARC_RELOC_HOWTO(ARC_N32, 11, \
                 ( S - A ))
 
 ARC_RELOC_HOWTO(ARC_SDA, 12, \
+                FALSE,
                 2, \
                 9, \
                 replace_disp9, \
@@ -69,6 +79,7 @@ ARC_RELOC_HOWTO(ARC_SDA, 12, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(ARC_SECTOFF, 13, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -76,6 +87,7 @@ ARC_RELOC_HOWTO(ARC_SECTOFF, 13, \
                 ( ( S - SECTSTART ) + A ))
 
 ARC_RELOC_HOWTO(ARC_S21H_PCREL, 14, \
+                TRUE,
                 2, \
                 20, \
                 replace_disp21h, \
@@ -83,6 +95,7 @@ ARC_RELOC_HOWTO(ARC_S21H_PCREL, 14, \
                 ( ( ( S + A ) - P ) >> 1 ))
 
 ARC_RELOC_HOWTO(ARC_S21W_PCREL, 15, \
+                TRUE,
                 2, \
                 19, \
                 replace_disp21w, \
@@ -90,6 +103,7 @@ ARC_RELOC_HOWTO(ARC_S21W_PCREL, 15, \
                 ( ( ( S + A ) - P ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_S25H_PCREL, 16, \
+                TRUE,
                 2, \
                 24, \
                 replace_disp25h, \
@@ -97,6 +111,7 @@ ARC_RELOC_HOWTO(ARC_S25H_PCREL, 16, \
                 ( ( ( S + A ) - P ) >> 1 ))
 
 ARC_RELOC_HOWTO(ARC_S25W_PCREL, 17, \
+                TRUE,
                 2, \
                 23, \
                 replace_disp25w, \
@@ -104,6 +119,7 @@ ARC_RELOC_HOWTO(ARC_S25W_PCREL, 17, \
                 ( ( ( S + A ) - P ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_SDA32, 18, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -111,6 +127,7 @@ ARC_RELOC_HOWTO(ARC_SDA32, 18, \
                 ( ( S + A ) - _SDA_BASE_ ))
 
 ARC_RELOC_HOWTO(ARC_SDA_LDST, 19, \
+                TRUE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -118,6 +135,7 @@ ARC_RELOC_HOWTO(ARC_SDA_LDST, 19, \
                 ( ( S + A ) - _SDA_BASE_ ))
 
 ARC_RELOC_HOWTO(ARC_SDA_LDST1, 20, \
+                TRUE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -125,6 +143,7 @@ ARC_RELOC_HOWTO(ARC_SDA_LDST1, 20, \
                 ( ( ( S + A ) - _SDA_BASE_ ) >> 1 ))
 
 ARC_RELOC_HOWTO(ARC_SDA_LDST2, 21, \
+                TRUE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -132,6 +151,7 @@ ARC_RELOC_HOWTO(ARC_SDA_LDST2, 21, \
                 ( ( ( S + A ) - _SDA_BASE_ ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_SDA16_LD, 22, \
+                FALSE,
                 1, \
                 9, \
                 replace_disp9s, \
@@ -139,6 +159,7 @@ ARC_RELOC_HOWTO(ARC_SDA16_LD, 22, \
                 ( ( S + A ) - _SDA_BASE_ ))
 
 ARC_RELOC_HOWTO(ARC_SDA16_LD1, 23, \
+                FALSE,
                 1, \
                 9, \
                 replace_disp9s, \
@@ -146,6 +167,7 @@ ARC_RELOC_HOWTO(ARC_SDA16_LD1, 23, \
                 ( ( ( S + A ) - _SDA_BASE_ ) >> 1 ))
 
 ARC_RELOC_HOWTO(ARC_SDA16_LD2, 24, \
+                FALSE,
                 1, \
                 9, \
                 replace_disp9s, \
@@ -153,6 +175,7 @@ ARC_RELOC_HOWTO(ARC_SDA16_LD2, 24, \
                 ( ( ( S + A ) - _SDA_BASE_ ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_S13_PCREL, 25, \
+                FALSE,
                 1, \
                 11, \
                 replace_disp13s, \
@@ -160,6 +183,7 @@ ARC_RELOC_HOWTO(ARC_S13_PCREL, 25, \
                 ( ( ( S + A ) - P ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_W, 26, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -167,6 +191,7 @@ ARC_RELOC_HOWTO(ARC_W, 26, \
                 ( ( S + A ) & ( ~3 ) ))
 
 ARC_RELOC_HOWTO(ARC_32_ME, 27, \
+                TRUE,
                 2, \
                 32, \
                 replace_limm, \
@@ -174,6 +199,7 @@ ARC_RELOC_HOWTO(ARC_32_ME, 27, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(ARC_32_ME_S, 105, \
+                TRUE,
                 2, \
                 32, \
                 replace_limms, \
@@ -181,6 +207,7 @@ ARC_RELOC_HOWTO(ARC_32_ME_S, 105, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(ARC_N32_ME, 28, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -188,6 +215,7 @@ ARC_RELOC_HOWTO(ARC_N32_ME, 28, \
                 ( S - A ))
 
 ARC_RELOC_HOWTO(ARC_SECTOFF_ME, 29, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -195,6 +223,7 @@ ARC_RELOC_HOWTO(ARC_SECTOFF_ME, 29, \
                 ( ( S - SECTSTART ) + A ))
 
 ARC_RELOC_HOWTO(ARC_SDA32_ME, 30, \
+                TRUE,
                 2, \
                 32, \
                 replace_limm, \
@@ -202,6 +231,7 @@ ARC_RELOC_HOWTO(ARC_SDA32_ME, 30, \
                 ( ( S + A ) - _SDA_BASE_ ))
 
 ARC_RELOC_HOWTO(ARC_W_ME, 31, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -209,6 +239,7 @@ ARC_RELOC_HOWTO(ARC_W_ME, 31, \
                 ( S + A ))
 
 ARC_RELOC_HOWTO(AC_SECTOFF_U8, 35, \
+                FALSE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -216,6 +247,7 @@ ARC_RELOC_HOWTO(AC_SECTOFF_U8, 35, \
                 ( ( S + A ) - SECTSTART ))
 
 ARC_RELOC_HOWTO(AC_SECTOFF_U8_1, 36, \
+                FALSE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -223,6 +255,7 @@ ARC_RELOC_HOWTO(AC_SECTOFF_U8_1, 36, \
                 ( ( ( S + A ) - SECTSTART ) >> 1 ))
 
 ARC_RELOC_HOWTO(AC_SECTOFF_U8_2, 37, \
+                FALSE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -230,6 +263,7 @@ ARC_RELOC_HOWTO(AC_SECTOFF_U8_2, 37, \
                 ( ( ( S + A ) - SECTSTART ) >> 2 ))
 
 ARC_RELOC_HOWTO(AC_SECTFOFF_S9, 38, \
+                FALSE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -237,6 +271,7 @@ ARC_RELOC_HOWTO(AC_SECTFOFF_S9, 38, \
                 ( ( S + A ) - SECTSTART ))
 
 ARC_RELOC_HOWTO(AC_SECTFOFF_S9_1, 39, \
+                FALSE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -244,6 +279,7 @@ ARC_RELOC_HOWTO(AC_SECTFOFF_S9_1, 39, \
                 ( ( ( S + A ) - SECTSTART ) >> 1 ))
 
 ARC_RELOC_HOWTO(AC_SECTFOFF_S9_2, 40, \
+                FALSE,
                 2, \
                 9, \
                 replace_disp9ls, \
@@ -251,6 +287,7 @@ ARC_RELOC_HOWTO(AC_SECTFOFF_S9_2, 40, \
                 ( ( ( S + A ) - SECTSTART ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_SECTOFF_ME_1, 41, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -258,6 +295,7 @@ ARC_RELOC_HOWTO(ARC_SECTOFF_ME_1, 41, \
                 ( ( ( S - SECTSTART ) + A ) >> 1 ))
 
 ARC_RELOC_HOWTO(ARC_SECTOFF_ME_2, 42, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -265,6 +303,7 @@ ARC_RELOC_HOWTO(ARC_SECTOFF_ME_2, 42, \
                 ( ( ( S - SECTSTART ) + A ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_SECTOFF_1, 43, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -272,6 +311,7 @@ ARC_RELOC_HOWTO(ARC_SECTOFF_1, 43, \
                 ( ( ( S - SECTSTART ) + A ) >> 1 ))
 
 ARC_RELOC_HOWTO(ARC_SECTOFF_2, 44, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -279,6 +319,7 @@ ARC_RELOC_HOWTO(ARC_SECTOFF_2, 44, \
                 ( ( ( S - SECTSTART ) + A ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_SDA16_ST2, 48, \
+                FALSE,
                 1, \
                 9, \
                 replace_disp9s1, \
@@ -286,6 +327,7 @@ ARC_RELOC_HOWTO(ARC_SDA16_ST2, 48, \
                 ( ( ( S + A ) - _SDA_BASE_ ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_32_PCREL, 49, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -293,6 +335,7 @@ ARC_RELOC_HOWTO(ARC_32_PCREL, 49, \
                 ( ( S + A ) - PDATA ))
 
 ARC_RELOC_HOWTO(ARC_PC32, 50, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -300,6 +343,7 @@ ARC_RELOC_HOWTO(ARC_PC32, 50, \
                 ( ( S + A ) - P ))
 
 ARC_RELOC_HOWTO(ARC_GOT32, 59, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -307,6 +351,7 @@ ARC_RELOC_HOWTO(ARC_GOT32, 59, \
                 ( G + A ))
 
 ARC_RELOC_HOWTO(ARC_GOTPC32, 51, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -314,6 +359,7 @@ ARC_RELOC_HOWTO(ARC_GOTPC32, 51, \
                 ( ( ( GOT + G ) + A ) - P ))
 
 ARC_RELOC_HOWTO(ARC_PLT32, 52, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -321,6 +367,7 @@ ARC_RELOC_HOWTO(ARC_PLT32, 52, \
                 ( ( L + A ) - P ))
 
 ARC_RELOC_HOWTO(ARC_COPY, 53, \
+                TRUE,
                 2, \
                 0, \
                 replace_none, \
@@ -328,6 +375,7 @@ ARC_RELOC_HOWTO(ARC_COPY, 53, \
                 none)
 
 ARC_RELOC_HOWTO(ARC_GLOB_DAT, 54, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -335,6 +383,7 @@ ARC_RELOC_HOWTO(ARC_GLOB_DAT, 54, \
                 S)
 
 ARC_RELOC_HOWTO(ARC_JMP_SLOT, 55, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -342,6 +391,7 @@ ARC_RELOC_HOWTO(ARC_JMP_SLOT, 55, \
                 S)
 
 ARC_RELOC_HOWTO(ARC_RELATIVE, 56, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -349,6 +399,7 @@ ARC_RELOC_HOWTO(ARC_RELATIVE, 56, \
                 ( B + A ))
 
 ARC_RELOC_HOWTO(ARC_GOTOFF, 57, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -356,6 +407,7 @@ ARC_RELOC_HOWTO(ARC_GOTOFF, 57, \
                 ( ( S + A ) - GOT ))
 
 ARC_RELOC_HOWTO(ARC_GOTPC, 58, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -363,6 +415,7 @@ ARC_RELOC_HOWTO(ARC_GOTPC, 58, \
                 ( ( GOT + A ) - P ))
 
 ARC_RELOC_HOWTO(ARC_S21W_PCREL_PLT, 60, \
+                TRUE,
                 2, \
                 19, \
                 replace_disp21w, \
@@ -370,6 +423,7 @@ ARC_RELOC_HOWTO(ARC_S21W_PCREL_PLT, 60, \
                 ( ( ( L + A ) - P ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_S25H_PCREL_PLT, 61, \
+                TRUE,
                 2, \
                 24, \
                 replace_disp25h, \
@@ -377,6 +431,7 @@ ARC_RELOC_HOWTO(ARC_S25H_PCREL_PLT, 61, \
                 ( ( ( L + A ) - P ) >> 1 ))
 
 ARC_RELOC_HOWTO(ARC_TLS_DTPMOD, 66, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -384,6 +439,7 @@ ARC_RELOC_HOWTO(ARC_TLS_DTPMOD, 66, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_TPOFF, 68, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -391,6 +447,7 @@ ARC_RELOC_HOWTO(ARC_TLS_TPOFF, 68, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_GD_GOT, 69, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -398,6 +455,7 @@ ARC_RELOC_HOWTO(ARC_TLS_GD_GOT, 69, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_GD_LD, 70, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -405,6 +463,7 @@ ARC_RELOC_HOWTO(ARC_TLS_GD_LD, 70, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_GD_CALL, 71, \
+                FALSE,
                 2, \
                 32, \
                 replace_word32, \
@@ -412,6 +471,7 @@ ARC_RELOC_HOWTO(ARC_TLS_GD_CALL, 71, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_IE_GOT, 72, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -419,6 +479,7 @@ ARC_RELOC_HOWTO(ARC_TLS_IE_GOT, 72, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_DTPOFF, 67, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -426,6 +487,7 @@ ARC_RELOC_HOWTO(ARC_TLS_DTPOFF, 67, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_DTPOFF_S9, 73, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -433,6 +495,7 @@ ARC_RELOC_HOWTO(ARC_TLS_DTPOFF_S9, 73, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_LE_S9, 74, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -440,6 +503,7 @@ ARC_RELOC_HOWTO(ARC_TLS_LE_S9, 74, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_TLS_LE_32, 75, \
+                TRUE,
                 2, \
                 32, \
                 replace_word32, \
@@ -447,6 +511,7 @@ ARC_RELOC_HOWTO(ARC_TLS_LE_32, 75, \
                 0)
 
 ARC_RELOC_HOWTO(ARC_S25W_PCREL_PLT, 76, \
+                TRUE,
                 2, \
                 23, \
                 replace_disp25w, \
@@ -454,6 +519,7 @@ ARC_RELOC_HOWTO(ARC_S25W_PCREL_PLT, 76, \
                 ( ( ( L + A ) - P ) >> 2 ))
 
 ARC_RELOC_HOWTO(ARC_S21H_PCREL_PLT, 77, \
+                TRUE,
                 2, \
                 20, \
                 replace_disp21h, \
