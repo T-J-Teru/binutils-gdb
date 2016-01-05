@@ -1,3 +1,10 @@
+2016-01-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-arc.c (reloc_type_to_name): Change ARC_RELOC_HOWTO to
+	place 'R_' before the reloc name returned.
+	(elf_arc_howto_table): Change ARC_RELOC_HOWTO to place 'R_' before
+	the relocation string.
+
 2016-01-01  Alan Modra  <amodra@gmail.com>
 
 	Update year range in copyright notice of all files.
