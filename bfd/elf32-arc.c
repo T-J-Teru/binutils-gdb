@@ -90,7 +90,7 @@ char * init_str = INIT_SYM_STRING;
 char * fini_str = FINI_SYM_STRING;
 
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, IS_ME, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
       case VALUE: \
 	return #TYPE; \
 	break;
@@ -140,32 +140,10 @@ is_reloc_for_PLT (reloc_howto_type * howto)
 
 #define arc_bfd_get_8(A,B,C) bfd_get_8(A,B)
 #define arc_bfd_get_16(A,B,C) bfd_get_16(A,B)
+#define arc_bfd_get_32(A,B,C) bfd_get_32(A,B)
 #define arc_bfd_put_8(A,B,C,D) bfd_put_8(A,B,C)
 #define arc_bfd_put_16(A,B,C,D) bfd_put_16(A,B,C)
-
-static long
-arc_bfd_get_32 (bfd * abfd, void *loc, asection * input_section)
-{
-  long insn = bfd_get_32 (abfd, loc);
-
-  if (!bfd_big_endian (abfd)
-      && input_section
-      && (input_section->flags & SEC_CODE))
-    insn = ((0x0000fffff & insn) << 16) | ((0xffff0000 & insn) >> 16);
-
-  return insn;
-}
-
-static void
-arc_bfd_put_32 (bfd * abfd, long insn, void *loc, asection * input_section)
-{
-  if (!bfd_big_endian (abfd)
-      && input_section
-      && (input_section->flags & SEC_CODE))
-    insn = ((0x0000fffff & insn) << 16) | ((0xffff0000 & insn) >> 16);
-
-  bfd_put_32 (abfd, insn, loc);
-}
+#define arc_bfd_put_32(A,B,C,D) bfd_put_32(A,B,C)
 
 static bfd_reloc_status_type
 arc_elf_reloc (bfd *abfd ATTRIBUTE_UNUSED,
@@ -193,7 +171,7 @@ arc_elf_reloc (bfd *abfd ATTRIBUTE_UNUSED,
 }
 
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, IS_ME, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   TYPE = VALUE,
 enum howto_list
 {
@@ -202,7 +180,7 @@ enum howto_list
 };
 #undef ARC_RELOC_HOWTO
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, RSIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, IS_ME, RSIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   [TYPE] = HOWTO (R_##TYPE, 0, RSIZE, BITSIZE, FALSE, 0, complain_overflow_##OVERFLOW, arc_elf_reloc, #TYPE, FALSE, 0, 0, FALSE),
 
 static struct reloc_howto_struct elf_arc_howto_table[] =
@@ -228,7 +206,7 @@ static struct reloc_howto_struct elf_arc_howto_table[] =
 
 static void arc_elf_howto_init (void)
 {
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, IS_ME, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   elf_arc_howto_table[TYPE].pc_relative = \
     (strstr (#FORMULA, " P ") != NULL || strstr (#FORMULA, " PDATA ") != NULL); \
   elf_arc_howto_table[TYPE].dst_mask = RELOC_FUNCTION(0, ~0);
@@ -238,7 +216,7 @@ static void arc_elf_howto_init (void)
 #undef ARC_RELOC_HOWTO
 
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, IS_ME, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   [TYPE] = VALUE,
 const int howto_table_lookup[] =
 {
@@ -262,7 +240,7 @@ struct arc_reloc_map
   unsigned char   elf_reloc_val;
 };
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, IS_ME, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   { BFD_RELOC_##TYPE, R_##TYPE },
 static const struct arc_reloc_map arc_reloc_map[] =
 {
@@ -473,17 +451,6 @@ debug_arc_reloc (struct arc_relocation_data reloc_data)
     fprintf (stderr, "	input section is NULL\n");
 }
 
-static ATTRIBUTE_UNUSED bfd_vma
-get_middle_endian_relocation (bfd_vma reloc)
-{
-  bfd_vma ret =
-	      ((reloc & 0xffff0000) >> 16) |
-	      ((reloc & 0xffff) << 16);
-  return ret;
-}
-
-#define ME(RELOC) (get_middle_endian_reloction(RELOC))
-
 #define S (reloc_data.sym_value \
 	   + reloc_data.sym_section->output_offset \
 	   + reloc_data.sym_section->output_section->vma)
@@ -513,12 +480,18 @@ get_middle_endian_relocation (bfd_vma reloc)
 
 #define none (0)
 
-#define ARC_RELOC_HOWTO(TYPE, VALUE, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
+#define ARC_RELOC_HOWTO(TYPE, VALUE, IS_ME, SIZE, BITSIZE, RELOC_FUNCTION, OVERFLOW, FORMULA) \
   case R_##TYPE: \
     { \
-      bfd_vma bitsize ATTRIBUTE_UNUSED = BITSIZE; \
+      bfd_vma bitsize ATTRIBUTE_UNUSED = BITSIZE;   \
+      if (IS_ME && !bfd_big_endian (reloc_data.input_section->owner)) \
+        insn = (((0x0000fffff & insn) << 16) \
+                | ((0xffff0000 & insn) >> 16)); \
       relocation = FORMULA  ; \
       insn = RELOC_FUNCTION (insn, relocation); \
+      if (IS_ME && !bfd_big_endian (reloc_data.input_section->owner)) \
+        insn = (((0x0000fffff & insn) << 16) \
+                | ((0xffff0000 & insn) >> 16)); \
     } \
     break;
 

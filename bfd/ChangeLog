@@ -1,3 +1,14 @@
+2016-01-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-arc.c (ARC_RELOC_HOWTO): Add new 'IS_ME' parameter to each
+	definition of this macro.  The new parameter is ignored in all
+	cases except for in 'arc_do_relocation' where we perform endian
+	correction if required.
+	(arc_bfd_get_32): Becomes an alias for bfd_get_32.
+	(arc_bfd_put_32): Becomes an alias for bfd_put_32.
+	(get_middle_endian_relocation): Delete.
+	(ME): Delete.
+
 2016-01-01  Alan Modra  <amodra@gmail.com>
 
 	Update year range in copyright notice of all files.
