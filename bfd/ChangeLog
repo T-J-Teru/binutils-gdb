@@ -1,3 +1,16 @@
+2016-01-05  Cupertino Miranda  <Cupertino.Miranda@synopsys.com>
+	    Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf32-arc.c (arc_bfd_get_32): Becomes an alias for bfd_get_32.
+	(arc_bfd_put_32): Becomes an alias for bfd_put_32.
+	(get_middle_endian_relocation): Delete.
+	(middle_endian_convert): New function.
+	(ME): Redefine, now does nothing.
+	(IS_ME): New define.
+	(arc_do_relocation): Extend the attached 'ARC_RELOC_HOWTO'
+	definition to call middle_endian_convert.  Add a new local
+	variable and make use of this throughout.
+
 2016-01-01  Alan Modra  <amodra@gmail.com>
 
 	Update year range in copyright notice of all files.

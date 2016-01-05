@@ -140,32 +140,10 @@ is_reloc_for_PLT (reloc_howto_type * howto)
 
 #define arc_bfd_get_8(A,B,C) bfd_get_8(A,B)
 #define arc_bfd_get_16(A,B,C) bfd_get_16(A,B)
+#define arc_bfd_get_32(A,B,C) bfd_get_32(A,B)
 #define arc_bfd_put_8(A,B,C,D) bfd_put_8(A,B,C)
 #define arc_bfd_put_16(A,B,C,D) bfd_put_16(A,B,C)
-
-static long
-arc_bfd_get_32 (bfd * abfd, void *loc, asection * input_section)
-{
-  long insn = bfd_get_32 (abfd, loc);
-
-  if (!bfd_big_endian (abfd)
-      && input_section
-      && (input_section->flags & SEC_CODE))
-    insn = ((0x0000fffff & insn) << 16) | ((0xffff0000 & insn) >> 16);
-
-  return insn;
-}
-
-static void
-arc_bfd_put_32 (bfd * abfd, long insn, void *loc, asection * input_section)
-{
-  if (!bfd_big_endian (abfd)
-      && input_section
-      && (input_section->flags & SEC_CODE))
-    insn = ((0x0000fffff & insn) << 16) | ((0xffff0000 & insn) >> 16);
-
-  bfd_put_32 (abfd, insn, loc);
-}
+#define arc_bfd_put_32(A,B,C,D) bfd_put_32(A,B,C)
 
 static bfd_reloc_status_type
 arc_elf_reloc (bfd *abfd ATTRIBUTE_UNUSED,
@@ -473,16 +451,22 @@ debug_arc_reloc (struct arc_relocation_data reloc_data)
     fprintf (stderr, "	input section is NULL\n");
 }
 
-static ATTRIBUTE_UNUSED bfd_vma
-get_middle_endian_relocation (bfd_vma reloc)
+static bfd_vma
+middle_endian_convert (bfd_vma insn, bfd_boolean do_it)
 {
-  bfd_vma ret =
-	      ((reloc & 0xffff0000) >> 16) |
-	      ((reloc & 0xffff) << 16);
-  return ret;
+  if (do_it)
+    {
+      insn =
+        ((insn & 0xffff0000) >> 16) |
+        ((insn & 0xffff) << 16);
+    }
+  return insn;
 }
 
-#define ME(RELOC) (get_middle_endian_reloction(RELOC))
+#define ME(reloc) (reloc)
+
+#define IS_ME(FORMULA,BFD) ((strstr(#FORMULA, "ME") != NULL) && \
+                            !bfd_big_endian (BFD))
 
 #define S (reloc_data.sym_value \
 	   + reloc_data.sym_section->output_offset \
@@ -518,7 +502,9 @@ get_middle_endian_relocation (bfd_vma reloc)
     { \
       bfd_vma bitsize ATTRIBUTE_UNUSED = BITSIZE; \
       relocation = FORMULA  ; \
+      insn = middle_endian_convert (insn, IS_ME (FORMULA, abfd)); \
       insn = RELOC_FUNCTION (insn, relocation); \
+      insn = middle_endian_convert (insn, IS_ME (FORMULA, abfd)); \
     } \
     break;
 
@@ -528,6 +514,7 @@ arc_do_relocation (bfd_byte * contents, struct arc_relocation_data reloc_data)
   bfd_vma relocation = 0;
   bfd_vma insn;
   bfd_vma orig_insn ATTRIBUTE_UNUSED;
+  bfd * abfd = reloc_data.input_section->owner;
 
   if (reloc_data.should_relocate == FALSE)
     return bfd_reloc_notsupported;
@@ -535,13 +522,13 @@ arc_do_relocation (bfd_byte * contents, struct arc_relocation_data reloc_data)
   switch (reloc_data.howto->size)
     {
       case 2:
-	insn = arc_bfd_get_32 (reloc_data.input_section->owner,
+	insn = arc_bfd_get_32 (abfd,
 			       contents + reloc_data.reloc_offset,
 			       reloc_data.input_section);
 	break;
       case 1:
       case 0:
-	insn = arc_bfd_get_16 (reloc_data.input_section->owner,
+	insn = arc_bfd_get_16 (abfd,
 			       contents + reloc_data.reloc_offset,
 			       reloc_data.input_section);
 	break;
@@ -569,7 +556,7 @@ arc_do_relocation (bfd_byte * contents, struct arc_relocation_data reloc_data)
       flag = bfd_check_overflow (reloc_data.howto->complain_on_overflow,
 				 reloc_data.howto->bitsize,
 				 reloc_data.howto->rightshift,
-				 bfd_arch_bits_per_address (reloc_data.input_section->owner),
+				 bfd_arch_bits_per_address (abfd),
 				 relocation);
 
 #undef DEBUG_ARC_RELOC
@@ -594,13 +581,13 @@ arc_do_relocation (bfd_byte * contents, struct arc_relocation_data reloc_data)
   switch (reloc_data.howto->size)
     {
       case 2:
-	arc_bfd_put_32 (reloc_data.input_section->owner, insn,
+	arc_bfd_put_32 (abfd, insn,
 		       contents + reloc_data.reloc_offset,
 		       reloc_data.input_section);
 	break;
       case 1:
       case 0:
-	arc_bfd_put_16 (reloc_data.input_section->owner, insn,
+	arc_bfd_put_16 (abfd, insn,
 		       contents + reloc_data.reloc_offset,
 		       reloc_data.input_section);
 	break;
