@@ -1,4 +1,4 @@
-# Copyright 2014-2015 Free Software Foundation, Inc.
+# Copyright 2014-2016 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,12 +15,6 @@
 
 # Test that when following an exec, we don't try to insert breakpoints
 # in the new image at the addresses the symbols had before the exec.
-
-# Remote protocol does not support follow-exec notifications.
-
-if [is_remote target] {
-    continue
-}
 
 standard_testfile
 

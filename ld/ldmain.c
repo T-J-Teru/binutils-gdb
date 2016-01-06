@@ -1,5 +1,5 @@
 /* Main program of GNU linker.
-   Copyright (C) 1991-2015 Free Software Foundation, Inc.
+   Copyright (C) 1991-2016 Free Software Foundation, Inc.
    Written by Steve Chamberlain steve@cygnus.com
 
    This file is part of the GNU Binutils.
@@ -222,15 +222,7 @@ main (int argc, char **argv)
   /* Set up the sysroot directory.  */
   ld_sysroot = get_sysroot (argc, argv);
   if (*ld_sysroot)
-    {
-      if (*TARGET_SYSTEM_ROOT == 0)
-	{
-	  einfo ("%P%F: this linker was not configured to use sysroots\n");
-	  ld_sysroot = "";
-	}
-      else
-	ld_canon_sysroot = lrealpath (ld_sysroot);
-    }
+    ld_canon_sysroot = lrealpath (ld_sysroot);
   if (ld_canon_sysroot)
     ld_canon_sysroot_len = strlen (ld_canon_sysroot);
   else
@@ -285,9 +277,13 @@ main (int argc, char **argv)
   link_info.init_function = "_init";
   link_info.fini_function = "_fini";
   link_info.relax_pass = 1;
+  link_info.extern_protected_data = -1;
   link_info.pei386_auto_import = -1;
   link_info.spare_dynamic_tags = 5;
   link_info.path_separator = ':';
+#ifdef DEFAULT_FLAG_COMPRESS_DEBUG
+  link_info.compress_debug = COMPRESS_DEBUG_GABI_ZLIB;
+#endif
 
   ldfile_add_arch ("");
   emulation = get_emulation (argc, argv);
@@ -419,10 +415,17 @@ main (int argc, char **argv)
 
   /* Print error messages for any missing symbols, for any warning
      symbols, and possibly multiple definitions.  */
-  if (link_info.relocatable)
+  if (bfd_link_relocatable (&link_info))
     link_info.output_bfd->flags &= ~EXEC_P;
   else
     link_info.output_bfd->flags |= EXEC_P;
+
+  if ((link_info.compress_debug & COMPRESS_DEBUG))
+    {
+      link_info.output_bfd->flags |= BFD_COMPRESS;
+      if (link_info.compress_debug == COMPRESS_DEBUG_GABI_ZLIB)
+	link_info.output_bfd->flags |= BFD_COMPRESS_GABI;
+    }
 
   ldwrite ();
 
@@ -432,6 +435,8 @@ main (int argc, char **argv)
     output_cref (config.map_file != NULL ? config.map_file : stdout);
   if (nocrossref_list != NULL)
     check_nocrossrefs ();
+  if (command_line.print_memory_usage)
+    lang_print_memory_usage ();
 #if 0
   {
     struct bfd_link_hash_entry * h;
@@ -463,7 +468,8 @@ main (int argc, char **argv)
       /* If the --force-exe-suffix is enabled, and we're making an
 	 executable file and it doesn't end in .exe, copy it to one
 	 which does.  */
-      if (! link_info.relocatable && command_line.force_exe_suffix)
+      if (!bfd_link_relocatable (&link_info)
+	  && command_line.force_exe_suffix)
 	{
 	  int len = strlen (output_filename);
 
@@ -1112,7 +1118,7 @@ constructor_callback (struct bfd_link_info *info,
   /* Ensure that BFD_RELOC_CTOR exists now, so that we can give a
      useful error message.  */
   if (bfd_reloc_type_lookup (info->output_bfd, BFD_RELOC_CTOR) == NULL
-      && (info->relocatable
+      && (bfd_link_relocatable (info)
 	  || bfd_reloc_type_lookup (abfd, BFD_RELOC_CTOR) == NULL))
     einfo (_("%P%F: BFD backend error: BFD_RELOC_CTOR unsupported\n"));
 

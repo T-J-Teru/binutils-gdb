@@ -1,5 +1,5 @@
 /* MI Command Set - varobj commands.
-   Copyright (C) 2000-2015 Free Software Foundation, Inc.
+   Copyright (C) 2000-2016 Free Software Foundation, Inc.
 
    Contributed by Cygnus Solutions (a Red Hat company).
 
@@ -233,10 +233,12 @@ mi_parse_format (const char *arg)
 	return FORMAT_HEXADECIMAL;
       else if (strncmp (arg, "octal", len) == 0)
 	return FORMAT_OCTAL;
+      else if (strncmp (arg, "zero-hexadecimal", len) == 0)
+	return FORMAT_ZHEXADECIMAL;
     }
 
   error (_("Must specify the format as: \"natural\", "
-	   "\"binary\", \"decimal\", \"hexadecimal\", or \"octal\""));
+	   "\"binary\", \"decimal\", \"hexadecimal\", \"octal\" or \"zero-hexadecimal\""));
 }
 
 void
@@ -649,7 +651,7 @@ struct mi_cmd_var_update
 static void
 mi_cmd_var_update_iter (struct varobj *var, void *data_pointer)
 {
-  struct mi_cmd_var_update *data = data_pointer;
+  struct mi_cmd_var_update *data = (struct mi_cmd_var_update *) data_pointer;
   int thread_id, thread_stopped;
 
   thread_id = varobj_get_thread_id (var);

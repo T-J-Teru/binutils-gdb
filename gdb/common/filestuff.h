@@ -1,5 +1,5 @@
 /* Low-level file-handling.
-   Copyright (C) 2012-2015 Free Software Foundation, Inc.
+   Copyright (C) 2012-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -66,5 +66,9 @@ extern int gdb_socket_cloexec (int domain, int style, int protocol);
    the close-on-exec flag set.  */
 
 extern int gdb_pipe_cloexec (int filedes[2]);
+
+/* Return a new cleanup that closes FD.  */
+
+extern struct cleanup *make_cleanup_close (int fd);
 
 #endif /* FILESTUFF_H */

@@ -1,6 +1,6 @@
 /* load.c --- loading object files into the RL78 simulator.
 
-   Copyright (C) 2005-2015 Free Software Foundation, Inc.
+   Copyright (C) 2005-2016 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
    This file is part of the GNU simulators.
@@ -92,13 +92,26 @@ rl78_load (bfd *prog, host_callback *callbacks, const char * const simname)
       return;
     }
 
-  rl78_g10_mode = 0;
   switch (elf_elfheader (prog)->e_flags & E_FLAG_RL78_CPU_MASK)
     {
-    case E_FLAG_RL78_G10: rl78_g10_mode = 1; break;
-    case E_FLAG_RL78_G13: g13_multiply = 1; break;
+    case E_FLAG_RL78_G10:
+      rl78_g10_mode = 1;
+      g13_multiply = 0;
+      g14_multiply = 0;
+      mem_set_mirror (0, 0xf8000, 4096);
+      break;
+    case E_FLAG_RL78_G13:
+      rl78_g10_mode = 0;
+      g13_multiply = 1;
+      g14_multiply = 0;
+      break;
     case E_FLAG_RL78_G14:
+      rl78_g10_mode = 0;
+      g13_multiply = 0;
+      g14_multiply = 1;
+      break;
     default:
+      /* Keep whatever was manually specified.  */
       break;
     }
 

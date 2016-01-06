@@ -1,6 +1,6 @@
 /* cpu.h --- declarations for the RL78 core.
 
-   Copyright (C) 2005-2015 Free Software Foundation, Inc.
+   Copyright (C) 2005-2016 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
    This file is part of the GNU simulators.
@@ -99,5 +99,6 @@ extern unsigned int counts_per_insn[0x100000];
 
 extern int rl78_g10_mode;
 extern int g13_multiply;
+extern int g14_multiply;
 
 #endif

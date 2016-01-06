@@ -1,6 +1,6 @@
 // x86_64.cc -- x86_64 target support for gold.
 
-// Copyright (C) 2006-2015 Free Software Foundation, Inc.
+// Copyright (C) 2006-2016 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -505,7 +505,6 @@ class Target_x86_64 : public Sized_target<size, false>
       size_t reloc_count,
       Output_section* output_section,
       typename elfcpp::Elf_types<size>::Elf_Off offset_in_output_section,
-      const Relocatable_relocs*,
       unsigned char* view,
       typename elfcpp::Elf_types<size>::Elf_Addr view_address,
       section_size_type view_size,
@@ -562,6 +561,7 @@ class Target_x86_64 : public Sized_target<size, false>
   void
   do_calls_non_split(Relobj* object, unsigned int shndx,
 		     section_offset_type fnoffset, section_size_type fnsize,
+		     const unsigned char* prelocs, size_t reloc_count,
 		     unsigned char* view, section_size_type view_size,
 		     std::string* from, std::string* to) const;
 
@@ -593,6 +593,11 @@ class Target_x86_64 : public Sized_target<size, false>
   // Return the size of each PLT entry.
   unsigned int
   plt_entry_size() const;
+
+  // Return the size of each GOT entry.
+  unsigned int
+  got_entry_size() const
+  { return 8; };
 
   // Create the GOT section for an incremental update.
   Output_data_got_base*
@@ -777,11 +782,9 @@ class Target_x86_64 : public Sized_target<size, false>
     // Do a relocation.  Return false if the caller should not issue
     // any warnings about this relocation.
     inline bool
-    relocate(const Relocate_info<size, false>*, Target_x86_64*,
-	     Output_section*,
-	     size_t relnum, const elfcpp::Rela<size, false>&,
-	     unsigned int r_type, const Sized_symbol<size>*,
-	     const Symbol_value<size>*,
+    relocate(const Relocate_info<size, false>*, unsigned int,
+	     Target_x86_64*, Output_section*, size_t, const unsigned char*,
+	     const Sized_symbol<size>*, const Symbol_value<size>*,
 	     unsigned char*, typename elfcpp::Elf_types<size>::Elf_Addr,
 	     section_size_type);
 
@@ -865,6 +868,25 @@ class Target_x86_64 : public Sized_target<size, false>
     get_size_for_reloc(unsigned int, Relobj*);
   };
 
+  // Check if relocation against this symbol is a candidate for
+  // conversion from
+  // mov foo@GOTPCREL(%rip), %reg
+  // to lea foo(%rip), %reg.
+  static bool
+  can_convert_mov_to_lea(const Symbol* gsym)
+  {
+    gold_assert(gsym != NULL);
+    return (gsym->type() != elfcpp::STT_GNU_IFUNC
+	    && !gsym->is_undefined ()
+	    && !gsym->is_from_dynobj()
+	    && !gsym->is_preemptible()
+	    && (!parameters->options().shared()
+		|| (gsym->visibility() != elfcpp::STV_DEFAULT
+		    && gsym->visibility() != elfcpp::STV_PROTECTED)
+		|| parameters->options().Bsymbolic())
+	    && strcmp(gsym->name(), "_DYNAMIC") != 0);
+  }
+
   // Adjust TLS relocation type based on the options and whether this
   // is a local symbol.
   static tls::Tls_optimization
@@ -944,10 +966,13 @@ class Target_x86_64 : public Sized_target<size, false>
 	     unsigned int shndx, Output_section* output_section,
 	     Symbol* sym, const elfcpp::Rela<size, false>& reloc)
   {
+    unsigned int r_type = elfcpp::elf_r_type<size>(reloc.get_r_info());
     this->copy_relocs_.copy_reloc(symtab, layout,
 				  symtab->get_sized_symbol<size>(sym),
 				  object, shndx, output_section,
-				  reloc, this->rela_dyn_section(layout));
+				  r_type, reloc.get_r_offset(),
+				  reloc.get_r_addend(),
+				  this->rela_dyn_section(layout));
   }
 
   // Information about this specific target which we pass to the
@@ -1033,7 +1058,8 @@ const Target::Target_info Target_x86_64<64>::x86_64_info =
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 template<>
@@ -1060,7 +1086,8 @@ const Target::Target_info Target_x86_64<32>::x86_64_info =
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 // This is called when a new output section is created.  This is where
@@ -2172,6 +2199,8 @@ Target_x86_64<size>::Scan::get_reference_flags(unsigned int r_type)
     case elfcpp::R_X86_64_GOT32:
     case elfcpp::R_X86_64_GOTPCREL64:
     case elfcpp::R_X86_64_GOTPCREL:
+    case elfcpp::R_X86_64_GOTPCRELX:
+    case elfcpp::R_X86_64_REX_GOTPCRELX:
     case elfcpp::R_X86_64_GOTPLT64:
       // Absolute in GOT.
       return Symbol::ABSOLUTE_REF;
@@ -2456,10 +2485,33 @@ Target_x86_64<size>::Scan::local(Symbol_table* symtab,
     case elfcpp::R_X86_64_GOT32:
     case elfcpp::R_X86_64_GOTPCREL64:
     case elfcpp::R_X86_64_GOTPCREL:
+    case elfcpp::R_X86_64_GOTPCRELX:
+    case elfcpp::R_X86_64_REX_GOTPCRELX:
     case elfcpp::R_X86_64_GOTPLT64:
       {
-	// The symbol requires a GOT entry.
+	// The symbol requires a GOT section.
 	Output_data_got<64, false>* got = target->got_section(symtab, layout);
+
+	// If the relocation symbol isn't IFUNC,
+	// and is local, then we will convert
+	// mov foo@GOTPCREL(%rip), %reg
+	// to lea foo(%rip), %reg.
+	// in Relocate::relocate.
+	if ((r_type == elfcpp::R_X86_64_GOTPCREL
+	     || r_type == elfcpp::R_X86_64_GOTPCRELX
+	     || r_type == elfcpp::R_X86_64_REX_GOTPCRELX)
+	    && reloc.get_r_offset() >= 2
+	    && !is_ifunc)
+	  {
+	    section_size_type stype;
+	    const unsigned char* view = object->section_contents(data_shndx,
+								 &stype, true);
+	    if (view[reloc.get_r_offset() - 2] == 0x8b)
+	      break;
+	  }
+
+
+	// The symbol requires a GOT entry.
 	unsigned int r_sym = elfcpp::elf_r_sym<size>(reloc.get_r_info());
 
 	// For a STT_GNU_IFUNC symbol we want the PLT offset.  That
@@ -2675,6 +2727,8 @@ Target_x86_64<size>::Scan::possible_function_pointer_reloc(unsigned int r_type)
     case elfcpp::R_X86_64_GOT32:
     case elfcpp::R_X86_64_GOTPCREL64:
     case elfcpp::R_X86_64_GOTPCREL:
+    case elfcpp::R_X86_64_GOTPCRELX:
+    case elfcpp::R_X86_64_REX_GOTPCRELX:
     case elfcpp::R_X86_64_GOTPLT64:
       {
 	return true;
@@ -2863,10 +2917,30 @@ Target_x86_64<size>::Scan::global(Symbol_table* symtab,
     case elfcpp::R_X86_64_GOT32:
     case elfcpp::R_X86_64_GOTPCREL64:
     case elfcpp::R_X86_64_GOTPCREL:
+    case elfcpp::R_X86_64_GOTPCRELX:
+    case elfcpp::R_X86_64_REX_GOTPCRELX:
     case elfcpp::R_X86_64_GOTPLT64:
       {
 	// The symbol requires a GOT entry.
 	Output_data_got<64, false>* got = target->got_section(symtab, layout);
+
+	// If we convert this from
+	// mov foo@GOTPCREL(%rip), %reg
+	// to lea foo(%rip), %reg.
+	// in Relocate::relocate, then there is nothing to do here.
+	if ((r_type == elfcpp::R_X86_64_GOTPCREL
+	     || r_type == elfcpp::R_X86_64_GOTPCRELX
+	     || r_type == elfcpp::R_X86_64_REX_GOTPCRELX)
+	    && reloc.get_r_offset() >= 2
+	    && Target_x86_64<size>::can_convert_mov_to_lea(gsym))
+	  {
+	    section_size_type stype;
+	    const unsigned char* view = object->section_contents(data_shndx,
+								 &stype, true);
+	    if (view[reloc.get_r_offset() - 2] == 0x8b)
+	      break;
+	  }
+
 	if (gsym->final_value_is_known())
 	  {
 	    // For a STT_GNU_IFUNC symbol we want the PLT address.
@@ -3272,17 +3346,20 @@ template<int size>
 inline bool
 Target_x86_64<size>::Relocate::relocate(
     const Relocate_info<size, false>* relinfo,
+    unsigned int,
     Target_x86_64<size>* target,
     Output_section*,
     size_t relnum,
-    const elfcpp::Rela<size, false>& rela,
-    unsigned int r_type,
+    const unsigned char* preloc,
     const Sized_symbol<size>* gsym,
     const Symbol_value<size>* psymval,
     unsigned char* view,
     typename elfcpp::Elf_types<size>::Elf_Addr address,
     section_size_type view_size)
 {
+  const elfcpp::Rela<size, false> rela(preloc);
+  unsigned int r_type = elfcpp::elf_r_type<size>(rela.get_r_info());
+
   if (this->skip_call_tls_get_addr_)
     {
       if ((r_type != elfcpp::R_X86_64_PLT32
@@ -3340,7 +3417,6 @@ Target_x86_64<size>::Relocate::relocate(
     case elfcpp::R_X86_64_GOT32:
     case elfcpp::R_X86_64_GOT64:
     case elfcpp::R_X86_64_GOTPLT64:
-    case elfcpp::R_X86_64_GOTPCREL:
     case elfcpp::R_X86_64_GOTPCREL64:
       if (gsym != NULL)
 	{
@@ -3485,11 +3561,41 @@ Target_x86_64<size>::Relocate::relocate(
       break;
 
     case elfcpp::R_X86_64_GOTPCREL:
+    case elfcpp::R_X86_64_GOTPCRELX:
+    case elfcpp::R_X86_64_REX_GOTPCRELX:
       {
-	gold_assert(have_got_offset);
-	typename elfcpp::Elf_types<size>::Elf_Addr value;
-	value = target->got_plt_section()->address() + got_offset;
-	Relocate_functions<size, false>::pcrela32(view, value, addend, address);
+      // Convert
+      // mov foo@GOTPCREL(%rip), %reg
+      // to lea foo(%rip), %reg.
+      // if possible.
+      if (rela.get_r_offset() >= 2
+	  && view[-2] == 0x8b
+	  && ((gsym == NULL && !psymval->is_ifunc_symbol())
+	      || (gsym != NULL
+		  && Target_x86_64<size>::can_convert_mov_to_lea(gsym))))
+	{
+	  view[-2] = 0x8d;
+	  Relocate_functions<size, false>::pcrela32(view, object, psymval, addend,
+						    address);
+	}
+      else
+	{
+	  if (gsym != NULL)
+	    {
+	      gold_assert(gsym->has_got_offset(GOT_TYPE_STANDARD));
+	      got_offset = gsym->got_offset(GOT_TYPE_STANDARD) - target->got_size();
+	    }
+	  else
+	    {
+	      unsigned int r_sym = elfcpp::elf_r_sym<size>(rela.get_r_info());
+	      gold_assert(object->local_has_got_offset(r_sym, GOT_TYPE_STANDARD));
+	      got_offset = (object->local_got_offset(r_sym, GOT_TYPE_STANDARD)
+			    - target->got_size());
+	    }
+	  typename elfcpp::Elf_types<size>::Elf_Addr value;
+	  value = target->got_plt_section()->address() + got_offset;
+	  Relocate_functions<size, false>::pcrela32(view, value, addend, address);
+	}
       }
       break;
 
@@ -4239,6 +4345,8 @@ Target_x86_64<size>::Relocatable_size_for_reloc::get_size_for_reloc(
     case elfcpp::R_X86_64_GOT64:
     case elfcpp::R_X86_64_GOTPCREL64:
     case elfcpp::R_X86_64_GOTPCREL:
+    case elfcpp::R_X86_64_GOTPCRELX:
+    case elfcpp::R_X86_64_REX_GOTPCRELX:
     case elfcpp::R_X86_64_GOTPLT64:
       return 8;
 
@@ -4329,7 +4437,6 @@ Target_x86_64<size>::relocate_relocs(
     size_t reloc_count,
     Output_section* output_section,
     typename elfcpp::Elf_types<size>::Elf_Off offset_in_output_section,
-    const Relocatable_relocs* rr,
     unsigned char* view,
     typename elfcpp::Elf_types<size>::Elf_Addr view_address,
     section_size_type view_size,
@@ -4344,7 +4451,6 @@ Target_x86_64<size>::relocate_relocs(
     reloc_count,
     output_section,
     offset_in_output_section,
-    rr,
     view,
     view_address,
     view_size,
@@ -4492,6 +4598,8 @@ void
 Target_x86_64<size>::do_calls_non_split(Relobj* object, unsigned int shndx,
 					section_offset_type fnoffset,
 					section_size_type fnsize,
+					const unsigned char*,
+					size_t,
 					unsigned char* view,
 					section_size_type view_size,
 					std::string* from,
@@ -4721,7 +4829,8 @@ const Target::Target_info Target_x86_64_nacl<64>::x86_64_nacl_info =
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 template<>
@@ -4748,7 +4857,8 @@ const Target::Target_info Target_x86_64_nacl<32>::x86_64_nacl_info =
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 #define	NACLMASK	0xe0            // 32-byte alignment mask.

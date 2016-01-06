@@ -1,4 +1,4 @@
-# Copyright (C) 2013-2015 Free Software Foundation, Inc.
+# Copyright (C) 2013-2016 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,7 +35,10 @@ class SingleStatisticTestResult(TestResult):
         self.results = dict ()
 
     def record(self, parameter, result):
-        self.results[parameter] = result
+        if parameter in self.results:
+            self.results[parameter].append(result)
+        else:
+            self.results[parameter] = [result]
 
     def report(self, reporter, name):
         reporter.start()

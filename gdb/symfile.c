@@ -1,6 +1,6 @@
 /* Generic symbol file reading for the GNU debugger, GDB.
 
-   Copyright (C) 1990-2015 Free Software Foundation, Inc.
+   Copyright (C) 1990-2016 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support, using pieces from other GDB modules.
 
@@ -62,7 +62,7 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <time.h>
-#include <sys/time.h>
+#include "gdb_sys_time.h"
 
 #include "psymtab.h"
 
@@ -424,7 +424,7 @@ struct place_section_arg
 static void
 place_section (bfd *abfd, asection *sect, void *obj)
 {
-  struct place_section_arg *arg = obj;
+  struct place_section_arg *arg = (struct place_section_arg *) obj;
   CORE_ADDR *offsets = arg->offsets->offsets, start_addr;
   int done;
   ULONGEST align = ((ULONGEST) 1) << bfd_get_section_alignment (abfd, sect);
@@ -555,7 +555,7 @@ addrs_section_sort (struct section_addr_info *addrs)
   int i;
 
   /* `+ 1' for the NULL terminator.  */
-  array = xmalloc (sizeof (*array) * (addrs->num_sections + 1));
+  array = XNEWVEC (struct other_sections *, addrs->num_sections + 1);
   for (i = 0; i < addrs->num_sections; i++)
     array[i] = &addrs->other[i];
   array[i] = NULL;
@@ -614,8 +614,7 @@ addr_info_make_relative (struct section_addr_info *addrs, bfd *abfd)
   /* Now create ADDRS_TO_ABFD_ADDRS from ADDRS_SORTED and
      ABFD_ADDRS_SORTED.  */
 
-  addrs_to_abfd_addrs = xzalloc (sizeof (*addrs_to_abfd_addrs)
-				 * addrs->num_sections);
+  addrs_to_abfd_addrs = XCNEWVEC (struct other_sections *, addrs->num_sections);
   make_cleanup (xfree, addrs_to_abfd_addrs);
 
   while (*addrs_sorted)
@@ -1016,7 +1015,8 @@ syms_from_objfile_1 (struct objfile *objfile,
 
       objfile->num_sections = num_sections;
       objfile->section_offsets
-        = obstack_alloc (&objfile->objfile_obstack, size);
+	= (struct section_offsets *) obstack_alloc (&objfile->objfile_obstack,
+						    size);
       memset (objfile->section_offsets, 0, size);
       return;
     }
@@ -1368,7 +1368,7 @@ separate_debug_file_exists (const char *name, unsigned long crc,
   if (filename_cmp (name, objfile_name (parent_objfile)) == 0)
     return 0;
 
-  abfd = gdb_bfd_open_maybe_remote (name);
+  abfd = gdb_bfd_open (name, gnutarget, -1);
 
   if (!abfd)
     return 0;
@@ -1471,12 +1471,13 @@ find_separate_debug_file (const char *dir,
   if (canon_dir != NULL && strlen (canon_dir) > i)
     i = strlen (canon_dir);
 
-  debugfile = xmalloc (strlen (debug_file_directory) + 1
-		       + i
-		       + strlen (DEBUG_SUBDIRECTORY)
-		       + strlen ("/")
-		       + strlen (debuglink)
-		       + 1);
+  debugfile
+    = (char *) xmalloc (strlen (debug_file_directory) + 1
+			+ i
+			+ strlen (DEBUG_SUBDIRECTORY)
+			+ strlen ("/")
+			+ strlen (debuglink)
+			+ 1);
 
   /* First try in the same directory as the original file.  */
   strcpy (debugfile, dir);
@@ -1696,7 +1697,7 @@ set_initial_language (void)
   if (lang == language_unknown)
     {
       char *name = main_name ();
-      struct symbol *sym = lookup_symbol (name, NULL, VAR_DOMAIN, NULL);
+      struct symbol *sym = lookup_symbol (name, NULL, VAR_DOMAIN, NULL).symbol;
 
       if (sym != NULL)
 	lang = SYMBOL_LANGUAGE (sym);
@@ -1712,83 +1713,57 @@ set_initial_language (void)
   expected_language = current_language; /* Don't warn the user.  */
 }
 
-/* If NAME is a remote name open the file using remote protocol, otherwise
-   open it normally.  Returns a new reference to the BFD.  On error,
-   returns NULL with the BFD error set.  */
-
-bfd *
-gdb_bfd_open_maybe_remote (const char *name)
-{
-  bfd *result;
-
-  if (remote_filename_p (name))
-    result = remote_bfd_open (name, gnutarget);
-  else
-    result = gdb_bfd_open (name, gnutarget, -1);
-
-  return result;
-}
-
 /* Open the file specified by NAME and hand it off to BFD for
    preliminary analysis.  Return a newly initialized bfd *, which
    includes a newly malloc'd` copy of NAME (tilde-expanded and made
    absolute).  In case of trouble, error() is called.  */
 
 bfd *
-symfile_bfd_open (const char *cname)
+symfile_bfd_open (const char *name)
 {
   bfd *sym_bfd;
-  int desc;
-  char *name, *absolute_name;
-  struct cleanup *back_to;
+  int desc = -1;
+  struct cleanup *back_to = make_cleanup (null_cleanup, 0);
 
-  if (remote_filename_p (cname))
+  if (!is_target_filename (name))
     {
-      sym_bfd = remote_bfd_open (cname, gnutarget);
-      if (!sym_bfd)
-	error (_("`%s': can't open to read symbols: %s."), cname,
-	       bfd_errmsg (bfd_get_error ()));
+      char *expanded_name, *absolute_name;
 
-      if (!bfd_check_format (sym_bfd, bfd_object))
+      expanded_name = tilde_expand (name); /* Returns 1st new malloc'd copy.  */
+
+      /* Look down path for it, allocate 2nd new malloc'd copy.  */
+      desc = openp (getenv ("PATH"),
+		    OPF_TRY_CWD_FIRST | OPF_RETURN_REALPATH,
+		    expanded_name, O_RDONLY | O_BINARY, &absolute_name);
+#if defined(__GO32__) || defined(_WIN32) || defined (__CYGWIN__)
+      if (desc < 0)
 	{
-	  make_cleanup_bfd_unref (sym_bfd);
-	  error (_("`%s': can't read symbols: %s."), cname,
-		 bfd_errmsg (bfd_get_error ()));
+	  char *exename = (char *) alloca (strlen (expanded_name) + 5);
+
+	  strcat (strcpy (exename, expanded_name), ".exe");
+	  desc = openp (getenv ("PATH"),
+			OPF_TRY_CWD_FIRST | OPF_RETURN_REALPATH,
+			exename, O_RDONLY | O_BINARY, &absolute_name);
+	}
+#endif
+      if (desc < 0)
+	{
+	  make_cleanup (xfree, expanded_name);
+	  perror_with_name (expanded_name);
 	}
 
-      return sym_bfd;
+      xfree (expanded_name);
+      make_cleanup (xfree, absolute_name);
+      name = absolute_name;
     }
-
-  name = tilde_expand (cname);	/* Returns 1st new malloc'd copy.  */
-
-  /* Look down path for it, allocate 2nd new malloc'd copy.  */
-  desc = openp (getenv ("PATH"), OPF_TRY_CWD_FIRST | OPF_RETURN_REALPATH, name,
-		O_RDONLY | O_BINARY, &absolute_name);
-#if defined(__GO32__) || defined(_WIN32) || defined (__CYGWIN__)
-  if (desc < 0)
-    {
-      char *exename = alloca (strlen (name) + 5);
-
-      strcat (strcpy (exename, name), ".exe");
-      desc = openp (getenv ("PATH"), OPF_TRY_CWD_FIRST | OPF_RETURN_REALPATH,
-		    exename, O_RDONLY | O_BINARY, &absolute_name);
-    }
-#endif
-  if (desc < 0)
-    {
-      make_cleanup (xfree, name);
-      perror_with_name (name);
-    }
-
-  xfree (name);
-  name = absolute_name;
-  back_to = make_cleanup (xfree, name);
 
   sym_bfd = gdb_bfd_open (name, gnutarget, desc);
   if (!sym_bfd)
     error (_("`%s': can't open to read symbols: %s."), name,
 	   bfd_errmsg (bfd_get_error ()));
-  bfd_set_cacheable (sym_bfd, 1);
+
+  if (!gdb_bfd_has_target_filename (sym_bfd))
+    bfd_set_cacheable (sym_bfd, 1);
 
   if (!bfd_check_format (sym_bfd, bfd_object))
     {
@@ -1887,7 +1862,7 @@ load_command (char *arg, int from_tty)
       if (count)
 	{
 	  /* We need to quote this string so buildargv can pull it apart.  */
-	  char *temp = xmalloc (strlen (arg) + count + 1 );
+	  char *temp = (char *) xmalloc (strlen (arg) + count + 1 );
 	  char *ptemp = temp;
 	  char *prev;
 
@@ -1932,7 +1907,7 @@ static int validate_download = 0;
 static void
 add_section_size_callback (bfd *abfd, asection *asec, void *data)
 {
-  bfd_size_type *sum = data;
+  bfd_size_type *sum = (bfd_size_type *) data;
 
   *sum += bfd_get_section_size (asec);
 }
@@ -1969,7 +1944,8 @@ struct load_progress_section_data {
 static void
 load_progress (ULONGEST bytes, void *untyped_arg)
 {
-  struct load_progress_section_data *args = untyped_arg;
+  struct load_progress_section_data *args
+    = (struct load_progress_section_data *) untyped_arg;
   struct load_progress_data *totals;
 
   if (args == NULL)
@@ -1998,7 +1974,7 @@ load_progress (ULONGEST bytes, void *untyped_arg)
 	 might add a verify_memory() method to the target vector and
 	 then use that.  remote.c could implement that method using
 	 the ``qCRC'' packet.  */
-      gdb_byte *check = xmalloc (bytes);
+      gdb_byte *check = (gdb_byte *) xmalloc (bytes);
       struct cleanup *verify_cleanups = make_cleanup (xfree, check);
 
       if (target_read_memory (args->lma, check, bytes) != 0)
@@ -2034,7 +2010,7 @@ static void
 load_section_callback (bfd *abfd, asection *asec, void *data)
 {
   struct memory_write_request *new_request;
-  struct load_section_data *args = data;
+  struct load_section_data *args = (struct load_section_data *) data;
   struct load_progress_section_data *section_data;
   bfd_size_type size = bfd_get_section_size (asec);
   gdb_byte *buffer;
@@ -2049,11 +2025,11 @@ load_section_callback (bfd *abfd, asection *asec, void *data)
   new_request = VEC_safe_push (memory_write_request_s,
 			       args->requests, NULL);
   memset (new_request, 0, sizeof (struct memory_write_request));
-  section_data = xcalloc (1, sizeof (struct load_progress_section_data));
+  section_data = XCNEW (struct load_progress_section_data);
   new_request->begin = bfd_section_lma (abfd, asec) + args->load_offset;
   new_request->end = new_request->begin + size; /* FIXME Should size
 						   be in instead?  */
-  new_request->data = xmalloc (size);
+  new_request->data = (gdb_byte *) xmalloc (size);
   new_request->baton = section_data;
 
   buffer = new_request->data;
@@ -2073,7 +2049,7 @@ load_section_callback (bfd *abfd, asection *asec, void *data)
 static void
 clear_memory_write_data (void *arg)
 {
-  VEC(memory_write_request_s) **vec_p = arg;
+  VEC(memory_write_request_s) **vec_p = (VEC(memory_write_request_s) **) arg;
   VEC(memory_write_request_s) *vec = *vec_p;
   int i;
   struct memory_write_request *mr;
@@ -2282,8 +2258,7 @@ add_symbol_file_command (char *args, int from_tty)
   struct cleanup *my_cleanups = make_cleanup (null_cleanup, NULL);
 
   num_sect_opts = 16;
-  sect_opts = (struct sect_opt *) xmalloc (num_sect_opts
-					   * sizeof (struct sect_opt));
+  sect_opts = XNEWVEC (struct sect_opt, num_sect_opts);
 
   dont_repeat ();
 
@@ -2596,7 +2571,7 @@ reread_symbols (void)
 	    obfd_filename = bfd_get_filename (objfile->obfd);
 	    /* Open the new BFD before freeing the old one, so that
 	       the filename remains live.  */
-	    objfile->obfd = gdb_bfd_open_maybe_remote (obfd_filename);
+	    objfile->obfd = gdb_bfd_open (obfd_filename, gnutarget, -1);
 	    if (objfile->obfd == NULL)
 	      {
 		/* We have to make a cleanup and error here, rather
@@ -2657,9 +2632,9 @@ reread_symbols (void)
 	     do it *after* the obstack has been initialized.  */
 	  set_objfile_per_bfd (objfile);
 
-	  objfile->original_name = obstack_copy0 (&objfile->objfile_obstack,
-						  original_name,
-						  strlen (original_name));
+	  objfile->original_name
+	    = (char *) obstack_copy0 (&objfile->objfile_obstack, original_name,
+				      strlen (original_name));
 
 	  /* Reset the sym_fns pointer.  The ELF reader can change it
 	     based on whether .gdb_index is present, and we need it to
@@ -2760,9 +2735,9 @@ add_filename_language (char *ext, enum language lang)
   if (fl_table_next >= fl_table_size)
     {
       fl_table_size += 10;
-      filename_language_table =
-	xrealloc (filename_language_table,
-		  fl_table_size * sizeof (*filename_language_table));
+      filename_language_table = XRESIZEVEC (filename_language,
+					    filename_language_table,
+					    fl_table_size);
     }
 
   filename_language_table[fl_table_next].ext = xstrdup (ext);
@@ -2859,8 +2834,8 @@ init_filename_language_table (void)
     {
       fl_table_size = 20;
       fl_table_next = 0;
-      filename_language_table =
-	xmalloc (fl_table_size * sizeof (*filename_language_table));
+      filename_language_table = XNEWVEC (filename_language, fl_table_size);
+
       add_filename_language (".c", language_c);
       add_filename_language (".d", language_d);
       add_filename_language (".C", language_cplus);
@@ -2906,7 +2881,7 @@ enum language
 deduce_language_from_filename (const char *filename)
 {
   int i;
-  char *cp;
+  const char *cp;
 
   if (filename != NULL)
     if ((cp = strrchr (filename, '.')) != NULL)
@@ -2927,7 +2902,8 @@ allocate_symtab (struct compunit_symtab *cust, const char *filename)
   struct symtab *symtab
     = OBSTACK_ZALLOC (&objfile->objfile_obstack, struct symtab);
 
-  symtab->filename = bcache (filename, strlen (filename) + 1,
+  symtab->filename
+    = (const char *) bcache (filename, strlen (filename) + 1,
 			     objfile->per_bfd->filename_cache);
   symtab->fullname = NULL;
   symtab->language = deduce_language_from_filename (filename);
@@ -2989,8 +2965,9 @@ allocate_compunit_symtab (struct objfile *objfile, const char *name)
      Just save the basename to avoid path issues (too long for display,
      relative vs absolute, etc.).  */
   saved_name = lbasename (name);
-  cu->name = obstack_copy0 (&objfile->objfile_obstack, saved_name,
-			    strlen (saved_name));
+  cu->name
+    = (const char *) obstack_copy0 (&objfile->objfile_obstack, saved_name,
+				    strlen (saved_name));
 
   COMPUNIT_DEBUGFORMAT (cu) = "unknown";
 
@@ -3544,12 +3521,12 @@ overlay_command (char *args, int from_tty)
    In this simple implementation, the target data structures are as follows:
    unsigned _novlys;            /# number of overlay sections #/
    unsigned _ovly_table[_novlys][4] = {
-   {VMA, SIZE, LMA, MAPPED},    /# one entry per overlay section #/
+   {VMA, OSIZE, LMA, MAPPED},    /# one entry per overlay section #/
    {..., ...,  ..., ...},
    }
    unsigned _novly_regions;     /# number of overlay regions #/
    unsigned _ovly_region_table[_novly_regions][3] = {
-   {VMA, SIZE, MAPPED_TO_LMA},  /# one entry per overlay region #/
+   {VMA, OSIZE, MAPPED_TO_LMA},  /# one entry per overlay region #/
    {..., ...,  ...},
    }
    These functions will attempt to update GDB's mappedness state in the
@@ -3567,7 +3544,7 @@ static unsigned cache_novlys = 0;
 static CORE_ADDR cache_ovly_table_base = 0;
 enum ovly_index
   {
-    VMA, SIZE, LMA, MAPPED
+    VMA, OSIZE, LMA, MAPPED
   };
 
 /* Throw away the cached copy of _ovly_table.  */
@@ -3590,7 +3567,7 @@ read_target_long_array (CORE_ADDR memaddr, unsigned int *myaddr,
 			int len, int size, enum bfd_endian byte_order)
 {
   /* FIXME (alloca): Not safe if array is very large.  */
-  gdb_byte *buf = alloca (len * size);
+  gdb_byte *buf = (gdb_byte *) alloca (len * size);
   int i;
 
   read_memory (memaddr, buf, len * size);
@@ -3636,7 +3613,7 @@ simple_read_overlay_table (void)
   cache_novlys = read_memory_integer (BMSYMBOL_VALUE_ADDRESS (novlys_msym),
 				      4, byte_order);
   cache_ovly_table
-    = (void *) xmalloc (cache_novlys * sizeof (*cache_ovly_table));
+    = (unsigned int (*)[4]) xmalloc (cache_novlys * sizeof (*cache_ovly_table));
   cache_ovly_table_base = BMSYMBOL_VALUE_ADDRESS (ovly_table_msym);
   read_target_long_array (cache_ovly_table_base,
                           (unsigned int *) cache_ovly_table,
@@ -3667,14 +3644,14 @@ simple_overlay_update_1 (struct obj_section *osect)
   for (i = 0; i < cache_novlys; i++)
     if (cache_ovly_table[i][VMA] == bfd_section_vma (obfd, bsect)
 	&& cache_ovly_table[i][LMA] == bfd_section_lma (obfd, bsect)
-	/* && cache_ovly_table[i][SIZE] == size */ )
+	/* && cache_ovly_table[i][OSIZE] == size */ )
       {
 	read_target_long_array (cache_ovly_table_base + i * word_size,
 				(unsigned int *) cache_ovly_table[i],
 				4, word_size, byte_order);
 	if (cache_ovly_table[i][VMA] == bfd_section_vma (obfd, bsect)
 	    && cache_ovly_table[i][LMA] == bfd_section_lma (obfd, bsect)
-	    /* && cache_ovly_table[i][SIZE] == size */ )
+	    /* && cache_ovly_table[i][OSIZE] == size */ )
 	  {
 	    osect->ovly_mapped = cache_ovly_table[i][MAPPED];
 	    return 1;
@@ -3740,7 +3717,7 @@ simple_overlay_update (struct obj_section *osect)
       for (i = 0; i < cache_novlys; i++)
 	if (cache_ovly_table[i][VMA] == bfd_section_vma (obfd, bsect)
 	    && cache_ovly_table[i][LMA] == bfd_section_lma (obfd, bsect)
-	    /* && cache_ovly_table[i][SIZE] == size */ )
+	    /* && cache_ovly_table[i][OSIZE] == size */ )
 	  { /* obj_section matches i'th entry in ovly_table.  */
 	    osect->ovly_mapped = cache_ovly_table[i][MAPPED];
 	    break;		/* finished with inner for loop: break out.  */

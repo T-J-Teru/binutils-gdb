@@ -1,6 +1,6 @@
 /* Simulator for FTDI FT32 processor.
 
-   Copyright (C) 2009-2015 Free Software Foundation, Inc.
+   Copyright (C) 2009-2016 Free Software Foundation, Inc.
    Contributed by FTDI <support@ftdichip.com>
 
    This file is part of simulators.
@@ -22,21 +22,14 @@
 #define SIM_MAIN_H
 
 #include "sim-basics.h"
-
-typedef address_word sim_cia;
-
 #include "sim-base.h"
 #include "bfd.h"
-
-typedef struct _sim_cpu SIM_CPU;
 
 #include "ft32-sim.h"
 
 struct _sim_cpu {
 
   /* The following are internal simulator state variables: */
-#define CIA_GET(CPU) ((CPU)->state.pc + 0)
-#define CIA_SET(CPU,CIA) ((CPU)->state.pc = (CIA))
 
   struct ft32_cpu_state state;
 
@@ -46,11 +39,6 @@ struct _sim_cpu {
 struct sim_state {
 
   sim_cpu *cpu[MAX_NR_PROCESSORS];
-#if (WITH_SMP)
-#define STATE_CPU(sd,n) ((sd)->cpu[n])
-#else
-#define STATE_CPU(sd,n) ((sd)->cpu[0])
-#endif
 
   sim_state_base base;
 };

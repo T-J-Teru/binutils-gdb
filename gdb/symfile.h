@@ -1,6 +1,6 @@
 /* Definitions for reading symbol files into GDB.
 
-   Copyright (C) 1990-2015 Free Software Foundation, Inc.
+   Copyright (C) 1990-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -513,8 +513,6 @@ extern void set_initial_language (void);
 extern void find_lowest_section (bfd *, asection *, void *);
 
 extern bfd *symfile_bfd_open (const char *);
-
-extern bfd *gdb_bfd_open_maybe_remote (const char *);
 
 extern int get_section_index (struct objfile *, char *);
 

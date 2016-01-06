@@ -1,6 +1,6 @@
 // target.h -- target support for gold   -*- C++ -*-
 
-// Copyright (C) 2006-2015 Free Software Foundation, Inc.
+// Copyright (C) 2006-2016 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -338,10 +338,12 @@ class Target
   void
   calls_non_split(Relobj* object, unsigned int shndx,
 		  section_offset_type fnoffset, section_size_type fnsize,
+		  const unsigned char* prelocs, size_t reloc_count,
 		  unsigned char* view, section_size_type view_size,
 		  std::string* from, std::string* to) const
   {
-    this->do_calls_non_split(object, shndx, fnoffset, fnsize, view, view_size,
+    this->do_calls_non_split(object, shndx, fnoffset, fnsize,
+			     prelocs, reloc_count, view, view_size,
 			     from, to);
   }
 
@@ -455,6 +457,11 @@ class Target
   entry_symbol_name() const
   { return this->pti_->entry_symbol_name; }
 
+  // Return the size in bits of SHT_HASH entry.
+  int
+  hash_entry_size() const
+  { return this->pti_->hash_entry_size; }
+
   // Whether the target has a custom set_dynsym_indexes method.
   bool
   has_custom_set_dynsym_indexes() const
@@ -540,6 +547,9 @@ class Target
     const char* attributes_vendor;
     // Name of the main entry point to the program.
     const char* entry_symbol_name;
+    // Size (in bits) of SHT_HASH entry. Always equal to 32, except for
+    // 64-bit S/390.
+    const int hash_entry_size;
   };
 
   Target(const Target_info* pti)
@@ -656,7 +666,8 @@ class Target
   // Virtual function which may be overridden by the child class.
   virtual void
   do_calls_non_split(Relobj* object, unsigned int, section_offset_type,
-		     section_size_type, unsigned char*, section_size_type,
+		     section_size_type, const unsigned char*, size_t,
+		     unsigned char*, section_size_type,
 		     std::string*, std::string*) const;
 
   // make_elf_object hooks.  There are four versions of these for
@@ -926,7 +937,6 @@ class Sized_target : public Target
 		  Output_section* output_section,
 		  typename elfcpp::Elf_types<size>::Elf_Off
                     offset_in_output_section,
-		  const Relocatable_relocs*,
 		  unsigned char* view,
 		  typename elfcpp::Elf_types<size>::Elf_Addr view_address,
 		  section_size_type view_size,
@@ -996,6 +1006,14 @@ class Sized_target : public Target
   plt_entry_size() const
   { gold_unreachable(); }
 
+  // Return the size of each GOT entry.  This is only used for
+  // laying out the incremental link info sections.  A target needs
+  // to implement this if its GOT size is different.
+
+  virtual unsigned int
+  got_entry_size() const
+  { return size / 8; }
+
   // Create the GOT and PLT sections for an incremental update.
   // A target needs to implement this to support incremental linking.
 
@@ -1056,9 +1074,9 @@ class Sized_target : public Target
   // and DST_OFF.
   void
   gc_add_reference(Symbol_table* symtab,
-		   Object* src_obj,
+		   Relobj* src_obj,
 		   unsigned int src_shndx,
-		   Object* dst_obj,
+		   Relobj* dst_obj,
 		   unsigned int dst_shndx,
 		   typename elfcpp::Elf_types<size>::Elf_Addr dst_off) const
   {
@@ -1080,8 +1098,8 @@ class Sized_target : public Target
 
   // Handle target specific gc actions when adding a gc reference.
   virtual void
-  do_gc_add_reference(Symbol_table*, Object*, unsigned int,
-		      Object*, unsigned int,
+  do_gc_add_reference(Symbol_table*, Relobj*, unsigned int,
+		      Relobj*, unsigned int,
 		      typename elfcpp::Elf_types<size>::Elf_Addr) const
   { }
 

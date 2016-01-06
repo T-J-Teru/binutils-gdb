@@ -634,7 +634,8 @@ CFLAGS
 LDFLAGS
 LIBS
 CPPFLAGS'
-ac_subdirs_all='arm
+ac_subdirs_all='aarch64
+arm
 avr
 mrk3
 bfin
@@ -1282,7 +1283,7 @@ Optional Features:
   --disable-option-checking  ignore unrecognized --enable/--with options
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
-  --enable-sim
+  --enable-sim            Enable the GNU simulator
 
 Some influential environment variables:
   CC          C compiler command
@@ -3626,12 +3627,19 @@ sim_common=yes
 sim_igen=no
 sim_arch=
 case "${target}" in
+   aarch64*-*-*)
+
+  sim_arch=aarch64
+
+
+subdirs="$subdirs aarch64"
+
+
+       ;;
    arm*-*-*)
 
   sim_arch=arm
-
-
-subdirs="$subdirs arm"
+  subdirs="$subdirs arm"
 
 
        ;;

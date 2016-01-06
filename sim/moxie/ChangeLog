@@ -1,3 +1,125 @@
+2016-01-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2016-01-03  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (sim_open): Update sim_parse_args comment.
+
+2016-01-03  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure.ac (SIM_AC_OPTION_HOSTENDIAN): Delete.
+	* configure: Regenerate.
+
+2016-01-02  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure.ac (SIM_AC_OPTION_ENDIAN): Change BIG_ENDIAN to BIG.
+	* configure: Regenerate.
+
+2015-12-30  Mike Frysinger  <vapier@gentoo.org>
+
+	* wrapper.c (sim_store_register): Rename to ...
+	(moxie_reg_store): ... this.
+	(sim_fetch_register): Rename to ...
+	(moxie_reg_fetch): ... this.
+	(sim_open): Call CPU_REG_FETCH/CPU_REG_STORE.
+
+2015-12-27  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in (SIM_OBJS): Delete sim-hload.o.
+
+2015-12-26  Mike Frysinger  <vapier@gentoo.org>
+
+	* config.in, configure: Regenerate.
+
+2015-11-15  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in (SIM_OBJS): Delete sim-reason.o and sim-stop.o.
+
+2015-11-14  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (sim_close): Delete.
+
+2015-10-11  Mike Frysinger  <vapier@gentoo.org>
+
+	PR sim/18273
+	* interp.c (load_dtb): Close open file in error path.
+
+2015-06-23  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-06-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-06-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-06-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (tracefile, tracing): Delete.
+	(MOXIE_TRACE_INSN): Call TRACE_INSN directly.
+
+2015-06-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (TRACE): Rename to ...
+	(MOXIE_TRACE_INSN): ... this.
+	(sim_engine_run): Change TRACE to MOXIE_TRACE_INSN.
+
+2015-04-18  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-main.h (SIM_CPU): Delete.
+
+2015-04-18  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-main.h (sim_cia): Delete.
+
+2015-04-17  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (wbat, wsat, wlat, rsat, rbat, rlat, sim_engine_run):
+	Change CIA_GET to CPU_PC_GET.
+	* sim-main.h (CIA_GET, CIA_SET): Delete.
+
+2015-04-16  Mike Frysinger  <vapier@gentoo.org>
+
+	* interp.c (moxie_pc_get, moxie_pc_set): New functions.
+	(sim_open): Declare new local var i.  Call CPU_PC_FETCH &
+	CPU_PC_STORE for all cpus.
+	* sim-main.h (SIM_CPU): New typedef.
+
+2015-04-15  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in (SIM_OBJS): Delete sim-cpu.o.
+	* sim-main.h (STATE_CPU): Delete.
+
+2015-04-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-04-06  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in (SIM_OBJS): Delete sim-engine.o and sim-hrw.o.
+
+2015-04-05  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in (SIM_OBJS): Add sim-resume.o.
+	* interp.c (moxie_regset): Delete exception.
+	(sim_resume): Rename to ...
+	(sim_engine_run): ... this.  Delete insts variable and references
+	to cpu.asregs.exception, and change most to sim_engine_halt.  Move
+	trailing insts and PC_REGNO updates into the loop.
+	(load_dtb): Delete open warning.  Change printf to sim_io_eprintf.
+
+2015-04-01  Mike Frysinger  <vapier@gentoo.org>
+
+	* sim-main.h (SIM_HAVE_BIENDIAN): Delete.
+
+2015-03-31  Mike Frysinger  <vapier@gentoo.org>
+
+	* config.in, configure: Regenerate.
+
 2015-03-24  Mike Frysinger  <vapier@gentoo.org>
 
 	* interp.c (moxie_extract_unsigned_integer): Mark static.  Update
@@ -135,7 +257,7 @@
 2012-09-07  Anthony Green  <green@moxielogic.com>
 
 	* interp.c (sim_resume): Branches are now relative to the
-          address of the instruction following the branch.
+	  address of the instruction following the branch.
 
 2012-06-17  Mike Frysinger  <vapier@gentoo.org>
 

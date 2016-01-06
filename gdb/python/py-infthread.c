@@ -1,6 +1,6 @@
 /* Python interface to inferior threads.
 
-   Copyright (C) 2009-2015 Free Software Foundation, Inc.
+   Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -62,7 +62,7 @@ static PyObject *
 thpy_get_name (PyObject *self, void *ignore)
 {
   thread_object *thread_obj = (thread_object *) self;
-  char *name;
+  const char *name;
 
   THPY_REQUIRE_VALID (thread_obj);
 

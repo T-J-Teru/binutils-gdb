@@ -1,6 +1,6 @@
 // sparc.cc -- sparc target support for gold.
 
-// Copyright (C) 2008-2015 Free Software Foundation, Inc.
+// Copyright (C) 2008-2016 Free Software Foundation, Inc.
 // Written by David S. Miller <davem@davemloft.net>.
 
 // This file is part of gold.
@@ -140,7 +140,6 @@ class Target_sparc : public Sized_target<size, big_endian>
 		  Output_section* output_section,
 		  typename elfcpp::Elf_types<size>::Elf_Off
                     offset_in_output_section,
-		  const Relocatable_relocs*,
 		  unsigned char* view,
 		  typename elfcpp::Elf_types<size>::Elf_Addr view_address,
 		  section_size_type view_size,
@@ -316,13 +315,10 @@ class Target_sparc : public Sized_target<size, big_endian>
     // Do a relocation.  Return false if the caller should not issue
     // any warnings about this relocation.
     inline bool
-    relocate(const Relocate_info<size, big_endian>*, Target_sparc*,
-	     Output_section*, size_t relnum,
-	     const elfcpp::Rela<size, big_endian>&,
-	     unsigned int r_type, const Sized_symbol<size>*,
-	     const Symbol_value<size>*,
-	     unsigned char*,
-	     typename elfcpp::Elf_types<size>::Elf_Addr,
+    relocate(const Relocate_info<size, big_endian>*, unsigned int,
+	     Target_sparc*, Output_section*, size_t, const unsigned char*,
+	     const Sized_symbol<size>*, const Symbol_value<size>*,
+	     unsigned char*, typename elfcpp::Elf_types<size>::Elf_Addr,
 	     section_size_type);
 
    private:
@@ -415,10 +411,13 @@ class Target_sparc : public Sized_target<size, big_endian>
 	     unsigned int shndx, Output_section* output_section,
 	     Symbol* sym, const elfcpp::Rela<size, big_endian>& reloc)
   {
+    unsigned int r_type = elfcpp::elf_r_type<size>(reloc.get_r_info());
     this->copy_relocs_.copy_reloc(symtab, layout,
 				  symtab->get_sized_symbol<size>(sym),
 				  object, shndx, output_section,
-				  reloc, this->rela_dyn_section(layout));
+				  r_type, reloc.get_r_offset(),
+				  reloc.get_r_addend(),
+				  this->rela_dyn_section(layout));
   }
 
   // Information about this specific target which we pass to the
@@ -482,7 +481,8 @@ Target::Target_info Target_sparc<32, true>::sparc_info =
   0,			// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 template<>
@@ -509,7 +509,8 @@ Target::Target_info Target_sparc<64, true>::sparc_info =
   0,			// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 // We have to take care here, even when operating in little-endian
@@ -1107,13 +1108,12 @@ public:
   // R_SPARC_GOTDATA_OP_HIX22: @gdopoff(Symbol + Addend) >> 10
   static inline void
   gdop_hix22(unsigned char* view,
-	     typename elfcpp::Elf_types<size>::Elf_Addr value,
-	     typename elfcpp::Elf_types<size>::Elf_Addr addend)
+	     typename elfcpp::Elf_types<size>::Elf_Addr value)
   {
     typedef typename elfcpp::Swap<32, true>::Valtype Valtype;
     Valtype* wv = reinterpret_cast<Valtype*>(view);
     Valtype val = elfcpp::Swap<32, true>::readval(wv);
-    int32_t reloc = static_cast<int32_t>(value + addend);
+    int32_t reloc = static_cast<int32_t>(value);
 
     val &= ~0x3fffff;
 
@@ -1170,13 +1170,12 @@ public:
   // R_SPARC_GOTDATA_OP_LOX10: (@gdopoff(Symbol + Addend) & 0x3ff) | 0x1c00
   static inline void
   gdop_lox10(unsigned char* view,
-	     typename elfcpp::Elf_types<size>::Elf_Addr value,
-	     typename elfcpp::Elf_types<size>::Elf_Addr addend)
+	     typename elfcpp::Elf_types<size>::Elf_Addr value)
   {
     typedef typename elfcpp::Swap<32, true>::Valtype Valtype;
     Valtype* wv = reinterpret_cast<Valtype*>(view);
     Valtype val = elfcpp::Swap<32, true>::readval(wv);
-    int32_t reloc = static_cast<int32_t>(value + addend);
+    int32_t reloc = static_cast<int32_t>(value);
 
     if (reloc < 0)
       reloc = (reloc & 0x3ff) | 0x1c00;
@@ -3166,17 +3165,19 @@ template<int size, bool big_endian>
 inline bool
 Target_sparc<size, big_endian>::Relocate::relocate(
 			const Relocate_info<size, big_endian>* relinfo,
+			unsigned int,
 			Target_sparc* target,
 			Output_section*,
 			size_t relnum,
-			const elfcpp::Rela<size, big_endian>& rela,
-			unsigned int r_type,
+			const unsigned char* preloc,
 			const Sized_symbol<size>* gsym,
 			const Symbol_value<size>* psymval,
 			unsigned char* view,
 			typename elfcpp::Elf_types<size>::Elf_Addr address,
 			section_size_type view_size)
 {
+  const elfcpp::Rela<size, big_endian> rela(preloc);
+  unsigned int r_type = elfcpp::elf_r_type<size>(rela.get_r_info());
   bool orig_is_ifunc = psymval->is_ifunc_symbol();
   r_type &= 0xff;
 
@@ -3244,7 +3245,7 @@ Target_sparc<size, big_endian>::Relocate::relocate(
 	      && !gsym->is_preemptible()
 	      && !orig_is_ifunc))
 	{
-	  got_offset = psymval->value(object, 0) - target->got_address();
+	  got_offset = psymval->value(object, addend) - target->got_address();
 	  gdop_valid = true;
 	  break;
 	}
@@ -3384,7 +3385,7 @@ Target_sparc<size, big_endian>::Relocate::relocate(
     case elfcpp::R_SPARC_GOTDATA_OP_LOX10:
       if (gdop_valid)
 	{
-	  Reloc::gdop_lox10(view, got_offset, addend);
+	  Reloc::gdop_lox10(view, got_offset);
 	  break;
 	}
       /* Fall through.  */
@@ -3395,7 +3396,7 @@ Target_sparc<size, big_endian>::Relocate::relocate(
     case elfcpp::R_SPARC_GOTDATA_OP_HIX22:
       if (gdop_valid)
 	{
-	  Reloc::gdop_hix22(view, got_offset, addend);
+	  Reloc::gdop_hix22(view, got_offset);
 	  break;
 	}
       /* Fall through.  */
@@ -4221,7 +4222,6 @@ Target_sparc<size, big_endian>::relocate_relocs(
     size_t reloc_count,
     Output_section* output_section,
     typename elfcpp::Elf_types<size>::Elf_Off offset_in_output_section,
-    const Relocatable_relocs* rr,
     unsigned char* view,
     typename elfcpp::Elf_types<size>::Elf_Addr view_address,
     section_size_type view_size,
@@ -4236,7 +4236,6 @@ Target_sparc<size, big_endian>::relocate_relocs(
     reloc_count,
     output_section,
     offset_in_output_section,
-    rr,
     view,
     view_address,
     view_size,

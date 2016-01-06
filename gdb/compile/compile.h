@@ -1,6 +1,6 @@
 /* Header file for Compile and inject module.
 
-   Copyright (C) 2014-2015 Free Software Foundation, Inc.
+   Copyright (C) 2014-2016 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,8 +28,10 @@ struct dynamic_prop;
    expression command.  GDB returns either a CMD, or a CMD_STRING, but
    never both.  */
 
-extern void eval_compile_command (struct command_line *cmd, char *cmd_string,
-				  enum compile_i_scope_types scope);
+extern void eval_compile_command (struct command_line *cmd,
+				  const char *cmd_string,
+				  enum compile_i_scope_types scope,
+				  void *scope_data);
 
 /* Compile a DWARF location expression to C, suitable for use by the
    compiler.
@@ -98,5 +100,7 @@ extern void compile_dwarf_bounds_to_c (struct ui_file *stream,
 				       const gdb_byte *op_ptr,
 				       const gdb_byte *op_end,
 				       struct dwarf2_per_cu_data *per_cu);
+
+extern void compile_print_value (struct value *val, void *data_voidp);
 
 #endif /* GDB_COMPILE_H */

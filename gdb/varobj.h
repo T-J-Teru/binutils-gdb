@@ -1,5 +1,5 @@
 /* GDB variable objects API.
-   Copyright (C) 1999-2015 Free Software Foundation, Inc.
+   Copyright (C) 1999-2016 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -28,7 +28,8 @@ enum varobj_display_formats
     FORMAT_BINARY,		/* Binary display                    */
     FORMAT_DECIMAL,		/* Decimal display                   */
     FORMAT_HEXADECIMAL,		/* Hex display                       */
-    FORMAT_OCTAL		/* Octal display                     */
+    FORMAT_OCTAL,		/* Octal display                     */
+    FORMAT_ZHEXADECIMAL		/* Zero padded hexadecimal	     */
   };
 
 enum varobj_type

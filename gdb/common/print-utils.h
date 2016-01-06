@@ -1,6 +1,6 @@
 /* Cell-based print utility routines for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2015 Free Software Foundation, Inc.
+   Copyright (C) 1986-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -65,6 +65,10 @@ extern const char *core_addr_to_string (const CORE_ADDR addr);
 
 extern const char *core_addr_to_string_nz (const CORE_ADDR addr);
 
-extern const char *host_address_to_string (const void *addr);
+extern const char *host_address_to_string_1 (const void *addr);
+
+/* Wrapper that avoids adding a pointless cast to all callers.  */
+#define host_address_to_string(ADDR) \
+  host_address_to_string_1 ((const void *) (ADDR))
 
 #endif /* COMMON_CELLS_H */

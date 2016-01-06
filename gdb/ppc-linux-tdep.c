@@ -1,6 +1,6 @@
 /* Target-dependent code for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2015 Free Software Foundation, Inc.
+   Copyright (C) 1986-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -373,7 +373,8 @@ ppc_linux_supply_gregset (const struct regset *regset,
 			  struct regcache *regcache,
 			  int regnum, const void *gregs, size_t len)
 {
-  const struct ppc_reg_offsets *offsets = regset->regmap;
+  const struct ppc_reg_offsets *offsets
+    = (const struct ppc_reg_offsets *) regset->regmap;
 
   ppc_supply_gregset (regset, regcache, regnum, gregs, len);
 
@@ -381,13 +382,13 @@ ppc_linux_supply_gregset (const struct regset *regset,
     {
       /* "orig_r3" is stored 2 slots after "pc".  */
       if (regnum == -1 || regnum == PPC_ORIG_R3_REGNUM)
-	ppc_supply_reg (regcache, PPC_ORIG_R3_REGNUM, gregs,
+	ppc_supply_reg (regcache, PPC_ORIG_R3_REGNUM, (const gdb_byte *) gregs,
 			offsets->pc_offset + 2 * offsets->gpr_size,
 			offsets->gpr_size);
 
       /* "trap" is stored 8 slots after "pc".  */
       if (regnum == -1 || regnum == PPC_TRAP_REGNUM)
-	ppc_supply_reg (regcache, PPC_TRAP_REGNUM, gregs,
+	ppc_supply_reg (regcache, PPC_TRAP_REGNUM, (const gdb_byte *) gregs,
 			offsets->pc_offset + 8 * offsets->gpr_size,
 			offsets->gpr_size);
     }
@@ -398,7 +399,8 @@ ppc_linux_collect_gregset (const struct regset *regset,
 			   const struct regcache *regcache,
 			   int regnum, void *gregs, size_t len)
 {
-  const struct ppc_reg_offsets *offsets = regset->regmap;
+  const struct ppc_reg_offsets *offsets
+    = (const struct ppc_reg_offsets *) regset->regmap;
 
   /* Clear areas in the linux gregset not written elsewhere.  */
   if (regnum == -1)
@@ -410,13 +412,13 @@ ppc_linux_collect_gregset (const struct regset *regset,
     {
       /* "orig_r3" is stored 2 slots after "pc".  */
       if (regnum == -1 || regnum == PPC_ORIG_R3_REGNUM)
-	ppc_collect_reg (regcache, PPC_ORIG_R3_REGNUM, gregs,
+	ppc_collect_reg (regcache, PPC_ORIG_R3_REGNUM, (gdb_byte *) gregs,
 			 offsets->pc_offset + 2 * offsets->gpr_size,
 			 offsets->gpr_size);
 
       /* "trap" is stored 8 slots after "pc".  */
       if (regnum == -1 || regnum == PPC_TRAP_REGNUM)
-	ppc_collect_reg (regcache, PPC_TRAP_REGNUM, gregs,
+	ppc_collect_reg (regcache, PPC_TRAP_REGNUM, (gdb_byte *) gregs,
 			 offsets->pc_offset + 8 * offsets->gpr_size,
 			 offsets->gpr_size);
     }
@@ -703,47 +705,6 @@ static struct tramp_frame ppc64_linux_sighandler_tramp_frame = {
   ppc64_linux_sighandler_cache_init
 };
 
-
-/* Address to use for displaced stepping.  When debugging a stand-alone
-   SPU executable, entry_point_address () will point to an SPU local-store
-   address and is thus not usable as displaced stepping location.  We use
-   the auxiliary vector to determine the PowerPC-side entry point address
-   instead.  */
-
-static CORE_ADDR ppc_linux_entry_point_addr = 0;
-
-static void
-ppc_linux_inferior_created (struct target_ops *target, int from_tty)
-{
-  ppc_linux_entry_point_addr = 0;
-}
-
-static CORE_ADDR
-ppc_linux_displaced_step_location (struct gdbarch *gdbarch)
-{
-  if (ppc_linux_entry_point_addr == 0)
-    {
-      CORE_ADDR addr;
-
-      /* Determine entry point from target auxiliary vector.  */
-      if (target_auxv_search (&current_target, AT_ENTRY, &addr) <= 0)
-	error (_("Cannot find AT_ENTRY auxiliary vector entry."));
-
-      /* Make certain that the address points at real code, and not a
-	 function descriptor.  */
-      addr = gdbarch_convert_from_func_ptr_addr (gdbarch, addr,
-						 &current_target);
-
-      /* Inferior calls also use the entry point as a breakpoint location.
-	 We don't want displaced stepping to interfere with those
-	 breakpoints, so leave space.  */
-      ppc_linux_entry_point_addr = addr + 2 * PPC_INSN_SIZE;
-    }
-
-  return ppc_linux_entry_point_addr;
-}
-
-
 /* Return 1 if PPC_ORIG_R3_REGNUM and PPC_TRAP_REGNUM are usable.  */
 int
 ppc_linux_trap_reg_p (struct gdbarch *gdbarch)
@@ -806,29 +767,32 @@ static struct linux_record_tdep ppc64_linux_record_tdep;
 static enum gdb_syscall
 ppc_canonicalize_syscall (int syscall)
 {
+  int result = -1;
+
   if (syscall <= 165)
-    return syscall;
+    result = syscall;
   else if (syscall >= 167 && syscall <= 190)	/* Skip query_module 166 */
-    return syscall + 1;
+    result = syscall + 1;
   else if (syscall >= 192 && syscall <= 197)	/* mmap2 */
-    return syscall;
+    result = syscall;
   else if (syscall == 208)			/* tkill */
-    return gdb_sys_tkill;
+    result = gdb_sys_tkill;
   else if (syscall >= 207 && syscall <= 220)	/* gettid */
-    return syscall + 224 - 207;
+    result = syscall + 224 - 207;
   else if (syscall >= 234 && syscall <= 239)	/* exit_group */
-    return syscall + 252 - 234;
-  else if (syscall >= 240 && syscall <=248)	/* timer_create */
-    return syscall += 259 - 240;
-  else if (syscall >= 250 && syscall <=251)	/* tgkill */
-    return syscall + 270 - 250;
+    result = syscall + 252 - 234;
+  else if (syscall >= 240 && syscall <= 248)	/* timer_create */
+    result = syscall += 259 - 240;
+  else if (syscall >= 250 && syscall <= 251)	/* tgkill */
+    result = syscall + 270 - 250;
   else if (syscall == 336)
-    return gdb_sys_recv;
+    result = gdb_sys_recv;
   else if (syscall == 337)
-    return gdb_sys_recvfrom;
+    result = gdb_sys_recvfrom;
   else if (syscall == 342)
-    return gdb_sys_recvmsg;
-  return -1;
+    result = gdb_sys_recvmsg;
+
+  return (enum gdb_syscall) result;
 }
 
 /* Record registers which might be clobbered during system call.
@@ -1117,7 +1081,7 @@ ppc_stap_parse_special_token (struct gdbarch *gdbarch,
 	}
 
       len = s - p->arg;
-      regname = alloca (len + 2);
+      regname = (char *) alloca (len + 2);
       regname[0] = 'r';
 
       strncpy (regname + 1, p->arg, len);
@@ -1178,7 +1142,7 @@ ppc_linux_spe_context_lookup (struct objfile *objfile)
     {
       spe_context_objfile = objfile;
       spe_context_lm_addr = svr4_fetch_objfile_link_map (objfile);
-      spe_context_offset = BMSYMBOL_VALUE_ADDRESS (sym);
+      spe_context_offset = MSYMBOL_VALUE_RAW_ADDRESS (sym.minsym);
       spe_context_cache_ptid = minus_one_ptid;
       spe_context_cache_address = 0;
       return;
@@ -1295,7 +1259,7 @@ struct ppu2spu_cache
 static struct gdbarch *
 ppu2spu_prev_arch (struct frame_info *this_frame, void **this_cache)
 {
-  struct ppu2spu_cache *cache = *this_cache;
+  struct ppu2spu_cache *cache = (struct ppu2spu_cache *) *this_cache;
   return get_regcache_arch (cache->regcache);
 }
 
@@ -1303,7 +1267,7 @@ static void
 ppu2spu_this_id (struct frame_info *this_frame,
 		 void **this_cache, struct frame_id *this_id)
 {
-  struct ppu2spu_cache *cache = *this_cache;
+  struct ppu2spu_cache *cache = (struct ppu2spu_cache *) *this_cache;
   *this_id = cache->frame_id;
 }
 
@@ -1311,11 +1275,11 @@ static struct value *
 ppu2spu_prev_register (struct frame_info *this_frame,
 		       void **this_cache, int regnum)
 {
-  struct ppu2spu_cache *cache = *this_cache;
+  struct ppu2spu_cache *cache = (struct ppu2spu_cache *) *this_cache;
   struct gdbarch *gdbarch = get_regcache_arch (cache->regcache);
   gdb_byte *buf;
 
-  buf = alloca (register_size (gdbarch, regnum));
+  buf = (gdb_byte *) alloca (register_size (gdbarch, regnum));
 
   if (regnum < gdbarch_num_regs (gdbarch))
     regcache_raw_read (cache->regcache, regnum, buf);
@@ -1333,10 +1297,10 @@ struct ppu2spu_data
   gdb_byte gprs[128*16];
 };
 
-static int
+static enum register_status
 ppu2spu_unwind_register (void *src, int regnum, gdb_byte *buf)
 {
-  struct ppu2spu_data *data = src;
+  struct ppu2spu_data *data = (struct ppu2spu_data *) src;
   enum bfd_endian byte_order = gdbarch_byte_order (data->gdbarch);
 
   if (regnum >= 0 && regnum < SPU_NUM_GPRS)
@@ -1388,7 +1352,7 @@ ppu2spu_sniffer (const struct frame_unwind *self,
       info.bfd_arch_info = bfd_lookup_arch (bfd_arch_spu, bfd_mach_spu);
       info.byte_order = BFD_ENDIAN_BIG;
       info.osabi = GDB_OSABI_LINUX;
-      info.tdep_info = (void *) &data.id;
+      info.tdep_info = &data.id;
       data.gdbarch = gdbarch_find_by_info (info);
       if (!data.gdbarch)
 	return 0;
@@ -1420,7 +1384,7 @@ ppu2spu_sniffer (const struct frame_unwind *self,
 static void
 ppu2spu_dealloc_cache (struct frame_info *self, void *this_cache)
 {
-  struct ppu2spu_cache *cache = this_cache;
+  struct ppu2spu_cache *cache = (struct ppu2spu_cache *) this_cache;
   regcache_xfree (cache->regcache);
 }
 
@@ -1459,8 +1423,8 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_flock = 32;
       record_tdep->size_oldold_utsname = 45;
       record_tdep->size_ustat = 32;
-      record_tdep->size_old_sigaction = 152;
-      record_tdep->size_old_sigset_t = 128;
+      record_tdep->size_old_sigaction = 32;
+      record_tdep->size_old_sigset_t = 8;
       record_tdep->size_rlimit = 16;
       record_tdep->size_rusage = 144;
       record_tdep->size_timeval = 16;
@@ -1468,8 +1432,7 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_old_gid_t = 4;
       record_tdep->size_old_uid_t = 4;
       record_tdep->size_fd_set = 128;
-      record_tdep->size_dirent = 280;
-      record_tdep->size_dirent64 = 280;
+      record_tdep->size_old_dirent = 280;
       record_tdep->size_statfs = 120;
       record_tdep->size_statfs64 = 120;
       record_tdep->size_sockaddr = 16;
@@ -1492,9 +1455,9 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_pollfd = 8;
       record_tdep->size_NFS_FHSIZE = 32;
       record_tdep->size_knfsd_fh = 132;
-      record_tdep->size_TASK_COMM_LEN = 32;
-      record_tdep->size_sigaction = 152;
-      record_tdep->size_sigset_t = 128;
+      record_tdep->size_TASK_COMM_LEN = 16;
+      record_tdep->size_sigaction = 32;
+      record_tdep->size_sigset_t = 8;
       record_tdep->size_siginfo_t = 128;
       record_tdep->size_cap_user_data_t = 8;
       record_tdep->size_stack_t = 24;
@@ -1509,7 +1472,6 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_epoll_event = 16;
       record_tdep->size_itimerspec = 32;
       record_tdep->size_mq_attr = 64;
-      record_tdep->size_siginfo = 128;
       record_tdep->size_termios = 44;
       record_tdep->size_pid_t = 4;
       record_tdep->size_winsize = 8;
@@ -1517,6 +1479,7 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_serial_icounter_struct = 80;
       record_tdep->size_size_t = 8;
       record_tdep->size_iovec = 16;
+      record_tdep->size_time_t = 8;
     }
   else if (wordsize == 4)
     {
@@ -1527,8 +1490,8 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_flock = 16;
       record_tdep->size_oldold_utsname = 45;
       record_tdep->size_ustat = 20;
-      record_tdep->size_old_sigaction = 152;
-      record_tdep->size_old_sigset_t = 128;
+      record_tdep->size_old_sigaction = 16;
+      record_tdep->size_old_sigset_t = 4;
       record_tdep->size_rlimit = 8;
       record_tdep->size_rusage = 72;
       record_tdep->size_timeval = 8;
@@ -1536,8 +1499,7 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_old_gid_t = 4;
       record_tdep->size_old_uid_t = 4;
       record_tdep->size_fd_set = 128;
-      record_tdep->size_dirent = 268;
-      record_tdep->size_dirent64 = 280;
+      record_tdep->size_old_dirent = 268;
       record_tdep->size_statfs = 64;
       record_tdep->size_statfs64 = 88;
       record_tdep->size_sockaddr = 16;
@@ -1560,9 +1522,9 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_pollfd = 8;
       record_tdep->size_NFS_FHSIZE = 32;
       record_tdep->size_knfsd_fh = 132;
-      record_tdep->size_TASK_COMM_LEN = 32;
-      record_tdep->size_sigaction = 140;
-      record_tdep->size_sigset_t = 128;
+      record_tdep->size_TASK_COMM_LEN = 16;
+      record_tdep->size_sigaction = 20;
+      record_tdep->size_sigset_t = 8;
       record_tdep->size_siginfo_t = 128;
       record_tdep->size_cap_user_data_t = 4;
       record_tdep->size_stack_t = 12;
@@ -1577,7 +1539,6 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_epoll_event = 16;
       record_tdep->size_itimerspec = 16;
       record_tdep->size_mq_attr = 32;
-      record_tdep->size_siginfo = 128;
       record_tdep->size_termios = 44;
       record_tdep->size_pid_t = 4;
       record_tdep->size_winsize = 8;
@@ -1585,6 +1546,7 @@ ppc_init_linux_record_tdep (struct linux_record_tdep *record_tdep,
       record_tdep->size_serial_icounter_struct = 80;
       record_tdep->size_size_t = 4;
       record_tdep->size_iovec = 8;
+      record_tdep->size_time_t = 4;
     }
   else
     internal_error (__FILE__, __LINE__, _("unexpected wordsize"));
@@ -1671,7 +1633,8 @@ ppc_linux_init_abi (struct gdbarch_info info,
                     struct gdbarch *gdbarch)
 {
   struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
-  struct tdesc_arch_data *tdesc_data = (void *) info.tdep_info;
+  struct tdesc_arch_data *tdesc_data
+    = (struct tdesc_arch_data *) info.tdep_info;
   static const char *const stap_integer_prefixes[] = { "i", NULL };
   static const char *const stap_register_indirection_prefixes[] = { "(",
 								    NULL };
@@ -1837,14 +1800,10 @@ ppc_linux_init_abi (struct gdbarch_info info,
 
       /* Cell/B.E. cross-architecture unwinder support.  */
       frame_unwind_prepend_unwinder (gdbarch, &ppu2spu_unwind);
-
-      /* The default displaced_step_at_entry_point doesn't work for
-	 SPU stand-alone executables.  */
-      set_gdbarch_displaced_step_location (gdbarch,
-					   ppc_linux_displaced_step_location);
     }
 
-  set_gdbarch_get_siginfo_type (gdbarch, linux_get_siginfo_type);
+  set_gdbarch_displaced_step_location (gdbarch,
+				       linux_displaced_step_location);
 
   /* Support reverse debugging.  */
   set_gdbarch_process_record (gdbarch, ppc_process_record);
@@ -1869,9 +1828,6 @@ _initialize_ppc_linux_tdep (void)
                          ppc_linux_init_abi);
   gdbarch_register_osabi (bfd_arch_rs6000, bfd_mach_rs6k, GDB_OSABI_LINUX,
                          ppc_linux_init_abi);
-
-  /* Attach to inferior_created observer.  */
-  observer_attach_inferior_created (ppc_linux_inferior_created);
 
   /* Attach to observers to track __spe_current_active_context.  */
   observer_attach_inferior_created (ppc_linux_spe_context_inferior_created);

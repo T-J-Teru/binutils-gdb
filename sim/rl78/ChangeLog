@@ -1,3 +1,46 @@
+2016-01-04  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2016-01-03  Mike Frysinger  <vapier@gentoo.org>
+
+	* config.in, configure: Regenerate.
+
+2015-12-26  Mike Frysinger  <vapier@gentoo.org>
+
+	* config.in, configure: Regenerate.
+
+2015-06-23  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-06-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-06-12  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-04-30  DJ Delorie  <dj@redhat.com>
+
+	* cpu.c (g14_multiply): New.
+	* cpu.h (g14_multiply): New.
+	* load.c (rl78_load): Decode ISA completely.
+	* main.c (main): Expand -M to include other ISAs.
+	* rl78.c (decode_opcode): Decode based on ISA.
+	* trace.c (rl78_disasm_fn): New.
+	(sim_disasm_init): Reset it.
+	(sim_disasm_one): Get correct disassembler for ISA.
+
+2015-04-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerate.
+
+2015-03-31  Mike Frysinger  <vapier@gentoo.org>
+
+	* config.in, configure: Regenerate.
+
 2015-03-23  Nick Clifton  <nickc@redhat.com>
 
 	* cpu.c (rl78_g10_mode): Declare.
@@ -63,7 +106,7 @@
 
 	PR gdb/7205
 
-        Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
+	Replace TARGET_SIGNAL_ with GDB_SIGNAL_ throughout.
 
 2012-03-24  Mike Frysinger  <vapier@gentoo.org>
 

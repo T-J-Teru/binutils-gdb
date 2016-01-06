@@ -1,5 +1,5 @@
 /* Remote target system call callback support.
-   Copyright (C) 1997-2015 Free Software Foundation, Inc.
+   Copyright (C) 1997-2016 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
    This file is part of GDB.
@@ -59,6 +59,7 @@
    name of the symbol.  */
 
 typedef struct {
+  const char *name;
   int host_val;
   int target_val;
 } CB_TARGET_DEFS_MAP;
@@ -315,6 +316,14 @@ int cb_target_to_host_signal (host_callback *, int);
 
 /* Translate host signal number to target.  */
 int cb_host_to_gdb_signal (host_callback *, int);
+
+/* Translate symbols into human readable strings.  */
+const char *cb_host_str_syscall (host_callback *, int);
+const char *cb_host_str_errno (host_callback *, int);
+const char *cb_host_str_signal (host_callback *, int);
+const char *cb_target_str_syscall (host_callback *, int);
+const char *cb_target_str_errno (host_callback *, int);
+const char *cb_target_str_signal (host_callback *, int);
 
 /* Translate host stat struct to target.
    If stat struct ptr is NULL, just compute target stat struct size.

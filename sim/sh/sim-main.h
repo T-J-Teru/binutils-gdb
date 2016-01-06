@@ -1,5 +1,5 @@
 /* Moxie Simulator definition.
-   Copyright (C) 2009-2015 Free Software Foundation, Inc.
+   Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
 This file is part of GDB, the GNU debugger.
 
@@ -20,14 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #define SIM_MAIN_H
 
 #include "sim-basics.h"
-
-typedef address_word sim_cia;
-
-#define CIA_GET(cpu)     saved_state.asregs.pc
-#define CIA_SET(cpu,val) saved_state.asregs.pc = (val)
-
-typedef struct _sim_cpu SIM_CPU;
-
 #include "sim-base.h"
 
 typedef struct
@@ -142,11 +134,6 @@ struct _sim_cpu {
 struct sim_state {
 
   sim_cpu *cpu[MAX_NR_PROCESSORS];
-#if (WITH_SMP)
-#define STATE_CPU(sd,n) ((sd)->cpu[n])
-#else
-#define STATE_CPU(sd,n) ((sd)->cpu[0])
-#endif
 
   sim_state_base base;
 };

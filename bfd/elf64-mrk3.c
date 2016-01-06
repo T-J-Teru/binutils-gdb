@@ -1173,7 +1173,7 @@ mrk3_elf_relocate_section (bfd *output_bfd,
 	RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section,
 					 rel, 1, relend, howto, 0, contents);
 
-      if (!info->relocatable)
+      if (!bfd_link_relocatable (info))
         {
           /* Patch in the relocation.  This is not needed if we are
 	     performing a relocatable link.  */
@@ -2478,7 +2478,7 @@ mrk3_elf_relax_section_worker (bfd *abfd,
 		   || h->root.type == bfd_link_hash_undefweak)
 	    {
 	      tsec = bfd_und_section_ptr;
-	      toff = link_info->relocatable ? indx : 0;
+	      toff = bfd_link_relocatable (link_info) ? indx : 0;
 	    }
 	  else
 	    continue;
@@ -2637,7 +2637,7 @@ mrk3_elf_create_plt_section (bfd *dynobj, struct bfd_link_info *info)
 {
    /* If we are doing a relocatable link, then don't create a plt section.
       It will instead be created during the final link. */
-   if (info->relocatable)
+  if (bfd_link_relocatable (info))
      return TRUE;
 
    flagword flags;
@@ -2758,7 +2758,7 @@ mrk3_elf_check_relocs (bfd *abfd,
   struct elf_mrk3_local_symdata *symdata;
 
   /* Do not generate a PLT section if generating reloatable output */
-  if (info->relocatable)
+  if (bfd_link_relocatable (info))
     return TRUE;
 
   rel_end = relocs + sec->reloc_count;
@@ -3240,7 +3240,7 @@ mrk3_elf_relax_section (bfd *abfd,
 
   /* We don't have to do anything for a relocatable link, if this section
      does not have relocs, or if this is not a code section.  */
-  if (link_info->relocatable
+  if (bfd_link_relocatable (link_info)
       || (sec->flags & SEC_RELOC) == 0
       || sec->reloc_count == 0
       || (sec->flags & SEC_CODE) == 0)

@@ -1,6 +1,6 @@
 // i386.cc -- i386 target support for gold.
 
-// Copyright (C) 2006-2015 Free Software Foundation, Inc.
+// Copyright (C) 2006-2016 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -437,7 +437,6 @@ class Target_i386 : public Sized_target<32, false>
 		  size_t reloc_count,
 		  Output_section* output_section,
 		  elfcpp::Elf_types<32>::Elf_Off offset_in_output_section,
-		  const Relocatable_relocs*,
 		  unsigned char* view,
 		  elfcpp::Elf_types<32>::Elf_Addr view_address,
 		  section_size_type view_size,
@@ -492,6 +491,7 @@ class Target_i386 : public Sized_target<32, false>
   void
   do_calls_non_split(Relobj* object, unsigned int shndx,
 		     section_offset_type fnoffset, section_size_type fnsize,
+		     const unsigned char* prelocs, size_t reloc_count,
 		     unsigned char* view, section_size_type view_size,
 		     std::string* from, std::string* to) const;
 
@@ -634,10 +634,9 @@ class Target_i386 : public Sized_target<32, false>
     // Do a relocation.  Return false if the caller should not issue
     // any warnings about this relocation.
     inline bool
-    relocate(const Relocate_info<32, false>*, Target_i386*, Output_section*,
-	     size_t relnum, const elfcpp::Rel<32, false>&,
-	     unsigned int r_type, const Sized_symbol<32>*,
-	     const Symbol_value<32>*,
+    relocate(const Relocate_info<32, false>*, unsigned int,
+	     Target_i386*, Output_section*, size_t, const unsigned char*,
+	     const Sized_symbol<32>*, const Symbol_value<32>*,
 	     unsigned char*, elfcpp::Elf_types<32>::Elf_Addr,
 	     section_size_type);
 
@@ -738,6 +737,26 @@ class Target_i386 : public Sized_target<32, false>
   static tls::Tls_optimization
   optimize_tls_reloc(bool is_final, int r_type);
 
+  // Check if relocation against this symbol is a candidate for
+  // conversion from
+  // mov foo@GOT(%reg), %reg
+  // to
+  // lea foo@GOTOFF(%reg), %reg.
+  static bool
+  can_convert_mov_to_lea(const Symbol* gsym)
+  {
+    gold_assert(gsym != NULL);
+    return (gsym->type() != elfcpp::STT_GNU_IFUNC
+	    && !gsym->is_undefined ()
+	    && !gsym->is_from_dynobj()
+	    && !gsym->is_preemptible()
+	    && (!parameters->options().shared()
+		|| (gsym->visibility() != elfcpp::STV_DEFAULT
+		    && gsym->visibility() != elfcpp::STV_PROTECTED)
+		|| parameters->options().Bsymbolic())
+	    && strcmp(gsym->name(), "_DYNAMIC") != 0);
+  }
+
   // Get the GOT section, creating it if necessary.
   Output_data_got<32, false>*
   got_section(Symbol_table*, Layout*);
@@ -808,9 +827,11 @@ class Target_i386 : public Sized_target<32, false>
 	     unsigned int shndx, Output_section* output_section,
 	     Symbol* sym, const elfcpp::Rel<32, false>& reloc)
   {
+    unsigned int r_type = elfcpp::elf_r_type<32>(reloc.get_r_info());
     this->copy_relocs_.copy_reloc(symtab, layout,
 				  symtab->get_sized_symbol<32>(sym),
-				  object, shndx, output_section, reloc,
+				  object, shndx, output_section,
+				  r_type, reloc.get_r_offset(), 0,
 				  this->rel_dyn_section(layout));
   }
 
@@ -878,7 +899,8 @@ const Target::Target_info Target_i386::i386_info =
   0,			// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 // Get the GOT section, creating it if necessary.
@@ -1670,6 +1692,7 @@ Target_i386::Scan::get_reference_flags(unsigned int r_type)
       return Symbol::FUNCTION_CALL | Symbol::RELATIVE_REF;
 
     case elfcpp::R_386_GOT32:
+    case elfcpp::R_386_GOT32X:
       // Absolute in GOT.
       return Symbol::ABSOLUTE_REF;
 
@@ -1834,9 +1857,28 @@ Target_i386::Scan::local(Symbol_table* symtab,
       break;
 
     case elfcpp::R_386_GOT32:
+    case elfcpp::R_386_GOT32X:
       {
-	// The symbol requires a GOT entry.
+	// We need GOT section.
 	Output_data_got<32, false>* got = target->got_section(symtab, layout);
+
+	// If the relocation symbol isn't IFUNC,
+	// and is local, then we will convert
+	// mov foo@GOT(%reg), %reg
+	// to
+	// lea foo@GOTOFF(%reg), %reg
+	// in Relocate::relocate.
+	if (reloc.get_r_offset() >= 2
+	    && lsym.get_st_type() != elfcpp::STT_GNU_IFUNC)
+	  {
+	    section_size_type stype;
+	    const unsigned char* view = object->section_contents(data_shndx,
+								 &stype, true);
+	    if (view[reloc.get_r_offset() - 2] == 0x8b)
+	      break;
+	  }
+
+	// Otherwise, the symbol requires a GOT entry.
 	unsigned int r_sym = elfcpp::elf_r_sym<32>(reloc.get_r_info());
 
 	// For a STT_GNU_IFUNC symbol we want the PLT offset.  That
@@ -2067,6 +2109,7 @@ Target_i386::Scan::possible_function_pointer_reloc(unsigned int r_type)
     case elfcpp::R_386_8:
     case elfcpp::R_386_GOTOFF:
     case elfcpp::R_386_GOT32:
+    case elfcpp::R_386_GOT32X:
       {
 	return true;
       }
@@ -2228,9 +2271,26 @@ Target_i386::Scan::global(Symbol_table* symtab,
       break;
 
     case elfcpp::R_386_GOT32:
+    case elfcpp::R_386_GOT32X:
       {
-	// The symbol requires a GOT entry.
+	// The symbol requires a GOT section.
 	Output_data_got<32, false>* got = target->got_section(symtab, layout);
+
+	// If we convert this from
+	// mov foo@GOT(%reg), %reg
+	// to
+	// lea foo@GOTOFF(%reg), %reg
+	// in Relocate::relocate, then there is nothing to do here.
+	if (reloc.get_r_offset() >= 2
+	    && Target_i386::can_convert_mov_to_lea(gsym))
+	  {
+	    section_size_type stype;
+	    const unsigned char* view = object->section_contents(data_shndx,
+								 &stype, true);
+	    if (view[reloc.get_r_offset() - 2] == 0x8b)
+	      break;
+	  }
+
 	if (gsym->final_value_is_known())
 	  {
 	    // For a STT_GNU_IFUNC symbol we want the PLT address.
@@ -2671,17 +2731,20 @@ Target_i386::Relocate::should_apply_static_reloc(const Sized_symbol<32>* gsym,
 
 inline bool
 Target_i386::Relocate::relocate(const Relocate_info<32, false>* relinfo,
-				       Target_i386* target,
-				       Output_section* output_section,
-				       size_t relnum,
-				       const elfcpp::Rel<32, false>& rel,
-				       unsigned int r_type,
-				       const Sized_symbol<32>* gsym,
-				       const Symbol_value<32>* psymval,
-				       unsigned char* view,
-				       elfcpp::Elf_types<32>::Elf_Addr address,
-				       section_size_type view_size)
+				unsigned int,
+				Target_i386* target,
+				Output_section* output_section,
+				size_t relnum,
+				const unsigned char* preloc,
+				const Sized_symbol<32>* gsym,
+				const Symbol_value<32>* psymval,
+				unsigned char* view,
+				elfcpp::Elf_types<32>::Elf_Addr address,
+				section_size_type view_size)
 {
+  const elfcpp::Rel<32, false> rel(preloc);
+  unsigned int r_type = elfcpp::elf_r_type<32>(rel.get_r_info());
+
   if (this->skip_call_tls_get_addr_)
     {
       if ((r_type != elfcpp::R_386_PLT32
@@ -2732,34 +2795,7 @@ Target_i386::Relocate::relocate(const Relocate_info<32, false>* relinfo,
 	}
     }
 
-  // Get the GOT offset if needed.
-  // The GOT pointer points to the end of the GOT section.
-  // We need to subtract the size of the GOT section to get
-  // the actual offset to use in the relocation.
-  bool have_got_offset = false;
-  unsigned int got_offset = 0;
-  switch (r_type)
-    {
-    case elfcpp::R_386_GOT32:
-      if (gsym != NULL)
-	{
-	  gold_assert(gsym->has_got_offset(GOT_TYPE_STANDARD));
-	  got_offset = (gsym->got_offset(GOT_TYPE_STANDARD)
-			- target->got_size());
-	}
-      else
-	{
-	  unsigned int r_sym = elfcpp::elf_r_sym<32>(rel.get_r_info());
-	  gold_assert(object->local_has_got_offset(r_sym, GOT_TYPE_STANDARD));
-	  got_offset = (object->local_got_offset(r_sym, GOT_TYPE_STANDARD)
-			- target->got_size());
-	}
-      have_got_offset = true;
-      break;
-
-    default:
-      break;
-    }
+  bool baseless;
 
   switch (r_type)
     {
@@ -2809,8 +2845,67 @@ Target_i386::Relocate::relocate(const Relocate_info<32, false>* relinfo,
       break;
 
     case elfcpp::R_386_GOT32:
-      gold_assert(have_got_offset);
-      Relocate_functions<32, false>::rel32(view, got_offset);
+    case elfcpp::R_386_GOT32X:
+      baseless = (view[-1] & 0xc7) == 0x5;
+      // R_386_GOT32 and R_386_GOT32X don't work without base register
+      // when generating a position-independent output file.
+      if (baseless
+	  && parameters->options().output_is_position_independent())
+	{
+	  if(gsym)
+	    gold_error_at_location(relinfo, relnum, rel.get_r_offset(),
+				   _("unexpected reloc %u against global symbol %s without base register in object file when generating a position-independent output file"),
+				   r_type, gsym->demangled_name().c_str());
+	  else
+	    gold_error_at_location(relinfo, relnum, rel.get_r_offset(),
+				   _("unexpected reloc %u against local symbol without base register in object file when generating a position-independent output file"),
+				   r_type);
+	}
+
+      // Convert
+      // mov foo@GOT(%reg), %reg
+      // to
+      // lea foo@GOTOFF(%reg), %reg
+      // if possible.
+      if (rel.get_r_offset() >= 2
+	  && view[-2] == 0x8b
+	  && ((gsym == NULL && !psymval->is_ifunc_symbol())
+	      || (gsym != NULL
+		  && Target_i386::can_convert_mov_to_lea(gsym))))
+	{
+	  view[-2] = 0x8d;
+	  elfcpp::Elf_types<32>::Elf_Addr value;
+	  value = psymval->value(object, 0);
+	  // Don't subtract the .got.plt section address for baseless
+	  // addressing.
+	  if (!baseless)
+	    value -= target->got_plt_section()->address();
+	  Relocate_functions<32, false>::rel32(view, value);
+	}
+      else
+	{
+	  // The GOT pointer points to the end of the GOT section.
+	  // We need to subtract the size of the GOT section to get
+	  // the actual offset to use in the relocation.
+	  unsigned int got_offset = 0;
+	  if (gsym != NULL)
+	    {
+	      gold_assert(gsym->has_got_offset(GOT_TYPE_STANDARD));
+	      got_offset = (gsym->got_offset(GOT_TYPE_STANDARD)
+			    - target->got_size());
+	    }
+	  else
+	    {
+	      unsigned int r_sym = elfcpp::elf_r_sym<32>(rel.get_r_info());
+	      gold_assert(object->local_has_got_offset(r_sym, GOT_TYPE_STANDARD));
+	      got_offset = (object->local_got_offset(r_sym, GOT_TYPE_STANDARD)
+			    - target->got_size());
+	    }
+	  // Add the .got.plt section address for baseless addressing.
+	  if (baseless)
+	    got_offset += target->got_plt_section()->address();
+	  Relocate_functions<32, false>::rel32(view, got_offset);
+	}
       break;
 
     case elfcpp::R_386_GOTOFF:
@@ -3556,6 +3651,7 @@ Target_i386::Relocatable_size_for_reloc::get_size_for_reloc(
     case elfcpp::R_386_32:
     case elfcpp::R_386_PC32:
     case elfcpp::R_386_GOT32:
+    case elfcpp::R_386_GOT32X:
     case elfcpp::R_386_PLT32:
     case elfcpp::R_386_GOTOFF:
     case elfcpp::R_386_GOTPC:
@@ -3646,7 +3742,6 @@ Target_i386::relocate_relocs(
     size_t reloc_count,
     Output_section* output_section,
     elfcpp::Elf_types<32>::Elf_Off offset_in_output_section,
-    const Relocatable_relocs* rr,
     unsigned char* view,
     elfcpp::Elf_types<32>::Elf_Addr view_address,
     section_size_type view_size,
@@ -3661,7 +3756,6 @@ Target_i386::relocate_relocs(
     reloc_count,
     output_section,
     offset_in_output_section,
-    rr,
     view,
     view_address,
     view_size,
@@ -3788,6 +3882,8 @@ void
 Target_i386::do_calls_non_split(Relobj* object, unsigned int shndx,
 				       section_offset_type fnoffset,
 				       section_size_type fnsize,
+				       const unsigned char*,
+				       size_t,
 				       unsigned char* view,
 				       section_size_type view_size,
 				       std::string* from,
@@ -3993,7 +4089,8 @@ const Target::Target_info Target_i386_nacl::i386_nacl_info =
   0,			// large_common_section_flags
   NULL,			// attributes_section
   NULL,			// attributes_vendor
-  "_start"		// entry_symbol_name
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
 };
 
 #define	NACLMASK	0xe0            // 32-byte alignment mask
@@ -4190,5 +4287,62 @@ class Target_selector_i386_nacl
 };
 
 Target_selector_i386_nacl target_selector_i386;
+
+// IAMCU variant.  It uses EM_IAMCU, not EM_386.
+
+class Target_iamcu : public Target_i386
+{
+ public:
+  Target_iamcu()
+    : Target_i386(&iamcu_info)
+  { }
+
+ private:
+  // Information about this specific target which we pass to the
+  // general Target structure.
+  static const Target::Target_info iamcu_info;
+};
+
+const Target::Target_info Target_iamcu::iamcu_info =
+{
+  32,			// size
+  false,		// is_big_endian
+  elfcpp::EM_IAMCU,	// machine_code
+  false,		// has_make_symbol
+  false,		// has_resolve
+  true,			// has_code_fill
+  true,			// is_default_stack_executable
+  true,			// can_icf_inline_merge_sections
+  '\0',			// wrap_char
+  "/usr/lib/libc.so.1",	// dynamic_linker
+  0x08048000,		// default_text_segment_address
+  0x1000,		// abi_pagesize (overridable by -z max-page-size)
+  0x1000,		// common_pagesize (overridable by -z common-page-size)
+  false,                // isolate_execinstr
+  0,                    // rosegment_gap
+  elfcpp::SHN_UNDEF,	// small_common_shndx
+  elfcpp::SHN_UNDEF,	// large_common_shndx
+  0,			// small_common_section_flags
+  0,			// large_common_section_flags
+  NULL,			// attributes_section
+  NULL,			// attributes_vendor
+  "_start",		// entry_symbol_name
+  32,			// hash_entry_size
+};
+
+class Target_selector_iamcu : public Target_selector
+{
+public:
+  Target_selector_iamcu()
+    : Target_selector(elfcpp::EM_IAMCU, 32, false, "elf32-iamcu",
+		      "elf_iamcu")
+  { }
+
+  Target*
+  do_instantiate_target()
+  { return new Target_iamcu(); }
+};
+
+Target_selector_iamcu target_selector_iamcu;
 
 } // End anonymous namespace.

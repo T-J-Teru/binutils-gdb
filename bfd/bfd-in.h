@@ -1,6 +1,6 @@
 /* Main header file for the bfd library -- portable access to object files.
 
-   Copyright (C) 1990-2015 Free Software Foundation, Inc.
+   Copyright (C) 1990-2016 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.
 
@@ -272,7 +272,7 @@ alent;
 /* Object and core file sections.  */
 
 #define	align_power(addr, align)	\
-  (((addr) + ((bfd_vma) 1 << (align)) - 1) & ((bfd_vma) -1 << (align)))
+  (((addr) + ((bfd_vma) 1 << (align)) - 1) & (-((bfd_vma) 1 << (align))))
 
 typedef struct bfd_section *sec_ptr;
 
@@ -436,6 +436,16 @@ extern void bfd_hash_traverse
    tables allocated using bfd_hash_table_init will be created with
    this size.  */
 extern unsigned long bfd_hash_set_default_size (unsigned long);
+
+/* Types of compressed DWARF debug sections.  We currently support
+   zlib.  */
+enum compressed_debug_section_type
+{
+  COMPRESS_DEBUG_NONE = 0,
+  COMPRESS_DEBUG = 1 << 0,
+  COMPRESS_DEBUG_GNU_ZLIB = COMPRESS_DEBUG | 1 << 1,
+  COMPRESS_DEBUG_GABI_ZLIB = COMPRESS_DEBUG | 1 << 2
+};
 
 /* This structure is used to keep track of stabs in sections
    information while linking.  */
@@ -839,6 +849,23 @@ extern bfd_boolean bfd_elf32_arm_vfp11_erratum_scan
 extern void bfd_elf32_arm_vfp11_fix_veneer_locations
   (bfd *, struct bfd_link_info *);
 
+/* ARM STM STM32L4XX erratum workaround support.  */
+typedef enum
+{
+  BFD_ARM_STM32L4XX_FIX_NONE,
+  BFD_ARM_STM32L4XX_FIX_DEFAULT,
+  BFD_ARM_STM32L4XX_FIX_ALL
+} bfd_arm_stm32l4xx_fix;
+
+extern void bfd_elf32_arm_set_stm32l4xx_fix
+  (bfd *, struct bfd_link_info *);
+
+extern bfd_boolean bfd_elf32_arm_stm32l4xx_erratum_scan
+  (bfd *, struct bfd_link_info *);
+
+extern void bfd_elf32_arm_stm32l4xx_fix_veneer_locations
+  (bfd *, struct bfd_link_info *);
+
 /* ARM Interworking support.  Called from linker.  */
 extern bfd_boolean bfd_arm_allocate_interworking_sections
   (struct bfd_link_info *);
@@ -868,7 +895,7 @@ extern bfd_boolean bfd_elf32_arm_process_before_allocation
 
 void bfd_elf32_arm_set_target_relocs
   (bfd *, struct bfd_link_info *, int, char *, int, int, bfd_arm_vfp11_fix,
-   int, int, int, int, int);
+   bfd_arm_stm32l4xx_fix, int, int, int, int, int);
 
 extern bfd_boolean bfd_elf32_arm_get_bfd_for_interworking
   (bfd *, struct bfd_link_info *);
@@ -934,10 +961,10 @@ extern void bfd_elf32_aarch64_init_maps
   (bfd *);
 
 extern void bfd_elf64_aarch64_set_options
-  (bfd *, struct bfd_link_info *, int, int, int, int);
+  (bfd *, struct bfd_link_info *, int, int, int, int, int);
 
 extern void bfd_elf32_aarch64_set_options
-  (bfd *, struct bfd_link_info *, int, int, int, int);
+  (bfd *, struct bfd_link_info *, int, int, int, int, int);
 
 /* ELF AArch64 mapping symbol support.  */
 #define BFD_AARCH64_SPECIAL_SYM_TYPE_MAP	(1 << 0)

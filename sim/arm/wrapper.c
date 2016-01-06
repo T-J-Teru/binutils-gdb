@@ -1,5 +1,5 @@
 /* run front end support for arm
-   Copyright (C) 1995-2015 Free Software Foundation, Inc.
+   Copyright (C) 1995-2016 Free Software Foundation, Inc.
 
    This file is part of ARM SIM.
 
@@ -114,7 +114,7 @@ struct maverick_regs
     int i;
     float f;
   } upper;
-  
+
   union
   {
     int i;
@@ -140,7 +140,7 @@ init (void)
     {
       ARMul_EmulateInit ();
       state = ARMul_NewState ();
-      state->bigendSig = (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN ? HIGH : LOW);
+      state->bigendSig = (CURRENT_TARGET_BYTE_ORDER == BFD_ENDIAN_BIG ? HIGH : LOW);
       ARMul_MemoryInit (state, mem_size);
       ARMul_OSInit (state);
       state->verbose = 0;
@@ -161,14 +161,6 @@ ARMul_ConsolePrint (ARMul_State * state,
       vprintf (format, ap);
       va_end (ap);
     }
-}
-
-ARMword
-ARMul_Debug (ARMul_State * state ATTRIBUTE_UNUSED,
-	     ARMword       pc    ATTRIBUTE_UNUSED,
-	     ARMword       instr ATTRIBUTE_UNUSED)
-{
-  return 0;
 }
 
 int
@@ -257,6 +249,11 @@ sim_create_inferior (SIM_DESC sd ATTRIBUTE_UNUSED,
       mach = 0;
     }
 
+#ifdef MODET
+  if (abfd != NULL && (bfd_get_start_address (abfd) & 1))
+    SETT;
+#endif
+
   switch (mach)
     {
     default:
@@ -341,17 +338,6 @@ sim_create_inferior (SIM_DESC sd ATTRIBUTE_UNUSED,
       break;
     }
 
-  if (   mach != bfd_mach_arm_3
-      && mach != bfd_mach_arm_3M
-      && mach != bfd_mach_arm_2
-      && mach != bfd_mach_arm_2a)
-    {
-      /* Reset mode to ARM.  A gdb user may rerun a program that had entered
-	 THUMB mode from the start and cause the ARM-mode startup code to be
-	 executed in THUMB mode.  */
-      ARMul_SetCPSR (state, SVC32MODE);
-    }
-  
   memset (& info, 0, sizeof (info));
   INIT_DISASSEMBLE_INFO (info, stdout, op_printf);
   info.read_memory_func = sim_dis_read;
@@ -445,11 +431,8 @@ tomem (struct ARMul_State *state,
     }
 }
 
-int
-sim_store_register (SIM_DESC sd ATTRIBUTE_UNUSED,
-		    int rn,
-		    unsigned char *memory,
-		    int length)
+static int
+arm_reg_store (SIM_CPU *cpu, int rn, unsigned char *memory, int length)
 {
   init ();
 
@@ -553,11 +536,8 @@ sim_store_register (SIM_DESC sd ATTRIBUTE_UNUSED,
   return length;
 }
 
-int
-sim_fetch_register (SIM_DESC sd ATTRIBUTE_UNUSED,
-		    int rn,
-		    unsigned char *memory,
-		    int length)
+static int
+arm_reg_fetch (SIM_CPU *cpu, int rn, unsigned char *memory, int length)
 {
   ARMword regval;
   int len = length;
@@ -670,7 +650,7 @@ sim_fetch_register (SIM_DESC sd ATTRIBUTE_UNUSED,
       len -= 4;
       memory += 4;
       regval = 0;
-    }  
+    }
 
   return length;
 }
@@ -716,7 +696,7 @@ sim_target_parse_command_line (int argc, char ** argv)
 	  trace = 1;
 	  continue;
 	}
-      
+
       if (strcmp (ptr, "-z") == 0)
 	{
 	  /* Remove this option from the argv array.  */
@@ -727,7 +707,7 @@ sim_target_parse_command_line (int argc, char ** argv)
 	  trace_funcs = 1;
 	  continue;
 	}
-      
+
       if (strcmp (ptr, "-d") == 0)
 	{
 	  /* Remove this option from the argv array.  */
@@ -748,14 +728,14 @@ sim_target_parse_command_line (int argc, char ** argv)
 	  for (arg = i; arg < argc; arg ++)
 	    argv[arg] = argv[arg + 1];
 	  argc --;
-	  
+
 	  ptr = argv[i];
 	}
       else
 	ptr += sizeof SWI_SWITCH;
 
       swi_mask = 0;
-      
+
       while (* ptr)
 	{
 	  int i;
@@ -779,7 +759,7 @@ sim_target_parse_command_line (int argc, char ** argv)
 
       if (* ptr != 0)
 	fprintf (stderr, "Ignoring swi options: %s\n", ptr);
-      
+
       /* Remove this option from the argv array.  */
       for (arg = i; arg < argc; arg ++)
 	argv[arg] = argv[arg + 1];
@@ -792,12 +772,19 @@ sim_target_parse_command_line (int argc, char ** argv)
 static void
 sim_target_parse_arg_array (char ** argv)
 {
-  int i;
+  sim_target_parse_command_line (countargv (argv), argv);
+}
 
-  for (i = 0; argv[i]; i++)
-    ;
+static sim_cia
+arm_pc_get (sim_cpu *cpu)
+{
+  return PC;
+}
 
-  sim_target_parse_command_line (i, argv);
+static void
+arm_pc_set (sim_cpu *cpu, sim_cia pc)
+{
+  ARMul_SetPC (state, pc);
 }
 
 static void
@@ -815,6 +802,7 @@ sim_open (SIM_OPEN_KIND kind,
 	  struct bfd *abfd,
 	  char **argv)
 {
+  int i;
   SIM_DESC sd = sim_state_alloc (kind, cb);
   SIM_ASSERT (STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
 
@@ -831,9 +819,7 @@ sim_open (SIM_OPEN_KIND kind,
       return 0;
     }
 
-  /* getopt will print the error message so we just have to exit if this fails.
-     FIXME: Hmmm...  in the case of gdb we need getopt to call
-     print_filtered.  */
+  /* The parser will print an error message for us, so we silently return.  */
   if (sim_parse_args (sd, argv) != SIM_RC_OK)
     {
       free_state (sd);
@@ -866,6 +852,17 @@ sim_open (SIM_OPEN_KIND kind,
       return 0;
     }
 
+  /* CPU specific initialization.  */
+  for (i = 0; i < MAX_NR_PROCESSORS; ++i)
+    {
+      SIM_CPU *cpu = STATE_CPU (sd, i);
+
+      CPU_REG_FETCH (cpu) = arm_reg_fetch;
+      CPU_REG_STORE (cpu) = arm_reg_store;
+      CPU_PC_FETCH (cpu) = arm_pc_get;
+      CPU_PC_STORE (cpu) = arm_pc_set;
+    }
+
   sim_callback = cb;
 
   sim_target_parse_arg_array (argv);
@@ -891,18 +888,10 @@ sim_open (SIM_OPEN_KIND kind,
 					       "Missing argument to -m option\n");
 		return NULL;
 	      }
-	      
 	  }
     }
 
   return sd;
-}
-
-void
-sim_close (SIM_DESC sd ATTRIBUTE_UNUSED,
-	   int quitting ATTRIBUTE_UNUSED)
-{
-  /* Nothing to do.  */
 }
 
 void

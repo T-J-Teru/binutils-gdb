@@ -1,6 +1,6 @@
 /* Python interface to types.
 
-   Copyright (C) 2008-2015 Free Software Foundation, Inc.
+   Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -346,7 +346,7 @@ typy_fields_items (PyObject *self, enum gdbpy_iter_kind kind)
 
   TRY
     {
-      CHECK_TYPEDEF (checked_type);
+      checked_type = check_typedef (checked_type);
     }
   CATCH (except, RETURN_MASK_ALL)
     {
@@ -477,7 +477,7 @@ typy_get_composite (struct type *type)
     {
       TRY
 	{
-	  CHECK_TYPEDEF (type);
+	  type = check_typedef (type);
 	}
       CATCH (except, RETURN_MASK_ALL)
 	{
@@ -495,10 +495,11 @@ typy_get_composite (struct type *type)
      exception.  */
   if (TYPE_CODE (type) != TYPE_CODE_STRUCT
       && TYPE_CODE (type) != TYPE_CODE_UNION
-      && TYPE_CODE (type) != TYPE_CODE_ENUM)
+      && TYPE_CODE (type) != TYPE_CODE_ENUM
+      && TYPE_CODE (type) != TYPE_CODE_FUNC)
     {
       PyErr_SetString (PyExc_TypeError,
-		       "Type is not a structure, union, or enum type.");
+		       "Type is not a structure, union, enum, or function type.");
       return NULL;
     }
 
@@ -1086,7 +1087,7 @@ static const struct objfile_data *typy_objfile_data_key;
 static void
 save_objfile_types (struct objfile *objfile, void *datum)
 {
-  type_object *obj = datum;
+  type_object *obj = (type_object *) datum;
   htab_t copied_types;
   struct cleanup *cleanup;
 
@@ -1127,7 +1128,8 @@ set_type (type_object *obj, struct type *type)
     {
       struct objfile *objfile = TYPE_OBJFILE (type);
 
-      obj->next = objfile_data (objfile, typy_objfile_data_key);
+      obj->next = ((struct pyty_type_object *)
+		   objfile_data (objfile, typy_objfile_data_key));
       if (obj->next)
 	obj->next->prev = obj;
       set_objfile_data (objfile, typy_objfile_data_key, obj);
@@ -1179,6 +1181,16 @@ static int
 typy_nonzero (PyObject *self)
 {
   return 1;
+}
+
+/* Return optimized out value of this type.  */
+
+static PyObject *
+typy_optimized_out (PyObject *self, PyObject *args)
+{
+  struct type *type = ((type_object *) self)->type;
+
+  return value_to_value_object (allocate_optimized_out_value (type));
 }
 
 /* Return a gdb.Field object for the field named by the argument.  */
@@ -1493,6 +1505,9 @@ They are first class values." },
   { "const", typy_const, METH_NOARGS,
     "const () -> Type\n\
 Return a const variant of this type." },
+  { "optimized_out", typy_optimized_out, METH_NOARGS,
+    "optimized_out() -> Value\n\
+Return optimized out value of this type." },
   { "fields", typy_fields, METH_NOARGS,
     "fields () -> list\n\
 Return a list holding all the fields of this type.\n\

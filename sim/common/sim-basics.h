@@ -1,6 +1,6 @@
 /* The common simulator framework for GDB, the GNU Debugger.
 
-   Copyright 2002-2015 Free Software Foundation, Inc.
+   Copyright 2002-2016 Free Software Foundation, Inc.
 
    Contributed by Andrew Cagney and Red Hat.
 
@@ -20,8 +20,8 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 
-#ifndef _SIM_BASICS_H_
-#define _SIM_BASICS_H_
+#ifndef SIM_BASICS_H
+#define SIM_BASICS_H
 
 
 /* Basic configuration */
@@ -48,6 +48,13 @@ extern int asprintf (char **result, const char *format, ...);
 #endif
 
 
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef max
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
 
 /* Some versions of GCC include an attribute operator, define it */
 
@@ -60,7 +67,6 @@ extern int asprintf (char **result, const char *format, ...);
 
 /* Global types that code manipulates */
 
-typedef struct _device device;
 struct hw;
 struct _sim_fpu;
 
@@ -146,4 +152,4 @@ typedef enum {
    weight objects, such as core and events, are defined in the more
    serious sim-base.h header. */
 
-#endif /* _SIM_BASICS_H_ */
+#endif /* SIM_BASICS_H */

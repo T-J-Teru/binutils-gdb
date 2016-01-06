@@ -1,6 +1,6 @@
 /* Target-dependent code for GNU/Linux, architecture independent.
 
-   Copyright (C) 2009-2015 Free Software Foundation, Inc.
+   Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -35,8 +35,62 @@
 #include "observer.h"
 #include "objfiles.h"
 #include "infcall.h"
+#include "gdbcmd.h"
+#include "gdb_regex.h"
+#include "common/enum-flags.h"
 
 #include <ctype.h>
+
+/* This enum represents the values that the user can choose when
+   informing the Linux kernel about which memory mappings will be
+   dumped in a corefile.  They are described in the file
+   Documentation/filesystems/proc.txt, inside the Linux kernel
+   tree.  */
+
+enum filter_flag
+  {
+    COREFILTER_ANON_PRIVATE = 1 << 0,
+    COREFILTER_ANON_SHARED = 1 << 1,
+    COREFILTER_MAPPED_PRIVATE = 1 << 2,
+    COREFILTER_MAPPED_SHARED = 1 << 3,
+    COREFILTER_ELF_HEADERS = 1 << 4,
+    COREFILTER_HUGETLB_PRIVATE = 1 << 5,
+    COREFILTER_HUGETLB_SHARED = 1 << 6,
+  };
+DEF_ENUM_FLAGS_TYPE (enum filter_flag, filter_flags);
+
+/* This struct is used to map flags found in the "VmFlags:" field (in
+   the /proc/<PID>/smaps file).  */
+
+struct smaps_vmflags
+  {
+    /* Zero if this structure has not been initialized yet.  It
+       probably means that the Linux kernel being used does not emit
+       the "VmFlags:" field on "/proc/PID/smaps".  */
+
+    unsigned int initialized_p : 1;
+
+    /* Memory mapped I/O area (VM_IO, "io").  */
+
+    unsigned int io_page : 1;
+
+    /* Area uses huge TLB pages (VM_HUGETLB, "ht").  */
+
+    unsigned int uses_huge_tlb : 1;
+
+    /* Do not include this memory region on the coredump (VM_DONTDUMP, "dd").  */
+
+    unsigned int exclude_coredump : 1;
+
+    /* Is this a MAP_SHARED mapping (VM_SHARED, "sh").  */
+
+    unsigned int shared_mapping : 1;
+  };
+
+/* Whether to take the /proc/PID/coredump_filter into account when
+   generating a corefile.  */
+
+static int use_coredump_filter = 1;
 
 /* This enum represents the signals' numbers on a generic architecture
    running the Linux kernel.  The definition of "generic" comes from
@@ -119,7 +173,8 @@ init_linux_gdbarch_data (struct gdbarch *gdbarch)
 static struct linux_gdbarch_data *
 get_linux_gdbarch_data (struct gdbarch *gdbarch)
 {
-  return gdbarch_data (gdbarch, linux_gdbarch_data_handle);
+  return ((struct linux_gdbarch_data *)
+	  gdbarch_data (gdbarch, linux_gdbarch_data_handle));
 }
 
 /* Per-inferior data key.  */
@@ -151,7 +206,7 @@ invalidate_linux_cache_inf (struct inferior *inf)
 {
   struct linux_info *info;
 
-  info = inferior_data (inf, linux_inferior_data);
+  info = (struct linux_info *) inferior_data (inf, linux_inferior_data);
   if (info != NULL)
     {
       xfree (info);
@@ -178,7 +233,7 @@ get_linux_inferior_data (void)
   struct linux_info *info;
   struct inferior *inf = current_inferior ();
 
-  info = inferior_data (inf, linux_inferior_data);
+  info = (struct linux_info *) inferior_data (inf, linux_inferior_data);
   if (info == NULL)
     {
       info = XCNEW (struct linux_info);
@@ -191,7 +246,7 @@ get_linux_inferior_data (void)
 /* This function is suitable for architectures that don't
    extend/override the standard siginfo structure.  */
 
-struct type *
+static struct type *
 linux_get_siginfo_type (struct gdbarch *gdbarch)
 {
   struct linux_gdbarch_data *linux_gdbarch_data;
@@ -381,6 +436,248 @@ read_mapping (const char *line,
   *filename = p;
 }
 
+/* Helper function to decode the "VmFlags" field in /proc/PID/smaps.
+
+   This function was based on the documentation found on
+   <Documentation/filesystems/proc.txt>, on the Linux kernel.
+
+   Linux kernels before commit
+   834f82e2aa9a8ede94b17b656329f850c1471514 (3.10) do not have this
+   field on smaps.  */
+
+static void
+decode_vmflags (char *p, struct smaps_vmflags *v)
+{
+  char *saveptr = NULL;
+  const char *s;
+
+  v->initialized_p = 1;
+  p = skip_to_space (p);
+  p = skip_spaces (p);
+
+  for (s = strtok_r (p, " ", &saveptr);
+       s != NULL;
+       s = strtok_r (NULL, " ", &saveptr))
+    {
+      if (strcmp (s, "io") == 0)
+	v->io_page = 1;
+      else if (strcmp (s, "ht") == 0)
+	v->uses_huge_tlb = 1;
+      else if (strcmp (s, "dd") == 0)
+	v->exclude_coredump = 1;
+      else if (strcmp (s, "sh") == 0)
+	v->shared_mapping = 1;
+    }
+}
+
+/* Return 1 if the memory mapping is anonymous, 0 otherwise.
+
+   FILENAME is the name of the file present in the first line of the
+   memory mapping, in the "/proc/PID/smaps" output.  For example, if
+   the first line is:
+
+   7fd0ca877000-7fd0d0da0000 r--p 00000000 fd:02 2100770   /path/to/file
+
+   Then FILENAME will be "/path/to/file".  */
+
+static int
+mapping_is_anonymous_p (const char *filename)
+{
+  static regex_t dev_zero_regex, shmem_file_regex, file_deleted_regex;
+  static int init_regex_p = 0;
+
+  if (!init_regex_p)
+    {
+      struct cleanup *c = make_cleanup (null_cleanup, NULL);
+
+      /* Let's be pessimistic and assume there will be an error while
+	 compiling the regex'es.  */
+      init_regex_p = -1;
+
+      /* DEV_ZERO_REGEX matches "/dev/zero" filenames (with or
+	 without the "(deleted)" string in the end).  We know for
+	 sure, based on the Linux kernel code, that memory mappings
+	 whose associated filename is "/dev/zero" are guaranteed to be
+	 MAP_ANONYMOUS.  */
+      compile_rx_or_error (&dev_zero_regex, "^/dev/zero\\( (deleted)\\)\\?$",
+			   _("Could not compile regex to match /dev/zero "
+			     "filename"));
+      /* SHMEM_FILE_REGEX matches "/SYSV%08x" filenames (with or
+	 without the "(deleted)" string in the end).  These filenames
+	 refer to shared memory (shmem), and memory mappings
+	 associated with them are MAP_ANONYMOUS as well.  */
+      compile_rx_or_error (&shmem_file_regex,
+			   "^/\\?SYSV[0-9a-fA-F]\\{8\\}\\( (deleted)\\)\\?$",
+			   _("Could not compile regex to match shmem "
+			     "filenames"));
+      /* FILE_DELETED_REGEX is a heuristic we use to try to mimic the
+	 Linux kernel's 'n_link == 0' code, which is responsible to
+	 decide if it is dealing with a 'MAP_SHARED | MAP_ANONYMOUS'
+	 mapping.  In other words, if FILE_DELETED_REGEX matches, it
+	 does not necessarily mean that we are dealing with an
+	 anonymous shared mapping.  However, there is no easy way to
+	 detect this currently, so this is the best approximation we
+	 have.
+
+	 As a result, GDB will dump readonly pages of deleted
+	 executables when using the default value of coredump_filter
+	 (0x33), while the Linux kernel will not dump those pages.
+	 But we can live with that.  */
+      compile_rx_or_error (&file_deleted_regex, " (deleted)$",
+			   _("Could not compile regex to match "
+			     "'<file> (deleted)'"));
+      /* We will never release these regexes, so just discard the
+	 cleanups.  */
+      discard_cleanups (c);
+
+      /* If we reached this point, then everything succeeded.  */
+      init_regex_p = 1;
+    }
+
+  if (init_regex_p == -1)
+    {
+      const char deleted[] = " (deleted)";
+      size_t del_len = sizeof (deleted) - 1;
+      size_t filename_len = strlen (filename);
+
+      /* There was an error while compiling the regex'es above.  In
+	 order to try to give some reliable information to the caller,
+	 we just try to find the string " (deleted)" in the filename.
+	 If we managed to find it, then we assume the mapping is
+	 anonymous.  */
+      return (filename_len >= del_len
+	      && strcmp (filename + filename_len - del_len, deleted) == 0);
+    }
+
+  if (*filename == '\0'
+      || regexec (&dev_zero_regex, filename, 0, NULL, 0) == 0
+      || regexec (&shmem_file_regex, filename, 0, NULL, 0) == 0
+      || regexec (&file_deleted_regex, filename, 0, NULL, 0) == 0)
+    return 1;
+
+  return 0;
+}
+
+/* Return 0 if the memory mapping (which is related to FILTERFLAGS, V,
+   MAYBE_PRIVATE_P, and MAPPING_ANONYMOUS_P) should not be dumped, or
+   greater than 0 if it should.
+
+   In a nutshell, this is the logic that we follow in order to decide
+   if a mapping should be dumped or not.
+
+   - If the mapping is associated to a file whose name ends with
+     " (deleted)", or if the file is "/dev/zero", or if it is
+     "/SYSV%08x" (shared memory), or if there is no file associated
+     with it, or if the AnonHugePages: or the Anonymous: fields in the
+     /proc/PID/smaps have contents, then GDB considers this mapping to
+     be anonymous.  Otherwise, GDB considers this mapping to be a
+     file-backed mapping (because there will be a file associated with
+     it).
+ 
+     It is worth mentioning that, from all those checks described
+     above, the most fragile is the one to see if the file name ends
+     with " (deleted)".  This does not necessarily mean that the
+     mapping is anonymous, because the deleted file associated with
+     the mapping may have been a hard link to another file, for
+     example.  The Linux kernel checks to see if "i_nlink == 0", but
+     GDB cannot easily (and normally) do this check (iff running as
+     root, it could find the mapping in /proc/PID/map_files/ and
+     determine whether there still are other hard links to the
+     inode/file).  Therefore, we made a compromise here, and we assume
+     that if the file name ends with " (deleted)", then the mapping is
+     indeed anonymous.  FWIW, this is something the Linux kernel could
+     do better: expose this information in a more direct way.
+ 
+   - If we see the flag "sh" in the "VmFlags:" field (in
+     /proc/PID/smaps), then certainly the memory mapping is shared
+     (VM_SHARED).  If we have access to the VmFlags, and we don't see
+     the "sh" there, then certainly the mapping is private.  However,
+     Linux kernels before commit
+     834f82e2aa9a8ede94b17b656329f850c1471514 (3.10) do not have the
+     "VmFlags:" field; in that case, we use another heuristic: if we
+     see 'p' in the permission flags, then we assume that the mapping
+     is private, even though the presence of the 's' flag there would
+     mean VM_MAYSHARE, which means the mapping could still be private.
+     This should work OK enough, however.  */
+
+static int
+dump_mapping_p (filter_flags filterflags, const struct smaps_vmflags *v,
+		int maybe_private_p, int mapping_anon_p, int mapping_file_p,
+		const char *filename)
+{
+  /* Initially, we trust in what we received from our caller.  This
+     value may not be very precise (i.e., it was probably gathered
+     from the permission line in the /proc/PID/smaps list, which
+     actually refers to VM_MAYSHARE, and not VM_SHARED), but it is
+     what we have until we take a look at the "VmFlags:" field
+     (assuming that the version of the Linux kernel being used
+     supports it, of course).  */
+  int private_p = maybe_private_p;
+
+  /* We always dump vDSO and vsyscall mappings, because it's likely that
+     there'll be no file to read the contents from at core load time.
+     The kernel does the same.  */
+  if (strcmp ("[vdso]", filename) == 0
+      || strcmp ("[vsyscall]", filename) == 0)
+    return 1;
+
+  if (v->initialized_p)
+    {
+      /* We never dump I/O mappings.  */
+      if (v->io_page)
+	return 0;
+
+      /* Check if we should exclude this mapping.  */
+      if (v->exclude_coredump)
+	return 0;
+
+      /* Update our notion of whether this mapping is shared or
+	 private based on a trustworthy value.  */
+      private_p = !v->shared_mapping;
+
+      /* HugeTLB checking.  */
+      if (v->uses_huge_tlb)
+	{
+	  if ((private_p && (filterflags & COREFILTER_HUGETLB_PRIVATE))
+	      || (!private_p && (filterflags & COREFILTER_HUGETLB_SHARED)))
+	    return 1;
+
+	  return 0;
+	}
+    }
+
+  if (private_p)
+    {
+      if (mapping_anon_p && mapping_file_p)
+	{
+	  /* This is a special situation.  It can happen when we see a
+	     mapping that is file-backed, but that contains anonymous
+	     pages.  */
+	  return ((filterflags & COREFILTER_ANON_PRIVATE) != 0
+		  || (filterflags & COREFILTER_MAPPED_PRIVATE) != 0);
+	}
+      else if (mapping_anon_p)
+	return (filterflags & COREFILTER_ANON_PRIVATE) != 0;
+      else
+	return (filterflags & COREFILTER_MAPPED_PRIVATE) != 0;
+    }
+  else
+    {
+      if (mapping_anon_p && mapping_file_p)
+	{
+	  /* This is a special situation.  It can happen when we see a
+	     mapping that is file-backed, but that contains anonymous
+	     pages.  */
+	  return ((filterflags & COREFILTER_ANON_SHARED) != 0
+		  || (filterflags & COREFILTER_MAPPED_SHARED) != 0);
+	}
+      else if (mapping_anon_p)
+	return (filterflags & COREFILTER_ANON_SHARED) != 0;
+      else
+	return (filterflags & COREFILTER_MAPPED_SHARED) != 0;
+    }
+}
+
 /* Implement the "info proc" command.  */
 
 static void
@@ -425,7 +722,7 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
   if (cmdline_f)
     {
       xsnprintf (filename, sizeof filename, "/proc/%ld/cmdline", pid);
-      data = target_fileio_read_stralloc (filename);
+      data = target_fileio_read_stralloc (NULL, filename);
       if (data)
 	{
 	  struct cleanup *cleanup = make_cleanup (xfree, data);
@@ -438,7 +735,7 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
   if (cwd_f)
     {
       xsnprintf (filename, sizeof filename, "/proc/%ld/cwd", pid);
-      data = target_fileio_readlink (filename, &target_errno);
+      data = target_fileio_readlink (NULL, filename, &target_errno);
       if (data)
 	{
 	  struct cleanup *cleanup = make_cleanup (xfree, data);
@@ -451,7 +748,7 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
   if (exe_f)
     {
       xsnprintf (filename, sizeof filename, "/proc/%ld/exe", pid);
-      data = target_fileio_readlink (filename, &target_errno);
+      data = target_fileio_readlink (NULL, filename, &target_errno);
       if (data)
 	{
 	  struct cleanup *cleanup = make_cleanup (xfree, data);
@@ -464,7 +761,7 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
   if (mappings_f)
     {
       xsnprintf (filename, sizeof filename, "/proc/%ld/maps", pid);
-      data = target_fileio_read_stralloc (filename);
+      data = target_fileio_read_stralloc (NULL, filename);
       if (data)
 	{
 	  struct cleanup *cleanup = make_cleanup (xfree, data);
@@ -525,7 +822,7 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
   if (status_f)
     {
       xsnprintf (filename, sizeof filename, "/proc/%ld/status", pid);
-      data = target_fileio_read_stralloc (filename);
+      data = target_fileio_read_stralloc (NULL, filename);
       if (data)
 	{
 	  struct cleanup *cleanup = make_cleanup (xfree, data);
@@ -538,7 +835,7 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
   if (stat_f)
     {
       xsnprintf (filename, sizeof filename, "/proc/%ld/stat", pid);
-      data = target_fileio_read_stralloc (filename);
+      data = target_fileio_read_stralloc (NULL, filename);
       if (data)
 	{
 	  struct cleanup *cleanup = make_cleanup (xfree, data);
@@ -703,7 +1000,7 @@ linux_core_info_proc_mappings (struct gdbarch *gdbarch, const char *args)
   if (note_size < 2 * addr_size)
     error (_("malformed core note - too short for header"));
 
-  contents = xmalloc (note_size);
+  contents = (unsigned char *) xmalloc (note_size);
   cleanup = make_cleanup (xfree, contents);
   if (!bfd_get_section_contents (core_bfd, section, contents, 0, note_size))
     error (_("could not get core note contents"));
@@ -819,48 +1116,101 @@ linux_find_memory_regions_full (struct gdbarch *gdbarch,
 				void *obfd)
 {
   char mapsfilename[100];
-  char *data;
+  char coredumpfilter_name[100];
+  char *data, *coredumpfilterdata;
+  pid_t pid;
+  /* Default dump behavior of coredump_filter (0x33), according to
+     Documentation/filesystems/proc.txt from the Linux kernel
+     tree.  */
+  filter_flags filterflags = (COREFILTER_ANON_PRIVATE
+			      | COREFILTER_ANON_SHARED
+			      | COREFILTER_ELF_HEADERS
+			      | COREFILTER_HUGETLB_PRIVATE);
 
   /* We need to know the real target PID to access /proc.  */
   if (current_inferior ()->fake_pid_p)
     return 1;
 
-  xsnprintf (mapsfilename, sizeof mapsfilename,
-	     "/proc/%d/smaps", current_inferior ()->pid);
-  data = target_fileio_read_stralloc (mapsfilename);
+  pid = current_inferior ()->pid;
+
+  if (use_coredump_filter)
+    {
+      xsnprintf (coredumpfilter_name, sizeof (coredumpfilter_name),
+		 "/proc/%d/coredump_filter", pid);
+      coredumpfilterdata = target_fileio_read_stralloc (NULL,
+							coredumpfilter_name);
+      if (coredumpfilterdata != NULL)
+	{
+	  unsigned int flags;
+
+	  sscanf (coredumpfilterdata, "%x", &flags);
+	  filterflags = (enum filter_flag) flags;
+	  xfree (coredumpfilterdata);
+	}
+    }
+
+  xsnprintf (mapsfilename, sizeof mapsfilename, "/proc/%d/smaps", pid);
+  data = target_fileio_read_stralloc (NULL, mapsfilename);
   if (data == NULL)
     {
       /* Older Linux kernels did not support /proc/PID/smaps.  */
-      xsnprintf (mapsfilename, sizeof mapsfilename,
-		 "/proc/%d/maps", current_inferior ()->pid);
-      data = target_fileio_read_stralloc (mapsfilename);
+      xsnprintf (mapsfilename, sizeof mapsfilename, "/proc/%d/maps", pid);
+      data = target_fileio_read_stralloc (NULL, mapsfilename);
     }
-  if (data)
+
+  if (data != NULL)
     {
       struct cleanup *cleanup = make_cleanup (xfree, data);
-      char *line;
+      char *line, *t;
 
-      line = strtok (data, "\n");
-      while (line)
+      line = strtok_r (data, "\n", &t);
+      while (line != NULL)
 	{
 	  ULONGEST addr, endaddr, offset, inode;
 	  const char *permissions, *device, *filename;
+	  struct smaps_vmflags v;
 	  size_t permissions_len, device_len;
-	  int read, write, exec;
-	  int modified = 0, has_anonymous = 0;
+	  int read, write, exec, priv;
+	  int has_anonymous = 0;
+	  int should_dump_p = 0;
+	  int mapping_anon_p;
+	  int mapping_file_p;
 
+	  memset (&v, 0, sizeof (v));
 	  read_mapping (line, &addr, &endaddr, &permissions, &permissions_len,
 			&offset, &device, &device_len, &inode, &filename);
+	  mapping_anon_p = mapping_is_anonymous_p (filename);
+	  /* If the mapping is not anonymous, then we can consider it
+	     to be file-backed.  These two states (anonymous or
+	     file-backed) seem to be exclusive, but they can actually
+	     coexist.  For example, if a file-backed mapping has
+	     "Anonymous:" pages (see more below), then the Linux
+	     kernel will dump this mapping when the user specified
+	     that she only wants anonymous mappings in the corefile
+	     (*even* when she explicitly disabled the dumping of
+	     file-backed mappings).  */
+	  mapping_file_p = !mapping_anon_p;
 
 	  /* Decode permissions.  */
 	  read = (memchr (permissions, 'r', permissions_len) != 0);
 	  write = (memchr (permissions, 'w', permissions_len) != 0);
 	  exec = (memchr (permissions, 'x', permissions_len) != 0);
+	  /* 'private' here actually means VM_MAYSHARE, and not
+	     VM_SHARED.  In order to know if a mapping is really
+	     private or not, we must check the flag "sh" in the
+	     VmFlags field.  This is done by decode_vmflags.  However,
+	     if we are using a Linux kernel released before the commit
+	     834f82e2aa9a8ede94b17b656329f850c1471514 (3.10), we will
+	     not have the VmFlags there.  In this case, there is
+	     really no way to know if we are dealing with VM_SHARED,
+	     so we just assume that VM_MAYSHARE is enough.  */
+	  priv = memchr (permissions, 'p', permissions_len) != 0;
 
-	  /* Try to detect if region was modified by parsing smaps counters.  */
-	  for (line = strtok (NULL, "\n");
-	       line && line[0] >= 'A' && line[0] <= 'Z';
-	       line = strtok (NULL, "\n"))
+	  /* Try to detect if region should be dumped by parsing smaps
+	     counters.  */
+	  for (line = strtok_r (NULL, "\n", &t);
+	       line != NULL && line[0] >= 'A' && line[0] <= 'Z';
+	       line = strtok_r (NULL, "\n", &t))
 	    {
 	      char keyword[64 + 1];
 
@@ -869,11 +1219,17 @@ linux_find_memory_regions_full (struct gdbarch *gdbarch,
 		  warning (_("Error parsing {s,}maps file '%s'"), mapsfilename);
 		  break;
 		}
+
 	      if (strcmp (keyword, "Anonymous:") == 0)
-		has_anonymous = 1;
-	      if (strcmp (keyword, "Shared_Dirty:") == 0
-		  || strcmp (keyword, "Private_Dirty:") == 0
-		  || strcmp (keyword, "Swap:") == 0
+		{
+		  /* Older Linux kernels did not support the
+		     "Anonymous:" counter.  Check it here.  */
+		  has_anonymous = 1;
+		}
+	      else if (strcmp (keyword, "VmFlags:") == 0)
+		decode_vmflags (line, &v);
+
+	      if (strcmp (keyword, "AnonHugePages:") == 0
 		  || strcmp (keyword, "Anonymous:") == 0)
 		{
 		  unsigned long number;
@@ -884,19 +1240,46 @@ linux_find_memory_regions_full (struct gdbarch *gdbarch,
 			       mapsfilename);
 		      break;
 		    }
-		  if (number != 0)
-		    modified = 1;
+		  if (number > 0)
+		    {
+		      /* Even if we are dealing with a file-backed
+			 mapping, if it contains anonymous pages we
+			 consider it to be *also* an anonymous
+			 mapping, because this is what the Linux
+			 kernel does:
+
+			 // Dump segments that have been written to.
+			 if (vma->anon_vma && FILTER(ANON_PRIVATE))
+			 	goto whole;
+
+			 Note that if the mapping is already marked as
+			 file-backed (i.e., mapping_file_p is
+			 non-zero), then this is a special case, and
+			 this mapping will be dumped either when the
+			 user wants to dump file-backed *or* anonymous
+			 mappings.  */
+		      mapping_anon_p = 1;
+		    }
 		}
 	    }
 
-	  /* Older Linux kernels did not support the "Anonymous:" counter.
-	     If it is missing, we can't be sure - dump all the pages.  */
-	  if (!has_anonymous)
-	    modified = 1;
+	  if (has_anonymous)
+	    should_dump_p = dump_mapping_p (filterflags, &v, priv,
+					    mapping_anon_p, mapping_file_p,
+					    filename);
+	  else
+	    {
+	      /* Older Linux kernels did not support the "Anonymous:" counter.
+		 If it is missing, we can't be sure - dump all the pages.  */
+	      should_dump_p = 1;
+	    }
 
 	  /* Invoke the callback function to create the corefile segment.  */
-	  func (addr, endaddr - addr, offset, inode,
-		read, write, exec, modified, filename, obfd);
+	  if (should_dump_p)
+	    func (addr, endaddr - addr, offset, inode,
+		  read, write, exec, 1, /* MODIFIED is true because we
+					   want to dump the mapping.  */
+		  filename, obfd);
 	}
 
       do_cleanups (cleanup);
@@ -929,7 +1312,8 @@ linux_find_memory_regions_thunk (ULONGEST vaddr, ULONGEST size,
 				 int read, int write, int exec, int modified,
 				 const char *filename, void *arg)
 {
-  struct linux_find_memory_regions_data *data = arg;
+  struct linux_find_memory_regions_data *data
+    = (struct linux_find_memory_regions_data *) arg;
 
   return data->func (vaddr, size, read, write, exec, modified, data->obfd);
 }
@@ -961,18 +1345,6 @@ find_signalled_thread (struct thread_info *info, void *data)
     return 1;
 
   return 0;
-}
-
-static enum gdb_signal
-find_stop_signal (void)
-{
-  struct thread_info *info =
-    iterate_over_threads (find_signalled_thread, NULL);
-
-  if (info)
-    return info->suspend.stop_signal;
-  else
-    return GDB_SIGNAL_0;
 }
 
 /* Generate corefile notes for SPU contexts.  */
@@ -1077,7 +1449,8 @@ linux_make_mappings_callback (ULONGEST vaddr, ULONGEST size,
 			      int read, int write, int exec, int modified,
 			      const char *filename, void *data)
 {
-  struct linux_make_mappings_data *map_data = data;
+  struct linux_make_mappings_data *map_data
+    = (struct linux_make_mappings_data *) data;
   gdb_byte buf[sizeof (ULONGEST)];
 
   if (*filename == '\0' || inode == 0)
@@ -1178,14 +1551,15 @@ linux_collect_regset_section_cb (const char *sect_name, int size,
 				 const char *human_name, void *cb_data)
 {
   char *buf;
-  struct linux_collect_regset_section_cb_data *data = cb_data;
+  struct linux_collect_regset_section_cb_data *data
+    = (struct linux_collect_regset_section_cb_data *) cb_data;
 
   if (data->abort_iteration)
     return;
 
   gdb_assert (regset && regset->collect_regset);
 
-  buf = xmalloc (size);
+  buf = (char *) xmalloc (size);
   regset->collect_regset (regset, data->regcache, -1, buf, size);
 
   /* PRSTATUS still needs to be treated specially.  */
@@ -1253,7 +1627,7 @@ linux_get_siginfo_data (struct gdbarch *gdbarch, LONGEST *size)
   
   siginfo_type = gdbarch_get_siginfo_type (gdbarch);
 
-  buf = xmalloc (TYPE_LENGTH (siginfo_type));
+  buf = (gdb_byte *) xmalloc (TYPE_LENGTH (siginfo_type));
   cleanups = make_cleanup (xfree, buf);
 
   bytes_read = target_read (&current_target, TARGET_OBJECT_SIGNAL_INFO, NULL,
@@ -1275,61 +1649,49 @@ linux_get_siginfo_data (struct gdbarch *gdbarch, LONGEST *size)
 struct linux_corefile_thread_data
 {
   struct gdbarch *gdbarch;
-  int pid;
   bfd *obfd;
   char *note_data;
   int *note_size;
   enum gdb_signal stop_signal;
 };
 
-/* Called by gdbthread.c once per thread.  Records the thread's
-   register state for the corefile note section.  */
+/* Records the thread's register state for the corefile note
+   section.  */
 
-static int
-linux_corefile_thread_callback (struct thread_info *info, void *data)
+static void
+linux_corefile_thread (struct thread_info *info,
+		       struct linux_corefile_thread_data *args)
 {
-  struct linux_corefile_thread_data *args = data;
+  struct cleanup *old_chain;
+  struct regcache *regcache;
+  gdb_byte *siginfo_data;
+  LONGEST siginfo_size = 0;
 
-  /* It can be current thread
-     which cannot be removed by update_thread_list.  */
-  if (info->state == THREAD_EXITED)
-    return 0;
+  regcache = get_thread_arch_regcache (info->ptid, args->gdbarch);
 
-  if (ptid_get_pid (info->ptid) == args->pid)
-    {
-      struct cleanup *old_chain;
-      struct regcache *regcache;
-      gdb_byte *siginfo_data;
-      LONGEST siginfo_size = 0;
+  old_chain = save_inferior_ptid ();
+  inferior_ptid = info->ptid;
+  target_fetch_registers (regcache, -1);
+  siginfo_data = linux_get_siginfo_data (args->gdbarch, &siginfo_size);
+  do_cleanups (old_chain);
 
-      regcache = get_thread_arch_regcache (info->ptid, args->gdbarch);
+  old_chain = make_cleanup (xfree, siginfo_data);
 
-      old_chain = save_inferior_ptid ();
-      inferior_ptid = info->ptid;
-      target_fetch_registers (regcache, -1);
-      siginfo_data = linux_get_siginfo_data (args->gdbarch, &siginfo_size);
-      do_cleanups (old_chain);
+  args->note_data = linux_collect_thread_registers
+    (regcache, info->ptid, args->obfd, args->note_data,
+     args->note_size, args->stop_signal);
 
-      old_chain = make_cleanup (xfree, siginfo_data);
+  /* Don't return anything if we got no register information above,
+     such a core file is useless.  */
+  if (args->note_data != NULL)
+    if (siginfo_data != NULL)
+      args->note_data = elfcore_write_note (args->obfd,
+					    args->note_data,
+					    args->note_size,
+					    "CORE", NT_SIGINFO,
+					    siginfo_data, siginfo_size);
 
-      args->note_data = linux_collect_thread_registers
-	(regcache, info->ptid, args->obfd, args->note_data,
-	 args->note_size, args->stop_signal);
-
-      /* Don't return anything if we got no register information above,
-         such a core file is useless.  */
-      if (args->note_data != NULL)
-	if (siginfo_data != NULL)
-	  args->note_data = elfcore_write_note (args->obfd,
-						args->note_data,
-						args->note_size,
-						"CORE", NT_SIGINFO,
-						siginfo_data, siginfo_size);
-
-      do_cleanups (old_chain);
-    }
-
-  return !args->note_data;
+  do_cleanups (old_chain);
 }
 
 /* Fill the PRPSINFO structure with information about the process being
@@ -1379,7 +1741,7 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
   /* Obtaining PID and filename.  */
   pid = ptid_get_pid (inferior_ptid);
   xsnprintf (filename, sizeof (filename), "/proc/%d/cmdline", (int) pid);
-  fname = target_fileio_read_stralloc (filename);
+  fname = target_fileio_read_stralloc (NULL, filename);
 
   if (fname == NULL || *fname == '\0')
     {
@@ -1412,7 +1774,7 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
   p->pr_psargs[sizeof (p->pr_psargs) - 1] = '\0';
 
   xsnprintf (filename, sizeof (filename), "/proc/%d/stat", (int) pid);
-  proc_stat = target_fileio_read_stralloc (filename);
+  proc_stat = target_fileio_read_stralloc (NULL, filename);
   make_cleanup (xfree, proc_stat);
 
   if (proc_stat == NULL || *proc_stat == '\0')
@@ -1493,7 +1855,7 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
   /* Finally, obtaining the UID and GID.  For that, we read and parse the
      contents of the `/proc/PID/status' file.  */
   xsnprintf (filename, sizeof (filename), "/proc/%d/status", (int) pid);
-  proc_status = target_fileio_read_stralloc (filename);
+  proc_status = target_fileio_read_stralloc (NULL, filename);
   make_cleanup (xfree, proc_status);
 
   if (proc_status == NULL || *proc_status == '\0')
@@ -1545,6 +1907,7 @@ linux_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
   char *note_data = NULL;
   gdb_byte *auxv;
   int auxv_len;
+  struct thread_info *curr_thr, *signalled_thr, *thr;
 
   if (! gdbarch_iterate_over_regset_sections_p (gdbarch))
     return NULL;
@@ -1581,13 +1944,37 @@ linux_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
     }
   END_CATCH
 
+  /* Like the kernel, prefer dumping the signalled thread first.
+     "First thread" is what tools use to infer the signalled thread.
+     In case there's more than one signalled thread, prefer the
+     current thread, if it is signalled.  */
+  curr_thr = inferior_thread ();
+  if (curr_thr->suspend.stop_signal != GDB_SIGNAL_0)
+    signalled_thr = curr_thr;
+  else
+    {
+      signalled_thr = iterate_over_threads (find_signalled_thread, NULL);
+      if (signalled_thr == NULL)
+	signalled_thr = curr_thr;
+    }
+
   thread_args.gdbarch = gdbarch;
-  thread_args.pid = ptid_get_pid (inferior_ptid);
   thread_args.obfd = obfd;
   thread_args.note_data = note_data;
   thread_args.note_size = note_size;
-  thread_args.stop_signal = find_stop_signal ();
-  iterate_over_threads (linux_corefile_thread_callback, &thread_args);
+  thread_args.stop_signal = signalled_thr->suspend.stop_signal;
+
+  linux_corefile_thread (signalled_thr, &thread_args);
+  ALL_NON_EXITED_THREADS (thr)
+    {
+      if (thr == signalled_thr)
+	continue;
+      if (ptid_get_pid (thr->ptid) != ptid_get_pid (inferior_ptid))
+	continue;
+
+      linux_corefile_thread (thr, &thread_args);
+    }
+
   note_data = thread_args.note_data;
   if (!note_data)
     return NULL;
@@ -1875,7 +2262,7 @@ find_mapping_size (CORE_ADDR vaddr, unsigned long size,
 		   int read, int write, int exec, int modified,
 		   void *data)
 {
-  struct mem_range *range = data;
+  struct mem_range *range = (struct mem_range *) data;
 
   if (vaddr == range->start)
     {
@@ -1972,6 +2359,77 @@ linux_infcall_mmap (CORE_ADDR size, unsigned prot)
   return retval;
 }
 
+/* See gdbarch.sh 'infcall_munmap'.  */
+
+static void
+linux_infcall_munmap (CORE_ADDR addr, CORE_ADDR size)
+{
+  struct objfile *objf;
+  struct value *munmap_val = find_function_in_inferior ("munmap", &objf);
+  struct value *retval_val;
+  struct gdbarch *gdbarch = get_objfile_arch (objf);
+  LONGEST retval;
+  enum
+    {
+      ARG_ADDR, ARG_LENGTH, ARG_LAST
+    };
+  struct value *arg[ARG_LAST];
+
+  arg[ARG_ADDR] = value_from_pointer (builtin_type (gdbarch)->builtin_data_ptr,
+				      addr);
+  /* Assuming sizeof (unsigned long) == sizeof (size_t).  */
+  arg[ARG_LENGTH] = value_from_ulongest
+		    (builtin_type (gdbarch)->builtin_unsigned_long, size);
+  retval_val = call_function_by_hand (munmap_val, ARG_LAST, arg);
+  retval = value_as_long (retval_val);
+  if (retval != 0)
+    warning (_("Failed inferior munmap call at %s for %s bytes, "
+	       "errno is changed."),
+	     hex_string (addr), pulongest (size));
+}
+
+/* See linux-tdep.h.  */
+
+CORE_ADDR
+linux_displaced_step_location (struct gdbarch *gdbarch)
+{
+  CORE_ADDR addr;
+  int bp_len;
+
+  /* Determine entry point from target auxiliary vector.  This avoids
+     the need for symbols.  Also, when debugging a stand-alone SPU
+     executable, entry_point_address () will point to an SPU
+     local-store address and is thus not usable as displaced stepping
+     location.  The auxiliary vector gets us the PowerPC-side entry
+     point address instead.  */
+  if (target_auxv_search (&current_target, AT_ENTRY, &addr) <= 0)
+    error (_("Cannot find AT_ENTRY auxiliary vector entry."));
+
+  /* Make certain that the address points at real code, and not a
+     function descriptor.  */
+  addr = gdbarch_convert_from_func_ptr_addr (gdbarch, addr,
+					     &current_target);
+
+  /* Inferior calls also use the entry point as a breakpoint location.
+     We don't want displaced stepping to interfere with those
+     breakpoints, so leave space.  */
+  gdbarch_breakpoint_from_pc (gdbarch, &addr, &bp_len);
+  addr += bp_len * 2;
+
+  return addr;
+}
+
+/* Display whether the gcore command is using the
+   /proc/PID/coredump_filter file.  */
+
+static void
+show_use_coredump_filter (struct ui_file *file, int from_tty,
+			  struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Use of /proc/PID/coredump_filter file to generate"
+			    " corefiles is %s.\n"), value);
+}
+
 /* To be called from the various GDB_OSABI_LINUX handlers for the
    various GNU/Linux architectures and machine types.  */
 
@@ -1991,6 +2449,8 @@ linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 				    linux_gdb_signal_to_target);
   set_gdbarch_vsyscall_range (gdbarch, linux_vsyscall_range);
   set_gdbarch_infcall_mmap (gdbarch, linux_infcall_mmap);
+  set_gdbarch_infcall_munmap (gdbarch, linux_infcall_munmap);
+  set_gdbarch_get_siginfo_type (gdbarch, linux_get_siginfo_type);
 }
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */
@@ -2008,4 +2468,16 @@ _initialize_linux_tdep (void)
   /* Observers used to invalidate the cache when needed.  */
   observer_attach_inferior_exit (invalidate_linux_cache_inf);
   observer_attach_inferior_appeared (invalidate_linux_cache_inf);
+
+  add_setshow_boolean_cmd ("use-coredump-filter", class_files,
+			   &use_coredump_filter, _("\
+Set whether gcore should consider /proc/PID/coredump_filter."),
+			   _("\
+Show whether gcore should consider /proc/PID/coredump_filter."),
+			   _("\
+Use this command to set whether gcore should consider the contents\n\
+of /proc/PID/coredump_filter when generating the corefile.  For more information\n\
+about this file, refer to the manpage of core(5)."),
+			   NULL, show_use_coredump_filter,
+			   &setlist, &showlist);
 }

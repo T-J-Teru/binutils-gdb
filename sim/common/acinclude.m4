@@ -5,7 +5,7 @@
 # SIM_AC_OUTPUT is a cover function to AC_OUTPUT to generate the Makefile.
 # It is intended to be invoked last.
 #
-# The simulator's configure.in should look like:
+# The simulator's configure.ac should look like:
 #
 # dnl Process this file with autoconf to produce a configure script.
 # AC_PREREQ(2.64)dnl
@@ -36,6 +36,7 @@ AC_REQUIRE([AC_PROG_CC])
 AC_CONFIG_HEADER(ifelse([$1],,config.h,[$1]):config.in)
 AC_CANONICAL_SYSTEM
 AC_USE_SYSTEM_EXTENSIONS
+AC_C_BIGENDIAN
 AC_ARG_PROGRAM
 AC_PROG_INSTALL
 
@@ -52,9 +53,6 @@ AC_SUBST(HDEFINES)
 AR=${AR-ar}
 AC_SUBST(AR)
 AC_PROG_RANLIB
-
-dnl Pull in the target configuration file directly.
-AH_BOTTOM([#include "tconfig.h"])
 
 # Some of the common include files depend on bfd.h, and bfd.h checks
 # that config.h is included first by testing that the PACKAGE macro
@@ -119,23 +117,9 @@ dnl --enable-maintainer-mode.
 AM_MAINTAINER_MODE
 
 
-dnl This is a generic option to enable special byte swapping
-dnl insns on *any* cpu.
-AC_ARG_ENABLE(sim-bswap,
-[  --enable-sim-bswap			Use Host specific BSWAP instruction.],
-[case "${enableval}" in
-  yes)	sim_bswap="-DWITH_BSWAP=1 -DUSE_BSWAP=1";;
-  no)	sim_bswap="-DWITH_BSWAP=0";;
-  *)	AC_MSG_ERROR("--enable-sim-bswap does not take a value"); sim_bswap="";;
-esac
-if test x"$silent" != x"yes" && test x"$sim_bswap" != x""; then
-  echo "Setting bswap flags = $sim_bswap" 6>&1
-fi],[sim_bswap=""])dnl
-AC_SUBST(sim_bswap)
-
-
 AC_ARG_ENABLE(sim-cflags,
-[  --enable-sim-cflags=opts		Extra CFLAGS for use in building simulator],
+[AS_HELP_STRING([--enable-sim-cflags=opts],
+		[Extra CFLAGS for use in building simulator])],
 [case "${enableval}" in
   yes)	 sim_cflags="-O2 -fomit-frame-pointer";;
   trace) AC_MSG_ERROR("Please use --enable-sim-debug instead."); sim_cflags="";;
@@ -151,7 +135,8 @@ AC_SUBST(sim_cflags)
 dnl --enable-sim-debug is for developers of the simulator
 dnl the allowable values are work-in-progress
 AC_ARG_ENABLE(sim-debug,
-[  --enable-sim-debug=opts		Enable debugging flags],
+[AS_HELP_STRING([--enable-sim-debug=opts],
+		[Enable debugging flags (for developers of the sim itself)])],
 [case "${enableval}" in
   yes) sim_debug="-DDEBUG=7 -DWITH_DEBUG=7";;
   no)  sim_debug="-DDEBUG=0 -DWITH_DEBUG=0";;
@@ -166,7 +151,8 @@ AC_SUBST(sim_debug)
 dnl --enable-sim-stdio is for users of the simulator
 dnl It determines if IO from the program is routed through STDIO (buffered)
 AC_ARG_ENABLE(sim-stdio,
-[  --enable-sim-stdio			Specify whether to use stdio for console input/output.],
+[AS_HELP_STRING([--enable-sim-stdio],
+		[Specify whether to use stdio for console input/output])],
 [case "${enableval}" in
   yes)	sim_stdio="-DWITH_STDIO=DO_USE_STDIO";;
   no)	sim_stdio="-DWITH_STDIO=DONT_USE_STDIO";;
@@ -184,12 +170,13 @@ dnl up to the simulator], or is a comma separated list of names of tracing
 dnl elements to enable.  The latter is only supported on simulators that
 dnl use WITH_TRACE.
 AC_ARG_ENABLE(sim-trace,
-[  --enable-sim-trace=opts		Enable tracing flags],
+[AS_HELP_STRING([--enable-sim-trace=opts],
+		[Enable tracing of simulated programs])],
 [case "${enableval}" in
-  yes)	sim_trace="-DTRACE=1 -DWITH_TRACE=-1";;
-  no)	sim_trace="-DTRACE=0 -DWITH_TRACE=0";;
+  yes)	sim_trace="-DWITH_TRACE=-1";;
+  no)	sim_trace="-DWITH_TRACE=0";;
   [[-0-9]]*)
-	sim_trace="-DTRACE='(${enableval})' -DWITH_TRACE='(${enableval})'";;
+	sim_trace="-DWITH_TRACE='(${enableval})'";;
   [[[:lower:]]]*)
 	sim_trace=""
 	for x in `echo "$enableval" | sed -e "s/,/ /g"`; do
@@ -213,7 +200,7 @@ dnl up to the simulator], or is a comma separated list of names of profiling
 dnl elements to enable.  The latter is only supported on simulators that
 dnl use WITH_PROFILE.
 AC_ARG_ENABLE(sim-profile,
-[  --enable-sim-profile=opts		Enable profiling flags],
+[AS_HELP_STRING([--enable-sim-profile=opts], [Enable profiling flags])],
 [case "${enableval}" in
   yes)	sim_profile="-DPROFILE=1 -DWITH_PROFILE=-1";;
   no)	sim_profile="-DPROFILE=0 -DWITH_PROFILE=0";;
@@ -235,7 +222,7 @@ if test x"$silent" != x"yes" && test x"$sim_profile" != x""; then
 fi],[sim_profile="-DPROFILE=1 -DWITH_PROFILE=-1"])dnl
 AC_SUBST(sim_profile)
 
-ACX_PKGVERSION([GDB])
+ACX_PKGVERSION([SIM])
 ACX_BUGURL([http://www.gnu.org/software/gdb/bugs/])
 AC_DEFINE_UNQUOTED([PKGVERSION], ["$PKGVERSION"], [Additional package description])
 AC_DEFINE_UNQUOTED([REPORT_BUGS_TO], ["$REPORT_BUGS_TO"], [Bug reporting address])
@@ -263,12 +250,12 @@ sim_link_links="${sim_link_links} targ-vals.def"
 dnl Additional SIM options that can (optionally) be configured
 dnl For optional simulator options, a macro SIM_AC_OPTION_* is defined.
 dnl Simulators that wish to use the relevant option specify the macro
-dnl in the simulator specific configure.in file between the SIM_AC_COMMON
+dnl in the simulator specific configure.ac file between the SIM_AC_COMMON
 dnl and SIM_AC_OUTPUT lines.
 
 
 dnl Specify the running environment.
-dnl If the simulator invokes this in its configure.in then without this option
+dnl If the simulator invokes this in its configure.ac then without this option
 dnl the default is the user environment and all are runtime selectable.
 dnl If the simulator doesn't invoke this, only the user environment is
 dnl supported.
@@ -277,7 +264,8 @@ dnl let's not.
 AC_DEFUN([SIM_AC_OPTION_ENVIRONMENT],
 [
 AC_ARG_ENABLE(sim-environment,
-[  --enable-sim-environment=environment	Specify mixed, user, virtual or operating environment.],
+[AS_HELP_STRING([--enable-sim-environment=environment],
+		[Specify mixed, user, virtual or operating environment])],
 [case "${enableval}" in
   all | ALL)             sim_environment="-DWITH_ENVIRONMENT=ALL_ENVIRONMENT";;
   user | USER)           sim_environment="-DWITH_ENVIRONMENT=USER_ENVIRONMENT";;
@@ -303,7 +291,8 @@ wire_alignment="[$1]"
 default_alignment="[$2]"
 [
 AC_ARG_ENABLE(sim-alignment,
-[  --enable-sim-alignment=align		Specify strict,  nonstrict or forced alignment of memory accesses.],
+[AS_HELP_STRING([--enable-sim-alignment=align],
+		[Specify strict, nonstrict or forced alignment of memory accesses])],
 [case "${enableval}" in
   strict | STRICT)       sim_alignment="-DWITH_ALIGNMENT=STRICT_ALIGNMENT";;
   nonstrict | NONSTRICT) sim_alignment="-DWITH_ALIGNMENT=NONSTRICT_ALIGNMENT";;
@@ -350,7 +339,8 @@ dnl Conditionally compile in assertion statements.
 AC_DEFUN([SIM_AC_OPTION_ASSERT],
 [
 AC_ARG_ENABLE(sim-assert,
-[  --enable-sim-assert			Specify whether to perform random assertions.],
+[AS_HELP_STRING([--enable-sim-assert],
+		[Specify whether to perform random assertions])],
 [case "${enableval}" in
   yes)	sim_assert="-DWITH_ASSERT=1";;
   no)	sim_assert="-DWITH_ASSERT=0";;
@@ -377,7 +367,7 @@ wire_word_msb="[$2]"
 wire_address_bitsize="[$3]"
 wire_cell_bitsize="[$4]"
 [AC_ARG_ENABLE(sim-bitsize,
-[  --enable-sim-bitsize=N		Specify target bitsize (32 or 64).],
+[AS_HELP_STRING([--enable-sim-bitsize=N], [Specify target bitsize (32 or 64)])],
 [sim_bitsize=
 case "${enableval}" in
   64,63 | 64,63,* ) sim_bitsize="-DWITH_TARGET_WORD_BITSIZE=64 -DWITH_TARGET_WORD_MSB=63";;
@@ -442,28 +432,29 @@ AC_DEFUN([SIM_AC_OPTION_ENDIAN],
 wire_endian="[$1]"
 default_endian="[$2]"
 AC_ARG_ENABLE(sim-endian,
-[  --enable-sim-endian=endian		Specify target byte endian orientation.],
+[AS_HELP_STRING([--enable-sim-endian=endian],
+		[Specify target byte endian orientation])],
 [case "${enableval}" in
-  b*|B*) sim_endian="-DWITH_TARGET_BYTE_ORDER=BIG_ENDIAN";;
-  l*|L*) sim_endian="-DWITH_TARGET_BYTE_ORDER=LITTLE_ENDIAN";;
+  b*|B*) sim_endian="-DWITH_TARGET_BYTE_ORDER=BFD_ENDIAN_BIG";;
+  l*|L*) sim_endian="-DWITH_TARGET_BYTE_ORDER=BFD_ENDIAN_LITTLE";;
   yes)	 if test x"$wire_endian" != x; then
-	   sim_endian="-DWITH_TARGET_BYTE_ORDER=${wire_endian}"
+	   sim_endian="-DWITH_TARGET_BYTE_ORDER=BFD_ENDIAN_${wire_endian}"
 	 else
-           if test x"$default_endian" != x; then
-	     sim_endian="-DWITH_TARGET_BYTE_ORDER=${default_endian}"
+	  if test x"$default_endian" != x; then
+	     sim_endian="-DWITH_TARGET_BYTE_ORDER=BFD_ENDIAN_${default_endian}"
 	   else
 	     echo "No hard-wired endian for target $target" 1>&6
-	     sim_endian="-DWITH_TARGET_BYTE_ORDER=0"
+	     sim_endian="-DWITH_TARGET_BYTE_ORDER=BFD_ENDIAN_UNKNOWN"
 	   fi
 	 fi;;
   no)	 if test x"$default_endian" != x; then
-	   sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=${default_endian}"
+	   sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=BFD_ENDIAN_${default_endian}"
 	 else
 	   if test x"$wire_endian" != x; then
-	     sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=${wire_endian}"
+	     sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=BFD_ENDIAN_${wire_endian}"
 	   else
 	     echo "No default endian for target $target" 1>&6
-	     sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=0"
+	     sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=BFD_ENDIAN_UNKNOWN"
 	   fi
 	 fi;;
   *)	 AC_MSG_ERROR("Unknown value $enableval for --enable-sim-endian"); sim_endian="";;
@@ -472,46 +463,16 @@ if test x"$silent" != x"yes" && test x"$sim_endian" != x""; then
   echo "Setting endian flags = $sim_endian" 6>&1
 fi],
 [if test x"$default_endian" != x; then
-  sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=${default_endian}"
+  sim_endian="-DWITH_DEFAULT_TARGET_BYTE_ORDER=BFD_ENDIAN_${default_endian}"
 else
   if test x"$wire_endian" != x; then
-    sim_endian="-DWITH_TARGET_BYTE_ORDER=${wire_endian}"
+    sim_endian="-DWITH_TARGET_BYTE_ORDER=BFD_ENDIAN_${wire_endian}"
   else
     sim_endian=
   fi
 fi])dnl
 ])
 AC_SUBST(sim_endian)
-
-
-dnl --enable-sim-hostendian is for users of the simulator when
-dnl they find that AC_C_BIGENDIAN does not function correctly
-dnl (for instance in a canadian cross)
-AC_DEFUN([SIM_AC_OPTION_HOSTENDIAN],
-[
-AC_ARG_ENABLE(sim-hostendian,
-[  --enable-sim-hostendian=end		Specify host byte endian orientation.],
-[case "${enableval}" in
-  no)	 sim_hostendian="-DWITH_HOST_BYTE_ORDER=0";;
-  b*|B*) sim_hostendian="-DWITH_HOST_BYTE_ORDER=BIG_ENDIAN";;
-  l*|L*) sim_hostendian="-DWITH_HOST_BYTE_ORDER=LITTLE_ENDIAN";;
-  *)	 AC_MSG_ERROR("Unknown value $enableval for --enable-sim-hostendian"); sim_hostendian="";;
-esac
-if test x"$silent" != x"yes" && test x"$sim_hostendian" != x""; then
-  echo "Setting hostendian flags = $sim_hostendian" 6>&1
-fi],[
-if test "x$cross_compiling" = "xno"; then
-  AC_C_BIGENDIAN
-  if test $ac_cv_c_bigendian = yes; then
-    sim_hostendian="-DWITH_HOST_BYTE_ORDER=BIG_ENDIAN"
-  else
-    sim_hostendian="-DWITH_HOST_BYTE_ORDER=LITTLE_ENDIAN"
-  fi
-else
-  sim_hostendian="-DWITH_HOST_BYTE_ORDER=0"
-fi])dnl
-])
-AC_SUBST(sim_hostendian)
 
 
 dnl --enable-sim-float is for developers of the simulator
@@ -524,7 +485,8 @@ AC_DEFUN([SIM_AC_OPTION_FLOAT],
 default_sim_float="[$1]"
 default_sim_float_bitsize="[$2]"
 AC_ARG_ENABLE(sim-float,
-[  --enable-sim-float			Specify that the target processor has floating point hardware.],
+[AS_HELP_STRING([--enable-sim-float],
+		[Specify that the target processor has floating point hardware])],
 [case "${enableval}" in
   yes | hard)	sim_float="-DWITH_FLOATING_POINT=HARD_FLOATING_POINT";;
   no | soft)	sim_float="-DWITH_FLOATING_POINT=SOFT_FLOATING_POINT";;
@@ -552,7 +514,8 @@ AC_DEFUN([SIM_AC_OPTION_SCACHE],
 [
 default_sim_scache="ifelse([$1],,0,[$1])"
 AC_ARG_ENABLE(sim-scache,
-[  --enable-sim-scache=size		Specify simulator execution cache size.],
+[AS_HELP_STRING([--enable-sim-scache=size],
+		[Specify simulator execution cache size])],
 [case "${enableval}" in
   yes)	sim_scache="-DWITH_SCACHE=${default_sim_scache}";;
   no)	sim_scache="-DWITH_SCACHE=0" ;;
@@ -572,7 +535,8 @@ AC_DEFUN([SIM_AC_OPTION_DEFAULT_MODEL],
 [
 default_sim_default_model="ifelse([$1],,0,[$1])"
 AC_ARG_ENABLE(sim-default-model,
-[  --enable-sim-default-model=model	Specify default model to simulate.],
+[AS_HELP_STRING([--enable-sim-default-model=model],
+		[Specify default model to simulate])],
 [case "${enableval}" in
   yes|no) AC_MSG_ERROR("Missing argument to --enable-sim-default-model");;
   *)	sim_default_model="-DWITH_DEFAULT_MODEL='\"${enableval}\"'";;
@@ -660,7 +624,8 @@ AC_DEFUN([SIM_AC_OPTION_INLINE],
 [
 default_sim_inline="ifelse([$1],,,-DDEFAULT_INLINE=[$1])"
 AC_ARG_ENABLE(sim-inline,
-[  --enable-sim-inline=inlines		Specify which functions should be inlined.],
+[AS_HELP_STRING([--enable-sim-inline=inlines],
+		[Specify which functions should be inlined])],
 [sim_inline=""
 case "$enableval" in
   no)		sim_inline="-DDEFAULT_INLINE=0";;
@@ -704,7 +669,8 @@ AC_SUBST(sim_inline)
 AC_DEFUN([SIM_AC_OPTION_PACKAGES],
 [
 AC_ARG_ENABLE(sim-packages,
-[  --enable-sim-packages=list		Specify the packages to be included in the build.],
+[AS_HELP_STRING([--enable-sim-packages=list],
+		[Specify the packages to be included in the build])],
 [packages=disklabel
 case "${enableval}" in
   yes)	;;
@@ -730,7 +696,8 @@ AC_SUBST(sim_packages)
 AC_DEFUN([SIM_AC_OPTION_REGPARM],
 [
 AC_ARG_ENABLE(sim-regparm,
-[  --enable-sim-regparm=nr-parm		Pass parameters in registers instead of on the stack - x86/GCC specific.],
+[AS_HELP_STRING([--enable-sim-regparm=nr-parm],
+		[Pass parameters in registers instead of on the stack - x86/GCC specific])],
 [case "${enableval}" in
   0*|1*|2*|3*|4*|5*|6*|7*|8*|9*) sim_regparm="-DWITH_REGPARM=${enableval}";;
   no)                            sim_regparm="" ;;
@@ -748,7 +715,8 @@ AC_DEFUN([SIM_AC_OPTION_RESERVED_BITS],
 [
 default_sim_reserved_bits="ifelse([$1],,1,[$1])"
 AC_ARG_ENABLE(sim-reserved-bits,
-[  --enable-sim-reserved-bits		Specify whether to check reserved bits in instruction.],
+[AS_HELP_STRING([--enable-sim-reserved-bits],
+		[Specify whether to check reserved bits in instruction])],
 [case "${enableval}" in
   yes)	sim_reserved_bits="-DWITH_RESERVED_BITS=1";;
   no)	sim_reserved_bits="-DWITH_RESERVED_BITS=0";;
@@ -765,7 +733,8 @@ AC_DEFUN([SIM_AC_OPTION_SMP],
 [
 default_sim_smp="ifelse([$1],,5,[$1])"
 AC_ARG_ENABLE(sim-smp,
-[  --enable-sim-smp=n			Specify number of processors to configure for (default ${default_sim_smp}).],
+[AS_HELP_STRING([--enable-sim-smp=n],
+		[Specify number of processors to configure for (default ${default_sim_smp})])],
 [case "${enableval}" in
   yes)	sim_smp="-DWITH_SMP=5" ; sim_igen_smp="-N 5";;
   no)	sim_smp="-DWITH_SMP=0" ; sim_igen_smp="-N 0";;
@@ -784,7 +753,8 @@ AC_SUBST(sim_smp)
 AC_DEFUN([SIM_AC_OPTION_STDCALL],
 [
 AC_ARG_ENABLE(sim-stdcall,
-[  --enable-sim-stdcall=type		Use an alternative function call/return mechanism - x86/GCC specific.],
+[AS_HELP_STRING([--enable-sim-stdcall=type],
+		[Use an alternative function call/return mechanism - x86/GCC specific])],
 [case "${enableval}" in
   no)		sim_stdcall="" ;;
   std*)		sim_stdcall="-DWITH_STDCALL=1";;
@@ -802,7 +772,8 @@ AC_DEFUN([SIM_AC_OPTION_XOR_ENDIAN],
 [
 default_sim_xor_endian="ifelse([$1],,8,[$1])"
 AC_ARG_ENABLE(sim-xor-endian,
-[  --enable-sim-xor-endian=n		Specify number bytes involved in XOR bi-endian mode (default ${default_sim_xor_endian}).],
+[AS_HELP_STRING([--enable-sim-xor-endian=n],
+		[Specify number bytes involved in XOR bi-endian mode (default ${default_sim_xor_endian})])],
 [case "${enableval}" in
   yes)	sim_xor_endian="-DWITH_XOR_ENDIAN=8";;
   no)	sim_xor_endian="-DWITH_XOR_ENDIAN=0";;
@@ -953,7 +924,7 @@ dnl a directory name, but what we're doing here is an enable/disable kind
 dnl of thing and specifying both --enable and --with is klunky.
 dnl If you reeely want this to be --with, go ahead and change it.
 AC_ARG_ENABLE(cgen-maint,
-[  --enable-cgen-maint[=DIR]    build cgen generated files],
+[AS_HELP_STRING([--enable-cgen-maint[=DIR]], [build cgen generated files])],
 [case "${enableval}" in
   yes)	cgen_maint=yes ;;
   no)	cgen_maint=no ;;

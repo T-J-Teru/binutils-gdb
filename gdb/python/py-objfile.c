@@ -1,6 +1,6 @@
 /* Python interface to objfiles.
 
-   Copyright (C) 2008-2015 Free Software Foundation, Inc.
+   Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -23,7 +23,6 @@
 #include "objfiles.h"
 #include "language.h"
 #include "build-id.h"
-#include "elf-bfd.h"
 #include "symtab.h"
 
 typedef struct
@@ -42,6 +41,10 @@ typedef struct
 
   /* The frame filter list of functions.  */
   PyObject *frame_filters;
+
+  /* The list of frame unwinders.  */
+  PyObject *frame_unwinders;
+
   /* The type-printer list.  */
   PyObject *type_printers;
 
@@ -130,7 +133,7 @@ objfpy_get_build_id (PyObject *self, void *closure)
 {
   objfile_object *obj = (objfile_object *) self;
   struct objfile *objfile = obj->objfile;
-  const struct elf_build_id *build_id = NULL;
+  const struct bfd_build_id *build_id = NULL;
 
   OBJFPY_REQUIRE_VALID (obj);
 
@@ -184,6 +187,7 @@ objfpy_dealloc (PyObject *o)
   Py_XDECREF (self->dict);
   Py_XDECREF (self->printers);
   Py_XDECREF (self->frame_filters);
+  Py_XDECREF (self->frame_unwinders);
   Py_XDECREF (self->type_printers);
   Py_XDECREF (self->xmethods);
   Py_TYPE (self)->tp_free (self);
@@ -204,6 +208,10 @@ objfpy_initialize (objfile_object *self)
 
   self->frame_filters = PyDict_New ();
   if (self->frame_filters == NULL)
+    return 0;
+
+  self->frame_unwinders = PyList_New (0);
+  if (self->frame_unwinders == NULL)
     return 0;
 
   self->type_printers = PyList_New (0);
@@ -308,6 +316,48 @@ objfpy_set_frame_filters (PyObject *o, PyObject *filters, void *ignore)
   tmp = self->frame_filters;
   Py_INCREF (filters);
   self->frame_filters = filters;
+  Py_XDECREF (tmp);
+
+  return 0;
+}
+
+/* Return the frame unwinders attribute for this object file.  */
+
+PyObject *
+objfpy_get_frame_unwinders (PyObject *o, void *ignore)
+{
+  objfile_object *self = (objfile_object *) o;
+
+  Py_INCREF (self->frame_unwinders);
+  return self->frame_unwinders;
+}
+
+/* Set this object file's frame unwinders list to UNWINDERS.  */
+
+static int
+objfpy_set_frame_unwinders (PyObject *o, PyObject *unwinders, void *ignore)
+{
+  PyObject *tmp;
+  objfile_object *self = (objfile_object *) o;
+
+  if (!unwinders)
+    {
+      PyErr_SetString (PyExc_TypeError,
+		       _("Cannot delete the frame unwinders attribute."));
+      return -1;
+    }
+
+  if (!PyList_Check (unwinders))
+    {
+      PyErr_SetString (PyExc_TypeError,
+		       _("The frame_unwinders attribute must be a list."));
+      return -1;
+    }
+
+  /* Take care in case the LHS and RHS are related somehow.  */
+  tmp = self->frame_unwinders;
+  Py_INCREF (unwinders);
+  self->frame_unwinders = unwinders;
   Py_XDECREF (tmp);
 
   return 0;
@@ -433,7 +483,7 @@ objfpy_build_id_ok (const char *string)
    It is assumed that objfpy_build_id_ok (string) returns TRUE.  */
 
 static int
-objfpy_build_id_matches (const struct elf_build_id *build_id,
+objfpy_build_id_matches (const struct bfd_build_id *build_id,
 			 const char *string)
 {
   size_t i;
@@ -491,7 +541,7 @@ objfpy_lookup_objfile_by_build_id (const char *build_id)
 
   ALL_OBJFILES (objfile)
     {
-      const struct elf_build_id *obfd_build_id;
+      const struct bfd_build_id *obfd_build_id;
 
       if (objfile->obfd == NULL)
 	continue;
@@ -565,7 +615,7 @@ static void
 py_free_objfile (struct objfile *objfile, void *datum)
 {
   struct cleanup *cleanup;
-  objfile_object *object = datum;
+  objfile_object *object = (objfile_object *) datum;
 
   cleanup = ensure_python_env (get_objfile_arch (objfile), current_language);
   object->objfile = NULL;
@@ -583,7 +633,7 @@ objfile_to_objfile_object (struct objfile *objfile)
 {
   objfile_object *object;
 
-  object = objfile_data (objfile, objfpy_objfile_data_key);
+  object = (objfile_object *) objfile_data (objfile, objfpy_objfile_data_key);
   if (!object)
     {
       object = PyObject_New (objfile_object, &objfile_object_type);
@@ -651,6 +701,8 @@ static PyGetSetDef objfile_getset[] =
     "Pretty printers.", NULL },
   { "frame_filters", objfpy_get_frame_filters,
     objfpy_set_frame_filters, "Frame Filters.", NULL },
+  { "frame_unwinders", objfpy_get_frame_unwinders,
+    objfpy_set_frame_unwinders, "Frame Unwinders", NULL },
   { "type_printers", objfpy_get_type_printers, objfpy_set_type_printers,
     "Type printers.", NULL },
   { "xmethods", objfpy_get_xmethods, NULL,

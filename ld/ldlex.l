@@ -2,7 +2,7 @@
 
 %{
 
-/* Copyright (C) 1991-2015 Free Software Foundation, Inc.
+/* Copyright (C) 1991-2016 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support.
 
    This file is part of the GNU Binutils.
@@ -451,7 +451,7 @@ V_IDENTIFIER [*?.$_a-zA-Z\[\]\-\!\^\\]([*?.$_a-zA-Z0-9\[\]\-\!\^\\]|::)*
 				  return *yytext;
 				}
 
-<VERS_START,VERS_NODE,VERS_SCRIPT>[\n]		{ lineno++; }
+<VERS_START,VERS_NODE,VERS_SCRIPT,INPUTLIST>[\n]	{ lineno++; }
 
 <VERS_START,VERS_NODE,VERS_SCRIPT>#.*		{ /* Eat up comments */ }
 

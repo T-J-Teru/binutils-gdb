@@ -1,6 +1,6 @@
 // reloc.h -- relocate input files for gold   -*- C++ -*-
 
-// Copyright (C) 2006-2015 Free Software Foundation, Inc.
+// Copyright (C) 2006-2016 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -294,6 +294,14 @@ class Relocatable_relocs
   {
     gold_assert(i < this->reloc_strategies_.size());
     return static_cast<Reloc_strategy>(this->reloc_strategies_[i]);
+  }
+
+  // Set the strategy for reloc I.
+  void
+  set_strategy(unsigned int i, Reloc_strategy strategy)
+  {
+    gold_assert(i < this->reloc_strategies_.size());
+    this->reloc_strategies_[i] = strategy;
   }
 
   // Return the number of relocations to create in the output file.

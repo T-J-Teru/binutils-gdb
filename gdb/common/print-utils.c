@@ -1,6 +1,6 @@
 /* Cell-based print utility routines for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2015 Free Software Foundation, Inc.
+   Copyright (C) 1986-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -19,8 +19,6 @@
 
 #include "common-defs.h"
 #include "print-utils.h"
-#include <stdint.h>
-
 /* Temporary storage using circular buffer.  */
 
 #define NUMCELLS 16
@@ -318,7 +316,7 @@ core_addr_to_string_nz (const CORE_ADDR addr)
 /* See print-utils.h.  */
 
 const char *
-host_address_to_string (const void *addr)
+host_address_to_string_1 (const void *addr)
 {
   char *str = get_cell ();
 

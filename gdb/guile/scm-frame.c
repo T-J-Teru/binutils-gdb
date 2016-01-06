@@ -1,6 +1,6 @@
 /* Scheme interface to stack frames.
 
-   Copyright (C) 2008-2015 Free Software Foundation, Inc.
+   Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,6 +28,7 @@
 #include "symfile.h"
 #include "symtab.h"
 #include "stack.h"
+#include "user-regs.h"
 #include "value.h"
 #include "guile-internal.h"
 
@@ -83,7 +84,7 @@ static const struct inferior_data *frscm_inferior_data_key;
 static hashval_t
 frscm_hash_frame_smob (const void *p)
 {
-  const frame_smob *f_smob = p;
+  const frame_smob *f_smob = (const frame_smob *) p;
   const struct frame_id *fid = &f_smob->frame_id;
   hashval_t hash = htab_hash_pointer (f_smob->inferior);
 
@@ -103,8 +104,8 @@ frscm_hash_frame_smob (const void *p)
 static int
 frscm_eq_frame_smob (const void *ap, const void *bp)
 {
-  const frame_smob *a = ap;
-  const frame_smob *b = bp;
+  const frame_smob *a = (const frame_smob *) ap;
+  const frame_smob *b = (const frame_smob *) bp;
 
   return (frame_id_eq (a->frame_id, b->frame_id)
 	  && a->inferior == b->inferior
@@ -117,7 +118,7 @@ frscm_eq_frame_smob (const void *ap, const void *bp)
 static htab_t
 frscm_inferior_frame_map (struct inferior *inferior)
 {
-  htab_t htab = inferior_data (inferior, frscm_inferior_data_key);
+  htab_t htab = (htab_t) inferior_data (inferior, frscm_inferior_data_key);
 
   if (htab == NULL)
     {
@@ -378,7 +379,7 @@ frscm_mark_frame_invalid (void **slot, void *info)
 static void
 frscm_del_inferior_frames (struct inferior *inferior, void *datum)
 {
-  htab_t htab = datum;
+  htab_t htab = (htab_t) datum;
 
   if (htab != NULL)
     {
@@ -782,6 +783,60 @@ gdbscm_frame_sal (SCM self)
   return stscm_scm_from_sal (sal);
 }
 
+/* (frame-read-register <gdb:frame> string) -> <gdb:value>
+   The register argument must be a string.  */
+
+static SCM
+gdbscm_frame_read_register (SCM self, SCM register_scm)
+{
+  char *register_str;
+  struct value *value = NULL;
+  struct frame_info *frame = NULL;
+  struct cleanup *cleanup;
+  frame_smob *f_smob;
+
+  f_smob = frscm_get_frame_smob_arg_unsafe (self, SCM_ARG1, FUNC_NAME);
+  gdbscm_parse_function_args (FUNC_NAME, SCM_ARG2, NULL, "s",
+			      register_scm, &register_str);
+  cleanup = make_cleanup (xfree, register_str);
+
+  TRY
+    {
+      int regnum;
+
+      frame = frscm_frame_smob_to_frame (f_smob);
+      if (frame)
+	{
+	  regnum = user_reg_map_name_to_regnum (get_frame_arch (frame),
+						register_str,
+						strlen (register_str));
+	  if (regnum >= 0)
+	    value = value_of_register (regnum, frame);
+	}
+    }
+  CATCH (except, RETURN_MASK_ALL)
+    {
+      GDBSCM_HANDLE_GDB_EXCEPTION (except);
+    }
+  END_CATCH
+
+  do_cleanups (cleanup);
+
+  if (frame == NULL)
+    {
+      gdbscm_invalid_object_error (FUNC_NAME, SCM_ARG1, self,
+				   _("<gdb:frame>"));
+    }
+
+  if (value == NULL)
+    {
+      gdbscm_out_of_range_error (FUNC_NAME, SCM_ARG2, register_scm,
+				 _("unknown register"));
+    }
+
+  return vlscm_scm_from_value (value);
+}
+
 /* (frame-read-var <gdb:frame> <gdb:symbol>) -> <gdb:value>
    (frame-read-var <gdb:frame> string [#:block <gdb:block>]) -> <gdb:value>
    If the optional block argument is provided start the search from that block,
@@ -800,6 +855,7 @@ gdbscm_frame_read_var (SCM self, SCM symbol_scm, SCM rest)
   SCM block_scm = SCM_UNDEFINED;
   struct frame_info *frame = NULL;
   struct symbol *var = NULL;
+  const struct block *block = NULL;
   struct value *value = NULL;
 
   f_smob = frscm_get_frame_smob_arg_unsafe (self, SCM_ARG1, FUNC_NAME);
@@ -854,9 +910,13 @@ gdbscm_frame_read_var (SCM self, SCM symbol_scm, SCM rest)
 
       TRY
 	{
+	  struct block_symbol lookup_sym;
+
 	  if (block == NULL)
 	    block = get_frame_block (frame, NULL);
-	  var = lookup_symbol (var_name, block, VAR_DOMAIN, NULL);
+	  lookup_sym = lookup_symbol (var_name, block, VAR_DOMAIN, NULL);
+	  var = lookup_sym.symbol;
+	  block = lookup_sym.block;
 	}
       CATCH (ex, RETURN_MASK_ALL)
 	{
@@ -885,7 +945,7 @@ gdbscm_frame_read_var (SCM self, SCM symbol_scm, SCM rest)
 
   TRY
     {
-      value = read_var_value (var, frame);
+      value = read_var_value (var, block, frame);
     }
   CATCH (except, RETURN_MASK_ALL)
     {
@@ -985,7 +1045,7 @@ gdbscm_unwind_stop_reason_string (SCM reason_scm)
   if (reason < UNWIND_FIRST || reason > UNWIND_LAST)
     scm_out_of_range (FUNC_NAME, reason_scm);
 
-  str = unwind_stop_reason_to_string (reason);
+  str = unwind_stop_reason_to_string ((enum unwind_stop_reason) reason);
   return gdbscm_scm_from_c_string (str);
 }
 
@@ -1015,80 +1075,89 @@ static const scheme_integer_constant frame_integer_constants[] =
 
 static const scheme_function frame_functions[] =
 {
-  { "frame?", 1, 0, 0, gdbscm_frame_p,
+  { "frame?", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_p),
     "\
 Return #t if the object is a <gdb:frame> object." },
 
-  { "frame-valid?", 1, 0, 0, gdbscm_frame_valid_p,
+  { "frame-valid?", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_valid_p),
     "\
 Return #t if the object is a valid <gdb:frame> object.\n\
 Frames become invalid when the inferior returns to its caller." },
 
-  { "frame-name", 1, 0, 0, gdbscm_frame_name,
+  { "frame-name", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_name),
     "\
 Return the name of the function corresponding to this frame,\n\
 or #f if there is no function." },
 
-  { "frame-arch", 1, 0, 0, gdbscm_frame_arch,
+  { "frame-arch", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_arch),
     "\
 Return the frame's architecture as a <gdb:arch> object." },
 
-  { "frame-type", 1, 0, 0, gdbscm_frame_type,
+  { "frame-type", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_type),
     "\
 Return the frame type, namely one of the gdb:*_FRAME constants." },
 
-  { "frame-unwind-stop-reason", 1, 0, 0, gdbscm_frame_unwind_stop_reason,
+  { "frame-unwind-stop-reason", 1, 0, 0,
+    as_a_scm_t_subr (gdbscm_frame_unwind_stop_reason),
     "\
 Return one of the gdb:FRAME_UNWIND_* constants explaining why\n\
 it's not possible to find frames older than this." },
 
-  { "frame-pc", 1, 0, 0, gdbscm_frame_pc,
+  { "frame-pc", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_pc),
     "\
 Return the frame's resume address." },
 
-  { "frame-block", 1, 0, 0, gdbscm_frame_block,
+  { "frame-block", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_block),
     "\
 Return the frame's code block, or #f if one cannot be found." },
 
-  { "frame-function", 1, 0, 0, gdbscm_frame_function,
+  { "frame-function", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_function),
     "\
 Return the <gdb:symbol> for the function corresponding to this frame,\n\
 or #f if there isn't one." },
 
-  { "frame-older", 1, 0, 0, gdbscm_frame_older,
+  { "frame-older", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_older),
     "\
 Return the frame immediately older (outer) to this frame,\n\
 or #f if there isn't one." },
 
-  { "frame-newer", 1, 0, 0, gdbscm_frame_newer,
+  { "frame-newer", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_newer),
     "\
 Return the frame immediately newer (inner) to this frame,\n\
 or #f if there isn't one." },
 
-  { "frame-sal", 1, 0, 0, gdbscm_frame_sal,
+  { "frame-sal", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_sal),
     "\
 Return the frame's symtab-and-line <gdb:sal> object." },
 
-  { "frame-read-var", 2, 0, 1, gdbscm_frame_read_var,
+  { "frame-read-var", 2, 0, 1, as_a_scm_t_subr (gdbscm_frame_read_var),
     "\
 Return the value of the symbol in the frame.\n\
 \n\
   Arguments: <gdb:frame> <gdb:symbol>\n\
          Or: <gdb:frame> string [#:block <gdb:block>]" },
 
-  { "frame-select", 1, 0, 0, gdbscm_frame_select,
+  { "frame-read-register", 2, 0, 0,
+    as_a_scm_t_subr (gdbscm_frame_read_register),
+    "\
+Return the value of the register in the frame.\n\
+\n\
+  Arguments: <gdb:frame> string" },
+
+  { "frame-select", 1, 0, 0, as_a_scm_t_subr (gdbscm_frame_select),
     "\
 Select this frame." },
 
-  { "newest-frame", 0, 0, 0, gdbscm_newest_frame,
+  { "newest-frame", 0, 0, 0, as_a_scm_t_subr (gdbscm_newest_frame),
     "\
 Return the newest frame." },
 
-  { "selected-frame", 0, 0, 0, gdbscm_selected_frame,
+  { "selected-frame", 0, 0, 0, as_a_scm_t_subr (gdbscm_selected_frame),
     "\
 Return the selected frame." },
 
-  { "unwind-stop-reason-string", 1, 0, 0, gdbscm_unwind_stop_reason_string,
+  { "unwind-stop-reason-string", 1, 0, 0,
+    as_a_scm_t_subr (gdbscm_unwind_stop_reason_string),
     "\
 Return a string explaining the unwind stop reason.\n\
 \n\

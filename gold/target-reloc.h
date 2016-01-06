@@ -1,6 +1,6 @@
 // target-reloc.h -- target specific relocation support  -*- C++ -*-
 
-// Copyright (C) 2006-2015 Free Software Foundation, Inc.
+// Copyright (C) 2006-2016 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -297,7 +297,6 @@ relocate_section(
 
       typename elfcpp::Elf_types<size>::Elf_WXword r_info = reloc.get_r_info();
       unsigned int r_sym = elfcpp::elf_r_sym<size>(r_info);
-      unsigned int r_type = elfcpp::elf_r_type<size>(r_info);
 
       const Sized_symbol<size>* sym;
 
@@ -400,9 +399,9 @@ relocate_section(
       if (offset < 0 || static_cast<section_size_type>(offset) >= view_size)
 	v = NULL;
 
-      if (!relocate.relocate(relinfo, target, output_section, i, reloc,
-			     r_type, sym, psymval, v, view_address + offset,
-			     view_size))
+      if (!relocate.relocate(relinfo, sh_type, target, output_section,
+			     i, prelocs, sym, psymval,
+			     v, view_address + offset, view_size))
 	continue;
 
       if (v == NULL)
@@ -443,7 +442,6 @@ apply_relocation(const Relocate_info<size, big_endian>* relinfo,
   // Construct the ELF relocation in a temporary buffer.
   const int reloc_size = elfcpp::Elf_sizes<size>::rela_size;
   unsigned char relbuf[reloc_size];
-  elfcpp::Rela<size, big_endian> rel(relbuf);
   elfcpp::Rela_write<size, big_endian> orel(relbuf);
   orel.put_r_offset(r_offset);
   orel.put_r_info(elfcpp::elf_r_info<size>(0, r_type));
@@ -461,7 +459,8 @@ apply_relocation(const Relocate_info<size, big_endian>* relinfo,
     symval.set_is_ifunc_symbol();
 
   Relocate relocate;
-  relocate.relocate(relinfo, target, NULL, -1U, rel, r_type, sym, &symval,
+  relocate.relocate(relinfo, elfcpp::SHT_RELA, target, NULL,
+		    -1U, relbuf, sym, &symval,
 		    view + r_offset, address + r_offset, view_size);
 }
 
@@ -619,7 +618,6 @@ relocate_relocs(
     size_t reloc_count,
     Output_section* output_section,
     typename elfcpp::Elf_types<size>::Elf_Off offset_in_output_section,
-    const Relocatable_relocs* rr,
     unsigned char* view,
     typename elfcpp::Elf_types<size>::Elf_Addr view_address,
     section_size_type view_size,
@@ -640,7 +638,7 @@ relocate_relocs(
 
   for (size_t i = 0; i < reloc_count; ++i, prelocs += reloc_size)
     {
-      Relocatable_relocs::Reloc_strategy strategy = rr->strategy(i);
+      Relocatable_relocs::Reloc_strategy strategy = relinfo->rr->strategy(i);
       if (strategy == Relocatable_relocs::RELOC_DISCARD)
 	continue;
 
@@ -666,6 +664,7 @@ relocate_relocs(
 
       // Get the new symbol index.
 
+      Output_section* os = NULL;
       unsigned int new_symndx;
       if (r_sym < local_count)
 	{
@@ -698,7 +697,7 @@ relocate_relocs(
 		unsigned int shndx =
 		  object->local_symbol_input_shndx(r_sym, &is_ordinary);
 		gold_assert(is_ordinary);
-		Output_section* os = object->output_section(shndx);
+		os = object->output_section(shndx);
 		gold_assert(os != NULL);
 		gold_assert(os->needs_symtab_index());
 		new_symndx = os->symtab_index();
@@ -780,7 +779,8 @@ relocate_relocs(
 		typename elfcpp::Elf_types<size>::Elf_Swxword addend;
 		addend = Reloc_types<sh_type, size, big_endian>::
 			   get_reloc_addend(&reloc);
-		addend = psymval->value(object, addend);
+		gold_assert(os != NULL);
+		addend = psymval->value(object, addend) - os->address();
 		Reloc_types<sh_type, size, big_endian>::
 		  set_reloc_addend(&reloc_write, addend);
 	      }

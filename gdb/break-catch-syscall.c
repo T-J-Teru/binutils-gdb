@@ -1,6 +1,6 @@
 /* Everything about syscall catchpoints, for GDB.
 
-   Copyright (C) 2009-2015 Free Software Foundation, Inc.
+   Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -85,7 +85,8 @@ get_catch_syscall_inferior_data (struct inferior *inf)
 {
   struct catch_syscall_inferior_data *inf_data;
 
-  inf_data = inferior_data (inf, catch_syscall_inferior_data);
+  inf_data = ((struct catch_syscall_inferior_data *)
+	      inferior_data (inf, catch_syscall_inferior_data));
   if (inf_data == NULL)
     {
       inf_data = XCNEW (struct catch_syscall_inferior_data);

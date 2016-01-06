@@ -56,10 +56,10 @@ bool __cdecl Dll_SimResume(const bool step);
 
 // Stop the simulation. Simulation might be continued with a call to
 // Dll_SimResume() afterwards.
-void __cdecl Dll_SimStop();
+void __cdecl Dll_SimStop(void);
 
 // Terminate the simulation and free the simulator.
-void __cdecl Dll_SimTerminate();
+void __cdecl Dll_SimTerminate(void);
 
 // Read data from the simulator memory.
 uint32_t __cdecl Dll_SimRead(const uint32_t addr, uint8_t* buffer, const uint32_t size);

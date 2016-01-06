@@ -1,5 +1,5 @@
 /* Linux-specific PROCFS manipulation routines.
-   Copyright (C) 2011-2015 Free Software Foundation, Inc.
+   Copyright (C) 2011-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -54,11 +54,12 @@ extern int linux_proc_pid_is_zombie_nowarn (pid_t pid);
 
 extern int linux_proc_pid_is_gone (pid_t pid);
 
-/* Return an opaque string identifying PID's NS namespace or NULL if
- * the information is unavailable.  The returned string must be
- * released with xfree.  */
+/* Return a string giving the thread's name or NULL if the
+   information is unavailable.  The returned value points to a statically
+   allocated buffer.  The value therefore becomes invalid at the next
+   linux_proc_tid_get_name call.  */
 
-extern char *linux_proc_pid_get_ns (pid_t pid, const char *ns);
+extern const char *linux_proc_tid_get_name (ptid_t ptid);
 
 /* Callback function for linux_proc_attach_tgid_threads.  If the PTID
    thread is not yet known, try to attach to it and return true,
@@ -72,5 +73,11 @@ extern void linux_proc_attach_tgid_threads (pid_t pid,
 
 /* Return true if the /proc/PID/task/ directory exists.  */
 extern int linux_proc_task_list_dir_exists (pid_t pid);
+
+/* Return the full absolute name of the executable file that was run
+   to create the process PID.  The returned value persists until this
+   function is next called.  */
+
+extern char *linux_proc_pid_to_exec_file (int pid);
 
 #endif /* COMMON_LINUX_PROCFS_H */

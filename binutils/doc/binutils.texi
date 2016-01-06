@@ -10,7 +10,7 @@
 
 @copying
 @c man begin COPYRIGHT
-Copyright @copyright{} 1991-2015 Free Software Foundation, Inc.
+Copyright @copyright{} 1991-2016 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3
@@ -234,8 +234,7 @@ a normal archive.  Instead the elements of the first archive are added
 individually to the second archive.
 
 The paths to the elements of the archive are stored relative to the
-archive itself.  For security reasons absolute paths and paths with a
-@code{/../} component are not allowed.
+archive itself.
 
 @cindex compatibility, @command{ar}
 @cindex @command{ar} compatibility
@@ -1108,6 +1107,7 @@ objcopy [@option{-F} @var{bfdname}|@option{--target=}@var{bfdname}]
         [@option{--localize-symbols=}@var{filename}]
         [@option{--globalize-symbols=}@var{filename}]
         [@option{--weaken-symbols=}@var{filename}]
+        [@option{--add-symbol} @var{name}=[@var{section}:]@var{value}[,@var{flags}]
         [@option{--alt-machine-code=}@var{index}]
         [@option{--prefix-symbols=}@var{string}]
         [@option{--prefix-sections=}@var{string}]
@@ -1512,6 +1512,18 @@ command line.  In this case, pass the original section name to
 @option{--update-section}, and the original and new section names to
 @option{--rename-section}.
 
+@item --add-symbol @var{name}=[@var{section}:]@var{value}[,@var{flags}]
+Add a new symbol named @var{name} while copying the file.  This option may be
+specified multiple times.  If the @var{section} is given, the symbol will be
+associated with and relative to that section, otherwise it will be an ABS
+symbol.  Specifying an undefined section will result in a fatal error.  There
+is no check for the value, it will be taken as specified.  Symbol flags can
+be specified and not all flags will be meaningful for all object file
+formats.  By default, the symbol will be global.  The special flag
+'before=@var{othersym}' will insert the new symbol in front of the specified
+@var{othersym}, otherwise the symbol(s) will be added at the end of the
+symbol table in the order they appear.
+
 @item --rename-section @var{oldname}=@var{newname}[,@var{flags}]
 Rename a section from @var{oldname} to @var{newname}, optionally
 changing the section's flags to @var{flags} in the process.  This has
@@ -1738,6 +1750,12 @@ Strip a file, removing contents of any sections that would not be
 stripped by @option{--strip-debug} and leaving the debugging sections
 intact.  In ELF files, this preserves all note sections in the output.
 
+Note - the section headers of the stripped sections are preserved,
+including their sizes, but the contents of the section are discarded.
+The section headers are preserved so that other tools can match up the
+debuginfo file with the real executable, even if that executable has
+been relocated to a different address space.
+
 The intention is that this option will be used in conjunction with
 @option{--add-gnu-debuglink} to create a two part executable.  One a
 stripped binary which will occupy less space in RAM and in a
@@ -1851,10 +1869,25 @@ It can also be a useful way of reducing the size of a @option{--just-symbols}
 linker input file.
 
 @item --compress-debug-sections
-Compress DWARF debug sections using zlib.  The debug sections are
-renamed to begin with @samp{.zdebug} instead of @samp{.debug}.  Note -
-if compression would actually make a section @emph{larger} then it is
-not compressed or renamed.
+Compress DWARF debug sections using zlib with SHF_COMPRESSED from the
+ELF ABI.  Note - if compression would actually make a section
+@emph{larger}, then it is not compressed.
+
+@item --compress-debug-sections=none
+@itemx --compress-debug-sections=zlib
+@itemx --compress-debug-sections=zlib-gnu
+@itemx --compress-debug-sections=zlib-gabi
+For ELF files, these options control how DWARF debug sections are
+compressed.  @option{--compress-debug-sections=none} is equivalent
+to @option{--nocompress-debug-sections}.
+@option{--compress-debug-sections=zlib} and
+@option{--compress-debug-sections=zlib-gabi} are equivalent to
+@option{--compress-debug-sections}.
+@option{--compress-debug-sections=zlib-gnu} compresses DWARF debug
+sections using zlib.  The debug sections are renamed to begin with
+@samp{.zdebug} instead of @samp{.debug}.  Note - if compression would
+actually make a section @emph{larger}, then it is not compressed nor
+renamed.
 
 @item --decompress-debug-sections
 Decompress DWARF debug sections using zlib.  The original section
@@ -2035,6 +2068,15 @@ expected to contain instructions.
 Like @option{-d}, but disassemble the contents of all sections, not just
 those expected to contain instructions.
 
+This option also has a subtle effect on the disassembly of
+instructions in code sections.  When option @option{-d} is in effect
+objdump will assume that any symbols present in a code section occur
+on the boundary between instructions and it will refuse to disassemble
+across such a boundary.  When option @option{-D} is in effect however
+this assumption is supressed.  This means that it is possible for the
+output of @option{-d} and @option{-D} to differ if, for example, data
+is stored in code sections.
+
 If the target is an ARM architecture this switch also has the effect
 of forcing the disassembler to decode pieces of data found in code
 sections as if they were instructions.
@@ -2168,6 +2210,10 @@ Select disassembly for the given architecture.
 @item intel
 @itemx att
 Select between intel syntax mode and AT&T syntax mode.
+
+@item amd64
+@itemx intel64
+Select between AMD64 ISA and Intel64 ISA.
 
 @item intel-mnemonic
 @itemx att-mnemonic
@@ -2764,6 +2810,7 @@ strings [@option{-afovV}] [@option{-}@var{min-len}]
         [@option{-}] [@option{--all}] [@option{--print-file-name}]
         [@option{-T} @var{bfdname}] [@option{--target=}@var{bfdname}]
         [@option{-w}] [@option{--include-all-whitespace}]
+        [@option{-s}] [@option{--output-separator}@var{sep_string}]
         [@option{--help}] [@option{--version}] @var{file}@dots{}
 @c man end
 @end smallexample
@@ -2868,6 +2915,13 @@ By default tab and space characters are included in the strings that
 are displayed, but other whitespace characters, such a newlines and
 carriage returns, are not.  The @option{-w} option changes this so
 that all whitespace characters are considered to be part of a string.
+
+@item -s
+@itemx --output-separator
+By default, output strings are delimited by a new-line. This option
+allows you to supply any string to be used as the output record
+separator.  Useful with --include-all-whitespace where strings
+may contain new-lines internally.
 @end table
 
 @c man end
@@ -3060,9 +3114,16 @@ When stripping a file, perhaps with @option{--strip-debug} or
 which would otherwise get stripped.
 
 @item --only-keep-debug
-Strip a file, removing contents of any sections that would not be
+Strip a file, emptying the contents of any sections that would not be
 stripped by @option{--strip-debug} and leaving the debugging sections
-intact.  In ELF files, this preserves all note sections in the output.
+intact.  In ELF files, this preserves all the note sections in the
+output as well.
+
+Note - the section headers of the stripped sections are preserved,
+including their sizes, but the contents of the section are discarded.
+The section headers are preserved so that other tools can match up the
+debuginfo file with the real executable, even if that executable has
+been relocated to a different address space.
 
 The intention is that this option will be used in conjunction with
 @option{--add-gnu-debuglink} to create a two part executable.  One a
@@ -4345,6 +4406,7 @@ readelf [@option{-a}|@option{--all}]
         [@option{-x} <number or name>|@option{--hex-dump=}<number or name>]
         [@option{-p} <number or name>|@option{--string-dump=}<number or name>]
         [@option{-R} <number or name>|@option{--relocated-dump=}<number or name>]
+        [@option{-z}|@option{--decompress}]
         [@option{-c}|@option{--archive-index}]
         [@option{-w[lLiaprmfFsoRt]}|
          @option{--debug-dump}[=rawline,=decodedline,=info,=abbrev,=pubnames,=aranges,=macro,=frames,=frames-interp,=str,=loc,=Ranges,=pubtypes,=trace_info,=trace_abbrev,=trace_aranges,=gdb_index]]
@@ -4493,6 +4555,12 @@ Displays the contents of the indicated section as printable strings.
 A number identifies a particular section by index in the section table;
 any other string identifies all sections with that name in the object file.
 
+@item -z
+@itemx --decompress
+Requests that the section(s) being dumped by @option{x}, @option{R} or
+@option{p} options are decompressed before being displayed.  If the
+section(s) are not compressed then they are displayed as is.
+
 @item -c
 @itemx --archive-index
 @cindex Archive file symbol index information
@@ -4615,8 +4683,8 @@ Set the matching input ELF machine type to @var{machine}.  If
 @option{--input-mach} isn't specified, it will match any ELF
 machine types.
 
-The supported ELF machine types are, @var{L1OM}, @var{K1OM} and
-@var{x86-64}.
+The supported ELF machine types are, @var{i386}, @var{IAMCU}, @var{L1OM},
+@var{K1OM} and @var{x86-64}.
 
 @item --output-mach=@var{machine}
 Change the ELF machine type in the ELF header to @var{machine}.  The

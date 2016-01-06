@@ -638,7 +638,6 @@ sim_hw_cflags
 sim_default_model
 sim_scache
 sim_float
-sim_hostendian
 sim_endian
 sim_bitsize
 sim_assert
@@ -2050,7 +2049,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 # SIM_AC_OUTPUT is a cover function to AC_OUTPUT to generate the Makefile.
 # It is intended to be invoked last.
 #
-# The simulator's configure.in should look like:
+# The simulator's configure.ac should look like:
 #
 # dnl Process this file with autoconf to produce a configure script.
 # AC_PREREQ(2.64)dnl
@@ -2101,7 +2100,6 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 # Helper to AC_CHECK_DECLS, which generates the check for a single
 # SYMBOL with INCLUDES, performs the AC_DEFINE, then expands
 # ACTION-IF-FOUND or ACTION-IF-NOT-FOUND.
-
 
 
 
@@ -3680,10 +3678,6 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 # ZW_CREATE_DEPDIR
 # ----------------
 # As AM_SET_DEPDIR, but also create the directory at config.status time.
-
-
-
-
 
 
 

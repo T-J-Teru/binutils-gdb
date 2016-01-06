@@ -1,5 +1,5 @@
 /* <proc_service.h> replacement for systems that don't have it.
-   Copyright (C) 2000-2015 Free Software Foundation, Inc.
+   Copyright (C) 2000-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -69,6 +69,10 @@ typedef void *psaddr_t;
 
 #ifndef HAVE_PRGREGSET_T
 typedef elf_gregset_t prgregset_t;
+#endif
+
+#ifndef HAVE_PRFPREGSET_T
+typedef elf_fpregset_t prfpregset_t;
 #endif
 
 /* This type is opaque in this interface.  It's defined by the user of

@@ -1,5 +1,5 @@
 /* Simulation code for the CR16 processor.
-   Copyright (C) 2009-2015 Free Software Foundation, Inc.
+   Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
    This file is part of simulators.
 
@@ -21,19 +21,13 @@
 
 #include "sim-basics.h"
 
-typedef address_word sim_cia;
 typedef long int           word;
 typedef unsigned long int  uword;
-
-typedef struct _sim_cpu SIM_CPU;
 
 #include "sim-base.h"
 #include "bfd.h"
 
 #include "cr16_sim.h"
-
-#define CIA_GET(cpu)     PC
-#define CIA_SET(cpu,val) SET_PC (val)
 
 struct _sim_cpu {
 
@@ -43,11 +37,6 @@ struct _sim_cpu {
 struct sim_state {
 
   sim_cpu *cpu[MAX_NR_PROCESSORS];
-#if (WITH_SMP)
-#define STATE_CPU(sd,n) ((sd)->cpu[n])
-#else
-#define STATE_CPU(sd,n) ((sd)->cpu[0])
-#endif
 
   sim_state_base base;
 };

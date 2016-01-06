@@ -1,6 +1,6 @@
 // target.cc -- target support for gold.
 
-// Copyright (C) 2009-2015 Free Software Foundation, Inc.
+// Copyright (C) 2009-2016 Free Software Foundation, Inc.
 // Written by Doug Kwan <dougkwan@google.com>.
 
 // This file is part of gold.
@@ -161,7 +161,8 @@ Target::do_is_call_to_non_split(const Symbol* sym, unsigned int) const
 
 void
 Target::do_calls_non_split(Relobj* object, unsigned int, section_offset_type,
-			   section_size_type, unsigned char*, section_size_type,
+			   section_size_type, const unsigned char*, size_t,
+			   unsigned char*, section_size_type,
 			   std::string*, std::string*) const
 {
   static bool warned;

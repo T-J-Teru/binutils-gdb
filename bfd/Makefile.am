@@ -1,17 +1,17 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2012-2015 Free Software Foundation, Inc.
+#   Copyright (C) 2012-2016 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; see the file COPYING3.  If not see
 # <http://www.gnu.org/licenses/>.
@@ -112,6 +112,7 @@ ALL_MACHINES = \
 	cpu-hppa.lo \
 	cpu-i370.lo \
 	cpu-i386.lo \
+	cpu-iamcu.lo \
 	cpu-l1om.lo \
 	cpu-k1om.lo \
 	cpu-i860.lo \
@@ -199,6 +200,7 @@ ALL_MACHINES_CFILES = \
 	cpu-hppa.c \
 	cpu-i370.c \
 	cpu-i386.c \
+	cpu-iamcu.c \
 	cpu-l1om.c \
 	cpu-k1om.c \
 	cpu-i860.c \
@@ -409,6 +411,7 @@ BFD32_BACKENDS = \
 	m88kopenbsd.lo \
 	mach-o.lo \
 	mach-o-i386.lo \
+	mach-o-arm.lo \
 	mipsbsd.lo \
 	newsos3.lo \
 	nlm.lo \
@@ -601,6 +604,7 @@ BFD32_BACKENDS_CFILES = \
 	m88kopenbsd.c \
 	mach-o.c \
 	mach-o-i386.c \
+	mach-o-arm.c \
 	mipsbsd.c \
 	newsos3.c \
 	nlm.c \
@@ -683,6 +687,7 @@ BFD64_BACKENDS = \
 	elfn32-mips.lo \
 	elfxx-ia64.lo \
 	elfxx-mips.lo \
+	mach-o-aarch64.lo \
 	mach-o-x86-64.lo \
 	mmo.lo \
 	nlm32-alpha.lo \
@@ -721,6 +726,7 @@ BFD64_BACKENDS_CFILES = \
 	elfxx-aarch64.c \
 	elfxx-ia64.c \
 	elfxx-mips.c \
+	mach-o-aarch64.c \
 	mach-o-x86-64.c \
 	mmo.c \
 	nlm32-alpha.c \
@@ -862,7 +868,7 @@ noinst_LIBRARIES = libbfd.a
 libbfd_a_SOURCES =
 
 stamp-lib: libbfd.la
-	libtooldir=`$(LIBTOOL) --config | sed -n -e 's/^objdir=//p'`; \
+	libtooldir=`$(LIBTOOL) --config | $(SED) -n -e 's/^objdir=//p'`; \
 	if [ -f $$libtooldir/libbfd.a ]; then \
 	  cp $$libtooldir/libbfd.a libbfd.tmp; \
 	  $(RANLIB) libbfd.tmp; \
@@ -877,7 +883,7 @@ libbfd.a: stamp-lib ; @true
 # itself, but is included by targets.c.
 targmatch.h: config.bfd targmatch.sed
 	rm -f targmatch.h
-	sed -f $(srcdir)/targmatch.sed < $(srcdir)/config.bfd > targmatch.new
+	$(SED) -f $(srcdir)/targmatch.sed < $(srcdir)/config.bfd > targmatch.new
 	mv -f targmatch.new targmatch.h
 
 # When compiling archures.c and targets.c, supply the default target
@@ -921,49 +927,49 @@ endif
 
 elf32-target.h : elfxx-target.h
 	rm -f elf32-target.h
-	sed -e s/NN/32/g < $(srcdir)/elfxx-target.h > elf32-target.new
+	$(SED) -e s/NN/32/g < $(srcdir)/elfxx-target.h > elf32-target.new
 	mv -f elf32-target.new elf32-target.h
 
 elf64-target.h : elfxx-target.h
 	rm -f elf64-target.h
-	sed -e s/NN/64/g < $(srcdir)/elfxx-target.h > elf64-target.new
+	$(SED) -e s/NN/64/g < $(srcdir)/elfxx-target.h > elf64-target.new
 	mv -f elf64-target.new elf64-target.h
 
 elf32-aarch64.c : elfnn-aarch64.c
 	rm -f elf32-aarch64.c
 	echo "#line 1 \"$(srcdir)/elfnn-aarch64.c\"" > elf32-aarch64.new
-	sed -e s/NN/32/g < $(srcdir)/elfnn-aarch64.c >> elf32-aarch64.new
+	$(SED) -e s/NN/32/g < $(srcdir)/elfnn-aarch64.c >> elf32-aarch64.new
 	mv -f elf32-aarch64.new elf32-aarch64.c
 
 elf64-aarch64.c : elfnn-aarch64.c
 	rm -f elf64-aarch64.c
 	echo "#line 1 \"$(srcdir)/elfnn-aarch64.c\"" > elf64-aarch64.new
-	sed -e s/NN/64/g < $(srcdir)/elfnn-aarch64.c >> elf64-aarch64.new
+	$(SED) -e s/NN/64/g < $(srcdir)/elfnn-aarch64.c >> elf64-aarch64.new
 	mv -f elf64-aarch64.new elf64-aarch64.c
 
 elf32-ia64.c : elfnn-ia64.c
 	rm -f elf32-ia64.c
-	sed -e s/NN/32/g < $(srcdir)/elfnn-ia64.c > elf32-ia64.new
+	$(SED) -e s/NN/32/g < $(srcdir)/elfnn-ia64.c > elf32-ia64.new
 	mv -f elf32-ia64.new elf32-ia64.c
 
 elf64-ia64.c : elfnn-ia64.c
 	rm -f elf64-ia64.c
-	sed -e s/NN/64/g < $(srcdir)/elfnn-ia64.c > elf64-ia64.new
+	$(SED) -e s/NN/64/g < $(srcdir)/elfnn-ia64.c > elf64-ia64.new
 	mv -f elf64-ia64.new elf64-ia64.c
 
 peigen.c : peXXigen.c
 	rm -f peigen.c
-	sed -e s/XX/pe/g < $(srcdir)/peXXigen.c > peigen.new
+	$(SED) -e s/XX/pe/g < $(srcdir)/peXXigen.c > peigen.new
 	mv -f peigen.new peigen.c
 
 pepigen.c : peXXigen.c
 	rm -f pepigen.c
-	sed -e s/XX/pep/g < $(srcdir)/peXXigen.c > pepigen.new
+	$(SED) -e s/XX/pep/g < $(srcdir)/peXXigen.c > pepigen.new
 	mv -f pepigen.new pepigen.c
 
 pex64igen.c: peXXigen.c
 	rm -f pex64igen.c
-	sed -e s/XX/pex64/g < $(srcdir)/peXXigen.c > pex64igen.new
+	$(SED) -e s/XX/pex64/g < $(srcdir)/peXXigen.c > pex64igen.new
 	mv -f pex64igen.new pex64igen.c
 
 BFD_H_DEPS= $(INCDIR)/ansidecl.h $(INCDIR)/symcat.h
@@ -1044,18 +1050,18 @@ DISTCLEANFILES = $(BUILD_CFILES) $(BUILD_HFILES) libtool-soversion
 
 bfdver.h: $(srcdir)/version.h $(srcdir)/development.sh $(srcdir)/Makefile.in
 	@echo "creating $@"
-	@bfd_version=`echo "$(VERSION)" | sed -e 's/\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\).*/\1.00\2.00\3.00\4.00\5/' -e 's/\([^\.]*\)\..*\(..\)\..*\(..\)\..*\(..\)\..*\(..\)$$/\1\2\3\4\5/'` ;\
+	@bfd_version=`echo "$(VERSION)" | $(SED) -e 's/\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\).*/\1.00\2.00\3.00\4.00\5/' -e 's/\([^\.]*\)\..*\(..\)\..*\(..\)\..*\(..\)\..*\(..\)$$/\1\2\3\4\5/'` ;\
 	bfd_version_string="\"$(VERSION)\"" ;\
 	bfd_soversion="$(VERSION)" ;\
 	bfd_version_package="\"$(PKGVERSION)\"" ;\
 	report_bugs_to="\"$(REPORT_BUGS_TO)\"" ;\
 	. $(srcdir)/development.sh ;\
 	if test "$$development" = true ; then \
-	  bfd_version_date=`sed -n -e 's/.*DATE //p' < $(srcdir)/version.h` ;\
+	  bfd_version_date=`$(SED) -n -e 's/.*DATE //p' < $(srcdir)/version.h` ;\
 	  bfd_version_string="\"$(VERSION).$${bfd_version_date}\"" ;\
 	  bfd_soversion="$(VERSION).$${bfd_version_date}" ;\
 	fi ;\
-	sed -e "s,@bfd_version@,$$bfd_version," \
+	$(SED) -e "s,@bfd_version@,$$bfd_version," \
 	    -e "s,@bfd_version_string@,$$bfd_version_string," \
 	    -e "s,@bfd_version_package@,$$bfd_version_package," \
 	    -e "s,@report_bugs_to@,$$report_bugs_to," \

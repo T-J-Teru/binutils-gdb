@@ -1,5 +1,5 @@
 # Expect script for ld-x86_64 tests
-#   Copyright (C) 2002-2015 Free Software Foundation, Inc.
+#   Copyright (C) 2002-2016 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -52,7 +52,7 @@ set x86_64tests {
     {"TLS -fpic -shared transitions"
      "-shared -melf_x86_64 --no-ld-generated-unwind-info" ""
      "--64" {tlspic1.s tlspic2.s}
-     {{readelf -WSsrl tlspic.rd} {objdump -drj.text tlspic.dd}
+     {{readelf -WSsrl tlspic.rd} {objdump -drj.text\ -Mintel64 tlspic.dd}
       {objdump -sj.got tlspic.sd} {objdump -sj.tdata tlspic.td}}
       "libtlspic.so"}
     {"TLS descriptor -fpic -shared transitions"
@@ -78,7 +78,7 @@ set x86_64tests {
     {"TLS with global dynamic and descriptors"
      "-shared -melf_x86_64 --no-ld-generated-unwind-info" ""
      "--64" {tlsgdesc.s}
-     {{readelf -WSsrl tlsgdesc.rd} {objdump -drj.text tlsgdesc.dd}}
+     {{readelf -WSsrl tlsgdesc.rd} {objdump -drj.text\ -Mintel64 tlsgdesc.dd}}
       "libtlsgdesc.so"}
     {"TLS in debug sections" "-melf_x86_64" ""
      "--64" {tlsg.s}
@@ -211,6 +211,8 @@ run_dump_test "tlsie3"
 run_dump_test "hidden1"
 run_dump_test "hidden2"
 run_dump_test "hidden3"
+run_dump_test "hidden4"
+run_dump_test "hidden5"
 run_dump_test "protected1"
 run_dump_test "protected2"
 run_dump_test "protected2-l1om"
@@ -218,6 +220,10 @@ run_dump_test "protected3"
 run_dump_test "protected3-l1om"
 run_dump_test "protected4"
 run_dump_test "protected5"
+run_dump_test "protected6a"
+run_dump_test "protected6b"
+run_dump_test "protected7a"
+run_dump_test "protected7b"
 run_dump_test "tlsle1"
 run_dump_test "tlspie1"
 run_dump_test "unique1"
@@ -315,9 +321,41 @@ run_dump_test "mov1a"
 run_dump_test "mov1b"
 run_dump_test "mov1c"
 run_dump_test "mov1d"
+run_dump_test "mov2a"
+run_dump_test "mov2b"
+run_dump_test "mov2c"
+run_dump_test "mov2d"
+run_dump_test "load1a"
+run_dump_test "load1b"
+run_dump_test "load1c"
+run_dump_test "load1d"
+run_dump_test "load1a-nacl"
+run_dump_test "load1b-nacl"
+run_dump_test "load1c-nacl"
+run_dump_test "load1d-nacl"
+run_dump_test "call1a"
+run_dump_test "call1b"
+run_dump_test "call1c"
+run_dump_test "call1d"
+run_dump_test "call1e"
+run_dump_test "call1f"
+run_dump_test "call1g"
+run_dump_test "call1h"
+run_dump_test "call1i"
 run_dump_test "pr17935-1"
 run_dump_test "pr17935-2"
 run_dump_test "pr18160"
+run_dump_test "pr18176"
+run_dump_test "pr18801"
+run_dump_test "pr18815"
+run_dump_test "pr19013"
+run_dump_test "pr19013-x32"
+run_dump_test "pr19013-nacl"
+run_dump_test "pr19162"
+run_dump_test "pr19175"
+
+# Add $PLT_CFLAGS if PLT is expected.
+global PLT_CFLAGS
 
 # Must be native with the C compiler
 if { [isnative] && [which $CC] != 0 } {
@@ -369,7 +407,7 @@ if { [isnative] && [which $CC] != 0 } {
 	[list \
 	    "Build libplt-main3.a" \
 	    "" \
-	    "-fPIC" \
+	    "-fPIC $PLT_CFLAGS" \
 	    { plt-main3.c } \
 	    {{readelf {-Wr} plt-main3.rd}} \
 	    "libplt-main3.a" \
@@ -377,7 +415,7 @@ if { [isnative] && [which $CC] != 0 } {
 	[list \
 	    "Build libplt-main4.a" \
 	    "" \
-	    "-fPIC" \
+	    "-fPIC $PLT_CFLAGS" \
 	    { plt-main4.c } \
 	    {{readelf {-Wr} plt-main4.rd}} \
 	    "libplt-main4.a" \
@@ -433,6 +471,14 @@ if { [isnative] && [which $CC] != 0 } {
 	    "pr17689.so" \
 	] \
 	[list \
+	    "Build pr17689now.so with -z now" \
+	    "-shared -Wl,-z,now" \
+	    "-fPIC" \
+	    { pr17689a.c } \
+	    {{readelf {-Wr} pr17689now.rd}} \
+	    "pr17689now.so" \
+	] \
+	[list \
 	    "Build pr17689 with PIE without -fPIE" \
 	    "tmpdir/pr17689.so -pie" \
 	    "" \
@@ -441,12 +487,84 @@ if { [isnative] && [which $CC] != 0 } {
 	    "pr17689" \
 	] \
 	[list \
+	    "Build pr17689 with PIE -z now without -fPIE" \
+	    "tmpdir/pr17689.so -pie -Wl,-z,now" \
+	    "" \
+	    { pr17689b.S } \
+	    {{readelf {-Wr} pr17689now.rd}} \
+	    "pr17689now" \
+	] \
+	[list \
 	    "Build pr17827 with PIE without -fPIE" \
 	    "tmpdir/pr17689.so -pie" \
 	    "" \
 	    { pr17689b.S } \
 	    {{readelf {-Wr} pr17827.rd}} \
 	    "pr17827" \
+	] \
+	[list \
+	    "Build pr18900.so" \
+	    "-shared" \
+	    "-fPIC" \
+	    { pr18900a.c } \
+	    "" \
+	    "pr18900.so" \
+	] \
+	[list \
+	    "Build pr18900a" \
+	    "tmpdir/pr18900.so" \
+	    "" \
+	    { pr18900b.c pr18900c.c } \
+	    {{readelf {-Wrd} pr18900a.rd}} \
+	    "pr18900a" \
+	] \
+	[list \
+	    "Build pr18900b" \
+	    "tmpdir/pr18900.so" \
+	    "" \
+	    { pr18900b.c pr18900c.c } \
+	    {{readelf {-Wrd} pr18900b.rd}} \
+	    "pr18900b" \
+	] \
+	[list \
+	    "Build pr19031.so" \
+	    "-shared" \
+	    "-fPIC" \
+	    { pr19031a.c } \
+	    "" \
+	    "pr19031.so" \
+	] \
+	[list \
+	    "Build gotpcrel1d.so" \
+	    "-shared" \
+	    "" \
+	    { gotpcrel1d.S } \
+	    "" \
+	    "gotpcrel1d.so" \
+	] \
+	[list \
+	    "Build gotpcrel1" \
+	    "tmpdir/gotpcrel1d.so" \
+	    "" \
+	    { gotpcrel1a.S gotpcrel1b.c gotpcrel1c.c } \
+	    {{objdump {-dw} gotpcrel1.dd}} \
+	    "gotpcrel1" \
+	] \
+	[list \
+	    "Build pr19319.so" \
+	    "-shared" \
+	    "" \
+	    { pr19319a.S } \
+	    "" \
+	    "pr19319.so" \
+	] \
+	[list \
+	    "Build pr19319" \
+	    "-pie -nostdlib -nostartfiles tmpdir/pr19319.so" \
+	    "" \
+	    { pr19319b.S } \
+	    {{objdump {-dw} pr19319.dd}} \
+	    "pr19319" \
 	] \
     ]
 
@@ -485,6 +603,38 @@ if { [isnative] && [which $CC] != 0 } {
 	    { pr17689b.S } \
 	    "pr17689" \
 	    "pr17689.out" \
+	] \
+	[list \
+	    "Run pr17689 with PIE -z now without -fPIE" \
+	    "tmpdir/pr17689.so -pie -z now" \
+	    "" \
+	    { pr17689b.S } \
+	    "pr17689now" \
+	    "pr17689.out" \
+	] \
+	[list \
+	    "Run pr18900" \
+	    "tmpdir/pr18900.so" \
+	    "" \
+	    { pr18900b.c pr18900c.c } \
+	    "pr18900" \
+	    "pr18900.out" \
+	] \
+	[list \
+	    "Run pr19031" \
+	    "tmpdir/pr19031.so" \
+	    "" \
+	    { pr19031b.S pr19031c.c } \
+	    "pr19031" \
+	    "pr19031.out" \
+	] \
+	[list \
+	    "Run gotpcrel1" \
+	    "tmpdir/gotpcrel1d.so" \
+	    "" \
+	    { gotpcrel1a.S gotpcrel1b.c gotpcrel1c.c } \
+	    "gotpcrel1" \
+	    "gotpcrel1.out" \
 	] \
     ]
 
@@ -542,3 +692,5 @@ if { ![istarget "x86_64-*-linux*"]} {
 
 # Linux only tests
 run_dump_test "pr17618"
+run_dump_test "pltgot-1"
+run_dump_test "pltgot-2"

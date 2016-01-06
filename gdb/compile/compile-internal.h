@@ -1,5 +1,5 @@
 /* Header file for GDB compile command and supporting functions.
-   Copyright (C) 2014-2015 Free Software Foundation, Inc.
+   Copyright (C) 2014-2016 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -19,6 +19,10 @@
 
 #include "hashtab.h"
 #include "gcc-c-interface.h"
+#include "common/enum-flags.h"
+
+/* enum-flags wrapper.  */
+DEF_ENUM_FLAGS_TYPE (enum gcc_qualifiers, gcc_qualifiers_flags);
 
 /* Debugging flag for the "compile" family of commands.  */
 
@@ -84,6 +88,10 @@ struct compile_c_instance
 #define COMPILE_I_SIMPLE_REGISTER_STRUCT_TAG "__gdb_regs"
 #define COMPILE_I_SIMPLE_REGISTER_ARG_NAME "__regs"
 #define COMPILE_I_SIMPLE_REGISTER_DUMMY "_dummy"
+#define COMPILE_I_PRINT_OUT_ARG_TYPE "void *"
+#define COMPILE_I_PRINT_OUT_ARG "__gdb_out_param"
+#define COMPILE_I_EXPR_VAL "__gdb_expr_val"
+#define COMPILE_I_EXPR_PTR_TYPE "__gdb_expr_ptr_type"
 
 /* Call gdbarch_register_name (GDBARCH, REGNUM) and convert its result
    to a form suitable for the compiler source.  The register names

@@ -1,6 +1,6 @@
 /* Interface between gdb and its extension languages.
 
-   Copyright (C) 2014-2015 Free Software Foundation, Inc.
+   Copyright (C) 2014-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -259,5 +259,9 @@ extern xmethod_worker_vec *get_matching_xmethod_workers
   (struct type *, const char *);
 
 extern struct type **get_xmethod_arg_types (struct xmethod_worker *, int *);
+
+extern struct type *get_xmethod_result_type (struct xmethod_worker *,
+					     struct value *object,
+					     struct value **args, int nargs);
 
 #endif /* EXTENSION_H */

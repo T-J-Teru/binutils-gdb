@@ -1,5 +1,5 @@
 # Makefile fragment for common parts of all simulators.
-# Copyright 1997-2015 Free Software Foundation, Inc.
+# Copyright 1997-2016 Free Software Foundation, Inc.
 # Contributed by Cygnus Support.
 
 # This program is free software; you can redistribute it and/or modify
@@ -72,7 +72,9 @@ INSTALL_DATA = @INSTALL_DATA@
 CC = @CC@
 CC_FOR_BUILD = @CC_FOR_BUILD@
 CFLAGS = @CFLAGS@
-SIM_BSWAP = @sim_bswap@
+CPPFLAGS = @CPPFLAGS@
+CXXFLAGS = @CXXFLAGS@
+LDFLAGS = @LDFLAGS@
 SIM_CFLAGS = @sim_cflags@
 SIM_DEBUG = @sim_debug@
 SIM_TRACE = @sim_trace@
@@ -88,7 +90,6 @@ SIM_FLOAT = @sim_float@
 SIM_HW_CFLAGS = @sim_hw_cflags@
 SIM_HW_OBJS = @sim_hw_objs@
 SIM_HW = @sim_hw@
-SIM_HOSTENDIAN = @sim_hostendian@
 SIM_INLINE = @sim_inline@
 SIM_PACKAGES = @sim_packages@
 SIM_REGPARM = @sim_regparm@
@@ -173,20 +174,30 @@ SIM_COMMON_HW_OBJS = \
 SIM_NEW_COMMON_OBJS = \
 	sim-arange.o \
 	sim-bits.o \
+	sim-close.o \
 	sim-command.o \
 	sim-config.o \
 	sim-core.o \
+	sim-cpu.o \
 	sim-endian.o \
+	sim-engine.o \
 	sim-events.o \
 	sim-fpu.o \
+	sim-hload.o \
+	sim-hrw.o \
 	sim-io.o \
 	sim-info.o \
 	sim-load.o \
 	sim-memopt.o \
+	sim-model.o \
 	sim-module.o \
 	sim-options.o \
 	sim-profile.o \
+	sim-reason.o \
+	sim-reg.o \
 	sim-signal.o \
+	sim-stop.o \
+	sim-syscall.o \
 	sim-trace.o \
 	sim-utils.o \
 	sim-watch.o \
@@ -222,7 +233,6 @@ CONFIG_CFLAGS = \
 	$(SIM_DEFAULT_MODEL) \
 	$(SIM_TRACE) \
 	$(SIM_PROFILE) \
-	$(SIM_BSWAP) \
 	$(SIM_ASSERT) \
 	$(SIM_ALIGNMENT) \
 	$(SIM_BITSIZE) \
@@ -230,7 +240,6 @@ CONFIG_CFLAGS = \
 	$(SIM_ENVIRONMENT) \
 	$(SIM_FLOAT) \
 	$(SIM_HW_CFLAGS) \
-	$(SIM_HOSTENDIAN) \
 	$(SIM_INLINE) \
 	$(SIM_PACKAGES) \
 	$(SIM_REGPARM) \
@@ -254,13 +263,14 @@ BUILD_CFLAGS = -g -O $(CSEARCH)
 
 COMMON_DEP_CFLAGS = $(CONFIG_CFLAGS) $(CSEARCH)
 
+ZLIB = @zlibdir@ -lz
 LIBIBERTY_LIB = ../../libiberty/libiberty.a
 BFD_LIB = ../../bfd/libbfd.a
 @PLUGINS_TRUE@LIBDL = @lt_cv_dlopen_libs@
 OPCODES_LIB = ../../opcodes/libopcodes.a
 LIBINTL = @LIBINTL@
 LIBINTL_DEP = @LIBINTL_DEP@
-CONFIG_LIBS = @LIBS@
+CONFIG_LIBS = @LIBS@ $(ZLIB)
 LIBDEPS = $(BFD_LIB) $(OPCODES_LIB) $(LIBINTL_DEP) $(LIBIBERTY_LIB) \
 	$(SIM_EXTRA_LIBDEPS)
 EXTRA_LIBS = $(BFD_LIB) $(OPCODES_LIB) $(LIBINTL) $(LIBIBERTY_LIB) \
@@ -301,8 +311,9 @@ stamp-tvals: gentmap
 	$(SHELL) $(srcroot)/move-if-change tmp-tmap.c targ-map.c
 	touch stamp-tvals
 
-version.c: Makefile $(srccom)/create-version.sh ../../bfd/version.h ../../gdb/version.in
-	$(SHELL) $(srccom)/create-version.sh $(srcsim) $(host_alias) $(target_alias) version.c
+version.c: Makefile $(srcroot)/gdb/version.in $(srcroot)/bfd/version.h $(srcroot)/gdb/common/create-version.sh
+	$(SHELL) $(srcroot)/gdb/common/create-version.sh $(srcroot)/gdb \
+	    $(host_alias) $(target_alias) version.c
 
 #
 # Rules for building sim-* components.  Triggered by listing the corresponding
@@ -347,7 +358,6 @@ sim-base_h = $(srccom)/sim-base.h \
 		$(sim-cpu_h)
 sim-basics_h = $(srccom)/sim-basics.h \
 		../common/cconfig.h \
-		tconfig.h \
 		$(sim-config_h) \
 		$(callback_h) \
 		$(sim-inline_h) \
@@ -522,7 +532,7 @@ clean: $(SIM_EXTRA_CLEAN)
 distclean mostlyclean maintainer-clean realclean: clean $(SIM_EXTRA_DISTCLEAN)
 	rm -f TAGS
 	rm -f Makefile config.cache config.log config.status .gdbinit
-	rm -f tconfig.h config.h stamp-h
+	rm -f config.h stamp-h
 	rm -f targ-vals.def
 
 .c.o:

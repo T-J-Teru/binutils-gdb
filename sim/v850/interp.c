@@ -18,14 +18,6 @@
 
 #include "bfd.h"
 
-#ifndef INLINE
-#ifdef __GNUC__
-#define INLINE inline
-#else
-#define INLINE
-#endif
-#endif
-
 static const char * get_insn_name (sim_cpu *, int);
 
 /* For compatibility.  */
@@ -184,6 +176,20 @@ get_insn_name (sim_cpu *cpu, int i)
 
 uint32 OP[4];
 
+static sim_cia
+v850_pc_get (sim_cpu *cpu)
+{
+  return PC;
+}
+
+static void
+v850_pc_set (sim_cpu *cpu, sim_cia pc)
+{
+  PC = pc;
+}
+
+static int v850_reg_fetch (SIM_CPU *, int, unsigned char *, int);
+static int v850_reg_store (SIM_CPU *, int, unsigned char *, int);
 
 SIM_DESC
 sim_open (SIM_OPEN_KIND    kind,
@@ -191,10 +197,15 @@ sim_open (SIM_OPEN_KIND    kind,
 	  struct bfd *     abfd,
 	  char **          argv)
 {
+  int i;
   SIM_DESC sd = sim_state_alloc (kind, cb);
   int mach;
 
   SIM_ASSERT (STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
+
+  /* The cpu data is kept in a separately allocated chunk of memory.  */
+  if (sim_cpu_alloc_all (sd, 1, /*cgen_cpu_max_extra_bytes ()*/0) != SIM_RC_OK)
+    return 0;
 
   /* for compatibility */
   simulator = sd;
@@ -223,9 +234,7 @@ sim_open (SIM_OPEN_KIND    kind,
   /* similarly if in the internal RAM region */
   sim_do_command (sd, "memory region 0xffe000,0x1000,1024");
 
-  /* getopt will print the error message so we just have to exit if this fails.
-     FIXME: Hmmm...  in the case of gdb we need getopt to call
-     print_filtered.  */
+  /* The parser will print an error message for us, so we silently return.  */
   if (sim_parse_args (sd, argv) != SIM_RC_OK)
     {
       /* Uninstall the modules to avoid memory leaks,
@@ -283,14 +292,18 @@ sim_open (SIM_OPEN_KIND    kind,
       break;
     }
 
+  /* CPU specific initialization.  */
+  for (i = 0; i < MAX_NR_PROCESSORS; ++i)
+    {
+      SIM_CPU *cpu = STATE_CPU (sd, i);
+
+      CPU_REG_FETCH (cpu) = v850_reg_fetch;
+      CPU_REG_STORE (cpu) = v850_reg_store;
+      CPU_PC_FETCH (cpu) = v850_pc_get;
+      CPU_PC_STORE (cpu) = v850_pc_set;
+    }
+
   return sd;
-}
-
-
-void
-sim_close (SIM_DESC sd, int quitting)
-{
-  sim_module_uninstall (sd);
 }
 
 SIM_RC
@@ -305,28 +318,16 @@ sim_create_inferior (SIM_DESC      sd,
   return SIM_RC_OK;
 }
 
-int
-sim_fetch_register (SIM_DESC         sd,
-		    int              rn,
-		    unsigned char *  memory,
-		    int              length)
+static int
+v850_reg_fetch (SIM_CPU *cpu, int rn, unsigned char *memory, int length)
 {
   *(unsigned32*)memory = H2T_4 (State.regs[rn]);
   return -1;
 }
- 
-int
-sim_store_register (SIM_DESC        sd,
-		    int             rn,
-		    unsigned char * memory,
-		    int             length)
+
+static int
+v850_reg_store (SIM_CPU *cpu, int rn, unsigned char *memory, int length)
 {
   State.regs[rn] = T2H_4 (*(unsigned32 *) memory);
   return length;
-}
-
-sim_cia
-sim_pc_get (sim_cpu *cpu)
-{
-  return PC;
 }

@@ -3,7 +3,7 @@
    Run "make headers" in your build bfd/ to regenerate.  */
 
 /* BFD COFF object file private structure.
-   Copyright (C) 1990-2015 Free Software Foundation, Inc.
+   Copyright (C) 1990-2016 Free Software Foundation, Inc.
    Written by Cygnus Support.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -269,6 +269,16 @@ struct coff_link_hash_table
   struct stab_info stab_info;
 };
 
+struct coff_reloc_cookie
+{
+  struct internal_reloc *         rels;
+  struct internal_reloc *         rel;
+  struct internal_reloc *         relend;
+  struct coff_symbol_struct *     symbols;	/* Symtab for input bfd.  */
+  bfd *                           abfd;
+  struct coff_link_hash_entry **  sym_hashes;
+};
+
 /* Look up an entry in a COFF linker hash table.  */
 
 #define coff_link_hash_lookup(table, string, create, copy, follow)	\
@@ -306,8 +316,8 @@ extern void coff_mangle_symbols
 extern bfd_boolean coff_write_symbols
   (bfd *);
 extern bfd_boolean coff_write_alien_symbol
-  (bfd *, asymbol *, struct internal_syment *, bfd_vma *,
-   bfd_size_type *, asection **, bfd_size_type *);
+  (bfd *, asymbol *, struct internal_syment *, union internal_auxent *,
+   bfd_vma *, bfd_size_type *, asection **, bfd_size_type *);
 extern bfd_boolean coff_write_linenumbers
   (bfd *);
 extern alent *coff_get_lineno
@@ -566,6 +576,8 @@ extern bfd_boolean _bfd_coff_link_input_bfd
 extern bfd_boolean _bfd_coff_reloc_link_order
   (bfd *, struct coff_final_link_info *, asection *,
    struct bfd_link_order *);
+extern bfd_boolean bfd_coff_gc_sections
+  (bfd *, struct bfd_link_info *);
 
 
 #define coff_get_section_contents_in_window \
@@ -672,6 +684,10 @@ enum coff_symbol_classification
   /* PE section symbol.  */
   COFF_SYMBOL_PE_SECTION
 };
+
+typedef asection * (*coff_gc_mark_hook_fn)
+  (asection *, struct bfd_link_info *, struct internal_reloc *,
+   struct coff_link_hash_entry *, struct internal_syment *);
 
 typedef struct
 {

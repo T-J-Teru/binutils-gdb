@@ -1,5 +1,5 @@
 /* Definitions used by the GDB event loop.
-   Copyright (C) 1999-2015 Free Software Foundation, Inc.
+   Copyright (C) 1999-2016 Free Software Foundation, Inc.
    Written by Elena Zannoni <ezannoni@cygnus.com> of Cygnus Solutions.
 
    This file is part of GDB.
@@ -101,6 +101,15 @@ void call_async_signal_handler (struct async_signal_handler *handler);
    Do not call this directly; use gdb_call_async_signal_handler,
    below, with IMMEDIATE_P == 0.  */
 void mark_async_signal_handler (struct async_signal_handler *handler);
+
+/* Returns true if HANDLER is marked ready.  */
+
+extern int
+  async_signal_handler_is_marked (struct async_signal_handler *handler);
+
+/* Mark HANDLER as NOT ready.  */
+
+extern void clear_async_signal_handler (struct async_signal_handler *handler);
 
 /* Wrapper for the body of signal handlers.  Call this function from
    any SIGINT handler which needs to access GDB data structures or

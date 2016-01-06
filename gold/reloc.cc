@@ -1,6 +1,6 @@
 // reloc.cc -- relocate input files for gold.
 
-// Copyright (C) 2006-2015 Free Software Foundation, Inc.
+// Copyright (C) 2006-2016 Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -665,6 +665,24 @@ Sized_relobj_file<size, big_endian>::do_relocate(const Symbol_table* symtab,
   // input offsets to output addresses.
   this->initialize_input_to_output_maps();
 
+  // Make the views available through get_output_view() for the duration
+  // of this routine.  This RAII class will reset output_views_ to NULL
+  // when the views go out of scope.
+  struct Set_output_views
+  {
+    Set_output_views(const Views** ppviews, const Views* pviews)
+    {
+      ppviews_ = ppviews;
+      *ppviews = pviews;
+    }
+
+    ~Set_output_views()
+    { *ppviews_ = NULL; }
+
+    const Views** ppviews_;
+  };
+  Set_output_views set_output_views(&this->output_views_, &views);
+
   // Apply relocations.
 
   this->relocate_sections(symtab, layout, pshdrs, of, &views);
@@ -866,7 +884,9 @@ Sized_relobj_file<size, big_endian>::write_sections(const Layout* layout,
 	  // Read and decompress the section.
           section_size_type len;
 	  const unsigned char* p = this->section_contents(i, &len, false);
-	  if (!decompress_input_section(p, len, view, view_size))
+	  if (!decompress_input_section(p, len, view, view_size,
+					size, big_endian,
+					shdr.get_sh_flags()))
 	    this->error(_("could not decompress section %s"),
 			this->section_name(i).c_str());
         }
@@ -1008,34 +1028,49 @@ Sized_relobj_file<size, big_endian>::do_relocate_sections(
 				     &reloc_map);
 	}
 
+      Relocatable_relocs* rr = NULL;
+      if (parameters->options().emit_relocs()
+	  || parameters->options().relocatable())
+	rr = this->relocatable_relocs(i);
+      relinfo.rr = rr;
+
       if (!parameters->options().relocatable())
 	{
 	  target->relocate_section(&relinfo, sh_type, prelocs, reloc_count, os,
 				   output_offset == invalid_address,
 				   view, address, view_size, reloc_map);
 	  if (parameters->options().emit_relocs())
-	    {
-	      Relocatable_relocs* rr = this->relocatable_relocs(i);
-	      target->relocate_relocs(&relinfo, sh_type, prelocs, reloc_count,
-				      os, output_offset, rr,
-				      view, address, view_size,
-				      (*pviews)[i].view,
-				      (*pviews)[i].view_size);
-	    }
+	    target->relocate_relocs(&relinfo, sh_type, prelocs, reloc_count,
+				    os, output_offset,
+				    view, address, view_size,
+				    (*pviews)[i].view,
+				    (*pviews)[i].view_size);
 	  if (parameters->incremental())
 	    this->incremental_relocs_write(&relinfo, sh_type, prelocs,
 					   reloc_count, os, output_offset, of);
 	}
       else
-	{
-	  Relocatable_relocs* rr = this->relocatable_relocs(i);
-	  target->relocate_relocs(&relinfo, sh_type, prelocs, reloc_count,
-				  os, output_offset, rr,
-				  view, address, view_size,
-				  (*pviews)[i].view,
-				  (*pviews)[i].view_size);
-	}
+	target->relocate_relocs(&relinfo, sh_type, prelocs, reloc_count,
+				os, output_offset,
+				view, address, view_size,
+				(*pviews)[i].view,
+				(*pviews)[i].view_size);
     }
+}
+
+// Return the output view for section SHNDX.
+
+template<int size, bool big_endian>
+unsigned char*
+Sized_relobj_file<size, big_endian>::do_get_output_view(
+    unsigned int shndx,
+    section_size_type* plen) const
+{
+  gold_assert(this->output_views_ != NULL);
+  gold_assert(shndx < this->output_views_->size());
+  const View_size& v = (*this->output_views_)[shndx];
+  *plen = v.view_size;
+  return v.view;
 }
 
 // Write the incremental relocs.
@@ -1329,6 +1364,7 @@ Sized_relobj_file<size, big_endian>::split_stack_adjust_reltype(
       std::string from;
       std::string to;
       parameters->target().calls_non_split(this, shndx, p->first, p->second,
+					   prelocs, reloc_count,
 					   view, view_size, &from, &to);
       if (!from.empty())
 	{
@@ -1415,13 +1451,21 @@ Sized_relobj_file<size, big_endian>::find_functions(
 	continue;
 
       bool is_ordinary;
-      unsigned int sym_shndx = this->adjust_sym_shndx(i, isym.get_st_shndx(),
-						      &is_ordinary);
-      if (!is_ordinary || sym_shndx != shndx)
+      Symbol_location loc;
+      loc.shndx = this->adjust_sym_shndx(i, isym.get_st_shndx(),
+					 &is_ordinary);
+      if (!is_ordinary)
+	continue;
+
+      loc.object = this;
+      loc.offset = isym.get_st_value();
+      parameters->target().function_location(&loc);
+
+      if (loc.shndx != shndx)
 	continue;
 
       section_offset_type value =
-	convert_to_section_size_type(isym.get_st_value());
+	convert_to_section_size_type(loc.offset);
       section_size_type fnsize =
 	convert_to_section_size_type(isym.get_st_size());
 
@@ -1729,6 +1773,12 @@ Sized_relobj_file<32, false>::do_relocate_sections(
     const unsigned char* pshdrs,
     Output_file* of,
     Views* pviews);
+
+template
+unsigned char*
+Sized_relobj_file<32, false>::do_get_output_view(
+    unsigned int shndx,
+    section_size_type* plen) const;
 #endif
 
 #ifdef HAVE_TARGET_32_BIG
@@ -1740,6 +1790,12 @@ Sized_relobj_file<32, true>::do_relocate_sections(
     const unsigned char* pshdrs,
     Output_file* of,
     Views* pviews);
+
+template
+unsigned char*
+Sized_relobj_file<32, true>::do_get_output_view(
+    unsigned int shndx,
+    section_size_type* plen) const;
 #endif
 
 #ifdef HAVE_TARGET_64_LITTLE
@@ -1751,6 +1807,12 @@ Sized_relobj_file<64, false>::do_relocate_sections(
     const unsigned char* pshdrs,
     Output_file* of,
     Views* pviews);
+
+template
+unsigned char*
+Sized_relobj_file<64, false>::do_get_output_view(
+    unsigned int shndx,
+    section_size_type* plen) const;
 #endif
 
 #ifdef HAVE_TARGET_64_BIG
@@ -1762,6 +1824,12 @@ Sized_relobj_file<64, true>::do_relocate_sections(
     const unsigned char* pshdrs,
     Output_file* of,
     Views* pviews);
+
+template
+unsigned char*
+Sized_relobj_file<64, true>::do_get_output_view(
+    unsigned int shndx,
+    section_size_type* plen) const;
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE

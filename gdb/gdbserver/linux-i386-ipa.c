@@ -1,7 +1,7 @@
 /* GNU/Linux/x86 specific low level interface, for the in-process
    agent library for GDB.
 
-   Copyright (C) 2010-2015 Free Software Foundation, Inc.
+   Copyright (C) 2010-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -19,7 +19,6 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "server.h"
-#include <stdint.h>
 #include <sys/mman.h>
 #include "tracepoint.h"
 

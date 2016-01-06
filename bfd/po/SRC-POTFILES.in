@@ -87,6 +87,7 @@ cpu-i386.c
 cpu-i860.c
 cpu-i960.c
 cpu-ia64.c
+cpu-iamcu.c
 cpu-ip2k.c
 cpu-iq2000.c
 cpu-k1om.c
@@ -299,6 +300,8 @@ m68klinux.c
 m68knetbsd.c
 m88kmach3.c
 m88kopenbsd.c
+mach-o-aarch64.c
+mach-o-arm.c
 mach-o-i386.c
 mach-o-x86-64.c
 mach-o.c

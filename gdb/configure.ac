@@ -1,5 +1,5 @@
 dnl Autoconf configure script for GDB, the GNU debugger.
-dnl Copyright (C) 1995-2015 Free Software Foundation, Inc.
+dnl Copyright (C) 1995-2016 Free Software Foundation, Inc.
 dnl
 dnl This file is part of GDB.
 dnl
@@ -617,18 +617,13 @@ case $host_os in
   go32* | *djgpp*)
     ac_cv_search_tgetent="none required"
     ;;
-  *mingw32*)
-    if test x"$curses_found" != xyes; then
-      ac_cv_search_tgetent="none required"
-      CONFIG_OBS="$CONFIG_OBS stub-termcap.o"
-    fi ;;
 esac
 
 # These are the libraries checked by Readline.
 AC_SEARCH_LIBS(tgetent, [termcap tinfo curses ncurses])
 
 if test "$ac_cv_search_tgetent" = no; then
-  AC_MSG_ERROR([no termcap library found])
+  CONFIG_OBS="$CONFIG_OBS stub-termcap.o"
 fi
 
 AC_ARG_WITH([system-readline],
@@ -1247,6 +1242,40 @@ if test "$ENABLE_LIBMCHECK" = "yes" \
   AC_MSG_WARN(--enable-libmcheck may lead to spurious crashes if threads are used in python)
 fi
 
+AC_ARG_WITH(intel_pt,
+  AS_HELP_STRING([--with-intel-pt], [include Intel(R) Processor Trace support (auto/yes/no)]),
+  [], [with_intel_pt=auto])
+AC_MSG_CHECKING([whether to use intel pt])
+AC_MSG_RESULT([$with_intel_pt])
+
+if test "${with_intel_pt}" = no; then
+  AC_MSG_WARN([Intel(R) Processor Trace support disabled; some features may be unavailable.])
+  HAVE_LIBIPT=no
+else
+  AC_PREPROC_IFELSE(AC_LANG_SOURCE([[
+#include <linux/perf_event.h>
+#ifndef PERF_ATTR_SIZE_VER5
+# error
+#endif
+  ]]), [perf_event=yes], [perf_event=no])
+  if test "$perf_event" != yes; then
+    if test "$with_intel_pt" = yes; then
+      AC_MSG_ERROR([linux/perf_event.h missing or too old])
+    else
+      AC_MSG_WARN([linux/perf_event.h missing or too old; some features may be unavailable.])
+    fi
+  fi
+
+  AC_LIB_HAVE_LINKFLAGS([ipt], [], [#include "intel-pt.h"], [pt_insn_alloc_decoder (0);])
+  if test "$HAVE_LIBIPT" != yes; then
+    if test "$with_intel_pt" = yes; then
+      AC_MSG_ERROR([libipt is missing or unusable])
+    else
+      AC_MSG_WARN([libipt is missing or unusable; some features may be unavailable.])
+    fi
+  fi
+fi
+
 # ------------------------- #
 # Checks for header files.  #
 # ------------------------- #
@@ -1310,7 +1339,6 @@ AC_CHECK_MEMBERS([struct stat.st_blocks, struct stat.st_blksize])
 # Checks for types.  #
 # ------------------ #
 
-AC_TYPE_SIGNAL
 AC_CHECK_TYPES(socklen_t, [], [],
 [#include <sys/types.h>
 #include <sys/socket.h>
@@ -1336,79 +1364,12 @@ AC_CHECK_FUNCS([getauxval getrusage getuid getgid \
 		sigaction sigprocmask sigsetmask socketpair \
 		ttrace wborder wresize setlocale iconvlist libiconvlist btowc \
 		setrlimit getrlimit posix_madvise waitpid \
-		ptrace64 sigaltstack mkdtemp])
+		ptrace64 sigaltstack mkdtemp setns])
 AM_LANGINFO_CODESET
 GDB_AC_COMMON
 
-# Check the return and argument types of ptrace.  No canned test for
-# this, so roll our own.
-gdb_ptrace_headers='
-#include <sys/types.h>
-#if HAVE_SYS_PTRACE_H
-# include <sys/ptrace.h>
-#endif
-#if HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-'
-# There is no point in checking if we don't have a prototype.
-AC_CHECK_DECLS(ptrace, [], [
-  : ${gdb_cv_func_ptrace_ret='int'}
-  : ${gdb_cv_func_ptrace_args='int,int,long,long'}
-], $gdb_ptrace_headers)
-# Check return type.  Varargs (used on GNU/Linux) conflict with the
-# empty argument list, so check for that explicitly.
-AC_CACHE_CHECK([return type of ptrace], gdb_cv_func_ptrace_ret,
-  AC_TRY_COMPILE($gdb_ptrace_headers,
-    [extern long ptrace (enum __ptrace_request, ...);],
-    gdb_cv_func_ptrace_ret='long',
-    AC_TRY_COMPILE($gdb_ptrace_headers,
-      [extern int ptrace ();],
-      gdb_cv_func_ptrace_ret='int',
-      gdb_cv_func_ptrace_ret='long')))
-AC_DEFINE_UNQUOTED(PTRACE_TYPE_RET, $gdb_cv_func_ptrace_ret,
-  [Define as the return type of ptrace.])
-# Check argument types.
-AC_CACHE_CHECK([types of arguments for ptrace], gdb_cv_func_ptrace_args, [
-  AC_TRY_COMPILE($gdb_ptrace_headers,
-    [extern long ptrace (enum __ptrace_request, ...);],
-    [gdb_cv_func_ptrace_args='int,int,long,long'],[
-for gdb_arg1 in 'int' 'long'; do
- for gdb_arg2 in 'pid_t' 'int' 'long'; do
-  for gdb_arg3 in 'int *' 'caddr_t' 'int' 'long' 'void *'; do
-   for gdb_arg4 in 'int' 'long' 'void *'; do
-     AC_TRY_COMPILE($gdb_ptrace_headers, [
-extern $gdb_cv_func_ptrace_ret
-  ptrace ($gdb_arg1, $gdb_arg2, $gdb_arg3, $gdb_arg4);
-], [gdb_cv_func_ptrace_args="$gdb_arg1,$gdb_arg2,$gdb_arg3,$gdb_arg4";
-    break 4;])
-    for gdb_arg5 in 'int *' 'int' 'long'; do
-     AC_TRY_COMPILE($gdb_ptrace_headers, [
-extern $gdb_cv_func_ptrace_ret
-  ptrace ($gdb_arg1, $gdb_arg2, $gdb_arg3, $gdb_arg4, $gdb_arg5);
-], [
-gdb_cv_func_ptrace_args="$gdb_arg1,$gdb_arg2,$gdb_arg3,$gdb_arg4,$gdb_arg5";
-    break 5;])
-    done
-   done
-  done
- done
-done
-# Provide a safe default value.
-: ${gdb_cv_func_ptrace_args='int,int,long,long'}
-])])
-ac_save_IFS=$IFS; IFS=','
-set dummy `echo "$gdb_cv_func_ptrace_args" | sed 's/\*/\*/g'`
-IFS=$ac_save_IFS
-shift
-AC_DEFINE_UNQUOTED(PTRACE_TYPE_ARG3, $[3],
-  [Define to the type of arg 3 for ptrace.])
-AC_DEFINE_UNQUOTED(PTRACE_TYPE_ARG4, $[4],
-  [Define to the type of arg 4 for ptrace.])
-if test -n "$[5]"; then
-  AC_DEFINE_UNQUOTED(PTRACE_TYPE_ARG5, $[5],
-    [Define to the type of arg 5 for ptrace.])
-fi
+# Check the return and argument types of ptrace.
+GDB_AC_PTRACE
 
 dnl AC_FUNC_SETPGRP does not work when cross compiling
 dnl Instead, assume we will have a prototype for setpgrp if cross compiling.
@@ -1889,25 +1850,6 @@ if test "x$gdb_cv_thread_db_h_has_td_notls" = "xyes"; then
             [Define if <thread_db.h> has the TD_NOTLS error code.])
 fi
 
-dnl See if we have a sys/syscall header file that has __NR_tkill.
-if test "x$ac_cv_header_sys_syscall_h" = "xyes"; then
-   AC_CACHE_CHECK([whether <sys/syscall.h> has __NR_tkill],
-                  gdb_cv_sys_syscall_h_has_tkill,
-     AC_TRY_COMPILE(
-       [#include <sys/syscall.h>],
-       [int i = __NR_tkill;],
-       gdb_cv_sys_syscall_h_has_tkill=yes,
-       gdb_cv_sys_syscall_h_has_tkill=no
-     )
-   )
-fi
-dnl See if we can issue tkill syscall.
-if test "x$gdb_cv_sys_syscall_h_has_tkill" = "xyes"; then
-  AC_CHECK_FUNC(syscall,
-    AC_DEFINE(HAVE_TKILL_SYSCALL, 1, [Define if you support the tkill syscall.])
-  )
-fi
-
 dnl Check if we can disable the virtual address space randomization.
 dnl The functionality of setarch -R.
 AC_CHECK_DECLS([ADDR_NO_RANDOMIZE],,, [#include <sys/personality.h>])
@@ -1971,11 +1913,8 @@ AC_ARG_ENABLE(werror,
      *) AC_MSG_ERROR(bad value ${enableval} for --enable-werror) ;;
    esac])
 
-# Enable -Werror by default when using gcc in C mode.  Leave it off
-# for C++ until we're warning clean.  Turn it off for releases.
-if test "${GCC}" = yes -a -z "${ERROR_ON_WARNING}" \
-   && test x"$enable_build_with_cxx" != x"yes" \
-   && $development; then
+# Enable -Werror by default when using gcc.  Turn it off for releases.
+if test "${GCC}" = yes -a -z "${ERROR_ON_WARNING}" && $development; then
     ERROR_ON_WARNING=yes
 fi
 
@@ -2049,14 +1988,23 @@ then
     # Separate out the -Werror flag as some files just cannot be
     # compiled with it enabled.
     for w in ${build_warnings}; do
+	# GCC does not complain about -Wno-unknown-warning.  Invert
+	# and test -Wunknown-warning instead.
+	case $w in
+	-Wno-*)
+		wtest=`echo $w | sed 's/-Wno-/-W/g'` ;;
+	*)
+		wtest=$w ;;
+	esac
+
 	case $w in
 	-Werr*) WERROR_CFLAGS=-Werror ;;
 	*)
 	    # Check whether GCC accepts it.
 	    saved_CFLAGS="$CFLAGS"
-	    CFLAGS="$CFLAGS $w"
+	    CFLAGS="$CFLAGS $wtest"
 	    saved_CXXFLAGS="$CXXFLAGS"
-	    CXXFLAGS="$CXXFLAGS $w"
+	    CXXFLAGS="$CXXFLAGS $wtest"
 	    AC_TRY_COMPILE([],[],WARN_CFLAGS="${WARN_CFLAGS} $w",)
 	    CFLAGS="$saved_CFLAGS"
 	    CXXFLAGS="$saved_CXXFLAGS"
@@ -2312,6 +2260,14 @@ if test "${ignore_sim}" = "false"; then
     SIM="${gdb_sim}"
     SIM_OBS="remote-sim.o"
     AC_DEFINE(WITH_SIM, 1, [Define if the simulator is being linked in.])
+
+    # Some tdep code should only be compiled in when the ppc sim is
+    # built.  PR sim/13418.
+    case $target in
+      powerpc*-*-*)
+	AC_DEFINE(WITH_PPC_SIM, 1, [Define if the PPC simulator is being linked in.])
+	;;
+    esac
   fi
 fi
 AC_SUBST(SIM)

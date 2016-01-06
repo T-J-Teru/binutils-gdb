@@ -1,5 +1,5 @@
 /* Simulator for Motorola's MCore processor
-   Copyright (C) 1999-2015 Free Software Foundation, Inc.
+   Copyright (C) 1999-2016 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of GDB, the GNU debugger.
@@ -31,11 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "sim-main.h"
 #include "sim-base.h"
+#include "sim-syscall.h"
 #include "sim-options.h"
-
-#ifndef NUM_ELEM
-#define NUM_ELEM(A) (sizeof (A) / sizeof (A)[0])
-#endif
 
 #define target_big_endian (CURRENT_TARGET_BYTE_ORDER == BIG_ENDIAN)
 
@@ -95,72 +92,40 @@ mcore_store_unsigned_integer (unsigned char *addr, int len, unsigned long val)
     }
 }
 
-/* The machine state.
-   This state is maintained in host byte order.  The
-   fetch/store register functions must translate between host
-   byte order and the target processor byte order.
-   Keeping this data in target byte order simplifies the register
-   read/write functions.  Keeping this data in native order improves
-   the performance of the simulator.  Simulation speed is deemed more
-   important.  */
-/* TODO: Should be moved to sim-main.h:sim_cpu.  */
-
-/* The ordering of the mcore_regset structure is matched in the
-   gdb/config/mcore/tm-mcore.h file in the REGISTER_NAMES macro.  */
-struct mcore_regset
-{
-  word	          gregs [16];		/* primary registers */
-  word	          alt_gregs [16];	/* alt register file */
-  word	          cregs [32];		/* control registers */
-  int		  ticks;
-  int		  stalls;
-  int		  cycles;
-  int		  insts;
-  int		  exception;
-  unsigned long   msize;
-  unsigned char * memory;
-  word *          active_gregs;
-};
-
-union
-{
-  struct mcore_regset asregs;
-  word asints [1];		/* but accessed larger... */
-} cpu;
-
-#define LAST_VALID_CREG	32		/* only 0..12 implemented */
-#define	NUM_MCORE_REGS	(16 + 16 + LAST_VALID_CREG + 1)
-
 static int memcycles = 1;
 
-static int issue_messages = 0;
-
-#define gr	asregs.active_gregs
-#define cr	asregs.cregs
-#define sr	asregs.cregs[0]
-#define	vbr	asregs.cregs[1]
-#define	esr	asregs.cregs[2]
-#define	fsr	asregs.cregs[3]
-#define	epc	asregs.cregs[4]
-#define	fpc	asregs.cregs[5]
-#define	ss0	asregs.cregs[6]
-#define	ss1	asregs.cregs[7]
-#define	ss2	asregs.cregs[8]
-#define	ss3	asregs.cregs[9]
-#define	ss4	asregs.cregs[10]
-#define	gcr	asregs.cregs[11]
-#define	gsr	asregs.cregs[12]
-#define mem	asregs.memory
+#define gr	cpu->active_gregs
+#define cr	cpu->regs.cregs
+#define sr	cr[0]
+#define vbr	cr[1]
+#define esr	cr[2]
+#define fsr	cr[3]
+#define epc	cr[4]
+#define fpc	cr[5]
+#define ss0	cr[6]
+#define ss1	cr[7]
+#define ss2	cr[8]
+#define ss3	cr[9]
+#define ss4	cr[10]
+#define gcr	cr[11]
+#define gsr	cr[12]
 
 /* maniuplate the carry bit */
-#define	C_ON()	 (cpu.sr & 1)
-#define	C_VALUE() (cpu.sr & 1)
-#define	C_OFF()	 ((cpu.sr & 1) == 0)
-#define	SET_C()	 {cpu.sr |= 1;}
-#define	CLR_C()	 {cpu.sr &= 0xfffffffe;}
-#define	NEW_C(v) {CLR_C(); cpu.sr |= ((v) & 1);}
+#define C_ON()		(sr & 1)
+#define C_VALUE()	(sr & 1)
+#define C_OFF()		((sr & 1) == 0)
+#define SET_C()		{sr |= 1;}
+#define CLR_C()		{sr &= 0xfffffffe;}
+#define NEW_C(v)	{CLR_C(); sr |= ((v) & 1);}
 
-#define	SR_AF() ((cpu.sr >> 1) & 1)
+#define SR_AF()		((sr >> 1) & 1)
+static void set_active_regs (SIM_CPU *cpu)
+{
+  if (SR_AF())
+    cpu->active_gregs = cpu->regs.alt_gregs;
+  else
+    cpu->active_gregs = cpu->regs.gregs;
+}
 
 #define	TRAPCODE	1	/* r1 holds which function we want */
 #define	PARM1	2		/* first parameter  */
@@ -169,423 +134,46 @@ static int issue_messages = 0;
 #define	PARM4	5
 #define	RET1	2		/* register for return values. */
 
-static void
-wbat (word x, word v)
-{
-  if (((uword)x) >= cpu.asregs.msize)
-    {
-      if (issue_messages)
-	fprintf (stderr, "byte write to 0x%x outside memory range\n", x);
-
-      cpu.asregs.exception = SIGSEGV;
-    }
-  else
-    {
-      unsigned char *p = cpu.mem + x;
-      p[0] = v;
-    }
-}
-
-static void
-wlat (word x, word v)
-{
-  if (((uword)x) >= cpu.asregs.msize)
-    {
-      if (issue_messages)
-	fprintf (stderr, "word write to 0x%x outside memory range\n", x);
-
-      cpu.asregs.exception = SIGSEGV;
-    }
-  else
-    {
-      if ((x & 3) != 0)
-	{
-	  if (issue_messages)
-	    fprintf (stderr, "word write to unaligned memory address: 0x%x\n", x);
-
-	  cpu.asregs.exception = SIGBUS;
-	}
-      else if (! target_big_endian)
-	{
-	  unsigned char * p = cpu.mem + x;
-	  p[3] = v >> 24;
-	  p[2] = v >> 16;
-	  p[1] = v >> 8;
-	  p[0] = v;
-	}
-      else
-	{
-	  unsigned char * p = cpu.mem + x;
-	  p[0] = v >> 24;
-	  p[1] = v >> 16;
-	  p[2] = v >> 8;
-	  p[3] = v;
-	}
-    }
-}
-
-static void
-what (word x, word v)
-{
-  if (((uword)x) >= cpu.asregs.msize)
-    {
-      if (issue_messages)
-	fprintf (stderr, "short write to 0x%x outside memory range\n", x);
-
-      cpu.asregs.exception = SIGSEGV;
-    }
-  else
-    {
-      if ((x & 1) != 0)
-	{
-	  if (issue_messages)
-	    fprintf (stderr, "short write to unaligned memory address: 0x%x\n",
-		     x);
-
-	  cpu.asregs.exception = SIGBUS;
-	}
-      else if (! target_big_endian)
-	{
-	  unsigned char * p = cpu.mem + x;
-	  p[1] = v >> 8;
-	  p[0] = v;
-	}
-      else
-	{
-	  unsigned char * p = cpu.mem + x;
-	  p[0] = v >> 8;
-	  p[1] = v;
-	}
-    }
-}
-
-/* Read functions.  */
-static int
-rbat (word x)
-{
-  if (((uword)x) >= cpu.asregs.msize)
-    {
-      if (issue_messages)
-	fprintf (stderr, "byte read from 0x%x outside memory range\n", x);
-
-      cpu.asregs.exception = SIGSEGV;
-      return 0;
-    }
-  else
-    {
-      unsigned char * p = cpu.mem + x;
-      return p[0];
-    }
-}
-
-static int
-rlat (word x)
-{
-  if (((uword) x) >= cpu.asregs.msize)
-    {
-      if (issue_messages)
-	fprintf (stderr, "word read from 0x%x outside memory range\n", x);
-
-      cpu.asregs.exception = SIGSEGV;
-      return 0;
-    }
-  else
-    {
-      if ((x & 3) != 0)
-	{
-	  if (issue_messages)
-	    fprintf (stderr, "word read from unaligned address: 0x%x\n", x);
-
-	  cpu.asregs.exception = SIGBUS;
-	  return 0;
-	}
-      else if (! target_big_endian)
-	{
-	  unsigned char * p = cpu.mem + x;
-	  return (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | p[0];
-	}
-      else
-	{
-	  unsigned char * p = cpu.mem + x;
-	  return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
-	}
-    }
-}
-
-static int
-rhat (word x)
-{
-  if (((uword)x) >= cpu.asregs.msize)
-    {
-      if (issue_messages)
-	fprintf (stderr, "short read from 0x%x outside memory range\n", x);
-
-      cpu.asregs.exception = SIGSEGV;
-      return 0;
-    }
-  else
-    {
-      if ((x & 1) != 0)
-	{
-	  if (issue_messages)
-	    fprintf (stderr, "short read from unaligned address: 0x%x\n", x);
-
-	  cpu.asregs.exception = SIGBUS;
-	  return 0;
-	}
-      else if (! target_big_endian)
-	{
-	  unsigned char * p = cpu.mem + x;
-	  return (p[1] << 8) | p[0];
-	}
-      else
-	{
-	  unsigned char * p = cpu.mem + x;
-	  return (p[0] << 8) | p[1];
-	}
-    }
-}
-
-
 /* Default to a 8 Mbyte (== 2^23) memory space.  */
-/* TODO: Delete all this custom memory logic and move to common sim helpers.  */
-static int sim_memory_size = 23;
-
-#define	MEM_SIZE_FLOOR	64
-static void
-sim_size (int power)
-{
-  sim_memory_size = power;
-  cpu.asregs.msize = 1 << sim_memory_size;
-
-  if (cpu.mem)
-    free (cpu.mem);
-
-  /* Watch out for the '0 count' problem. There's probably a better
-     way.. e.g., why do we use 64 here?  */
-  if (cpu.asregs.msize < 64)	/* Ensure a boundary.  */
-    cpu.mem = (unsigned char *) calloc (64, (64 + cpu.asregs.msize) / 64);
-  else
-    cpu.mem = (unsigned char *) calloc (64, cpu.asregs.msize / 64);
-
-  if (!cpu.mem)
-    {
-      if (issue_messages)
-	fprintf (stderr,
-		 "Not enough VM for simulation of %lu bytes of RAM\n",
-		 cpu.asregs.msize);
-
-      cpu.asregs.msize = 1;
-      cpu.mem = (unsigned char *) calloc (1, 1);
-    }
-}
+#define DEFAULT_MEMORY_SIZE 0x800000
 
 static void
-init_pointers (void)
+set_initial_gprs (SIM_CPU *cpu)
 {
-  if (cpu.asregs.msize != (1 << sim_memory_size))
-    sim_size (sim_memory_size);
-}
-
-static void
-set_initial_gprs (SIM_CPU *scpu)
-{
-  int i;
-  long space;
-  unsigned long memsize;
-
-  init_pointers ();
-
   /* Set up machine just out of reset.  */
-  CIA_SET (scpu, 0);
-  cpu.sr = 0;
-
-  memsize = cpu.asregs.msize / (1024 * 1024);
-
-  if (issue_messages > 1)
-    fprintf (stderr, "Simulated memory of %lu Mbytes (0x0 .. 0x%08lx)\n",
-	     memsize, cpu.asregs.msize - 1);
+  CPU_PC_SET (cpu, 0);
+  sr = 0;
 
   /* Clean out the GPRs and alternate GPRs.  */
-  for (i = 0; i < 16; i++)
-    {
-      cpu.asregs.gregs[i] = 0;
-      cpu.asregs.alt_gregs[i] = 0;
-    }
+  memset (&cpu->regs.gregs, 0, sizeof(cpu->regs.gregs));
+  memset (&cpu->regs.alt_gregs, 0, sizeof(cpu->regs.alt_gregs));
 
   /* Make our register set point to the right place.  */
-  if (SR_AF())
-    cpu.asregs.active_gregs = &cpu.asregs.alt_gregs[0];
-  else
-    cpu.asregs.active_gregs = &cpu.asregs.gregs[0];
+  set_active_regs (cpu);
 
   /* ABI specifies initial values for these registers.  */
-  cpu.gr[0] = cpu.asregs.msize - 4;
+  gr[0] = DEFAULT_MEMORY_SIZE - 4;
 
   /* dac fix, the stack address must be 8-byte aligned! */
-  cpu.gr[0] = cpu.gr[0] - cpu.gr[0] % 8;
-  cpu.gr[PARM1] = 0;
-  cpu.gr[PARM2] = 0;
-  cpu.gr[PARM3] = 0;
-  cpu.gr[PARM4] = cpu.gr[0];
+  gr[0] = gr[0] - gr[0] % 8;
+  gr[PARM1] = 0;
+  gr[PARM2] = 0;
+  gr[PARM3] = 0;
+  gr[PARM4] = gr[0];
 }
 
-/* Functions so that trapped open/close don't interfere with the
-   parent's functions.  We say that we can't close the descriptors
-   that we didn't open.  exit() and cleanup() get in trouble here,
-   to some extent.  That's the price of emulation.  */
-
-unsigned char opened[100];
+/* Simulate a monitor trap.  */
 
 static void
-log_open (int fd)
+handle_trap1 (SIM_DESC sd, SIM_CPU *cpu)
 {
-  if (fd < 0 || fd > NUM_ELEM (opened))
-    return;
-
-  opened[fd] = 1;
+  /* XXX: We don't pass back the actual errno value.  */
+  gr[RET1] = sim_syscall (cpu, gr[TRAPCODE], gr[PARM1], gr[PARM2], gr[PARM3],
+			  gr[PARM4]);
 }
 
 static void
-log_close (int fd)
-{
-  if (fd < 0 || fd > NUM_ELEM (opened))
-    return;
-
-  opened[fd] = 0;
-}
-
-static int
-is_opened (int fd)
-{
-  if (fd < 0 || fd > NUM_ELEM (opened))
-    return 0;
-
-  return opened[fd];
-}
-
-static void
-handle_trap1 (SIM_DESC sd)
-{
-  unsigned long a[3];
-  host_callback *callback = STATE_CALLBACK (sd);
-
-  switch ((unsigned long) (cpu.gr [TRAPCODE]))
-    {
-    case 3:
-      a[0] = (unsigned long) (cpu.gr[PARM1]);
-      a[1] = (unsigned long) (cpu.mem + cpu.gr[PARM2]);
-      a[2] = (unsigned long) (cpu.gr[PARM3]);
-      cpu.gr[RET1] = callback->read (callback, a[0], (char *) a[1], a[2]);
-      break;
-
-    case 4:
-      a[0] = (unsigned long) (cpu.gr[PARM1]);
-      a[1] = (unsigned long) (cpu.mem + cpu.gr[PARM2]);
-      a[2] = (unsigned long) (cpu.gr[PARM3]);
-      cpu.gr[RET1] = (int)callback->write (callback, a[0], (char *) a[1], a[2]);
-      break;
-
-    case 5:
-      a[0] = (unsigned long) (cpu.mem + cpu.gr[PARM1]);
-      a[1] = (unsigned long) (cpu.gr[PARM2]);
-      /* a[2] = (unsigned long) (cpu.gr[PARM3]); */
-      cpu.gr[RET1] = callback->open (callback, (char *) a[0], a[1]);
-      log_open (cpu.gr[RET1]);
-      break;
-
-    case 6:
-      a[0] = (unsigned long) (cpu.gr[PARM1]);
-      /* Watch out for debugger's files. */
-      if (is_opened (a[0]))
-	{
-	  log_close (a[0]);
-	  cpu.gr[RET1] = callback->close (callback, a[0]);
-	}
-      else
-	{
-	  /* Don't let him close it.  */
-	  cpu.gr[RET1] = (-1);
-	}
-      break;
-
-    case 9:
-      a[0] = (unsigned long) (cpu.mem + cpu.gr[PARM1]);
-      a[1] = (unsigned long) (cpu.mem + cpu.gr[PARM2]);
-      cpu.gr[RET1] = link ((char *) a[0], (char *) a[1]);
-      break;
-
-    case 10:
-      a[0] = (unsigned long) (cpu.mem + cpu.gr[PARM1]);
-      cpu.gr[RET1] = callback->unlink (callback, (char *) a[0]);
-      break;
-
-    case 13:
-      /* handle time(0) vs time(&var) */
-      a[0] = (unsigned long) (cpu.gr[PARM1]);
-      if (a[0])
-	a[0] += (unsigned long) cpu.mem;
-      cpu.gr[RET1] = callback->time (callback, (time_t *) a[0]);
-      break;
-
-    case 19:
-      a[0] = (unsigned long) (cpu.gr[PARM1]);
-      a[1] = (unsigned long) (cpu.gr[PARM2]);
-      a[2] = (unsigned long) (cpu.gr[PARM3]);
-      cpu.gr[RET1] = callback->lseek (callback, a[0], a[1], a[2]);
-      break;
-
-    case 33:
-      a[0] = (unsigned long) (cpu.mem + cpu.gr[PARM1]);
-      a[1] = (unsigned long) (cpu.gr[PARM2]);
-      cpu.gr[RET1] = access ((char *) a[0], a[1]);
-      break;
-
-    case 43:
-      a[0] = (unsigned long) (cpu.mem + cpu.gr[PARM1]);
-#if 0
-      cpu.gr[RET1] = times ((char *)a[0]);
-#else
-      {
-	/* Give him simulated cycles for utime
-	   and an instruction count for stime. */
-	struct tms
-	{
-	  time_t tms_utime;
-	  time_t tms_stime;
-	  time_t tms_cutime;
-	  time_t tms_cstime;
-	} t;
-
-	t.tms_utime = cpu.asregs.cycles;
-	t.tms_stime = cpu.asregs.insts;
-	t.tms_cutime = t.tms_utime;
-	t.tms_cstime = t.tms_stime;
-
-	memcpy ((struct tms *)(a[0]), &t, sizeof (t));
-
-	cpu.gr[RET1] = cpu.asregs.cycles;
-      }
-#endif
-      break;
-
-    case 69:
-      /* Historically this was sbrk(), but no one used it, and the
-	implementation didn't actually work, so it's a stub now.  */
-      a[0] = (unsigned long) (cpu.gr[PARM1]);
-      cpu.gr[RET1] = -1;
-      break;
-
-    default:
-      if (issue_messages)
-	fprintf (stderr, "WARNING: sys call %d unimplemented\n",
-		 cpu.gr[TRAPCODE]);
-      break;
-    }
-}
-
-static void
-process_stub (SIM_DESC sd, int what)
+process_stub (SIM_DESC sd, SIM_CPU *cpu, int what)
 {
   /* These values should match those in libgloss/mcore/syscalls.s.  */
   switch (what)
@@ -597,65 +185,46 @@ process_stub (SIM_DESC sd, int what)
     case 10: /* _unlink */
     case 19: /* _lseek */
     case 43: /* _times */
-      cpu.gr [TRAPCODE] = what;
-      handle_trap1 (sd);
+      gr[TRAPCODE] = what;
+      handle_trap1 (sd, cpu);
       break;
 
     default:
-      if (issue_messages)
+      if (STATE_VERBOSE_P (sd))
 	fprintf (stderr, "Unhandled stub opcode: %d\n", what);
       break;
     }
 }
 
 static void
-util (SIM_DESC sd, unsigned what)
+util (SIM_DESC sd, SIM_CPU *cpu, unsigned what)
 {
   switch (what)
     {
     case 0:	/* exit */
-      cpu.asregs.exception = SIGQUIT;
+      sim_engine_halt (sd, cpu, NULL, cpu->regs.pc, sim_exited, gr[PARM1]);
       break;
 
     case 1:	/* printf */
-      {
-	unsigned long a[6];
-	unsigned char *s;
-	int i;
-
-	a[0] = (unsigned long)(cpu.mem + cpu.gr[PARM1]);
-
-	for (s = (unsigned char *)a[0], i = 1 ; *s && i < 6 ; s++)
-	  {
-	    if (*s == '%')
-	      {
-		if (*++s == 's')
-		  a[i] = (unsigned long)(cpu.mem + cpu.gr[PARM1+i]);
-		else
-		  a[i] = cpu.gr[i+PARM1];
-		i++;
-	      }
-	  }
-
-	cpu.gr[RET1] = printf ((char *)a[0], a[1], a[2], a[3], a[4], a[5]);
-      }
+      if (STATE_VERBOSE_P (sd))
+	fprintf (stderr, "WARNING: printf unimplemented\n");
       break;
 
     case 2:	/* scanf */
-      if (issue_messages)
+      if (STATE_VERBOSE_P (sd))
 	fprintf (stderr, "WARNING: scanf unimplemented\n");
       break;
 
     case 3:	/* utime */
-      cpu.gr[RET1] = cpu.asregs.insts;
+      gr[RET1] = cpu->insts;
       break;
 
     case 0xFF:
-      process_stub (sd, cpu.gr[1]);
+      process_stub (sd, cpu, gr[1]);
       break;
 
     default:
-      if (issue_messages)
+      if (STATE_VERBOSE_P (sd))
 	fprintf (stderr, "Unhandled util code: %x\n", what);
       break;
     }
@@ -674,7 +243,8 @@ iu_carry (unsigned long a, unsigned long b, int cin)
   return (x != 0);
 }
 
-#define WATCHFUNCTIONS 1
+/* TODO: Convert to common watchpoints.  */
+#undef WATCHFUNCTIONS
 #ifdef WATCHFUNCTIONS
 
 #define MAXWL 80
@@ -698,12 +268,21 @@ int WLW;
 #define IMM5	((inst >> 4) & 0x1F)
 #define IMM4	((inst) & 0xF)
 
+#define rbat(X)	sim_core_read_1 (cpu, 0, read_map, X)
+#define rhat(X)	sim_core_read_2 (cpu, 0, read_map, X)
+#define rlat(X)	sim_core_read_4 (cpu, 0, read_map, X)
+#define wbat(X, D) sim_core_write_1 (cpu, 0, write_map, X, D)
+#define what(X, D) sim_core_write_2 (cpu, 0, write_map, X, D)
+#define wlat(X, D) sim_core_write_4 (cpu, 0, write_map, X, D)
+
 static int tracing = 0;
 
-void
-sim_resume (SIM_DESC sd, int step, int siggnal)
+#define ILLEGAL() \
+  sim_engine_halt (sd, cpu, NULL, pc, sim_stopped, SIM_SIGILL)
+
+static void
+step_once (SIM_DESC sd, SIM_CPU *cpu)
 {
-  SIM_CPU *scpu = STATE_CPU (sd, 0);
   int needfetch;
   word ibuf;
   word pc;
@@ -713,10 +292,11 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
   int insts;
   int w;
   int cycs;
+#ifdef WATCHFUNCTIONS
   word WLhash;
+#endif
 
-  cpu.asregs.exception = step ? SIGTRAP: 0;
-  pc = CIA_GET (scpu);
+  pc = CPU_PC_GET (cpu);
 
   /* Fetch the initial instructions that we'll decode. */
   ibuf = rlat (pc & 0xFFFFFFFC);
@@ -727,18 +307,17 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
   insts = 0;
 
   /* make our register set point to the right place */
-  if (SR_AF ())
-    cpu.asregs.active_gregs = & cpu.asregs.alt_gregs[0];
-  else
-    cpu.asregs.active_gregs = & cpu.asregs.gregs[0];
+  set_active_regs (cpu);
 
+#ifdef WATCHFUNCTIONS
   /* make a hash to speed exec loop, hope it's nonzero */
   WLhash = 0xFFFFFFFF;
 
   for (w = 1; w <= ENDWL; w++)
     WLhash = WLhash & WL[w];
+#endif
 
-  do
+  /* TODO: Unindent this block.  */
     {
       word oldpc;
 
@@ -766,7 +345,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 
       if ((WLincyc == 1) && (pc == WLendpc))
 	{
-	  cycs = (cpu.asregs.cycles + (insts + bonus_cycles +
+	  cycs = (cpu->cycles + (insts + bonus_cycles +
 				       (memops * memcycles)) - WLbcyc);
 
 	  if (WLcnts[WLW] == 1)
@@ -801,9 +380,9 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 		  if (pc == WL[w])
 		    {
 		      WLcnts[w]++;
-		      WLbcyc = cpu.asregs.cycles + insts
+		      WLbcyc = cpu->cycles + insts
 			+ bonus_cycles + (memops * memcycles);
-		      WLendpc = cpu.gr[15];
+		      WLendpc = gr[15];
 		      WLincyc = 1;
 		      WLW = w;
 		      break;
@@ -814,7 +393,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 #endif
 
       if (tracing)
-	fprintf (stderr, "%.4x: inst = %.4x ", pc, inst);
+	fprintf (stderr, "%.4lx: inst = %.4x ", pc, inst);
 
       oldpc = pc;
 
@@ -829,96 +408,93 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      switch RD
 		{
 		case 0x0:				/* bkpt */
-		  cpu.asregs.exception = SIGTRAP;
 		  pc -= 2;
+		  sim_engine_halt (sd, cpu, NULL, pc - 2,
+				   sim_stopped, SIM_SIGTRAP);
 		  break;
 
 		case 0x1:				/* sync */
 		  break;
 
 		case 0x2:				/* rte */
-		  pc = cpu.epc;
-		  cpu.sr = cpu.esr;
+		  pc = epc;
+		  sr = esr;
 		  needfetch = 1;
 
-		  if (SR_AF ())
-		    cpu.asregs.active_gregs = & cpu.asregs.alt_gregs[0];
-		  else
-		    cpu.asregs.active_gregs = & cpu.asregs.gregs[0];
+		  set_active_regs (cpu);
 		  break;
 
 		case 0x3:				/* rfi */
-		  pc = cpu.fpc;
-		  cpu.sr = cpu.fsr;
+		  pc = fpc;
+		  sr = fsr;
 		  needfetch = 1;
 
-		  if (SR_AF ())
-		    cpu.asregs.active_gregs = &cpu.asregs.alt_gregs[0];
-		  else
-		    cpu.asregs.active_gregs = &cpu.asregs.gregs[0];
+		  set_active_regs (cpu);
 		  break;
 
 		case 0x4:				/* stop */
-		  if (issue_messages)
+		  if (STATE_VERBOSE_P (sd))
 		    fprintf (stderr, "WARNING: stop unimplemented\n");
 		  break;
 
 		case 0x5:				/* wait */
-		  if (issue_messages)
+		  if (STATE_VERBOSE_P (sd))
 		    fprintf (stderr, "WARNING: wait unimplemented\n");
 		  break;
 
 		case 0x6:				/* doze */
-		  if (issue_messages)
+		  if (STATE_VERBOSE_P (sd))
 		    fprintf (stderr, "WARNING: doze unimplemented\n");
 		  break;
 
 		case 0x7:
-		  cpu.asregs.exception = SIGILL;	/* illegal */
+		  ILLEGAL ();				/* illegal */
 		  break;
 
 		case 0x8:				/* trap 0 */
 		case 0xA:				/* trap 2 */
 		case 0xB:				/* trap 3 */
-		  cpu.asregs.exception = SIGTRAP;
+		  sim_engine_halt (sd, cpu, NULL, pc,
+				   sim_stopped, SIM_SIGTRAP);
 		  break;
 
 		case 0xC:				/* trap 4 */
 		case 0xD:				/* trap 5 */
 		case 0xE:				/* trap 6 */
-		  cpu.asregs.exception = SIGILL;	/* illegal */
+		  ILLEGAL ();				/* illegal */
 		  break;
 
 		case 0xF: 				/* trap 7 */
-		  cpu.asregs.exception = SIGTRAP;	/* integer div-by-0 */
+		  sim_engine_halt (sd, cpu, NULL, pc,	/* integer div-by-0 */
+				   sim_stopped, SIM_SIGTRAP);
 		  break;
 
 		case 0x9:				/* trap 1 */
-		  handle_trap1 (sd);
+		  handle_trap1 (sd, cpu);
 		  break;
 		}
 	      break;
 
 	    case 0x1:
-	      cpu.asregs.exception = SIGILL;		/* illegal */
+	      ILLEGAL ();				/* illegal */
 	      break;
 
 	    case 0x2:					/* mvc */
-	      cpu.gr[RD] = C_VALUE();
+	      gr[RD] = C_VALUE();
 	      break;
 	    case 0x3:					/* mvcv */
-	      cpu.gr[RD] = C_OFF();
+	      gr[RD] = C_OFF();
 	      break;
 	    case 0x4:					/* ldq */
 	      {
-		word addr = cpu.gr[RD];
+		word addr = gr[RD];
 		int regno = 4;			/* always r4-r7 */
 
 		bonus_cycles++;
 		memops += 4;
 		do
 		  {
-		    cpu.gr[regno] = rlat(addr);
+		    gr[regno] = rlat (addr);
 		    addr += 4;
 		    regno++;
 		  }
@@ -927,14 +503,14 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      break;
 	    case 0x5:					/* stq */
 	      {
-		word addr = cpu.gr[RD];
+		word addr = gr[RD];
 		int regno = 4;			/* always r4-r7 */
 
 		memops += 4;
 		bonus_cycles++;
 		do
 		  {
-		    wlat(addr, cpu.gr[regno]);
+		    wlat (addr, gr[regno]);
 		    addr += 4;
 		    regno++;
 		  }
@@ -943,7 +519,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      break;
 	    case 0x6:					/* ldm */
 	      {
-		word addr = cpu.gr[0];
+		word addr = gr[0];
 		int regno = RD;
 
 		/* bonus cycle is really only needed if
@@ -954,7 +530,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 		memops += 16-regno;
 		while (regno <= 0xF)
 		  {
-		    cpu.gr[regno] = rlat(addr);
+		    gr[regno] = rlat (addr);
 		    addr += 4;
 		    regno++;
 		  }
@@ -962,7 +538,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      break;
 	    case 0x7:					/* stm */
 	      {
-		word addr = cpu.gr[0];
+		word addr = gr[0];
 		int regno = RD;
 
 		/* this should be removed! */
@@ -971,7 +547,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 		memops += 16 - regno;
 		while (regno <= 0xF)
 		  {
-		    wlat(addr, cpu.gr[regno]);
+		    wlat (addr, gr[regno]);
 		    addr += 4;
 		    regno++;
 		  }
@@ -979,49 +555,49 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      break;
 
 	    case 0x8:					/* dect */
-	      cpu.gr[RD] -= C_VALUE();
+	      gr[RD] -= C_VALUE();
 	      break;
 	    case 0x9:					/* decf */
-	      cpu.gr[RD] -= C_OFF();
+	      gr[RD] -= C_OFF();
 	      break;
 	    case 0xA:					/* inct */
-	      cpu.gr[RD] += C_VALUE();
+	      gr[RD] += C_VALUE();
 	      break;
 	    case 0xB:					/* incf */
-	      cpu.gr[RD] += C_OFF();
+	      gr[RD] += C_OFF();
 	      break;
 	    case 0xC:					/* jmp */
-	      pc = cpu.gr[RD];
+	      pc = gr[RD];
 	      if (tracing && RD == 15)
-		fprintf (stderr, "Func return, r2 = %x, r3 = %x\n",
-			 cpu.gr[2], cpu.gr[3]);
+		fprintf (stderr, "Func return, r2 = %lxx, r3 = %lx\n",
+			 gr[2], gr[3]);
 	      bonus_cycles++;
 	      needfetch = 1;
 	      break;
 	    case 0xD:					/* jsr */
-	      cpu.gr[15] = pc;
-	      pc = cpu.gr[RD];
+	      gr[15] = pc;
+	      pc = gr[RD];
 	      bonus_cycles++;
 	      needfetch = 1;
 	      break;
 	    case 0xE:					/* ff1 */
 	      {
 		word tmp, i;
-		tmp = cpu.gr[RD];
+		tmp = gr[RD];
 		for (i = 0; !(tmp & 0x80000000) && i < 32; i++)
 		  tmp <<= 1;
-		cpu.gr[RD] = i;
+		gr[RD] = i;
 	      }
 	      break;
 	    case 0xF:					/* brev */
 	      {
 		word tmp;
-		tmp = cpu.gr[RD];
+		tmp = gr[RD];
 		tmp = ((tmp & 0xaaaaaaaa) >>  1) | ((tmp & 0x55555555) <<  1);
 		tmp = ((tmp & 0xcccccccc) >>  2) | ((tmp & 0x33333333) <<  2);
 		tmp = ((tmp & 0xf0f0f0f0) >>  4) | ((tmp & 0x0f0f0f0f) <<  4);
 		tmp = ((tmp & 0xff00ff00) >>  8) | ((tmp & 0x00ff00ff) <<  8);
-		cpu.gr[RD] = ((tmp & 0xffff0000) >> 16) | ((tmp & 0x0000ffff) << 16);
+		gr[RD] = ((tmp & 0xffff0000) >> 16) | ((tmp & 0x0000ffff) << 16);
 	      }
 	      break;
 	    }
@@ -1030,90 +606,90 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	  switch RS
 	    {
 	    case 0x0:					/* xtrb3 */
-	      cpu.gr[1] = (cpu.gr[RD]) & 0xFF;
-	      NEW_C (cpu.gr[RD] != 0);
+	      gr[1] = (gr[RD]) & 0xFF;
+	      NEW_C (gr[RD] != 0);
 	      break;
 	    case 0x1:					/* xtrb2 */
-	      cpu.gr[1] = (cpu.gr[RD]>>8) & 0xFF;
-	      NEW_C (cpu.gr[RD] != 0);
+	      gr[1] = (gr[RD]>>8) & 0xFF;
+	      NEW_C (gr[RD] != 0);
 	      break;
 	    case 0x2:					/* xtrb1 */
-	      cpu.gr[1] = (cpu.gr[RD]>>16) & 0xFF;
-	      NEW_C (cpu.gr[RD] != 0);
+	      gr[1] = (gr[RD]>>16) & 0xFF;
+	      NEW_C (gr[RD] != 0);
 	      break;
 	    case 0x3:					/* xtrb0 */
-	      cpu.gr[1] = (cpu.gr[RD]>>24) & 0xFF;
-	      NEW_C (cpu.gr[RD] != 0);
+	      gr[1] = (gr[RD]>>24) & 0xFF;
+	      NEW_C (gr[RD] != 0);
 	      break;
 	    case 0x4:					/* zextb */
-	      cpu.gr[RD] &= 0x000000FF;
+	      gr[RD] &= 0x000000FF;
 	      break;
 	    case 0x5:					/* sextb */
 	      {
 		long tmp;
-		tmp = cpu.gr[RD];
+		tmp = gr[RD];
 		tmp <<= 24;
 		tmp >>= 24;
-		cpu.gr[RD] = tmp;
+		gr[RD] = tmp;
 	      }
 	      break;
 	    case 0x6:					/* zexth */
-	      cpu.gr[RD] &= 0x0000FFFF;
+	      gr[RD] &= 0x0000FFFF;
 	      break;
 	    case 0x7:					/* sexth */
 	      {
 		long tmp;
-		tmp = cpu.gr[RD];
+		tmp = gr[RD];
 		tmp <<= 16;
 		tmp >>= 16;
-		cpu.gr[RD] = tmp;
+		gr[RD] = tmp;
 	      }
 	      break;
 	    case 0x8:					/* declt */
-	      --cpu.gr[RD];
-	      NEW_C ((long)cpu.gr[RD] < 0);
+	      --gr[RD];
+	      NEW_C ((long)gr[RD] < 0);
 	      break;
 	    case 0x9:					/* tstnbz */
 	      {
-		word tmp = cpu.gr[RD];
+		word tmp = gr[RD];
 		NEW_C ((tmp & 0xFF000000) != 0 &&
 		       (tmp & 0x00FF0000) != 0 && (tmp & 0x0000FF00) != 0 &&
 		       (tmp & 0x000000FF) != 0);
 	      }
 	      break;
 	    case 0xA:					/* decgt */
-	      --cpu.gr[RD];
-	      NEW_C ((long)cpu.gr[RD] > 0);
+	      --gr[RD];
+	      NEW_C ((long)gr[RD] > 0);
 	      break;
 	    case 0xB:					/* decne */
-	      --cpu.gr[RD];
-	      NEW_C ((long)cpu.gr[RD] != 0);
+	      --gr[RD];
+	      NEW_C ((long)gr[RD] != 0);
 	      break;
 	    case 0xC:					/* clrt */
 	      if (C_ON())
-		cpu.gr[RD] = 0;
+		gr[RD] = 0;
 	      break;
 	    case 0xD:					/* clrf */
 	      if (C_OFF())
-		cpu.gr[RD] = 0;
+		gr[RD] = 0;
 	      break;
 	    case 0xE:					/* abs */
-	      if (cpu.gr[RD] & 0x80000000)
-		cpu.gr[RD] = ~cpu.gr[RD] + 1;
+	      if (gr[RD] & 0x80000000)
+		gr[RD] = ~gr[RD] + 1;
 	      break;
 	    case 0xF:					/* not */
-	      cpu.gr[RD] = ~cpu.gr[RD];
+	      gr[RD] = ~gr[RD];
 	      break;
 	    }
 	  break;
 	case 0x02:					/* movt */
 	  if (C_ON())
-	    cpu.gr[RD] = cpu.gr[RS];
+	    gr[RD] = gr[RS];
 	  break;
 	case 0x03:					/* mult */
 	  /* consume 2 bits per cycle from rs, until rs is 0 */
 	  {
-	    unsigned int t = cpu.gr[RS];
+	    unsigned int t = gr[RS];
 	    int ticks;
 	    for (ticks = 0; t != 0 ; t >>= 2)
 	      ticks++;
@@ -1121,9 +697,9 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	  }
 	  bonus_cycles += 2;  /* min. is 3, so add 2, plus ticks above */
 	  if (tracing)
-	    fprintf (stderr, "  mult %x by %x to give %x",
-		     cpu.gr[RD], cpu.gr[RS], cpu.gr[RD] * cpu.gr[RS]);
-	  cpu.gr[RD] = cpu.gr[RD] * cpu.gr[RS];
+	    fprintf (stderr, "  mult %lx by %lx to give %lx",
+		     gr[RD], gr[RS], gr[RD] * gr[RS]);
+	  gr[RD] = gr[RD] * gr[RS];
 	  break;
 	case 0x04:					/* loopt */
 	  if (C_ON())
@@ -1132,18 +708,18 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      bonus_cycles ++;
 	      needfetch = 1;
 	    }
-	  --cpu.gr[RS];				/* not RD! */
-	  NEW_C (((long)cpu.gr[RS]) > 0);
+	  --gr[RS];				/* not RD! */
+	  NEW_C (((long)gr[RS]) > 0);
 	  break;
 	case 0x05:					/* subu */
-	  cpu.gr[RD] -= cpu.gr[RS];
+	  gr[RD] -= gr[RS];
 	  break;
 	case 0x06:					/* addc */
 	  {
 	    unsigned long tmp, a, b;
-	    a = cpu.gr[RD];
-	    b = cpu.gr[RS];
-	    cpu.gr[RD] = a + b + C_VALUE ();
+	    a = gr[RD];
+	    b = gr[RS];
+	    gr[RD] = a + b + C_VALUE ();
 	    tmp = iu_carry (a, b, C_VALUE ());
 	    NEW_C (tmp);
 	  }
@@ -1151,83 +727,83 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	case 0x07:					/* subc */
 	  {
 	    unsigned long tmp, a, b;
-	    a = cpu.gr[RD];
-	    b = cpu.gr[RS];
-	    cpu.gr[RD] = a - b + C_VALUE () - 1;
+	    a = gr[RD];
+	    b = gr[RS];
+	    gr[RD] = a - b + C_VALUE () - 1;
 	    tmp = iu_carry (a,~b, C_VALUE ());
 	    NEW_C (tmp);
 	  }
 	  break;
 	case 0x08:					/* illegal */
 	case 0x09:					/* illegal*/
-	  cpu.asregs.exception = SIGILL;
+	  ILLEGAL ();
 	  break;
 	case 0x0A:					/* movf */
 	  if (C_OFF())
-	    cpu.gr[RD] = cpu.gr[RS];
+	    gr[RD] = gr[RS];
 	  break;
 	case 0x0B:					/* lsr */
 	  {
 	    unsigned long dst, src;
-	    dst = cpu.gr[RD];
-	    src = cpu.gr[RS];
+	    dst = gr[RD];
+	    src = gr[RS];
 	    /* We must not rely solely upon the native shift operations, since they
 	       may not match the M*Core's behaviour on boundary conditions.  */
 	    dst = src > 31 ? 0 : dst >> src;
-	    cpu.gr[RD] = dst;
+	    gr[RD] = dst;
 	  }
 	  break;
 	case 0x0C:					/* cmphs */
-	  NEW_C ((unsigned long )cpu.gr[RD] >=
-		 (unsigned long)cpu.gr[RS]);
+	  NEW_C ((unsigned long )gr[RD] >=
+		 (unsigned long)gr[RS]);
 	  break;
 	case 0x0D:					/* cmplt */
-	  NEW_C ((long)cpu.gr[RD] < (long)cpu.gr[RS]);
+	  NEW_C ((long)gr[RD] < (long)gr[RS]);
 	  break;
 	case 0x0E:					/* tst */
-	  NEW_C ((cpu.gr[RD] & cpu.gr[RS]) != 0);
+	  NEW_C ((gr[RD] & gr[RS]) != 0);
 	  break;
 	case 0x0F:					/* cmpne */
-	  NEW_C (cpu.gr[RD] != cpu.gr[RS]);
+	  NEW_C (gr[RD] != gr[RS]);
 	  break;
 	case 0x10: case 0x11:				/* mfcr */
 	  {
 	    unsigned r;
 	    r = IMM5;
 	    if (r <= LAST_VALID_CREG)
-	      cpu.gr[RD] = cpu.cr[r];
+	      gr[RD] = cr[r];
 	    else
-	      cpu.asregs.exception = SIGILL;
+	      ILLEGAL ();
 	  }
 	  break;
 
 	case 0x12:					/* mov */
-	  cpu.gr[RD] = cpu.gr[RS];
+	  gr[RD] = gr[RS];
 	  if (tracing)
-	    fprintf (stderr, "MOV %x into reg %d", cpu.gr[RD], RD);
+	    fprintf (stderr, "MOV %lx into reg %d", gr[RD], RD);
 	  break;
 
 	case 0x13:					/* bgenr */
-	  if (cpu.gr[RS] & 0x20)
-	    cpu.gr[RD] = 0;
+	  if (gr[RS] & 0x20)
+	    gr[RD] = 0;
 	  else
-	    cpu.gr[RD] = 1 << (cpu.gr[RS] & 0x1F);
+	    gr[RD] = 1 << (gr[RS] & 0x1F);
 	  break;
 
 	case 0x14:					/* rsub */
-	  cpu.gr[RD] = cpu.gr[RS] - cpu.gr[RD];
+	  gr[RD] = gr[RS] - gr[RD];
 	  break;
 
 	case 0x15:					/* ixw */
-	  cpu.gr[RD] += cpu.gr[RS]<<2;
+	  gr[RD] += gr[RS]<<2;
 	  break;
 
 	case 0x16:					/* and */
-	  cpu.gr[RD] &= cpu.gr[RS];
+	  gr[RD] &= gr[RS];
 	  break;
 
 	case 0x17:					/* xor */
-	  cpu.gr[RD] ^= cpu.gr[RS];
+	  gr[RD] ^= gr[RS];
 	  break;
 
 	case 0x18: case 0x19:				/* mtcr */
@@ -1235,56 +811,53 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	    unsigned r;
 	    r = IMM5;
 	    if (r <= LAST_VALID_CREG)
-	      cpu.cr[r] = cpu.gr[RD];
+	      cr[r] = gr[RD];
 	    else
-	      cpu.asregs.exception = SIGILL;
+	      ILLEGAL ();
 
 	    /* we might have changed register sets... */
-	    if (SR_AF ())
-	      cpu.asregs.active_gregs = & cpu.asregs.alt_gregs[0];
-	    else
-	      cpu.asregs.active_gregs = & cpu.asregs.gregs[0];
+	    set_active_regs (cpu);
 	  }
 	  break;
 
 	case 0x1A:					/* asr */
 	  /* We must not rely solely upon the native shift operations, since they
 	     may not match the M*Core's behaviour on boundary conditions.  */
-	  if (cpu.gr[RS] > 30)
-	    cpu.gr[RD] = ((long) cpu.gr[RD]) < 0 ? -1 : 0;
+	  if (gr[RS] > 30)
+	    gr[RD] = ((long) gr[RD]) < 0 ? -1 : 0;
 	  else
-	    cpu.gr[RD] = (long) cpu.gr[RD] >> cpu.gr[RS];
+	    gr[RD] = (long) gr[RD] >> gr[RS];
 	  break;
 
 	case 0x1B:					/* lsl */
 	  /* We must not rely solely upon the native shift operations, since they
 	     may not match the M*Core's behaviour on boundary conditions.  */
-	  cpu.gr[RD] = cpu.gr[RS] > 31 ? 0 : cpu.gr[RD] << cpu.gr[RS];
+	  gr[RD] = gr[RS] > 31 ? 0 : gr[RD] << gr[RS];
 	  break;
 
 	case 0x1C:					/* addu */
-	  cpu.gr[RD] += cpu.gr[RS];
+	  gr[RD] += gr[RS];
 	  break;
 
 	case 0x1D:					/* ixh */
-	  cpu.gr[RD] += cpu.gr[RS] << 1;
+	  gr[RD] += gr[RS] << 1;
 	  break;
 
 	case 0x1E:					/* or */
-	  cpu.gr[RD] |= cpu.gr[RS];
+	  gr[RD] |= gr[RS];
 	  break;
 
 	case 0x1F:					/* andn */
-	  cpu.gr[RD] &= ~cpu.gr[RS];
+	  gr[RD] &= ~gr[RS];
 	  break;
 	case 0x20: case 0x21:				/* addi */
-	  cpu.gr[RD] =
-	    cpu.gr[RD] + (IMM5 + 1);
+	  gr[RD] =
+	    gr[RD] + (IMM5 + 1);
 	  break;
 	case 0x22: case 0x23:				/* cmplti */
 	  {
 	    int tmp = (IMM5 + 1);
-	    if (cpu.gr[RD] < tmp)
+	    if (gr[RD] < tmp)
 	      {
 	        SET_C();
 	      }
@@ -1295,18 +868,18 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	  }
 	  break;
 	case 0x24: case 0x25:				/* subi */
-	  cpu.gr[RD] =
-	    cpu.gr[RD] - (IMM5 + 1);
+	  gr[RD] =
+	    gr[RD] - (IMM5 + 1);
 	  break;
 	case 0x26: case 0x27:				/* illegal */
-	  cpu.asregs.exception = SIGILL;
+	  ILLEGAL ();
 	  break;
 	case 0x28: case 0x29:				/* rsubi */
-	  cpu.gr[RD] =
-	    IMM5 - cpu.gr[RD];
+	  gr[RD] =
+	    IMM5 - gr[RD];
 	  break;
 	case 0x2A: case 0x2B:				/* cmpnei */
-	  if (cpu.gr[RD] != IMM5)
+	  if (gr[RD] != IMM5)
 	    {
 	      SET_C();
 	    }
@@ -1326,12 +899,12 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 		int rxnlz, r1nlz;
 		unsigned int rx, r1;
 
-		rx = cpu.gr[RD];
-		r1 = cpu.gr[1];
+		rx = gr[RD];
+		r1 = gr[1];
 		exe = 0;
 
 		/* unsigned divide */
-		cpu.gr[RD] = (word) ((unsigned int) cpu.gr[RD] / (unsigned int)cpu.gr[1] );
+		gr[RD] = (word) ((unsigned int) gr[RD] / (unsigned int)gr[1] );
 
 		/* compute bonus_cycles for divu */
 		for (r1nlz = 0; ((r1 & 0x80000000) == 0) && (r1nlz < 32); r1nlz ++)
@@ -1354,22 +927,22 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	      {
 		/* bmaski */
 		if (imm == 0)
-		  cpu.gr[RD] = -1;
+		  gr[RD] = -1;
 		else
-		  cpu.gr[RD] = (1 << imm) - 1;
+		  gr[RD] = (1 << imm) - 1;
 	      }
 	    else
 	      {
 		/* illegal */
-		cpu.asregs.exception = SIGILL;
+		ILLEGAL ();
 	      }
 	  }
 	  break;
 	case 0x2E: case 0x2F:				/* andi */
-	  cpu.gr[RD] = cpu.gr[RD] & IMM5;
+	  gr[RD] = gr[RD] & IMM5;
 	  break;
 	case 0x30: case 0x31:				/* bclri */
-	  cpu.gr[RD] = cpu.gr[RD] & ~(1<<IMM5);
+	  gr[RD] = gr[RD] & ~(1<<IMM5);
 	  break;
 	case 0x32: case 0x33:				/* bgeni, divs */
 	  {
@@ -1381,8 +954,8 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 		signed int rx, r1;
 
 		/* compute bonus_cycles for divu */
-		rx = cpu.gr[RD];
-		r1 = cpu.gr[1];
+		rx = gr[RD];
+		r1 = gr[1];
 		exe = 0;
 
 		if (((rx < 0) && (r1 > 0)) || ((rx >= 0) && (r1 < 0)))
@@ -1394,7 +967,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 		r1 = abs (r1);
 
 		/* signed divide, general registers are of type int, so / op is OK */
-		cpu.gr[RD] = cpu.gr[RD] / cpu.gr[1];
+		gr[RD] = gr[RD] / gr[1];
 
 		for (r1nlz = 0; ((r1 & 0x80000000) == 0) && (r1nlz < 32) ; r1nlz ++ )
 		  r1 = r1 << 1;
@@ -1415,114 +988,115 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	    else if (imm >= 7)
 	      {
 		/* bgeni */
-		cpu.gr[RD] = (1 << IMM5);
+		gr[RD] = (1 << IMM5);
 	      }
 	    else
 	      {
 		/* illegal */
-		cpu.asregs.exception = SIGILL;
+		ILLEGAL ();
 	      }
 	    break;
 	  }
 	case 0x34: case 0x35:				/* bseti */
-	  cpu.gr[RD] = cpu.gr[RD] | (1 << IMM5);
+	  gr[RD] = gr[RD] | (1 << IMM5);
 	  break;
 	case 0x36: case 0x37:				/* btsti */
-	  NEW_C (cpu.gr[RD] >> IMM5);
+	  NEW_C (gr[RD] >> IMM5);
 	  break;
 	case 0x38: case 0x39:				/* xsr, rotli */
 	  {
 	    unsigned imm = IMM5;
-	    unsigned long tmp = cpu.gr[RD];
+	    unsigned long tmp = gr[RD];
 	    if (imm == 0)
 	      {
 		word cbit;
 		cbit = C_VALUE();
 		NEW_C (tmp);
-		cpu.gr[RD] = (cbit << 31) | (tmp >> 1);
+		gr[RD] = (cbit << 31) | (tmp >> 1);
 	      }
 	    else
-	      cpu.gr[RD] = (tmp << imm) | (tmp >> (32 - imm));
+	      gr[RD] = (tmp << imm) | (tmp >> (32 - imm));
 	  }
 	  break;
 	case 0x3A: case 0x3B:				/* asrc, asri */
 	  {
 	    unsigned imm = IMM5;
-	    long tmp = cpu.gr[RD];
+	    long tmp = gr[RD];
 	    if (imm == 0)
 	      {
 		NEW_C (tmp);
-		cpu.gr[RD] = tmp >> 1;
+		gr[RD] = tmp >> 1;
 	      }
 	    else
-	      cpu.gr[RD] = tmp >> imm;
+	      gr[RD] = tmp >> imm;
 	  }
 	  break;
 	case 0x3C: case 0x3D:				/* lslc, lsli */
 	  {
 	    unsigned imm = IMM5;
-	    unsigned long tmp = cpu.gr[RD];
+	    unsigned long tmp = gr[RD];
 	    if (imm == 0)
 	      {
 		NEW_C (tmp >> 31);
-		cpu.gr[RD] = tmp << 1;
+		gr[RD] = tmp << 1;
 	      }
 	    else
-	      cpu.gr[RD] = tmp << imm;
+	      gr[RD] = tmp << imm;
 	  }
 	  break;
 	case 0x3E: case 0x3F:				/* lsrc, lsri */
 	  {
 	    unsigned imm = IMM5;
-	    unsigned long tmp = cpu.gr[RD];
+	    unsigned long tmp = gr[RD];
 	    if (imm == 0)
 	      {
 		NEW_C (tmp);
-		cpu.gr[RD] = tmp >> 1;
+		gr[RD] = tmp >> 1;
 	      }
 	    else
-	      cpu.gr[RD] = tmp >> imm;
+	      gr[RD] = tmp >> imm;
 	  }
 	  break;
 	case 0x40: case 0x41: case 0x42: case 0x43:
 	case 0x44: case 0x45: case 0x46: case 0x47:
 	case 0x48: case 0x49: case 0x4A: case 0x4B:
 	case 0x4C: case 0x4D: case 0x4E: case 0x4F:
-	  cpu.asregs.exception = SIGILL;
+	  ILLEGAL ();
 	  break;
 	case 0x50:
-	  util (sd, inst & 0xFF);
+	  util (sd, cpu, inst & 0xFF);
 	  break;
 	case 0x51: case 0x52: case 0x53:
 	case 0x54: case 0x55: case 0x56: case 0x57:
 	case 0x58: case 0x59: case 0x5A: case 0x5B:
 	case 0x5C: case 0x5D: case 0x5E: case 0x5F:
-	  cpu.asregs.exception = SIGILL;
+	  ILLEGAL ();
 	  break;
 	case 0x60: case 0x61: case 0x62: case 0x63:	/* movi  */
 	case 0x64: case 0x65: case 0x66: case 0x67:
-	  cpu.gr[RD] = (inst >> 4) & 0x7F;
+	  gr[RD] = (inst >> 4) & 0x7F;
 	  break;
 	case 0x68: case 0x69: case 0x6A: case 0x6B:
 	case 0x6C: case 0x6D: case 0x6E: case 0x6F:	/* illegal */
-	  cpu.asregs.exception = SIGILL;
+	  ILLEGAL ();
 	  break;
 	case 0x71: case 0x72: case 0x73:
 	case 0x74: case 0x75: case 0x76: case 0x77:
 	case 0x78: case 0x79: case 0x7A: case 0x7B:
 	case 0x7C: case 0x7D: case 0x7E:		/* lrw */
-	  cpu.gr[RX] =  rlat ((pc + ((inst & 0xFF) << 2)) & 0xFFFFFFFC);
+	  gr[RX] =  rlat ((pc + ((inst & 0xFF) << 2)) & 0xFFFFFFFC);
 	  if (tracing)
-	    fprintf (stderr, "LRW of 0x%x from 0x%x to reg %d",
+	    fprintf (stderr, "LRW of 0x%x from 0x%lx to reg %d",
 		     rlat ((pc + ((inst & 0xFF) << 2)) & 0xFFFFFFFC),
 		     (pc + ((inst & 0xFF) << 2)) & 0xFFFFFFFC, RX);
 	  memops++;
 	  break;
 	case 0x7F:					/* jsri */
-	  cpu.gr[15] = pc;
+	  gr[15] = pc;
 	  if (tracing)
-	    fprintf (stderr, "func call: r2 = %x r3 = %x r4 = %x r5 = %x r6 = %x r7 = %x\n",
-		     cpu.gr[2], cpu.gr[3], cpu.gr[4], cpu.gr[5], cpu.gr[6], cpu.gr[7]);
+	    fprintf (stderr,
+		     "func call: r2 = %lx r3 = %lx r4 = %lx r5 = %lx r6 = %lx r7 = %lx\n",
+		     gr[2], gr[3], gr[4], gr[5], gr[6], gr[7]);
 	case 0x70:					/* jmpi */
 	  pc = rlat ((pc + ((inst & 0xFF) << 2)) & 0xFFFFFFFC);
 	  memops++;
@@ -1534,50 +1108,50 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 	case 0x84: case 0x85: case 0x86: case 0x87:
 	case 0x88: case 0x89: case 0x8A: case 0x8B:
 	case 0x8C: case 0x8D: case 0x8E: case 0x8F:	/* ld */
-	  cpu.gr[RX] = rlat (cpu.gr[RD] + ((inst >> 2) & 0x003C));
+	  gr[RX] = rlat (gr[RD] + ((inst >> 2) & 0x003C));
 	  if (tracing)
-	    fprintf (stderr, "load reg %d from 0x%x with 0x%x",
+	    fprintf (stderr, "load reg %d from 0x%lx with 0x%lx",
 		     RX,
-		     cpu.gr[RD] + ((inst >> 2) & 0x003C), cpu.gr[RX]);
+		     gr[RD] + ((inst >> 2) & 0x003C), gr[RX]);
 	  memops++;
 	  break;
 	case 0x90: case 0x91: case 0x92: case 0x93:
 	case 0x94: case 0x95: case 0x96: case 0x97:
 	case 0x98: case 0x99: case 0x9A: case 0x9B:
 	case 0x9C: case 0x9D: case 0x9E: case 0x9F:	/* st */
-	  wlat (cpu.gr[RD] + ((inst >> 2) & 0x003C), cpu.gr[RX]);
+	  wlat (gr[RD] + ((inst >> 2) & 0x003C), gr[RX]);
 	  if (tracing)
-	    fprintf (stderr, "store reg %d (containing 0x%x) to 0x%x",
-		     RX, cpu.gr[RX],
-		     cpu.gr[RD] + ((inst >> 2) & 0x003C));
+	    fprintf (stderr, "store reg %d (containing 0x%lx) to 0x%lx",
+		     RX, gr[RX],
+		     gr[RD] + ((inst >> 2) & 0x003C));
 	  memops++;
 	  break;
 	case 0xA0: case 0xA1: case 0xA2: case 0xA3:
 	case 0xA4: case 0xA5: case 0xA6: case 0xA7:
 	case 0xA8: case 0xA9: case 0xAA: case 0xAB:
 	case 0xAC: case 0xAD: case 0xAE: case 0xAF:	/* ld.b */
-	  cpu.gr[RX] = rbat (cpu.gr[RD] + RS);
+	  gr[RX] = rbat (gr[RD] + RS);
 	  memops++;
 	  break;
 	case 0xB0: case 0xB1: case 0xB2: case 0xB3:
 	case 0xB4: case 0xB5: case 0xB6: case 0xB7:
 	case 0xB8: case 0xB9: case 0xBA: case 0xBB:
 	case 0xBC: case 0xBD: case 0xBE: case 0xBF:	/* st.b */
-	  wbat (cpu.gr[RD] + RS, cpu.gr[RX]);
+	  wbat (gr[RD] + RS, gr[RX]);
 	  memops++;
 	  break;
 	case 0xC0: case 0xC1: case 0xC2: case 0xC3:
 	case 0xC4: case 0xC5: case 0xC6: case 0xC7:
 	case 0xC8: case 0xC9: case 0xCA: case 0xCB:
 	case 0xCC: case 0xCD: case 0xCE: case 0xCF:	/* ld.h */
-	  cpu.gr[RX] = rhat (cpu.gr[RD] + ((inst >> 3) & 0x001E));
+	  gr[RX] = rhat (gr[RD] + ((inst >> 3) & 0x001E));
 	  memops++;
 	  break;
 	case 0xD0: case 0xD1: case 0xD2: case 0xD3:
 	case 0xD4: case 0xD5: case 0xD6: case 0xD7:
 	case 0xD8: case 0xD9: case 0xDA: case 0xDB:
 	case 0xDC: case 0xDD: case 0xDE: case 0xDF:	/* st.h */
-	  what (cpu.gr[RD] + ((inst >> 3) & 0x001E), cpu.gr[RX]);
+	  what (gr[RD] + ((inst >> 3) & 0x001E), gr[RX]);
 	  memops++;
 	  break;
 	case 0xE8: case 0xE9: case 0xEA: case 0xEB:
@@ -1609,7 +1183,7 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 
 	case 0xF8: case 0xF9: case 0xFA: case 0xFB:
 	case 0xFC: case 0xFD: case 0xFE: case 0xFF:	/* bsr */
-	  cpu.gr[15] = pc;
+	  gr[15] = pc;
 	case 0xF0: case 0xF1: case 0xF2: case 0xF3:
 	case 0xF4: case 0xF5: case 0xF6: case 0xF7:	/* br */
 	  {
@@ -1630,60 +1204,42 @@ sim_resume (SIM_DESC sd, int step, int siggnal)
 
       if (needfetch)
 	{
-	  /* Do not let him fetch from a bad address! */
-	  if (((uword)pc) >= cpu.asregs.msize)
-	    {
-	      if (issue_messages)
-		fprintf (stderr, "PC loaded at 0x%x is outside of available memory! (0x%x)\n", oldpc, pc);
-
-	      cpu.asregs.exception = SIGSEGV;
-	    }
-	  else
-	    {
-	      ibuf = rlat (pc & 0xFFFFFFFC);
-	      needfetch = 0;
-	    }
+	  ibuf = rlat (pc & 0xFFFFFFFC);
+	  needfetch = 0;
 	}
     }
-  while (!cpu.asregs.exception);
 
   /* Hide away the things we've cached while executing.  */
-  CIA_SET (scpu, pc);
-  cpu.asregs.insts += insts;		/* instructions done ... */
-  cpu.asregs.cycles += insts;		/* and each takes a cycle */
-  cpu.asregs.cycles += bonus_cycles;	/* and extra cycles for branches */
-  cpu.asregs.cycles += memops * memcycles;	/* and memop cycle delays */
+  CPU_PC_SET (cpu, pc);
+  cpu->insts += insts;		/* instructions done ... */
+  cpu->cycles += insts;		/* and each takes a cycle */
+  cpu->cycles += bonus_cycles;	/* and extra cycles for branches */
+  cpu->cycles += memops * memcycles;	/* and memop cycle delays */
 }
 
-
-int
-sim_write (SIM_DESC sd, SIM_ADDR addr, const unsigned char *buffer, int size)
+void
+sim_engine_run (SIM_DESC sd,
+		int next_cpu_nr,  /* ignore  */
+		int nr_cpus,      /* ignore  */
+		int siggnal)      /* ignore  */
 {
-  int i;
-  init_pointers ();
+  sim_cpu *cpu;
 
-  memcpy (& cpu.mem[addr], buffer, size);
+  SIM_ASSERT (STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
 
-  return size;
+  cpu = STATE_CPU (sd, 0);
+
+  while (1)
+    {
+      step_once (sd, cpu);
+      if (sim_events_tick (sd))
+	sim_events_process (sd);
+    }
 }
 
-int
-sim_read (SIM_DESC sd, SIM_ADDR addr, unsigned char *buffer, int size)
+static int
+mcore_reg_store (SIM_CPU *cpu, int rn, unsigned char *memory, int length)
 {
-  int i;
-  init_pointers ();
-
-  memcpy (buffer, & cpu.mem[addr], size);
-
-  return size;
-}
-
-
-int
-sim_store_register (SIM_DESC sd, int rn, unsigned char *memory, int length)
-{
-  init_pointers ();
-
   if (rn < NUM_MCORE_REGS && rn >= 0)
     {
       if (length == 4)
@@ -1692,7 +1248,7 @@ sim_store_register (SIM_DESC sd, int rn, unsigned char *memory, int length)
 
 	  /* misalignment safe */
 	  ival = mcore_extract_unsigned_integer (memory, 4);
-	  cpu.asints[rn] = ival;
+	  cpu->asints[rn] = ival;
 	}
 
       return 4;
@@ -1701,16 +1257,14 @@ sim_store_register (SIM_DESC sd, int rn, unsigned char *memory, int length)
     return 0;
 }
 
-int
-sim_fetch_register (SIM_DESC sd, int rn, unsigned char *memory, int length)
+static int
+mcore_reg_fetch (SIM_CPU *cpu, int rn, unsigned char *memory, int length)
 {
-  init_pointers ();
-
   if (rn < NUM_MCORE_REGS && rn >= 0)
     {
       if (length == 4)
 	{
-	  long ival = cpu.asints[rn];
+	  long ival = cpu->asints[rn];
 
 	  /* misalignment-safe */
 	  mcore_store_unsigned_integer (memory, 4, ival);
@@ -1723,35 +1277,21 @@ sim_fetch_register (SIM_DESC sd, int rn, unsigned char *memory, int length)
 }
 
 void
-sim_stop_reason (SIM_DESC sd, enum sim_stop *reason, int *sigrc)
-{
-  if (cpu.asregs.exception == SIGQUIT)
-    {
-      * reason = sim_exited;
-      * sigrc = cpu.gr[PARM1];
-    }
-  else
-    {
-      * reason = sim_stopped;
-      * sigrc = cpu.asregs.exception;
-    }
-}
-
-void
 sim_info (SIM_DESC sd, int verbose)
 {
+  SIM_CPU *cpu = STATE_CPU (sd, 0);
 #ifdef WATCHFUNCTIONS
   int w, wcyc;
 #endif
-  double virttime = cpu.asregs.cycles / 36.0e6;
+  double virttime = cpu->cycles / 36.0e6;
   host_callback *callback = STATE_CALLBACK (sd);
 
   callback->printf_filtered (callback, "\n\n# instructions executed  %10d\n",
-			     cpu.asregs.insts);
+			     cpu->insts);
   callback->printf_filtered (callback, "# cycles                 %10d\n",
-			     cpu.asregs.cycles);
+			     cpu->cycles);
   callback->printf_filtered (callback, "# pipeline stalls        %10d\n",
-			     cpu.asregs.stalls);
+			     cpu->stalls);
   callback->printf_filtered (callback, "# virtual time taken     %10.4f\n",
 			     virttime);
 
@@ -1779,6 +1319,18 @@ sim_info (SIM_DESC sd, int verbose)
 #endif
 }
 
+static sim_cia
+mcore_pc_get (sim_cpu *cpu)
+{
+  return cpu->regs.pc;
+}
+
+static void
+mcore_pc_set (sim_cpu *cpu, sim_cia pc)
+{
+  cpu->regs.pc = pc;
+}
+
 static void
 free_state (SIM_DESC sd)
 {
@@ -1791,8 +1343,8 @@ free_state (SIM_DESC sd)
 SIM_DESC
 sim_open (SIM_OPEN_KIND kind, host_callback *cb, struct bfd *abfd, char **argv)
 {
+  int i;
   SIM_DESC sd = sim_state_alloc (kind, cb);
-  int i, osize;
   SIM_ASSERT (STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
 
   /* The cpu data is kept in a separately allocated chunk of memory.  */
@@ -1808,9 +1360,7 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb, struct bfd *abfd, char **argv)
       return 0;
     }
 
-  /* getopt will print the error message so we just have to exit if this fails.
-     FIXME: Hmmm...  in the case of gdb we need getopt to call
-     print_filtered.  */
+  /* The parser will print an error message for us, so we silently return.  */
   if (sim_parse_args (sd, argv) != SIM_RC_OK)
     {
       free_state (sd);
@@ -1843,35 +1393,29 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb, struct bfd *abfd, char **argv)
       return 0;
     }
 
-  osize = sim_memory_size;
-
-  if (kind == SIM_OPEN_STANDALONE)
-    issue_messages = 1;
-
-  /* Discard and reacquire memory -- start with a clean slate.  */
-  sim_size (1);		/* small */
-  sim_size (osize);	/* and back again */
-
   /* CPU specific initialization.  */
   for (i = 0; i < MAX_NR_PROCESSORS; ++i)
     {
       SIM_CPU *cpu = STATE_CPU (sd, i);
+
+      CPU_REG_FETCH (cpu) = mcore_reg_fetch;
+      CPU_REG_STORE (cpu) = mcore_reg_store;
+      CPU_PC_FETCH (cpu) = mcore_pc_get;
+      CPU_PC_STORE (cpu) = mcore_pc_set;
+
       set_initial_gprs (cpu);	/* Reset the GPR registers.  */
     }
 
-  return sd;
-}
+  /* Default to a 8 Mbyte (== 2^23) memory space.  */
+  sim_do_commandf (sd, "memory-size %#x", DEFAULT_MEMORY_SIZE);
 
-void
-sim_close (SIM_DESC sd, int quitting)
-{
-  /* nothing to do */
+  return sd;
 }
 
 SIM_RC
 sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd, char **argv, char **env)
 {
-  SIM_CPU *scpu = STATE_CPU (sd, 0);
+  SIM_CPU *cpu = STATE_CPU (sd, 0);
   char ** avp;
   int nargs = 0;
   int nenv = 0;
@@ -1883,13 +1427,10 @@ sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd, char **argv, char **env)
 
 
   /* Set the initial register set.  */
-  l = issue_messages;
-  issue_messages = 0;
-  set_initial_gprs (scpu);
-  issue_messages = l;
+  set_initial_gprs (cpu);
 
-  hi_stack = cpu.asregs.msize - 4;
-  CIA_SET (scpu, bfd_get_start_address (prog_bfd));
+  hi_stack = DEFAULT_MEMORY_SIZE - 4;
+  CPU_PC_SET (cpu, bfd_get_start_address (prog_bfd));
 
   /* Calculate the argument and environment strings.  */
   s_length = 0;
@@ -1914,24 +1455,24 @@ sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd, char **argv, char **env)
   /* Claim some memory for the pointers and strings. */
   pointers = hi_stack - sizeof(word) * (nenv+1+nargs+1);
   pointers &= ~3;		/* must be 4-byte aligned */
-  cpu.gr[0] = pointers;
+  gr[0] = pointers;
 
-  strings = cpu.gr[0] - s_length;
+  strings = gr[0] - s_length;
   strings &= ~3;		/* want to make it 4-byte aligned */
-  cpu.gr[0] = strings;
+  gr[0] = strings;
   /* dac fix, the stack address must be 8-byte aligned! */
-  cpu.gr[0] = cpu.gr[0] - cpu.gr[0] % 8;
+  gr[0] = gr[0] - gr[0] % 8;
 
   /* Loop through the arguments and fill them in.  */
-  cpu.gr[PARM1] = nargs;
+  gr[PARM1] = nargs;
   if (nargs == 0)
     {
       /* No strings to fill in.  */
-      cpu.gr[PARM2] = 0;
+      gr[PARM2] = 0;
     }
   else
     {
-      cpu.gr[PARM2] = pointers;
+      gr[PARM2] = pointers;
       avp = argv;
       while (avp && *avp)
 	{
@@ -1940,7 +1481,7 @@ sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd, char **argv, char **env)
 
 	  /* Copy the string.  */
 	  l = strlen (* avp) + 1;
-	  strcpy ((char *)(cpu.mem + strings), *avp);
+	  sim_core_write_buffer (sd, cpu, write_map, *avp, strings, l);
 
 	  /* Bump the pointers.  */
 	  avp++;
@@ -1957,11 +1498,11 @@ sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd, char **argv, char **env)
   if (nenv == 0)
     {
       /* No strings to fill in.  */
-      cpu.gr[PARM3] = 0;
+      gr[PARM3] = 0;
     }
   else
     {
-      cpu.gr[PARM3] = pointers;
+      gr[PARM3] = pointers;
       avp = env;
 
       while (avp && *avp)
@@ -1971,7 +1512,7 @@ sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd, char **argv, char **env)
 
 	  /* Copy the string.  */
 	  l = strlen (* avp) + 1;
-	  strcpy ((char *)(cpu.mem + strings), *avp);
+	  sim_core_write_buffer (sd, cpu, write_map, *avp, strings, l);
 
 	  /* Bump the pointers.  */
 	  avp++;
@@ -1985,76 +1526,4 @@ sim_create_inferior (SIM_DESC sd, struct bfd *prog_bfd, char **argv, char **env)
     }
 
   return SIM_RC_OK;
-}
-
-void
-sim_do_command (SIM_DESC sd, const char *cmd)
-{
-  /* Nothing there yet; it's all an error.  */
-
-  if (cmd != NULL)
-    {
-      char ** simargv = buildargv (cmd);
-
-      if (strcmp (simargv[0], "watch") == 0)
-	{
-	  if ((simargv[1] == NULL) || (simargv[2] == NULL))
-	    {
-	      fprintf (stderr, "Error: missing argument to watch cmd.\n");
-	      freeargv (simargv);
-	      return;
-	    }
-
-	  ENDWL++;
-
-	  WL[ENDWL] = strtol (simargv[2], NULL, 0);
-	  WLstr[ENDWL] = strdup (simargv[1]);
-	  fprintf (stderr, "Added %s (%x) to watchlist, #%d\n",WLstr[ENDWL],
-		   WL[ENDWL], ENDWL);
-
-	}
-      else if (strcmp (simargv[0], "dumpmem") == 0)
-	{
-	  unsigned char * p;
-	  FILE * dumpfile;
-
-	  if (simargv[1] == NULL)
-	    fprintf (stderr, "Error: missing argument to dumpmem cmd.\n");
-
-	  fprintf (stderr, "Writing dumpfile %s...",simargv[1]);
-
-	  dumpfile = fopen (simargv[1], "w");
-	  p = cpu.mem;
-	  fwrite (p, cpu.asregs.msize-1, 1, dumpfile);
-	  fclose (dumpfile);
-
-	  fprintf (stderr, "done.\n");
-	}
-      else if (strcmp (simargv[0], "clearstats") == 0)
-	{
-	  cpu.asregs.cycles = 0;
-	  cpu.asregs.insts = 0;
-	  cpu.asregs.stalls = 0;
-	  ENDWL = 0;
-	}
-      else if (strcmp (simargv[0], "verbose") == 0)
-	{
-	  issue_messages = 2;
-	}
-      else
-	{
-	  fprintf (stderr,"Error: \"%s\" is not a valid M.CORE simulator command.\n",
-		   cmd);
-	}
-
-      freeargv (simargv);
-    }
-  else
-    {
-      fprintf (stderr, "M.CORE sim commands: \n");
-      fprintf (stderr, "  watch <funcname> <addr>\n");
-      fprintf (stderr, "  dumpmem <filename>\n");
-      fprintf (stderr, "  clearstats\n");
-      fprintf (stderr, "  verbose\n");
-    }
 }

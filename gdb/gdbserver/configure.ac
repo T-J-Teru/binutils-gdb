@@ -1,5 +1,5 @@
 dnl Autoconf configure script for GDB server.
-dnl Copyright (C) 2000-2015 Free Software Foundation, Inc.
+dnl Copyright (C) 2000-2016 Free Software Foundation, Inc.
 dnl
 dnl This file is part of GDB.
 dnl
@@ -94,9 +94,12 @@ AC_CHECK_HEADERS(sgtty.h termio.h termios.h sys/reg.h string.h dnl
 		 fcntl.h signal.h sys/file.h dnl
 		 sys/ioctl.h netinet/in.h sys/socket.h netdb.h dnl
 		 netinet/tcp.h arpa/inet.h)
-AC_CHECK_FUNCS(getauxval pread pwrite pread64)
+AC_CHECK_FUNCS(getauxval pread pwrite pread64 setns)
 
 GDB_AC_COMMON
+
+# Check the return and argument types of ptrace.
+GDB_AC_PTRACE
 
 # Check for UST
 ustlibs=""
@@ -154,8 +157,7 @@ AC_ARG_ENABLE(werror,
      *) AC_MSG_ERROR(bad value ${enableval} for --enable-werror) ;;
    esac])
 
-# Enable -Werror by default when using gcc in C mode.  Leave it off
-# for C++ until we're warning clean.  Turn it off for releases.
+# Enable -Werror by default when using gcc.  Turn it off for releases.
 if test "${GCC}" = yes -a -z "${ERROR_ON_WARNING}" \
    && test x"$enable_build_with_cxx" != x"yes" \
    && $development; then
@@ -191,14 +193,23 @@ then
     # Separate out the -Werror flag as some files just cannot be
     # compiled with it enabled.
     for w in ${build_warnings}; do
+	# GCC does not complain about -Wno-unknown-warning.  Invert
+	# and test -Wunknown-warning instead.
+	case $w in
+	-Wno-*)
+		wtest=`echo $w | sed 's/-Wno-/-W/g'` ;;
+	*)
+		wtest=$w ;;
+	esac
+
 	case $w in
 	-Werr*) WERROR_CFLAGS=-Werror ;;
 	*)
 	    # Check whether GCC accepts it.
 	    saved_CFLAGS="$CFLAGS"
-	    CFLAGS="$CFLAGS $w"
+	    CFLAGS="$CFLAGS $wtest"
 	    saved_CXXFLAGS="$CXXFLAGS"
-	    CXXFLAGS="$CXXFLAGS $w"
+	    CXXFLAGS="$CXXFLAGS $wtest"
 	    AC_TRY_COMPILE([],[],WARN_CFLAGS="${WARN_CFLAGS} $w",)
 	    CFLAGS="$saved_CFLAGS"
 	    CXXFLAGS="$saved_CXXFLAGS"
@@ -233,9 +244,23 @@ AC_CHECK_TYPES(socklen_t, [], [],
 #include <sys/socket.h>
 ])
 
-AC_CHECK_TYPES([Elf32_auxv_t, Elf64_auxv_t], [], [],
-#include <elf.h>
-)
+case "${target}" in
+  *-android*)
+    # Starting with NDK version 9, <elf.h> actually includes definitions
+    # of Elf32_auxv_t and Elf64_auxv_t. But sadly, <elf.h> includes
+    # <sys/exec_elf.h> which defines some of the ELF types incorrectly,
+    # leading to conflicts with the defintions from <linux/elf.h>.
+    # This makes it impossible for us to include both <elf.h> and
+    # <linux/elf.h>, which means that, in practice, we do not have
+    # access to Elf32_auxv_t and Elf64_auxv_t on this platform.
+    # Therefore, do not try to auto-detect availability, as it would
+    # get it wrong on this platform.
+    ;;
+  *)
+    AC_CHECK_TYPES([Elf32_auxv_t, Elf64_auxv_t], [], [],
+    #include <elf.h>
+    )
+esac
 
 ACX_PKGVERSION([GDB])
 ACX_BUGURL([http://www.gnu.org/software/gdb/bugs/])
@@ -343,6 +368,7 @@ if test "$ac_cv_header_sys_procfs_h" = yes; then
   BFD_HAVE_SYS_PROCFS_TYPE(lwpid_t)
   BFD_HAVE_SYS_PROCFS_TYPE(psaddr_t)
   BFD_HAVE_SYS_PROCFS_TYPE(prgregset_t)
+  BFD_HAVE_SYS_PROCFS_TYPE(prfpregset_t)
   BFD_HAVE_SYS_PROCFS_TYPE(elf_fpregset_t)
 fi
 

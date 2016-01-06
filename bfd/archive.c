@@ -1,5 +1,5 @@
 /* BFD back-end for archive files (libraries).
-   Copyright (C) 1990-2015 Free Software Foundation, Inc.
+   Copyright (C) 1990-2016 Free Software Foundation, Inc.
    Written by Cygnus Support.  Mostly Gumby Henkel-Wallace's fault.
 
    This file is part of BFD, the Binary File Descriptor library.
@@ -725,8 +725,13 @@ _bfd_get_elt_at_filepos (bfd *archive, file_ptr filepos)
 
   n_bfd->arelt_data = new_areldata;
 
-  /* Copy BFD_COMPRESS and BFD_DECOMPRESS flags.  */
-  n_bfd->flags |= archive->flags & (BFD_COMPRESS | BFD_DECOMPRESS);
+  /* Copy BFD_COMPRESS, BFD_DECOMPRESS and BFD_COMPRESS_GABI flags.  */
+  n_bfd->flags |= archive->flags & (BFD_COMPRESS
+				    | BFD_DECOMPRESS
+				    | BFD_COMPRESS_GABI);
+
+  /* Copy is_linker_input.  */
+  n_bfd->is_linker_input = archive->is_linker_input;
 
   if (_bfd_add_bfd_to_archive_cache (archive, filepos, n_bfd))
     return n_bfd;
@@ -781,21 +786,29 @@ bfd_openr_next_archived_file (bfd *archive, bfd *last_file)
 bfd *
 bfd_generic_openr_next_archived_file (bfd *archive, bfd *last_file)
 {
-  file_ptr filestart;
+  ufile_ptr filestart;
 
   if (!last_file)
     filestart = bfd_ardata (archive)->first_file_filepos;
   else
     {
-      bfd_size_type size = arelt_size (last_file);
-
       filestart = last_file->proxy_origin;
       if (! bfd_is_thin_archive (archive))
-	filestart += size;
-      /* Pad to an even boundary...
-	 Note that last_file->origin can be odd in the case of
-	 BSD-4.4-style element with a long odd size.  */
-      filestart += filestart % 2;
+	{
+	  bfd_size_type size = arelt_size (last_file);
+
+	  filestart += size;
+	  /* Pad to an even boundary...
+	     Note that last_file->origin can be odd in the case of
+	     BSD-4.4-style element with a long odd size.  */
+	  filestart += filestart % 2;
+	  if (filestart <= last_file->proxy_origin)
+	    {
+	      /* Prevent looping.  See PR19256.  */
+	      bfd_set_error (bfd_error_malformed_archive);
+	      return NULL;
+	    }
+	}
     }
 
   return _bfd_get_elt_at_filepos (archive, filestart);

@@ -1,6 +1,6 @@
 /* GNU/Linux/x86-64 specific low level interface, for the remote server
    for GDB.
-   Copyright (C) 2002-2015 Free Software Foundation, Inc.
+   Copyright (C) 2002-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -25,6 +25,7 @@
 #include "i387-fp.h"
 #include "x86-low.h"
 #include "x86-xstate.h"
+#include "nat/gdb_ptrace.h"
 
 #include "gdb_proc_service.h"
 /* Don't include elf/common.h if linux/elf.h got included by
@@ -117,17 +118,8 @@ static const char *xmltarget_amd64_linux_no_xml = "@<target>\
 
 #include <sys/reg.h>
 #include <sys/procfs.h>
-#include <sys/ptrace.h>
+#include "nat/gdb_ptrace.h"
 #include <sys/uio.h>
-
-#ifndef PTRACE_GETREGSET
-#define PTRACE_GETREGSET	0x4204
-#endif
-
-#ifndef PTRACE_SETREGSET
-#define PTRACE_SETREGSET	0x4205
-#endif
-
 
 #ifndef PTRACE_GET_THREAD_AREA
 #define PTRACE_GET_THREAD_AREA 25
@@ -471,7 +463,7 @@ static struct regset_info x86_regsets[] =
     FP_REGS,
     x86_fill_fpregset, x86_store_fpregset },
 #endif /* HAVE_PTRACE_GETREGS */
-  { 0, 0, 0, -1, -1, NULL, NULL }
+  NULL_REGSET
 };
 
 static CORE_ADDR
@@ -510,7 +502,7 @@ x86_set_pc (struct regcache *regcache, CORE_ADDR pc)
     }
 }
 
-static const unsigned char x86_breakpoint[] = { 0xCC };
+static const gdb_byte x86_breakpoint[] = { 0xCC };
 #define x86_breakpoint_len 1
 
 static int
@@ -561,9 +553,6 @@ x86_insert_point (enum raw_bkpt_type type, CORE_ADDR addr,
 
   switch (type)
     {
-    case raw_bkpt_type_sw:
-      return insert_memory_breakpoint (bp);
-
     case raw_bkpt_type_hw:
     case raw_bkpt_type_write_wp:
     case raw_bkpt_type_access_wp:
@@ -590,9 +579,6 @@ x86_remove_point (enum raw_bkpt_type type, CORE_ADDR addr,
 
   switch (type)
     {
-    case raw_bkpt_type_sw:
-      return remove_memory_breakpoint (bp);
-
     case raw_bkpt_type_hw:
     case raw_bkpt_type_write_wp:
     case raw_bkpt_type_access_wp:
@@ -638,6 +624,34 @@ x86_linux_new_process (void)
   x86_low_init_dregs (&info->debug_reg_state);
 
   return info;
+}
+
+/* Target routine for linux_new_fork.  */
+
+static void
+x86_linux_new_fork (struct process_info *parent, struct process_info *child)
+{
+  /* These are allocated by linux_add_process.  */
+  gdb_assert (parent->priv != NULL
+	      && parent->priv->arch_private != NULL);
+  gdb_assert (child->priv != NULL
+	      && child->priv->arch_private != NULL);
+
+  /* Linux kernel before 2.6.33 commit
+     72f674d203cd230426437cdcf7dd6f681dad8b0d
+     will inherit hardware debug registers from parent
+     on fork/vfork/clone.  Newer Linux kernels create such tasks with
+     zeroed debug registers.
+
+     GDB core assumes the child inherits the watchpoints/hw
+     breakpoints of the parent, and will remove them all from the
+     forked off process.  Copy the debug registers mirrors into the
+     new process so that all breakpoints and watchpoints can be
+     removed together.  The debug registers mirror will become zeroed
+     in the end before detaching the forked off process, thus making
+     this compatible with older Linux kernels too.  */
+
+  *child->priv->arch_private = *parent->priv->arch_private;
 }
 
 /* See nat/x86-dregs.h.  */
@@ -1128,9 +1142,6 @@ int have_ptrace_getfpxregs =
 #endif
 ;
 
-/* Does the current host support PTRACE_GETREGSET?  */
-static int have_ptrace_getregset = -1;
-
 /* Get Linux/x86 target description from running target.  */
 
 static const struct target_desc *
@@ -1345,29 +1356,35 @@ x86_linux_update_xmltarget (void)
    PTRACE_GETREGSET.  */
 
 static void
-x86_linux_process_qsupported (const char *query)
+x86_linux_process_qsupported (char **features, int count)
 {
+  int i;
+
   /* Return if gdb doesn't support XML.  If gdb sends "xmlRegisters="
      with "i386" in qSupported query, it supports x86 XML target
      descriptions.  */
   use_xml = 0;
-  if (query != NULL && startswith (query, "xmlRegisters="))
+  for (i = 0; i < count; i++)
     {
-      char *copy = xstrdup (query + 13);
-      char *p;
+      const char *feature = features[i];
 
-      for (p = strtok (copy, ","); p != NULL; p = strtok (NULL, ","))
+      if (startswith (feature, "xmlRegisters="))
 	{
-	  if (strcmp (p, "i386") == 0)
+	  char *copy = xstrdup (feature + 13);
+	  char *p;
+
+	  for (p = strtok (copy, ","); p != NULL; p = strtok (NULL, ","))
 	    {
-	      use_xml = 1;
-	      break;
+	      if (strcmp (p, "i386") == 0)
+		{
+		  use_xml = 1;
+		  break;
+		}
 	    }
-	} 
 
-      free (copy);
+	  free (copy);
+	}
     }
-
   x86_linux_update_xmltarget ();
 }
 
@@ -3232,8 +3249,26 @@ x86_emit_ops (void)
     return &i386_emit_ops;
 }
 
+/* Implementation of linux_target_ops method "sw_breakpoint_from_kind".  */
+
+static const gdb_byte *
+x86_sw_breakpoint_from_kind (int kind, int *size)
+{
+  *size = x86_breakpoint_len;
+  return x86_breakpoint;
+}
+
 static int
 x86_supports_range_stepping (void)
+{
+  return 1;
+}
+
+/* Implementation of linux_target_ops method "supports_hardware_single_step".
+ */
+
+static int
+x86_supports_hardware_single_step (void)
 {
   return 1;
 }
@@ -3250,8 +3285,8 @@ struct linux_target_ops the_low_target =
   NULL, /* fetch_register */
   x86_get_pc,
   x86_set_pc,
-  x86_breakpoint,
-  x86_breakpoint_len,
+  NULL, /* breakpoint_kind_from_pc */
+  x86_sw_breakpoint_from_kind,
   NULL,
   1,
   x86_breakpoint_at,
@@ -3269,6 +3304,7 @@ struct linux_target_ops the_low_target =
   x86_siginfo_fixup,
   x86_linux_new_process,
   x86_linux_new_thread,
+  x86_linux_new_fork,
   x86_linux_prepare_to_resume,
   x86_linux_process_qsupported,
   x86_supports_tracepoints,
@@ -3277,6 +3313,8 @@ struct linux_target_ops the_low_target =
   x86_emit_ops,
   x86_get_min_fast_tracepoint_insn_len,
   x86_supports_range_stepping,
+  NULL, /* breakpoint_kind_from_current_state */
+  x86_supports_hardware_single_step,
 };
 
 void
@@ -3293,7 +3331,7 @@ initialize_low_arch (void)
   init_registers_x32_avx_linux ();
   init_registers_x32_avx512_linux ();
 
-  tdesc_amd64_linux_no_xml = xmalloc (sizeof (struct target_desc));
+  tdesc_amd64_linux_no_xml = XNEW (struct target_desc);
   copy_target_description (tdesc_amd64_linux_no_xml, tdesc_amd64_linux);
   tdesc_amd64_linux_no_xml->xmltarget = xmltarget_amd64_linux_no_xml;
 #endif
@@ -3303,7 +3341,7 @@ initialize_low_arch (void)
   init_registers_i386_avx512_linux ();
   init_registers_i386_mpx_linux ();
 
-  tdesc_i386_linux_no_xml = xmalloc (sizeof (struct target_desc));
+  tdesc_i386_linux_no_xml = XNEW (struct target_desc);
   copy_target_description (tdesc_i386_linux_no_xml, tdesc_i386_linux);
   tdesc_i386_linux_no_xml->xmltarget = xmltarget_i386_linux_no_xml;
 

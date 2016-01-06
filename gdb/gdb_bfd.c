@@ -1,6 +1,6 @@
 /* Definitions for BFD wrappers used by GDB.
 
-   Copyright (C) 2011-2015 Free Software Foundation, Inc.
+   Copyright (C) 2011-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -30,6 +30,9 @@
 #define MAP_FAILED ((void *) -1)
 #endif
 #endif
+#include "target.h"
+#include "gdb/fileio.h"
+#include "inferior.h"
 
 typedef bfd *bfdp;
 DEF_VEC_P (bfdp);
@@ -69,6 +72,12 @@ struct gdb_bfd_data
   /* The file size (in bytes) at the point the cache entry was made.  */
   off_t size;
 
+  /* The inode of the file at the point the cache entry was made.  */
+  ino_t inode;
+
+  /* The device id of the file at the point the cache entry was made.  */
+  dev_t device_id;
+
   /* This is true if we have determined whether this BFD has any
      sections requiring relocation.  */
   unsigned int relocation_computed : 1;
@@ -105,11 +114,23 @@ static htab_t gdb_bfd_cache;
 /* When true gdb will reuse an existing bfd object if the filename,
    modification time, and file size all match.  */
 
-static int bfd_sharing;
+static int bfd_sharing = 1;
+static void
+show_bfd_sharing  (struct ui_file *file, int from_tty,
+		   struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("BFD sharing is %s.\n"), value);
+}
 
 /* When non-zero debugging of the bfd caches is enabled.  */
 
 static unsigned int debug_bfd_cache;
+static void
+show_bfd_cache_debug (struct ui_file *file, int from_tty,
+		      struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("BFD cache debugging is %s.\n"), value);
+}
 
 /* The type of an object being looked up in gdb_bfd_cache.  We use
    htab's capability of storing one kind of object (BFD in this case)
@@ -123,6 +144,10 @@ struct gdb_bfd_cache_search
   time_t mtime;
   /* The file size (in bytes).  */
   off_t size;
+  /* The inode of the file.  */
+  ino_t inode;
+  /* The device id of the file.  */
+  dev_t device_id;
 };
 
 /* A hash function for BFDs.  */
@@ -130,7 +155,7 @@ struct gdb_bfd_cache_search
 static hashval_t
 hash_bfd (const void *b)
 {
-  const bfd *abfd = b;
+  const bfd *abfd = (const struct bfd *) b;
 
   /* It is simplest to just hash the filename.  */
   return htab_hash_string (bfd_get_filename (abfd));
@@ -142,13 +167,191 @@ hash_bfd (const void *b)
 static int
 eq_bfd (const void *a, const void *b)
 {
-  const bfd *abfd = a;
-  const struct gdb_bfd_cache_search *s = b;
-  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
+  const bfd *abfd = (const struct bfd *) a;
+  const struct gdb_bfd_cache_search *s
+    = (const struct gdb_bfd_cache_search *) b;
+  struct gdb_bfd_data *gdata = (struct gdb_bfd_data *) bfd_usrdata (abfd);
 
   return (gdata->mtime == s->mtime
 	  && gdata->size == s->size
+	  && gdata->inode == s->inode
+	  && gdata->device_id == s->device_id
 	  && strcmp (bfd_get_filename (abfd), s->filename) == 0);
+}
+
+/* See gdb_bfd.h.  */
+
+int
+is_target_filename (const char *name)
+{
+  return startswith (name, TARGET_SYSROOT_PREFIX);
+}
+
+/* See gdb_bfd.h.  */
+
+int
+gdb_bfd_has_target_filename (struct bfd *abfd)
+{
+  return is_target_filename (bfd_get_filename (abfd));
+}
+
+
+/* Return the system error number corresponding to ERRNUM.  */
+
+static int
+fileio_errno_to_host (int errnum)
+{
+  switch (errnum)
+    {
+      case FILEIO_EPERM:
+        return EPERM;
+      case FILEIO_ENOENT:
+        return ENOENT;
+      case FILEIO_EINTR:
+        return EINTR;
+      case FILEIO_EIO:
+        return EIO;
+      case FILEIO_EBADF:
+        return EBADF;
+      case FILEIO_EACCES:
+        return EACCES;
+      case FILEIO_EFAULT:
+        return EFAULT;
+      case FILEIO_EBUSY:
+        return EBUSY;
+      case FILEIO_EEXIST:
+        return EEXIST;
+      case FILEIO_ENODEV:
+        return ENODEV;
+      case FILEIO_ENOTDIR:
+        return ENOTDIR;
+      case FILEIO_EISDIR:
+        return EISDIR;
+      case FILEIO_EINVAL:
+        return EINVAL;
+      case FILEIO_ENFILE:
+        return ENFILE;
+      case FILEIO_EMFILE:
+        return EMFILE;
+      case FILEIO_EFBIG:
+        return EFBIG;
+      case FILEIO_ENOSPC:
+        return ENOSPC;
+      case FILEIO_ESPIPE:
+        return ESPIPE;
+      case FILEIO_EROFS:
+        return EROFS;
+      case FILEIO_ENOSYS:
+        return ENOSYS;
+      case FILEIO_ENAMETOOLONG:
+        return ENAMETOOLONG;
+    }
+  return -1;
+}
+
+/* Wrapper for target_fileio_open suitable for passing as the
+   OPEN_FUNC argument to gdb_bfd_openr_iovec.  The supplied
+   OPEN_CLOSURE is unused.  */
+
+static void *
+gdb_bfd_iovec_fileio_open (struct bfd *abfd, void *inferior)
+{
+  const char *filename = bfd_get_filename (abfd);
+  int fd, target_errno;
+  int *stream;
+
+  gdb_assert (is_target_filename (filename));
+
+  fd = target_fileio_open_warn_if_slow ((struct inferior *) inferior,
+					filename
+					+ strlen (TARGET_SYSROOT_PREFIX),
+					FILEIO_O_RDONLY, 0,
+					&target_errno);
+  if (fd == -1)
+    {
+      errno = fileio_errno_to_host (target_errno);
+      bfd_set_error (bfd_error_system_call);
+      return NULL;
+    }
+
+  stream = XCNEW (int);
+  *stream = fd;
+  return stream;
+}
+
+/* Wrapper for target_fileio_pread suitable for passing as the
+   PREAD_FUNC argument to gdb_bfd_openr_iovec.  */
+
+static file_ptr
+gdb_bfd_iovec_fileio_pread (struct bfd *abfd, void *stream, void *buf,
+			    file_ptr nbytes, file_ptr offset)
+{
+  int fd = *(int *) stream;
+  int target_errno;
+  file_ptr pos, bytes;
+
+  pos = 0;
+  while (nbytes > pos)
+    {
+      QUIT;
+
+      bytes = target_fileio_pread (fd, (gdb_byte *) buf + pos,
+				   nbytes - pos, offset + pos,
+				   &target_errno);
+      if (bytes == 0)
+        /* Success, but no bytes, means end-of-file.  */
+        break;
+      if (bytes == -1)
+	{
+	  errno = fileio_errno_to_host (target_errno);
+	  bfd_set_error (bfd_error_system_call);
+	  return -1;
+	}
+
+      pos += bytes;
+    }
+
+  return pos;
+}
+
+/* Wrapper for target_fileio_close suitable for passing as the
+   CLOSE_FUNC argument to gdb_bfd_openr_iovec.  */
+
+static int
+gdb_bfd_iovec_fileio_close (struct bfd *abfd, void *stream)
+{
+  int fd = *(int *) stream;
+  int target_errno;
+
+  xfree (stream);
+
+  /* Ignore errors on close.  These may happen with remote
+     targets if the connection has already been torn down.  */
+  target_fileio_close (fd, &target_errno);
+
+  /* Zero means success.  */
+  return 0;
+}
+
+/* Wrapper for target_fileio_fstat suitable for passing as the
+   STAT_FUNC argument to gdb_bfd_openr_iovec.  */
+
+static int
+gdb_bfd_iovec_fileio_fstat (struct bfd *abfd, void *stream,
+			    struct stat *sb)
+{
+  int fd = *(int *) stream;
+  int target_errno;
+  int result;
+
+  result = target_fileio_fstat (fd, sb, &target_errno);
+  if (result == -1)
+    {
+      errno = fileio_errno_to_host (target_errno);
+      bfd_set_error (bfd_error_system_call);
+    }
+
+  return result;
 }
 
 /* See gdb_bfd.h.  */
@@ -161,6 +364,23 @@ gdb_bfd_open (const char *name, const char *target, int fd)
   bfd *abfd;
   struct gdb_bfd_cache_search search;
   struct stat st;
+
+  if (is_target_filename (name))
+    {
+      if (!target_filesystem_is_local ())
+	{
+	  gdb_assert (fd == -1);
+
+	  return gdb_bfd_openr_iovec (name, target,
+				      gdb_bfd_iovec_fileio_open,
+				      current_inferior (),
+				      gdb_bfd_iovec_fileio_pread,
+				      gdb_bfd_iovec_fileio_close,
+				      gdb_bfd_iovec_fileio_fstat);
+	}
+
+      name += strlen (TARGET_SYSROOT_PREFIX);
+    }
 
   if (gdb_bfd_cache == NULL)
     gdb_bfd_cache = htab_create_alloc (1, hash_bfd, eq_bfd, NULL,
@@ -182,11 +402,15 @@ gdb_bfd_open (const char *name, const char *target, int fd)
       /* Weird situation here.  */
       search.mtime = 0;
       search.size = 0;
+      search.inode = 0;
+      search.device_id = 0;
     }
   else
     {
       search.mtime = st.st_mtime;
       search.size = st.st_size;
+      search.inode = st.st_ino;
+      search.device_id = st.st_dev;
     }
 
   /* Note that this must compute the same result as hash_bfd.  */
@@ -194,7 +418,7 @@ gdb_bfd_open (const char *name, const char *target, int fd)
   /* Note that we cannot use htab_find_slot_with_hash here, because
      opening the BFD may fail; and this would violate hashtab
      invariants.  */
-  abfd = htab_find_with_hash (gdb_bfd_cache, &search, hash);
+  abfd = (struct bfd *) htab_find_with_hash (gdb_bfd_cache, &search, hash);
   if (bfd_sharing && abfd != NULL)
     {
       if (debug_bfd_cache)
@@ -234,7 +458,8 @@ gdb_bfd_open (const char *name, const char *target, int fd)
 static void
 free_one_bfd_section (bfd *abfd, asection *sectp, void *ignore)
 {
-  struct gdb_bfd_section_data *sect = bfd_get_section_userdata (abfd, sectp);
+  struct gdb_bfd_section_data *sect
+    = (struct gdb_bfd_section_data *) bfd_get_section_userdata (abfd, sectp);
 
   if (sect != NULL && sect->data != NULL)
     {
@@ -276,13 +501,20 @@ gdb_bfd_close_or_warn (struct bfd *abfd)
 void
 gdb_bfd_ref (struct bfd *abfd)
 {
+  struct stat buf;
   struct gdb_bfd_data *gdata;
   void **slot;
 
   if (abfd == NULL)
     return;
 
-  gdata = bfd_usrdata (abfd);
+  gdata = (struct gdb_bfd_data *) bfd_usrdata (abfd);
+
+  if (debug_bfd_cache)
+    fprintf_unfiltered (gdb_stdlog,
+			"Increase reference count on bfd %s (%s)\n",
+			host_address_to_string (abfd),
+			bfd_get_filename (abfd));
 
   if (debug_bfd_cache)
     fprintf_unfiltered (gdb_stdlog,
@@ -299,11 +531,23 @@ gdb_bfd_ref (struct bfd *abfd)
   /* Ask BFD to decompress sections in bfd_get_full_section_contents.  */
   abfd->flags |= BFD_DECOMPRESS;
 
-  gdata = bfd_zalloc (abfd, sizeof (struct gdb_bfd_data));
+  gdata
+    = (struct gdb_bfd_data *) bfd_zalloc (abfd, sizeof (struct gdb_bfd_data));
   gdata->refc = 1;
   gdata->mtime = bfd_get_mtime (abfd);
   gdata->size = bfd_get_size (abfd);
   gdata->archive_bfd = NULL;
+  if (bfd_stat (abfd, &buf) == 0)
+    {
+      gdata->inode = buf.st_ino;
+      gdata->device_id = buf.st_dev;
+    }
+  else
+    {
+      /* The stat failed.  */
+      gdata->inode = 0;
+      gdata->device_id = 0;
+    }
   bfd_usrdata (abfd) = gdata;
 
   bfd_alloc_data (abfd);
@@ -327,7 +571,7 @@ gdb_bfd_unref (struct bfd *abfd)
   if (abfd == NULL)
     return;
 
-  gdata = bfd_usrdata (abfd);
+  gdata = (struct gdb_bfd_data *) bfd_usrdata (abfd);
   gdb_assert (gdata->refc >= 1);
 
   gdata->refc -= 1;
@@ -357,6 +601,8 @@ gdb_bfd_unref (struct bfd *abfd)
 
       search.mtime = gdata->mtime;
       search.size = gdata->size;
+      search.inode = gdata->inode;
+      search.device_id = gdata->device_id;
       slot = htab_find_slot_with_hash (gdb_bfd_cache, &search, hash,
 				       NO_INSERT);
 
@@ -389,11 +635,13 @@ get_section_descriptor (asection *section)
 {
   struct gdb_bfd_section_data *result;
 
-  result = bfd_get_section_userdata (section->owner, section);
+  result = ((struct gdb_bfd_section_data *)
+	    bfd_get_section_userdata (section->owner, section));
 
   if (result == NULL)
     {
-      result = bfd_zalloc (section->owner, sizeof (*result));
+      result = ((struct gdb_bfd_section_data *)
+		bfd_zalloc (section->owner, sizeof (*result)));
       bfd_set_section_userdata (section->owner, section, result);
     }
 
@@ -471,7 +719,7 @@ gdb_bfd_map_section (asection *sectp, bfd_size_type *size)
  done:
   gdb_assert (descriptor->data != NULL);
   *size = descriptor->size;
-  return descriptor->data;
+  return (const gdb_byte *) descriptor->data;
 }
 
 /* Return 32-bit CRC for ABFD.  If successful store it to *FILE_CRC_RETURN and
@@ -516,7 +764,7 @@ get_file_crc (bfd *abfd, unsigned long *file_crc_return)
 int
 gdb_bfd_crc (struct bfd *abfd, unsigned long *crc_out)
 {
-  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
+  struct gdb_bfd_data *gdata = (struct gdb_bfd_data *) bfd_usrdata (abfd);
 
   if (!gdata->crc_computed)
     gdata->crc_computed = get_file_crc (abfd, &gdata->crc);
@@ -607,7 +855,7 @@ gdb_bfd_mark_parent (bfd *child, bfd *parent)
   /* No need to stash the filename here, because we also keep a
      reference on the parent archive.  */
 
-  gdata = bfd_usrdata (child);
+  gdata = (struct gdb_bfd_data *) bfd_usrdata (child);
   if (gdata->archive_bfd == NULL)
     {
       gdata->archive_bfd = parent;
@@ -638,7 +886,7 @@ gdb_bfd_record_inclusion (bfd *includer, bfd *includee)
   struct gdb_bfd_data *gdata;
 
   gdb_bfd_ref (includee);
-  gdata = bfd_usrdata (includer);
+  gdata = (struct gdb_bfd_data *) bfd_usrdata (includer);
   VEC_safe_push (bfdp, gdata->included_bfds, includee);
 }
 
@@ -690,7 +938,7 @@ gdb_bfd_count_sections (bfd *abfd)
 int
 gdb_bfd_requires_relocations (bfd *abfd)
 {
-  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
+  struct gdb_bfd_data *gdata = (struct gdb_bfd_data *) bfd_usrdata (abfd);
 
   if (gdata->relocation_computed == 0)
     {
@@ -716,9 +964,9 @@ gdb_bfd_requires_relocations (bfd *abfd)
 static int
 print_one_bfd (void **slot, void *data)
 {
-  bfd *abfd = *slot;
-  struct gdb_bfd_data *gdata = bfd_usrdata (abfd);
-  struct ui_out *uiout = data;
+  bfd *abfd = (struct bfd *) *slot;
+  struct gdb_bfd_data *gdata = (struct gdb_bfd_data *) bfd_usrdata (abfd);
+  struct ui_out *uiout = (struct ui_out *) data;
   struct cleanup *inner;
 
   inner = make_cleanup_ui_out_tuple_begin_end (uiout, NULL);
@@ -767,14 +1015,13 @@ List the BFDs that are currently open."),
 			   &bfd_sharing, _("\
 Set whether gdb will share bfds that appear to be the same file."), _("\
 Show whether gdb will share bfds that appear to be the same file."), _("\
-Tells gdb whether to share bfds that appear to be the same file.  The\n\
-modification time and file size are used to determine if a file on\n\
-disc has changed."),
+When enabled gdb will reuse existing bfds rather than reopening the\n\
+same file.  To decide if two files are the same then gdb compares the\n\
+filename, file size, file modification time, and file inode."),
 			   NULL,
-			   NULL,
+			   &show_bfd_sharing,
 			   &maintenance_set_cmdlist,
 			   &maintenance_show_cmdlist);
-  bfd_sharing = 1;
 
   add_setshow_zuinteger_cmd ("bfd-cache", class_maintenance,
 			     &debug_bfd_cache, _("\
@@ -782,6 +1029,6 @@ Set bfd cache debugging."), _("\
 Show bfd cache debugging."), _("\
 When non-zero, bfd cache specific debugging is enabled."),
 			     NULL,
-			     NULL,
+			     &show_bfd_cache_debug,
 			     &setdebuglist, &showdebuglist);
 }

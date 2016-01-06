@@ -1,6 +1,6 @@
 /* mem.c --- memory for RL78 simulator.
 
-   Copyright (C) 2011-2015 Free Software Foundation, Inc.
+   Copyright (C) 2011-2016 Free Software Foundation, Inc.
    Contributed by Red Hat, Inc.
 
    This file is part of the GNU simulators.
@@ -63,6 +63,18 @@ mem_rom_size (int rom_bytes)
   rom_limit = rom_bytes;
 }
 
+int mirror_rom_base = 0x01000;
+int mirror_ram_base = 0xf1000;
+int mirror_length = 0x7000;
+
+void
+mem_set_mirror (int rom_base, int ram_base, int length)
+{
+  mirror_rom_base = rom_base;
+  mirror_ram_base = ram_base;
+  mirror_length = length;
+}
+
 /* ---------------------------------------------------------------------- */
 /* Note: the RL78 memory map has a few surprises.  For starters, part
    of the first 64k is mapped to the last 64k, depending on an SFR bit
@@ -92,13 +104,11 @@ static int
 address_mapping (int address)
 {
   address &= MASK;
-  if (address >= 0xf1000 && address < ram_base)
+  if (address >= mirror_ram_base && address < mirror_ram_base + mirror_length)
     {
-      address &= 0xffff;
-      tprintf ("&");
+      address = address - mirror_ram_base + mirror_rom_base;
       if (memory[RL78_SFR_PMC] & 1)
 	{
-	  tprintf ("|");
 	  address |= 0x10000;
 	}
       last_addr_was_mirror = 1;

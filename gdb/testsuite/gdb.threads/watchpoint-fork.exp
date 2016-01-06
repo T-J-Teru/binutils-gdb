@@ -1,4 +1,4 @@
-# Copyright 2012-2015 Free Software Foundation, Inc.
+# Copyright 2012-2016 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,11 +16,6 @@
 # Test case for forgotten hw-watchpoints after fork()-off of a process.
 
 set testfile watchpoint-fork
-
-if [is_remote target] {
-    kfail "remote/13584" "gdbserver does not support debugging across fork"
-    return
-}
 
 proc test {type symbol} {
     with_test_prefix "$type" {

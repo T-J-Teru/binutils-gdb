@@ -1,4 +1,4 @@
-/* Copyright 2009-2015 Free Software Foundation, Inc.
+/* Copyright 2009-2016 Free Software Foundation, Inc.
 
    This file is part of the Xilinx MicroBlaze simulator.
 
@@ -20,14 +20,6 @@
 
 #include "microblaze.h"
 #include "sim-basics.h"
-
-typedef address_word sim_cia;
-
-#define CIA_GET(cpu) (cpu)->microblaze_cpu.spregs[0]
-#define CIA_SET(cpu,val) (cpu)->microblaze_cpu.spregs[0] = (val)
-
-typedef struct _sim_cpu SIM_CPU;
-
 #include "sim-base.h"
 
 /* The machine state.
@@ -47,9 +39,6 @@ typedef struct _sim_cpu SIM_CPU;
   word	          spregs[2];		/* pc + msr */
   int		  cycles;
   int		  insts;
-  int		  exception;
-  unsigned long   msize;
-  unsigned char  *memory;
   ubyte           imm_enable;
   half            imm_high;
 };
@@ -62,11 +51,6 @@ struct _sim_cpu {
 struct sim_state {
 
   sim_cpu *cpu[MAX_NR_PROCESSORS];
-#if (WITH_SMP)
-#define STATE_CPU(sd,n) ((sd)->cpu[n])
-#else
-#define STATE_CPU(sd,n) ((sd)->cpu[0])
-#endif
 
   sim_state_base base;
 };

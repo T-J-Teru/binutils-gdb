@@ -1,6 +1,6 @@
 /* Remote File-I/O communications
 
-   Copyright (C) 2003-2015 Free Software Foundation, Inc.
+   Copyright (C) 2003-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -31,7 +31,7 @@
 #include "filestuff.h"
 
 #include <fcntl.h>
-#include <sys/time.h>
+#include "gdb_sys_time.h"
 #ifdef __CYGWIN__
 #include <sys/cygwin.h>		/* For cygwin_conv_path.  */
 #endif
@@ -57,7 +57,7 @@ remote_fileio_init_fd_map (void)
 
   if (!remote_fio_data.fd_map)
     {
-      remote_fio_data.fd_map = (int *) xmalloc (10 * sizeof (int));
+      remote_fio_data.fd_map = XNEWVEC (int, 10);
       remote_fio_data.fd_map_size = 10;
       remote_fio_data.fd_map[0] = FIO_FD_CONSOLE_IN;
       remote_fio_data.fd_map[1] = FIO_FD_CONSOLE_OUT;
@@ -194,57 +194,6 @@ remote_fileio_mode_to_host (long mode, int open_call)
 }
 
 static int
-remote_fileio_errno_to_target (int error)
-{
-  switch (error)
-    {
-      case EPERM:
-        return FILEIO_EPERM;
-      case ENOENT:
-        return FILEIO_ENOENT;
-      case EINTR:
-        return FILEIO_EINTR;
-      case EIO:
-        return FILEIO_EIO;
-      case EBADF:
-        return FILEIO_EBADF;
-      case EACCES:
-        return FILEIO_EACCES;
-      case EFAULT:
-        return FILEIO_EFAULT;
-      case EBUSY:
-        return FILEIO_EBUSY;
-      case EEXIST:
-        return FILEIO_EEXIST;
-      case ENODEV:
-        return FILEIO_ENODEV;
-      case ENOTDIR:
-        return FILEIO_ENOTDIR;
-      case EISDIR:
-        return FILEIO_EISDIR;
-      case EINVAL:
-        return FILEIO_EINVAL;
-      case ENFILE:
-        return FILEIO_ENFILE;
-      case EMFILE:
-        return FILEIO_EMFILE;
-      case EFBIG:
-        return FILEIO_EFBIG;
-      case ENOSPC:
-        return FILEIO_ENOSPC;
-      case ESPIPE:
-        return FILEIO_ESPIPE;
-      case EROFS:
-        return FILEIO_EROFS;
-      case ENOSYS:
-        return FILEIO_ENOSYS;
-      case ENAMETOOLONG:
-        return FILEIO_ENAMETOOLONG;
-    }
-  return FILEIO_EUNKNOWN;
-}
-
-static int
 remote_fileio_seek_flag_to_host (long num, int *flag)
 {
   if (!flag)
@@ -341,13 +290,13 @@ remote_fileio_extract_ptr_w_len (char **buf, CORE_ADDR *ptrval, int *length)
 static void
 remote_fileio_to_fio_long (LONGEST num, fio_long_t fnum)
 {
-  remote_fileio_to_be (num, (char *) fnum, 8);
+  host_to_bigendian (num, (char *) fnum, 8);
 }
 
 static void
 remote_fileio_to_fio_timeval (struct timeval *tv, struct fio_timeval *ftv)
 {
-  remote_fileio_to_fio_time (tv->tv_sec, ftv->ftv_sec);
+  host_to_fileio_time (tv->tv_sec, ftv->ftv_sec);
   remote_fileio_to_fio_long (tv->tv_usec, ftv->ftv_usec);
 }
 
@@ -459,7 +408,7 @@ static void
 remote_fileio_return_errno (int retcode)
 {
   remote_fileio_reply (retcode, retcode < 0
-		       ? remote_fileio_errno_to_target (errno) : 0);
+		       ? host_to_fileio_error (errno) : 0);
 }
 
 static void
@@ -501,7 +450,7 @@ remote_fileio_func_open (char *buf)
   mode = remote_fileio_mode_to_host (num, 1);
 
   /* Request pathname.  */
-  pathname = alloca (length);
+  pathname = (char *) alloca (length);
   if (target_read_memory (ptrval, (gdb_byte *) pathname, length) != 0)
     {
       remote_fileio_ioerror ();
@@ -845,7 +794,7 @@ remote_fileio_func_rename (char *buf)
     }
   
   /* Request oldpath using 'm' packet */
-  oldpath = alloca (old_len);
+  oldpath = (char *) alloca (old_len);
   if (target_read_memory (old_ptr, (gdb_byte *) oldpath, old_len) != 0)
     {
       remote_fileio_ioerror ();
@@ -853,7 +802,7 @@ remote_fileio_func_rename (char *buf)
     }
   
   /* Request newpath using 'm' packet */
-  newpath = alloca (new_len);
+  newpath = (char *) alloca (new_len);
   if (target_read_memory (new_ptr, (gdb_byte *) newpath, new_len) != 0)
     {
       remote_fileio_ioerror ();
@@ -931,7 +880,7 @@ remote_fileio_func_unlink (char *buf)
       return;
     }
   /* Request pathname using 'm' packet */
-  pathname = alloca (length);
+  pathname = (char *) alloca (length);
   if (target_read_memory (ptrval, (gdb_byte *) pathname, length) != 0)
     {
       remote_fileio_ioerror ();
@@ -981,7 +930,7 @@ remote_fileio_func_stat (char *buf)
   statptr = (CORE_ADDR) lnum;
   
   /* Request pathname using 'm' packet */
-  pathname = alloca (namelength);
+  pathname = (char *) alloca (namelength);
   if (target_read_memory (nameptr, (gdb_byte *) pathname, namelength) != 0)
     {
       remote_fileio_ioerror ();
@@ -1004,8 +953,8 @@ remote_fileio_func_stat (char *buf)
     }
   if (statptr)
     {
-      remote_fileio_to_fio_stat (&st, &fst);
-      remote_fileio_to_fio_uint (0, fst.fst_dev);
+      host_to_fileio_stat (&st, &fst);
+      host_to_fileio_uint (0, fst.fst_dev);
 
       errno = target_write_memory (statptr, (gdb_byte *) &fst, sizeof fst);
       if (errno != 0)
@@ -1051,7 +1000,7 @@ remote_fileio_func_fstat (char *buf)
   remote_fio_no_longjmp = 1;
   if (fd == FIO_FD_CONSOLE_IN || fd == FIO_FD_CONSOLE_OUT)
     {
-      remote_fileio_to_fio_uint (1, fst.fst_dev);
+      host_to_fileio_uint (1, fst.fst_dev);
       memset (&st, 0, sizeof (st));
       st.st_mode = S_IFCHR | (fd == FIO_FD_CONSOLE_IN ? S_IRUSR : S_IWUSR);
       st.st_nlink = 1;
@@ -1083,7 +1032,7 @@ remote_fileio_func_fstat (char *buf)
     }
   if (ptrval)
     {
-      remote_fileio_to_fio_stat (&st, &fst);
+      host_to_fileio_stat (&st, &fst);
 
       errno = target_write_memory (ptrval, (gdb_byte *) &fst, sizeof fst);
       if (errno != 0)
@@ -1182,7 +1131,7 @@ remote_fileio_func_system (char *buf)
   if (length)
     {
       /* Request commandline using 'm' packet */
-      cmdline = alloca (length);
+      cmdline = (char *) alloca (length);
       if (target_read_memory (ptrval, (gdb_byte *) cmdline, length) != 0)
 	{
 	  remote_fileio_ioerror ();
@@ -1236,7 +1185,7 @@ static struct {
 static int
 do_remote_fileio_request (struct ui_out *uiout, void *buf_arg)
 {
-  char *buf = buf_arg;
+  char *buf = (char *) buf_arg;
   char *c;
   int idx;
 

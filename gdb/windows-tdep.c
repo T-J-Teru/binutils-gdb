@@ -1,4 +1,4 @@
-/* Copyright (C) 2008-2015 Free Software Foundation, Inc.
+/* Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -33,6 +33,7 @@
 #include "complaints.h"
 #include "solib.h"
 #include "solib-target.h"
+#include "gdbcore.h"
 
 struct cmd_list_element *info_w32_cmdlist;
 
@@ -320,7 +321,7 @@ display_one_tib (ptid_t ptid)
       max = tib_size / size;
     }
   
-  tib = alloca (tib_size);
+  tib = (gdb_byte *) alloca (tib_size);
 
   if (target_get_tib_address (ptid, &thread_local_base) == 0)
     {
@@ -401,7 +402,7 @@ windows_xfer_shared_library (const char* so_name, CORE_ADDR load_addr,
   obstack_grow_str (obstack, p);
   xfree (p);
   obstack_grow_str (obstack, "\"><segment address=\"");
-  dll = gdb_bfd_open_maybe_remote (so_name);
+  dll = gdb_bfd_open (so_name, gnutarget, -1);
   /* The following calls are OK even if dll is NULL.
      The default value 0x1000 is returned by pe_text_section_offset
      in that case.  */

@@ -1,5 +1,5 @@
 /* Register support routines for the remote server for GDB.
-   Copyright (C) 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 2001-2016 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -28,7 +28,7 @@ get_thread_regcache (struct thread_info *thread, int fetch)
 {
   struct regcache *regcache;
 
-  regcache = (struct regcache *) inferior_regcache_data (thread);
+  regcache = inferior_regcache_data (thread);
 
   /* Threads' regcaches are created lazily, because biarch targets add
      the main thread/lwp before seeing it stop for the first time, and
@@ -76,7 +76,7 @@ regcache_invalidate_thread (struct thread_info *thread)
 {
   struct regcache *regcache;
 
-  regcache = (struct regcache *) inferior_regcache_data (thread);
+  regcache = inferior_regcache_data (thread);
 
   if (regcache == NULL)
     return;
@@ -107,13 +107,23 @@ regcache_invalidate_one (struct inferior_list_entry *entry,
   return 0;
 }
 
+/* See regcache.h.  */
+
+void
+regcache_invalidate_pid (int pid)
+{
+  find_inferior (&all_threads, regcache_invalidate_one, &pid);
+}
+
+/* See regcache.h.  */
+
 void
 regcache_invalidate (void)
 {
   /* Only update the threads of the current process.  */
   int pid = ptid_get_pid (current_thread->entry.id);
 
-  find_inferior (&all_threads, regcache_invalidate_one, &pid);
+  regcache_invalidate_pid (pid);
 }
 
 #endif
@@ -131,10 +141,13 @@ init_register_cache (struct regcache *regcache,
 	 fetches.  This way they'll read as zero instead of
 	 garbage.  */
       regcache->tdesc = tdesc;
-      regcache->registers = xcalloc (1, tdesc->registers_size);
+      regcache->registers
+	= (unsigned char *) xcalloc (1, tdesc->registers_size);
       regcache->registers_owned = 1;
-      regcache->register_status = xcalloc (1, tdesc->num_registers);
-      gdb_assert (REG_UNAVAILABLE == 0);
+      regcache->register_status
+	= (unsigned char *) xmalloc (tdesc->num_registers);
+      memset ((void *) regcache->register_status, REG_UNAVAILABLE,
+	      tdesc->num_registers);
 #else
       gdb_assert_not_reached ("can't allocate memory from the heap");
 #endif
@@ -159,11 +172,10 @@ init_register_cache (struct regcache *regcache,
 struct regcache *
 new_register_cache (const struct target_desc *tdesc)
 {
-  struct regcache *regcache;
+  struct regcache *regcache = XCNEW (struct regcache);
 
   gdb_assert (tdesc->registers_size != 0);
 
-  regcache = xmalloc (sizeof (*regcache));
   return init_register_cache (regcache, tdesc, NULL);
 }
 
@@ -277,8 +289,7 @@ find_register_by_number (const struct target_desc *tdesc, int n)
 static void
 free_register_cache_thread (struct thread_info *thread)
 {
-  struct regcache *regcache
-    = (struct regcache *) inferior_regcache_data (thread);
+  struct regcache *regcache = inferior_regcache_data (thread);
 
   if (regcache != NULL)
     {
@@ -314,6 +325,14 @@ int
 register_size (const struct target_desc *tdesc, int n)
 {
   return tdesc->reg_defs[n].size / 8;
+}
+
+/* See common/common-regcache.h.  */
+
+int
+regcache_register_size (const struct regcache *regcache, int n)
+{
+  return register_size (regcache->tdesc, n);
 }
 
 static unsigned char *
@@ -415,6 +434,27 @@ collect_register (struct regcache *regcache, int n, void *buf)
 {
   memcpy (buf, register_data (regcache, n, 1),
 	  register_size (regcache->tdesc, n));
+}
+
+enum register_status
+regcache_raw_read_unsigned (struct regcache *regcache, int regnum,
+			    ULONGEST *val)
+{
+  int size;
+
+  gdb_assert (regcache != NULL);
+  gdb_assert (regnum >= 0 && regnum < regcache->tdesc->num_registers);
+
+  size = register_size (regcache->tdesc, regnum);
+
+  if (size > (int) sizeof (ULONGEST))
+    error (_("That operation is not available on integers of more than"
+            "%d bytes."),
+          (int) sizeof (ULONGEST));
+
+  collect_register (regcache, regnum, val);
+
+  return REG_VALID;
 }
 
 #ifndef IN_PROCESS_AGENT
