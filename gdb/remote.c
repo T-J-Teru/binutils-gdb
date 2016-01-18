@@ -9200,7 +9200,8 @@ remote_insert_breakpoint (struct target_ops *ops,
       CORE_ADDR addr = bp_tgt->reqstd_address;
       struct remote_state *rs;
       char *p, *endbuf;
-      int bpsize;
+      int bpsize, val;
+      gdb_byte *readbuf;
       struct condition_list *cond = NULL;
 
       /* Make sure the remote is pointing at the right process, if
@@ -9209,6 +9210,15 @@ remote_insert_breakpoint (struct target_ops *ops,
 	set_general_process ();
 
       gdbarch_remote_breakpoint_from_pc (gdbarch, &addr, &bpsize);
+      addr = (ULONGEST) remote_address_masked (addr);
+
+      readbuf = (gdb_byte *) alloca (bpsize);
+      val = target_read_memory (addr, readbuf, bpsize);
+      if (val == 0)
+	{
+	  bp_tgt->shadow_len = bpsize;
+	  memcpy (bp_tgt->shadow_contents, readbuf, bpsize);
+	}
 
       rs = get_remote_state ();
       p = rs->buf;
@@ -9217,9 +9227,9 @@ remote_insert_breakpoint (struct target_ops *ops,
       *(p++) = 'Z';
       *(p++) = '0';
       *(p++) = ',';
-      addr = (ULONGEST) remote_address_masked (addr);
       p += hexnumstr (p, addr);
       xsnprintf (p, endbuf - p, ",%d", bpsize);
+
 
       if (remote_supports_cond_breakpoints (ops))
 	remote_add_target_side_condition (gdbarch, bp_tgt, p, endbuf);

@@ -1,4 +1,9 @@
-2015-11-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+2016-01-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* remote.c (remote_insert_breakpoint): Fill in breakpoint shadow
+	buffer before inserting breakpoint.
+
+15-0111-19  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_analyze_frame_type): Support case where we
 	find a call site but no return instruction.
