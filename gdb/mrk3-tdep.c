@@ -59,6 +59,10 @@ of physical registers visible to GDB and their size in bits in order is:
     R5E           16        Combined with R5 to create 32-bit value
     R6E           16        Combined with R6 to create 32-bit value
 
+    CCYCLES0      32        Cycle count 0, read-only
+    CCYCLES1      32        Cycle count 1, writable
+    CCYCLES2      32        Cycle count 2, writable
+
 GDB also defines some pseudo-registers which are combinations of the physical
 registers.
 
@@ -225,10 +229,15 @@ bits. */
 #define MRK3_R4E_REGNUM   12
 #define MRK3_R5E_REGNUM   13
 #define MRK3_R6E_REGNUM   14
+#define MRK3_CCYCLES0_REGNUM 15
+#define MRK3_CCYCLES1_REGNUM 16
+#define MRK3_CCYCLES2_REGNUM 17
+
+#define MRK3_LAST_PHYSICAL_REGNUM MRK3_CCYCLES2_REGNUM
 
 /* Useful register numbers - SFRs
    TODO: For now we don't show the SFRs */
-#define SFR_START   (MRK3_R6E_REGNUM + 1)
+#define SFR_START   (MRK3_LAST_PHYSICAL_REGNUM + 1)
 
 /* Useful register numbers - pseudo registers */
 #define PSEUDO_START (SFR_START)
@@ -716,12 +725,13 @@ static const char *const mrk3_register_names [] =
     "R0", "R1", "R2", "R3", "R4",		/*  0  1  2  3  4 */
     "R5", "R6", "PC", "PSW", "SSSP",		/*  5  6  7  8  9 */
     "SSP", "USP", "R4e", "R5e", "R6e",		/* 10 11 12 13 14 */
+    "CPU_CYCLES0", "CPU_CYCLES1", "CPU_CYCLES2",/* 15 16 17 */
 
     /* The "pseudo" registers.  */
-    "SP", "R0L", "R1L", "R2L", "R3L",		/* 15 16 17 18 19 */
-    "R0H", "R1H", "R2H", "R3H", "R4LONG",	/* 20 21 22 23 24 */
-    "R5LONG", "R6LONG", "SYS", "INT", "ZERO",	/* 25 26 27 28 29 */
-    "NEG", "OVERFLOW", "CARRY"			/* 30 31 32 */
+    "SP", "R0L", "R1L", "R2L", "R3L",
+    "R0H", "R1H", "R2H", "R3H", "R4LONG",
+    "R5LONG", "R6LONG", "SYS", "INT", "ZERO",
+    "NEG", "OVERFLOW", "CARRY"
   };
 
 /*! Lookup the name of a register given it's number. */
@@ -792,6 +802,12 @@ mrk3_register_type (struct gdbarch *gdbarch, int regnum)
       return bt_uint16;
     case (MRK3_R6E_REGNUM):
       return bt_uint16;
+    case (MRK3_CCYCLES0_REGNUM):
+      return bt_uint32;
+    case (MRK3_CCYCLES1_REGNUM):
+      return bt_uint32;
+    case (MRK3_CCYCLES2_REGNUM):
+      return bt_uint32;
 
       /* Special Function Registers  - TODO through XML */
 
