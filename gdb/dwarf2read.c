@@ -11487,6 +11487,32 @@ read_func_scope (struct die_info *die, struct dwarf2_cu *cu)
   /* If we have address ranges, record them.  */
   dwarf2_record_block_ranges (die, block, baseaddr, cu);
 
+  /* For inline functions extend the line table.  */
+  if (inlined_func)
+    {
+      int file_index, file_line;
+
+      call_line = dwarf2_attr (die, DW_AT_call_line, cu);
+      call_file = dwarf2_attr (die, DW_AT_call_file, cu);
+      if (call_line != NULL && call_file != NULL)
+	{
+	  file_index = DW_UNSND (call_file);
+	  file_line = DW_UNSND (call_line);
+
+	  if (cu->line_header == NULL
+	      || file_index > cu->line_header->num_file_names)
+	    complaint (&symfile_complaints,
+		       _("file index out of range"));
+	  else if (file_index > 0)
+	    {
+	      struct file_entry *fe;
+
+	      fe = &cu->line_header->file_names[file_index - 1];
+	      maybe_record_line (current_subfile, file_line, lowpc);
+	    }
+	}
+    }
+
   gdbarch_make_symbol_special (gdbarch, newobj->name, objfile);
 
   /* Attach template arguments to function.  */

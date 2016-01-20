@@ -250,6 +250,7 @@ extern struct context_stack *push_context (int desc, CORE_ADDR valu);
 extern struct context_stack *pop_context (void);
 
 extern record_line_ftype record_line;
+extern record_line_ftype maybe_record_line;
 
 extern struct compunit_symtab *start_symtab (struct objfile *objfile,
 					     const char *name,

@@ -15,7 +15,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-static int g;
+static volatile int g;
+static volatile int h;
 
 static inline void
 foo (void)
@@ -23,10 +24,34 @@ foo (void)
   g = 42;
 }
 
+static inline void
+bar (void)
+{
+  volatile int i;
+  for (i = 0; i < 10; ++i);
+}
+
+static inline void
+baz (void)
+{
+  g = 24;
+  h = 5;
+}
+
+__attribute__((noinline)) int
+test_inline (void)
+{
+  foo (); /* location 1 */
+  bar (); /* location 2 */
+  baz (); /* location 3 */
+  return g;
+}
+
+
 int
 main (int argc, char *argv[])
 {
-  foo ();
-  return g;
+  int val = test_inline ();
+  return val;
 }
 

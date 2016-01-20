@@ -982,7 +982,7 @@ maintenance_info_line_tables (char *arg, int from_tty)
 	   symtab->filename);
 
   table_cleanup
-    = make_cleanup_ui_out_table_begin_end (uiout, 3,
+    = make_cleanup_ui_out_table_begin_end (uiout, 4,
 					   linetable->nitems,
 					   "line-table");
 
@@ -992,6 +992,7 @@ maintenance_info_line_tables (char *arg, int from_tty)
   ui_out_table_header (uiout, 6, ui_right, "line", "LINE");
   ui_out_table_header (uiout, (sizeof (CORE_ADDR) * 2 + 2)
 		       , ui_left, "address", "ADDRESS");
+  ui_out_table_header (uiout, 8, ui_left, "flag", "FLAG");
   ui_out_table_body (uiout);
 
   for (i = 0; i < linetable->nitems; ++i)
@@ -1007,7 +1008,9 @@ maintenance_info_line_tables (char *arg, int from_tty)
       ui_out_field_int (uiout, "index", i);
       ui_out_field_int (uiout, "line", item->line);
       ui_out_field_string (uiout, "address", core_addr_to_string (item->pc));
-
+      ui_out_field_string (uiout, "flag",
+			   (item->flags == LINETABLE_ENTRY_NORMAL
+			    ? "NORMAL" : "INLINE"));
       ui_out_text (uiout, "\n");
       do_cleanups (row_cleanup);
     }

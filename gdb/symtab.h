@@ -906,15 +906,30 @@ struct template_symbol
 };
 
 
+
+/* Each line table entry has a flag to indicate what type of entry it
+   is.  The type is determined from where the entry comes from.  */
+
+enum linetable_entry_flags
+  {
+    /* NORMAL entries come from the line table.  */
+    LINETABLE_ENTRY_NORMAL = 0,
+
+    /* INLINE entries are extracted from the debug information.  */
+    LINETABLE_ENTRY_INLINE = 1,
+  };
+
 /* Each item represents a line-->pc (or the reverse) mapping.  This is
    somewhat more wasteful of space than one might wish, but since only
    the files which are actually debugged are read in to core, we don't
-   waste much space.  */
+   waste much space.  The flag fields tells us where the entry came from,
+   and is used when sorting the line table entries.  */
 
 struct linetable_entry
 {
   int line;
   CORE_ADDR pc;
+  enum linetable_entry_flags flags;
 };
 
 /* The order of entries in the linetable is significant.  They should
