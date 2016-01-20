@@ -14,14 +14,23 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-if { [prepare_for_testing break-inline.exp "break-inline" {} {debug nowarnings optimize=-O2}] } {
+standard_testfile
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile {debug nowarnings optimize=-O2}]} {
+    untested $testfile.exp
     return -1
 }
 
-gdb_breakpoint "main" "temporary"
-gdb_run_cmd
-gdb_test "" "Temporary breakpoint.*foo\\(\\).*"
+if ![runto_main] then {
+    fail "Can't run to main"
+    return 0
+}
 
-# Now test 'break' with no arguments.
-gdb_test "break" "Breakpoint.*"
+# Check that we can stop on inlined functions.
+gdb_breakpoint [gdb_get_line_number "location 1"]
+gdb_breakpoint [gdb_get_line_number "location 2"]
+gdb_breakpoint [gdb_get_line_number "location 3"]
 
+gdb_continue_to_breakpoint "location 1" ".* location 1 .*"
+gdb_continue_to_breakpoint "location 2" ".* location 2 .*"
+gdb_continue_to_breakpoint "location 3" ".* location 3 .*"

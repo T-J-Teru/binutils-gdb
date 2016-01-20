@@ -144,6 +144,11 @@ static struct pending *free_pendings;
 
 static int have_line_numbers;
 
+/* Non-zero if symtab has made use of maybe_record_line, which indicates
+   that we have inline functions in the line table.  */
+
+static int have_used_maybe_record_line;
+
 /* The mutable address map for the compilation unit whose symbols
    we're currently reading.  The symtabs' shared blockvector will
    point to a fixed copy of this.  */
@@ -896,8 +901,8 @@ pop_subfile (void)
 /* Add a linetable entry for line number LINE and address PC to the
    line vector for SUBFILE.  */
 
-void
-record_line (struct subfile *subfile, int line, CORE_ADDR pc)
+static void
+record_line_1 (struct subfile *subfile, int line, CORE_ADDR pc, enum linetable_entry_flags flags)
 {
   struct linetable_entry *e;
 
@@ -954,6 +959,40 @@ record_line (struct subfile *subfile, int line, CORE_ADDR pc)
   e = subfile->line_vector->item + subfile->line_vector->nitems++;
   e->line = line;
   e->pc = pc;
+  e->flags = flags;
+}
+
+void
+record_line (struct subfile *subfile, int line, CORE_ADDR pc)
+{
+  record_line_1 (subfile, line, pc, LINETABLE_ENTRY_NORMAL);
+}
+
+/* Like RECORD_LINE but only add a new entry if there's not already an
+   entry for LINE.  */
+void
+maybe_record_line (struct subfile *subfile, int line, CORE_ADDR pc)
+{
+  printf_filtered ("inline function at %s\t(line %d of %s)\n",
+		   core_addr_to_string (pc), line,
+		   subfile->symtab->filename);
+
+  if (subfile->line_vector
+      && subfile->line_vector->nitems > 0)
+    {
+      struct linetable_entry *e;
+      int i;
+
+      for (i = 0; i < subfile->line_vector->nitems; ++i)
+	{
+	  e = subfile->line_vector->item + i;
+	  if (e->line == line && e->pc == pc)
+	    return;
+	}
+    }
+
+  have_used_maybe_record_line = 1;
+  record_line_1 (subfile, line, pc, LINETABLE_ENTRY_INLINE);
 }
 
 /* Needed in order to sort line tables from IBM xcoff files.  Sigh!  */
@@ -1311,6 +1350,73 @@ end_symtab_get_static_block (CORE_ADDR end_addr, int expandable, int required)
     }
 }
 
+/* Helper function used when reordering the line table.  Due to the order
+   in which the line table is built up we will have the NORMAL entries,
+   those that originate from the actual line table first, followed by any
+   INLINE entries in reverse order.
+
+   Reverse order here means that if we have a call hierarchy of A calls B
+   calls C then the first INLINE entry will identify the line from B, while
+   the second INLINE entry will identify the line in A.  The NORMAL entry,
+   which occurs first, will identify the line from C.
+
+   The target is to move the NORMAL entries to be last, while all INLINE
+   entries will appear in call order first in the line table.  */
+
+static int
+reorder_linetable_entries (struct linetable_entry *entry, int count)
+{
+  /* First, how many entries are there that share this pc.  */
+  int i, same_pc_count = 0, normal_count = 0, inline_count = 0;
+  CORE_ADDR pc = entry->pc;
+  struct linetable_entry *buffer;
+  size_t size_of_normal_entries, size_of_inline_entries;
+
+  for (i = 0; i < count; ++i)
+    {
+      if (entry [i].pc == pc)
+	{
+	  ++same_pc_count;
+	  if (entry [i].flags == LINETABLE_ENTRY_NORMAL)
+	    {
+	      /* Inline entries should always appear after the normal
+		 entries.  */
+	      gdb_assert (inline_count == 0);
+	      ++normal_count;
+	    }
+	  else
+	    ++inline_count;
+	}
+      else
+	break;
+    }
+
+  if (inline_count == 0 || same_pc_count == 1)
+    return same_pc_count;
+
+  /* Move NORMAL entries in a block to the end.  */
+  size_of_normal_entries = sizeof (struct linetable_entry) * normal_count;
+  buffer = alloca (size_of_normal_entries);
+  memmove (buffer, entry, size_of_normal_entries);
+  size_of_inline_entries = sizeof (struct linetable_entry) * inline_count;
+  memmove (entry, entry + normal_count, size_of_inline_entries);
+  memmove (entry + inline_count, buffer, size_of_normal_entries);
+
+  /* Reverse the order of the inline entries.  */
+  for (i = 0; i < inline_count / 2; ++i)
+    {
+      struct linetable_entry tmp;
+      int j = inline_count - 1 - i;
+      gdb_assert (i < j);
+
+      tmp = entry [j];
+      entry [j] = entry [i];
+      entry [i] = tmp;
+    }
+
+  return same_pc_count;
+}
+
 /* Subroutine of end_symtab_from_static_block to simplify it.
    Handle the "have blockvector" case.
    See end_symtab_from_static_block for a description of the arguments.  */
@@ -1369,6 +1475,25 @@ end_symtab_with_blockvector (struct block *static_block,
 	    qsort (subfile->line_vector->item,
 		   subfile->line_vector->nitems,
 		   sizeof (struct linetable_entry), compare_line_numbers);
+
+	  if (have_used_maybe_record_line)
+	    {
+	      int i;
+
+	      for (i = 0; i < subfile->line_vector->nitems - 1; ++i)
+		{
+		  struct linetable_entry *e0
+		    = subfile->line_vector->item + i + 0;
+		  struct linetable_entry *e1
+		    = subfile->line_vector->item + i + 1;
+
+		  if (e0->pc == e1->pc)
+		    {
+		      int count = subfile->line_vector->nitems - i;
+		      i += reorder_linetable_entries (e0, count) - 1;
+		    }
+		}
+	    }
 	}
 
       /* Allocate a symbol table if necessary.  */

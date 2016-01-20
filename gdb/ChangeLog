@@ -1,3 +1,21 @@
+2016-01-20  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* buildsym.c (have_used_maybe_record_line): New global.
+	(record_line_1): New function containing most of the old
+	record_line, but with a new flag parameter.
+	(record_line): Now a wrapper to call record_line_1 with specific
+	flag.
+	(maybe_record_line): New function.
+	(reorder_linetable_entries): New function.
+	(end_symtab_with_blockvector): Call reorder_linetable_entries.
+	* buildsym.h (maybe_record_line): Declare.
+	* dwarf2read.c (read_func_scope): Add information about inline
+	subroutines to the line table.
+	* symmisc.c (maintenance_info_line_tables): Add flag type to line
+	table printing.
+	* symtab.h (enum linetable_entry_flags): New enum.
+	(struct linetable_entry): Add flags field.
+
 2016-01-05  Mike Frysinger  <vapier@gentoo.org>
 
 	* version.in: Change cvs to git.
