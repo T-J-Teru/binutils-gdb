@@ -114,6 +114,9 @@ maint set bfd-sharing
 maint show bfd-sharing
   Control the reuse of bfd objects.
 
+maint info line-table FILENAME
+  Display the contents of GDB's internal line table data struture.
+
 set debug bfd-cache
 show debug bfd-cache
   Control display of debugging info regarding bfd caching.

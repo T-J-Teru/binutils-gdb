@@ -1,3 +1,8 @@
+2016-01-21  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Symbols): Document new 'maint info line-table'
+	command.
+
 2016-02-18  Walfred Tedeschi  <walfred.tedeschi@intel.com>
 
 	* gdb.texinfo (Signals): Add bound violation display hints for

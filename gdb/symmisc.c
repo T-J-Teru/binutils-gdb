@@ -949,6 +949,73 @@ block_depth (struct block *block)
 }
 
 
+/* Implement the 'maint info line-table' command.  */
+
+static void
+maintenance_info_line_tables (char *arg, int from_tty)
+{
+  struct ui_out *uiout = current_uiout;
+  struct symtab *symtab = NULL;
+  struct linetable *linetable;
+  struct cleanup *table_cleanup;
+  int i;
+
+  if (arg == NULL)
+    {
+      struct frame_info *frame;
+      CORE_ADDR pc;
+
+      frame = get_selected_frame (_("No frame selected."));
+      pc = get_frame_address_in_block (frame);
+      symtab = find_pc_line_symtab (pc);
+    }
+  else
+    symtab = lookup_symtab (arg);
+  if (symtab == NULL)
+    error (_("No matching symbol table found"));
+
+  linetable = SYMTAB_LINETABLE (symtab);
+  if (linetable == NULL)
+    error (_("Symbol table for `%s' has no line table"), symtab->filename);
+  if (linetable->nitems <= 0)
+    error (_("Line table for symbol table `%s' has no lines"),
+	   symtab->filename);
+
+  table_cleanup
+    = make_cleanup_ui_out_table_begin_end (uiout, 3,
+					   linetable->nitems,
+					   "line-table");
+
+  /* Leave space for 6 digits of index and line number.  After that the
+     tables will just not format as well.  */
+  ui_out_table_header (uiout, 6, ui_left, "index", "INDEX");
+  ui_out_table_header (uiout, 6, ui_right, "line", "LINE");
+  ui_out_table_header (uiout, (sizeof (CORE_ADDR) * 2 + 2)
+		       , ui_left, "address", "ADDRESS");
+  ui_out_table_body (uiout);
+
+  for (i = 0; i < linetable->nitems; ++i)
+    {
+      struct linetable_entry *item;
+      struct cleanup *row_cleanup;
+
+      item = &linetable->item [i];
+
+      row_cleanup
+	= make_cleanup_ui_out_tuple_begin_end (uiout, NULL);
+
+      ui_out_field_int (uiout, "index", i);
+      ui_out_field_int (uiout, "line", item->line);
+      ui_out_field_string (uiout, "address", core_addr_to_string (item->pc));
+
+      ui_out_text (uiout, "\n");
+      do_cleanups (row_cleanup);
+    }
+
+  do_cleanups (table_cleanup);
+}
+
+
 /* Do early runtime initializations.  */
 
 void
@@ -980,6 +1047,12 @@ List the full symbol tables for all object files.\n\
 This does not include information about individual symbols, blocks, or\n\
 linetables --- just the symbol table structures themselves.\n\
 With an argument REGEXP, list the symbol tables with matching names."),
+	   &maintenanceinfolist);
+
+  add_cmd ("line-table", class_maintenance, maintenance_info_line_tables, _("\
+List line tables contents for specified symtab.\n\
+Given the filename of a symtab, list the contents of the\n\
+associated line table."),
 	   &maintenanceinfolist);
 
   add_cmd ("check-symtabs", class_maintenance, maintenance_check_symtabs,
