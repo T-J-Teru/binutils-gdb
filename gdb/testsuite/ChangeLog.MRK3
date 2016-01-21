@@ -1,3 +1,7 @@
+2016-02-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/maint.exp: New tests for 'maint info line-table'.
+
 2015-09-17  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* lib/gdb.exp (skip_cplus_tests): Skip these tests for MRK3.

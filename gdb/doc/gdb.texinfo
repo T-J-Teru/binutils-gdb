@@ -16909,6 +16909,15 @@ line 1574.
 (@value{GDBP})
 @end smallexample
 
+@kindex maint info line-table
+@cindex listing @value{GDBN}'s internal line tables
+@cindex line tables, listing @value{GDBN}'s internal
+@item maint info line-table @var{filename}
+
+List the @code{struct linetable} for the symtab with @var{filename}.
+If @var{filename} is not given then the the @code{struct linetable}
+that contains the current @var{pc} is given.
+
 @kindex maint set symbol-cache-size
 @cindex symbol cache size
 @item maint set symbol-cache-size @var{size}

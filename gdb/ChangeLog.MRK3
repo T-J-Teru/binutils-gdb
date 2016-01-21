@@ -1,5 +1,11 @@
 2016-02-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* symmisc.c (maintenance_info_line_tables): New function.
+	(_initialize_symmisc): Register 'maint info line-table' command.
+	* NEWS: Mention new command.
+
+2016-02-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* infrun.c (process_event_stop_test): Before restarting the step,
 	check we have not stepped out of the frame in which the step was
 	initiated.
