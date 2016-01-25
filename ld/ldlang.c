@@ -2185,7 +2185,7 @@ sort_def_symbol (struct bfd_link_hash_entry *hash_entry,
 /* Initialize an output section.  */
 
 static void
-init_os (lang_output_section_statement_type *s, flagword flags)
+init_os (lang_output_section_statement_type *s)
 {
   if (strcmp (s->name, DISCARD_SECTION_NAME) == 0)
     einfo (_("%P%F: Illegal use of `%s' section\n"), DISCARD_SECTION_NAME);
@@ -2194,7 +2194,7 @@ init_os (lang_output_section_statement_type *s, flagword flags)
     s->bfd_section = bfd_get_section_by_name (link_info.output_bfd, s->name);
   if (s->bfd_section == NULL)
     s->bfd_section = bfd_make_section_anyway_with_flags (link_info.output_bfd,
-							 s->name, flags);
+							 s->name, s->flags);
   if (s->bfd_section == NULL)
     {
       einfo (_("%P%F: output format %s cannot represent section called %s\n"),
@@ -2263,7 +2263,7 @@ exp_init_os (etree_type *exp)
 
 	    os = lang_output_section_find (exp->name.name);
 	    if (os != NULL && os->bfd_section == NULL)
-	      init_os (os, 0);
+	      init_os (os);
 	  }
 	}
       break;
@@ -2391,7 +2391,7 @@ lang_add_section (lang_statement_list_type *ptr,
     }
 
   if (output->bfd_section == NULL)
-    init_os (output, flags);
+    init_os (output);
 
   /* If SEC_READONLY is not set in the input section, then clear
      it from the output section.  */
@@ -3660,9 +3660,8 @@ map_input_to_output_sections
 	      break;
 	    }
 	  if (os->bfd_section == NULL)
-	    init_os (os, flags);
-	  else
-	    os->bfd_section->flags |= flags;
+	    init_os (os);
+          os->bfd_section->flags |= flags;
 	  break;
 	case lang_input_section_enum:
 	  break;
@@ -3672,11 +3671,11 @@ map_input_to_output_sections
 	case lang_padding_statement_enum:
 	case lang_input_statement_enum:
 	  if (os != NULL && os->bfd_section == NULL)
-	    init_os (os, 0);
+	    init_os (os);
 	  break;
 	case lang_assignment_statement_enum:
 	  if (os != NULL && os->bfd_section == NULL)
-	    init_os (os, 0);
+	    init_os (os);
 
 	  /* Make sure that any sections mentioned in the assignment
 	     are initialized.  */
@@ -3706,7 +3705,7 @@ map_input_to_output_sections
 	      tos = lang_output_section_statement_lookup (name, 0, TRUE);
 	      tos->addr_tree = s->address_statement.address;
 	      if (tos->bfd_section == NULL)
-		init_os (tos, 0);
+		init_os (tos);
 	    }
 	  break;
 	case lang_insert_statement_enum:

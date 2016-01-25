@@ -1,3 +1,11 @@
+2016-01-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ldlang.c (init_os): Remove flags argument, use flags from the
+	lang_output_section_statement_type instead.
+	(exp_init_os): Update call to init_os.
+	(lang_add_section): Likewise.
+	(map_input_to_output_sections): Likewise.
+
 2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ldexp.c (fold_name): Report error when we are evaluating a data
