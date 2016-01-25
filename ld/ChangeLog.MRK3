@@ -1,5 +1,10 @@
 2016-01-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldlang.c (insert_pad): When inserting padding, mark sections as
+	loadable if they are marked allocatable.
+
+2016-01-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldlang.c (lang_enter_output_section_statement): Set up defaults
 	flags for sections marked as LOAD.
 

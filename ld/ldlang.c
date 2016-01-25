@@ -4629,6 +4629,14 @@ insert_pad (lang_statement_union_type **ptr,
   pad->padding_statement.size = alignment_needed;
   output_section->size = TO_SIZE (dot + TO_ADDR (alignment_needed)
 				  - output_section->vma);
+
+  /* Forcing a FILL pattern of 0's will still make the section allocatable
+     and loadable.  Currently I'm treating this as a feature not bug.  If
+     we want to be smarter, then we just need to scan the FILL field to
+     check if we're filling with non-zero.  */
+  if (pad->padding_statement.fill != &zero_fill
+      && (output_section->flags & SEC_ALLOC) != 0)
+    output_section->flags |= SEC_ALLOC | SEC_LOAD;
 }
 
 /* Work out how much this section will move the dot point.  */
