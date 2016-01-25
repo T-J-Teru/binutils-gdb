@@ -2839,6 +2839,10 @@ mrk3_elf_check_relocs (bfd *abfd,
                       {
                         elf_hash_table (info)->splt->size += SPLT_ENTRY_SIZE;
                         splt_entry_count += 1;
+                        codesig_info_sec->size += SPLT_CODESIG_SIZE;
+                        if (codesig_info_sec->size == SPLT_CODESIG_SIZE) {
+                          codesig_info_sec->size += 4;
+                        }
                       }
                     else
                       {
