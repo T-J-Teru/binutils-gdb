@@ -1,5 +1,10 @@
 2016-01-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldlang.c (lang_enter_output_section_statement): Set up defaults
+	flags for sections marked as LOAD.
+
+2016-01-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldlang.c (init_os): Remove flags argument, use flags from the
 	lang_output_section_statement_type instead.
 	(exp_init_os): Update call to init_os.

@@ -6376,10 +6376,19 @@ lang_enter_output_section_statement (const char *output_section_statement_name,
       os->addr_tree = address_exp;
     }
   os->sectype = sectype;
-  if (sectype != noload_section)
-    os->flags = SEC_NO_FLAGS;
-  else
-    os->flags = SEC_NEVER_LOAD;
+  switch (sectype)
+    {
+    case noload_section:
+      os->flags = SEC_NEVER_LOAD;
+      break;
+    case isload_section:
+      os->flags = SEC_LOAD | SEC_ALLOC;
+      break;
+    default:
+      os->flags = SEC_NO_FLAGS;
+      break;
+    }
+
   os->block_value = 1;
 
   /* Make next things chain into subchain of this.  */
