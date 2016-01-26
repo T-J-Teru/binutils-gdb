@@ -2688,6 +2688,7 @@ struct elf_mrk3_local_symdata
     /* Details identifying the symbol this record refers to */
     bfd *abfd;
     unsigned long r_symndx;
+    unsigned long r_addend;
 
     /* Reference counter for PLT entries */
     unsigned long plt_refcount;
@@ -2700,13 +2701,16 @@ static struct elf_mrk3_local_symdata *local_symdata = NULL;
 
 /* Lookup for mrk3 local symbol data */
 static struct elf_mrk3_local_symdata *get_local_symdata (bfd *abfd,
-                                                         unsigned long r_symndx)
+                                                         unsigned long r_symndx,
+                                                         unsigned long r_addend)
 {
   struct elf_mrk3_local_symdata *symdata = local_symdata;
 
   while (symdata != NULL)
     {
-      if (symdata->abfd == abfd && symdata->r_symndx == r_symndx)
+      if (symdata->abfd == abfd &&
+          symdata->r_symndx == r_symndx &&
+          symdata->r_addend == r_addend)
         return symdata;
 
       symdata = symdata->next;
@@ -2718,6 +2722,7 @@ static struct elf_mrk3_local_symdata *get_local_symdata (bfd *abfd,
 
   symdata->abfd = abfd;
   symdata->r_symndx = r_symndx;
+  symdata->r_addend = r_addend;
   symdata->plt_refcount = 0;
   symdata->next = local_symdata;
   local_symdata = symdata;
@@ -2765,10 +2770,11 @@ mrk3_elf_check_relocs (bfd *abfd,
   for (rel = relocs; rel < rel_end; rel++)
     {
       struct elf_link_hash_entry *h;
-      unsigned long r_symndx;
+      unsigned long r_symndx, r_addend;
       bfd_boolean secure = FALSE;
 
       r_symndx = ELF64_R_SYM (rel->r_info);
+      r_addend = rel->r_addend;
       if (r_symndx < symtab_hdr->sh_info)
         h = NULL;
       else
@@ -2826,7 +2832,7 @@ mrk3_elf_check_relocs (bfd *abfd,
                 mrk3_elf_create_plt_section (abfd, info);
                 info->dynamic = 1;
 
-                symdata = get_local_symdata (abfd, r_symndx);
+                symdata = get_local_symdata (abfd, r_symndx, r_addend);
                 symdata->plt_refcount += 1;
 
                 /* If we have not seen this symbol before space needs
