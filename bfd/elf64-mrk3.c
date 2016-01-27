@@ -2921,7 +2921,7 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       address = bfd_get_32 (output_bfd, plt->contents + offset);
       address = address / 2;
       address_lo = address & 0xffff;
-      address_hi = (address >> 16) & 0xffff;
+      address_hi = ((address >> 16) & 0xffff) << 4;
       /* sub r7, #2   - 2b (0)  */
       bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset);
       /* mov @r7, #LO - 4b (2)  */
@@ -2946,7 +2946,7 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       address = bfd_get_32 (output_bfd, plt->contents + offset);
       address = address / 2;
       address_lo = address & 0xffff;
-      address_hi = (address >> 16) & 0xffff;
+      address_hi = (((address >> 16) & 0xffff) << 4) | 0x1000;
       full_address = bfd_get_32 (output_bfd, plt->contents + offset + 4);
       full_address = full_address << 32 | (address << 1);
       /* sub r7, #2   - 2b (0)  */
@@ -2956,14 +2956,14 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       bfd_put_16 (output_bfd, address_lo, plt->contents + offset + 4);
       /* sub r7, #2   - 2b (6)  */
       bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset + 6);
-      /* mov @r7, #HI - 4b (8)  */
+      /* mov @r7, #K - 4b (8)  */
       bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + offset + 8);
-      bfd_put_16 (output_bfd, address_hi, plt->contents + offset + 10);
+      bfd_put_16 (output_bfd, 0,          plt->contents + offset + 10);
       /* sub r7, #2   - 2b (12) */
       bfd_put_16 (output_bfd, 0x0497,     plt->contents + offset + 12);
-      /* mov @r7, #K  - 4b (14) */
+      /* mov @r7, #HI  - 4b (14) */
       bfd_put_16 (output_bfd, 0x6c0b,     plt->contents + offset + 14);
-      bfd_put_16 (output_bfd, 0x0,        plt->contents + offset + 16);
+      bfd_put_16 (output_bfd, address_hi, plt->contents + offset + 16);
       /* eret         - 2b (18) */
       bfd_put_16 (output_bfd, 0x1bc7,     plt->contents + offset + 18);
 
@@ -2977,7 +2977,7 @@ mrk3_elf_finish_dynamic_sections (bfd * output_bfd,
       /* Place block key instream         (18)
          (This corresponds to the #K above) */
       bfd_put_16 (output_bfd, 0xe,          metadata->contents + csoffset + 18);
-      bfd_put_64 (output_bfd, plt->vma + offset + 16,
+      bfd_put_64 (output_bfd, plt->vma + offset + 10,
                                             metadata->contents + csoffset + 20);
       /* End function                     (28) */
       bfd_put_16 (output_bfd, 0x2,          metadata->contents + csoffset + 28);
