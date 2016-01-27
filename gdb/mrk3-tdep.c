@@ -193,6 +193,7 @@ bits. */
 #include "readline/tilde.h"
 #include "user-regs.h"
 #include "stack.h"
+#include "dwarf2-frame.h"
 
 /*  Required for symbol switch handling. */
 #include "gdb/defs.h"
@@ -2823,6 +2824,30 @@ mrk3_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
   return NULL; /* False, don't stop here.  */
 }
 
+/* This is called to initialise register state within a frame that is being
+   unwound by the DWARF2 stack frame unwinder.  */
+
+static void
+mrk3_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
+			   struct dwarf2_frame_state_reg *reg,
+			   struct frame_info *this_frame)
+{
+  /* Give a one time warning that this function is incomplete.  */
+  static int warned = 0;
+  if (!warned)
+    {
+      warned = 1;
+      printf_unfiltered ("TODO: %s: Needs better initialisation "
+			 "for more registers.\n", __PRETTY_FUNCTION__);
+    }
+
+  switch (regnum)
+    {
+    case MRK3_SP_REGNUM:
+      reg->how = DWARF2_FRAME_REG_CFA;
+      break;
+    }
+}
 
 /*! Initialize the gdbarch structure for the mrk3. */
 static struct gdbarch *
@@ -2893,6 +2918,13 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   set_gdbarch_decr_pc_after_break (gdbarch, 2);
   set_gdbarch_breakpoint_from_pc (gdbarch, mrk3_breakpoint_from_pc);
+
+  /* Setup DWARF2 stack unwinders.  */
+  if (getenv ("MRK3_DWARF_CFI") != NULL)
+    {
+      dwarf2_frame_set_init_reg (gdbarch, mrk3_dwarf2_frame_init_reg);
+      dwarf2_append_unwinders (gdbarch);
+    }
 
   frame_unwind_append_unwinder (gdbarch, &mrk3_frame_unwind);
   frame_base_set_default (gdbarch, &mrk3_frame_base);
