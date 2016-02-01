@@ -1,3 +1,9 @@
+2016-02-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* testsuite/gas/ip2k/allinsn.d: New file.
+	* testsuite/gas/ip2k/allinsn.s: New file.
+	* testsuite/gas/ip2k/ip2k-allinsn.exp: New file.
+
 2016-01-26  Claudiu Zissulescu  <claziss@synopsys.com>
 
         * config/tc-arc.c (md_apply_fix): Allow addendum.
