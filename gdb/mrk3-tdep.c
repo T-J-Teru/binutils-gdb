@@ -295,6 +295,12 @@ bits. */
 
 #define MRK3_MEM_MASK      MRK3_MEM_FLAGS(0xffffffff)
 
+#define MRK3_DM16_MASK     0xffff0000
+
+#define MRK3_CLASS_NONE    0
+#define MRK3_CLASS_DM16    1
+#define MRK3_CLASS_DM32    2
+
 #define PRIxMEM_SPACE "08lx"
 
 /* Define the breakpoint instruction which is inserted by GDB into the target
@@ -1248,12 +1254,15 @@ mrk3_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int dwarf2_regnr)
 
 static CORE_ADDR
 mrk3_p2a (struct gdbarch *gdbarch, int is_code,
-	  struct mrk3_addr_info memspace, CORE_ADDR ptr)
+	  struct mrk3_addr_info memspace, int space, CORE_ADDR ptr)
 {
   CORE_ADDR addr;
 
   ptr  &= ~MRK3_MEM_MASK;		/* Just in case */
   addr  = is_code ? (ptr << 1) : ptr;
+  /* Is this a DM16 pointer? If so, mask off high 16 bits */
+  if (!is_code && (space == MRK3_CLASS_DM16 || space == MRK3_CLASS_NONE))
+    addr &= ~MRK3_DM16_MASK;
   memspace.type = is_code ? TYPE_CODE : TYPE_DATA;
   addr |= mrk3_make_addr_flags (memspace);
 
@@ -1286,12 +1295,16 @@ mrk3_p2a (struct gdbarch *gdbarch, int is_code,
   @return  The pointer */
 
 static CORE_ADDR
-mrk3_a2p (struct gdbarch *gdbarch,
+mrk3_a2p (struct gdbarch *gdbarch, int space,
 	  CORE_ADDR       addr)
 {
   int is_code = mrk3_is_code_address (addr);
   CORE_ADDR ptr = addr & ~MRK3_MEM_MASK;
   ptr = is_code ? (ptr >> 1) : ptr;
+
+  /* Is this a DM16 pointer? If so, mask off high 16 bits */
+  if (!is_code && (space == MRK3_CLASS_DM16 || space == MRK3_CLASS_NONE))
+    ptr &= ~MRK3_DM16_MASK;
 
   if (mrk3_debug_ptraddr ())
     {
@@ -1355,8 +1368,11 @@ mrk3_pointer_to_address (struct gdbarch *gdbarch,
   int  is_code = TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
     || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
     || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type));
+  int space = TYPE_ADDRESS_CLASS_1 (type) ? MRK3_CLASS_DM16 :
+              TYPE_ADDRESS_CLASS_2 (type) ? MRK3_CLASS_DM32 :
+              MRK3_CLASS_NONE;
 
-  return mrk3_p2a (gdbarch, is_code, mrk3_get_memspace (), ptr);
+  return mrk3_p2a (gdbarch, is_code, mrk3_get_memspace (), space, ptr);
 
 }	/* mrk3_pointer_to_address () */
 
@@ -1388,8 +1404,11 @@ mrk3_address_to_pointer (struct gdbarch *gdbarch,
   int  is_code = TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_FUNC
     || TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_METHOD
     || TYPE_CODE_SPACE (TYPE_TARGET_TYPE (type));
+  int space = TYPE_ADDRESS_CLASS_1 (type) ? MRK3_CLASS_DM16 :
+              TYPE_ADDRESS_CLASS_2 (type) ? MRK3_CLASS_DM32 :
+              MRK3_CLASS_NONE;
   struct mrk3_addr_info memspace = mrk3_get_memspace ();
-  CORE_ADDR ptr = mrk3_a2p (gdbarch,
+  CORE_ADDR ptr = mrk3_a2p (gdbarch, space,
 			    mrk3_addr_bits_add (is_code, memspace, addr));
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
 
@@ -1419,7 +1438,7 @@ mrk3_read_pc (struct regcache *regcache)
   struct gdbarch *gdbarch = get_regcache_arch (regcache);
   struct mrk3_addr_info memspace = mrk3_get_memspace ();
   regcache_cooked_read_unsigned (regcache, MRK3_PC_REGNUM, &pcptr);
-  pcaddr = mrk3_p2a (gdbarch, 1, memspace, pcptr);
+  pcaddr = mrk3_p2a (gdbarch, 1, memspace, MRK3_CLASS_NONE, pcptr);
 
   if (mrk3_debug_ptraddr ())
     fprintf_unfiltered (gdb_stdlog, _("MRK3 read pc: ptr %s -> addr %s.\n"),
@@ -1450,7 +1469,7 @@ mrk3_write_pc (struct regcache *regcache, CORE_ADDR pcaddr)
   CORE_ADDR pcptr;
 
   pcaddr = mrk3_addr_bits_add (1, mrk3_get_memspace (), pcaddr);
-  pcptr = mrk3_a2p (gdbarch, pcaddr);
+  pcptr = mrk3_a2p (gdbarch, MRK3_CLASS_NONE, pcaddr);
 
   regcache_cooked_write_unsigned (regcache, MRK3_PC_REGNUM, pcptr);
 
@@ -2093,7 +2112,7 @@ mrk3_frame_cache (struct frame_info *this_frame,
 
       /* Compute this before we try to figure out the frame type.  */
       this_sp = get_frame_register_unsigned (this_frame, MRK3_SP_REGNUM);
-      this_sp = mrk3_p2a (gdbarch, 0, memspace, this_sp);
+      this_sp = mrk3_p2a (gdbarch, 0, memspace, MRK3_CLASS_NONE, this_sp);
       cache->frame_base = this_sp + cache->frame_size;
       cache->frame_base_p = 1;
 
@@ -2127,7 +2146,7 @@ mrk3_frame_cache (struct frame_info *this_frame,
 	prev_pc = 0;
 
       trad_frame_set_value (cache->saved_regs, MRK3_PC_REGNUM,
-			    mrk3_a2p (gdbarch, prev_pc));
+			    mrk3_a2p (gdbarch, MRK3_CLASS_NONE, prev_pc));
 
       /* Some debug output.  */
       if (mrk3_debug_frame ())
@@ -2274,7 +2293,8 @@ mrk3_unwind_pc (struct gdbarch    *gdbarch,
 		struct frame_info *next_frame)
 {
   CORE_ADDR pcptr = frame_unwind_register_unsigned (next_frame, MRK3_PC_REGNUM);
-  CORE_ADDR pcaddr = mrk3_p2a (gdbarch, 1, mrk3_get_memspace (), pcptr);
+  CORE_ADDR pcaddr = mrk3_p2a (gdbarch, 1, mrk3_get_memspace (),
+                               MRK3_CLASS_NONE, pcptr);
 
   if (mrk3_debug_ptraddr ())
     fprintf_unfiltered (gdb_stdlog, _("unwind PC value %s.\n"),
@@ -2306,8 +2326,39 @@ mrk3_unwind_sp (struct gdbarch *gdbarch, struct frame_info *next_frame)
 static int
 mrk3_address_class_type_flags (int byte_size, int dwarf2_addr_class)
 {
-  if (byte_size == 2)
+  if (dwarf2_addr_class == 1)
     return TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1;
+  if (dwarf2_addr_class == 2)
+    return TYPE_INSTANCE_FLAG_ADDRESS_CLASS_2;
+  return 0;
+}
+
+static const char*
+mrk3_address_class_type_flags_to_name (struct gdbarch *gdbarch, int type_flags)
+{
+  if (type_flags & TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1)
+    return "DM16";
+  if (type_flags & TYPE_INSTANCE_FLAG_ADDRESS_CLASS_2)
+    return "DM32";
+  else
+    return NULL;
+}
+
+static int
+mrk3_address_class_name_to_type_flags (struct gdbarch *gdbarch,
+                                       const char* name,
+                                       int *type_flags_ptr)
+{
+  if (strcmp (name, "DM16") == 0)
+    {
+      *type_flags_ptr = TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1;
+      return 1;
+    }
+  if (strcmp (name, "DM32") == 0)
+    {
+      *type_flags_ptr = TYPE_INSTANCE_FLAG_ADDRESS_CLASS_2;
+      return 2;
+    }
   else
     return 0;
 }
@@ -2818,7 +2869,7 @@ mrk3_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
   gdb_assert (this_frame != NULL);
   frame_pc_p = get_frame_pc_if_available (this_frame, &frame_pc);
 
-  if (frame_pc_p && mrk3_a2p (gdbarch, frame_pc) == 0)
+  if (frame_pc_p && mrk3_a2p (gdbarch, MRK3_CLASS_NONE, frame_pc) == 0)
     return "zero PC";
 
   return NULL; /* False, don't stop here.  */
@@ -2871,6 +2922,10 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   gdbarch = gdbarch_alloc (&info, NULL);
   set_gdbarch_address_class_type_flags (gdbarch,
 					mrk3_address_class_type_flags);
+  set_gdbarch_address_class_type_flags_to_name (gdbarch,
+					mrk3_address_class_type_flags_to_name);
+  set_gdbarch_address_class_name_to_type_flags (gdbarch,
+					mrk3_address_class_name_to_type_flags);
   set_gdbarch_short_bit (gdbarch, 2 * TARGET_CHAR_BIT);
   set_gdbarch_int_bit (gdbarch, 2 * TARGET_CHAR_BIT);
   set_gdbarch_long_bit (gdbarch, 4 * TARGET_CHAR_BIT);

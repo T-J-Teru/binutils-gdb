@@ -1,3 +1,20 @@
+2016-02-02  Simon Cook  <simon.cook@embecosm.com>
+
+	* mrk3-tdep.c (MRK3_DM16_MASK): Define.
+	(mrk3_p2a): Add DM16 specific address masking. Add new arg 'space'.
+	(mrk3_a2p): Likewise.
+	(mrk3_pointer_to_address): Determine address space, pass to mrk3_p2a.
+	(mrk3_address_to_pointer): Determine address space, pass to mrk3_a2p.
+	(mrk3_read_pc): Update to account for mrk3_p2a additional arg.
+	(mrk3_write_pc): Update to account for mrk3_a2p additional arg.
+	(mrk3_frame_cache): Likewise.
+	(mrk3_unwind_pc): Likewise.
+	(mrk3_unwind_stop_at_frame_p): Likewise.
+	(mrk3_address_class_type_flags): Update to use DWARF address classes.
+	(mrk3_address_class_type_flags_to_name): New function.
+	(mrk3_address_class_name_to_type_flags): New function.
+	(mrk3_gdbarch_init): Register new flag to name functions.
+
 2016-01-27  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c: Add 'dwarf2-frame.h' include.
