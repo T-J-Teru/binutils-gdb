@@ -1,3 +1,9 @@
+2016-02-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdbarch.sh: Add unwind_stop_at_frame_p line.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+
 2016-02-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* symmisc.c (maintenance_info_line_tables): New function.

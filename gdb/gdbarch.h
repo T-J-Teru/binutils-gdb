@@ -61,7 +61,6 @@ struct stap_parse_info;
 struct parser_state;
 struct ravenscar_arch_ops;
 struct elf_internal_linux_prpsinfo;
-struct frame;
 struct mem_range;
 struct syscalls_info;
 
@@ -592,7 +591,7 @@ extern void set_gdbarch_unwind_sp (struct gdbarch *gdbarch, gdbarch_unwind_sp_ft
 
 typedef const char * (gdbarch_unwind_stop_at_frame_p_ftype) (struct gdbarch *gdbarch, struct frame_info *frame);
 extern const char * gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch, struct frame_info *frame);
-extern void set_gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch, gdbarch_unwind_stop_at_frame_p_ftype *func);
+extern void set_gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch, gdbarch_unwind_stop_at_frame_p_ftype *unwind_stop_at_frame_p);
 
 /* DEPRECATED_FRAME_LOCALS_ADDRESS as been replaced by the per-frame
    frame-base.  Enable frame-base before frame-unwind. */

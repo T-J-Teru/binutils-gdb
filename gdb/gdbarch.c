@@ -47,7 +47,6 @@
 #include "observer.h"
 #include "regcache.h"
 #include "objfiles.h"
-#include "frame.h"
 
 /* Static function declarations */
 
@@ -362,7 +361,6 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->target_desc = info->target_desc;
 
   /* Force the explicit initialization of these.  */
-  gdbarch->unwind_stop_at_frame_p = default_unwind_stop_at_frame_p;
   gdbarch->bits_big_endian = (gdbarch->byte_order == BFD_ENDIAN_BIG);
   gdbarch->short_bit = 2*TARGET_CHAR_BIT;
   gdbarch->int_bit = 4*TARGET_CHAR_BIT;
@@ -401,6 +399,7 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->memory_insert_breakpoint = default_memory_insert_breakpoint;
   gdbarch->memory_remove_breakpoint = default_memory_remove_breakpoint;
   gdbarch->remote_register_number = default_remote_register_number;
+  gdbarch->unwind_stop_at_frame_p = default_unwind_stop_at_frame_p;
   gdbarch->stabs_argument_has_addr = default_stabs_argument_has_addr;
   gdbarch->convert_from_func_ptr_addr = convert_from_func_ptr_addr_identity;
   gdbarch->addr_bits_remove = core_addr_identity;
@@ -583,6 +582,7 @@ verify_gdbarch (struct gdbarch *gdbarch)
   /* Skip verify of frame_args_skip, invalid_p == 0 */
   /* Skip verify of unwind_pc, has predicate.  */
   /* Skip verify of unwind_sp, has predicate.  */
+  /* Skip verify of unwind_stop_at_frame_p, invalid_p == 0 */
   /* Skip verify of frame_num_args, has predicate.  */
   /* Skip verify of frame_align, has predicate.  */
   /* Skip verify of stabs_argument_has_addr, invalid_p == 0 */
@@ -1379,7 +1379,7 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
                       "gdbarch_dump: unwind_sp = <%s>\n",
                       host_address_to_string (gdbarch->unwind_sp));
   fprintf_unfiltered (file,
-                      "gdbarch_dump: gdbarch_unwind_stop_at_frame_p = %s\n",
+                      "gdbarch_dump: unwind_stop_at_frame_p = <%s>\n",
                       host_address_to_string (gdbarch->unwind_stop_at_frame_p));
   fprintf_unfiltered (file,
                       "gdbarch_dump: value_from_register = <%s>\n",
@@ -2905,8 +2905,7 @@ set_gdbarch_unwind_sp (struct gdbarch *gdbarch,
 }
 
 const char *
-gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
-				struct frame_info *frame)
+gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch, struct frame_info *frame)
 {
   gdb_assert (gdbarch != NULL);
   gdb_assert (gdbarch->unwind_stop_at_frame_p != NULL);
@@ -2917,9 +2916,9 @@ gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
 
 void
 set_gdbarch_unwind_stop_at_frame_p (struct gdbarch *gdbarch,
-				    gdbarch_unwind_stop_at_frame_p_ftype *func)
+                                    gdbarch_unwind_stop_at_frame_p_ftype unwind_stop_at_frame_p)
 {
-  gdbarch->unwind_stop_at_frame_p = func;
+  gdbarch->unwind_stop_at_frame_p = unwind_stop_at_frame_p;
 }
 
 int
