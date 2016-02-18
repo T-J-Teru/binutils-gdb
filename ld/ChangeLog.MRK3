@@ -1,3 +1,7 @@
+2016-02-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* scripttempl/mrk3.sc: Add entry to merge .mrk3.records sections.
+
 2016-01-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ldlang.c (insert_pad): When inserting padding, mark sections as

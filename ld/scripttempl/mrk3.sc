@@ -90,6 +90,12 @@ SECTIONS
 
     PROVIDE (___heap_start = ALIGN (., 0x10));
 
+    /* Handle .mrk3.records sections.  These contain meta-information
+       that is requried for linker relaxation.  After that this
+       information is no longer required, but should be harmless if
+       kept around.  */
+    .mrk3.records 0 : { *(.mrk3.records) }
+
     /* DWARF debug sections.
        Symbols in the DWARF debugging sections are relative to the beginning
        of the section so we begin them at 0.  */
