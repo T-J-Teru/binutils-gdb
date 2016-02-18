@@ -1482,6 +1482,12 @@ typedef int (gdbarch_addressable_memory_unit_size_ftype) (struct gdbarch *gdbarc
 extern int gdbarch_addressable_memory_unit_size (struct gdbarch *gdbarch);
 extern void set_gdbarch_addressable_memory_unit_size (struct gdbarch *gdbarch, gdbarch_addressable_memory_unit_size_ftype *addressable_memory_unit_size);
 
+/* Adjust the pc prior to performing disassembly. */
+
+typedef CORE_ADDR (gdbarch_adjust_pc_for_disassembly_ftype) (struct gdbarch *gdbarch, CORE_ADDR pc);
+extern CORE_ADDR gdbarch_adjust_pc_for_disassembly (struct gdbarch *gdbarch, CORE_ADDR pc);
+extern void set_gdbarch_adjust_pc_for_disassembly (struct gdbarch *gdbarch, gdbarch_adjust_pc_for_disassembly_ftype *adjust_pc_for_disassembly);
+
 /* Definition for an unknown syscall, used basically in error-cases.  */
 #define UNKNOWN_SYSCALL (-1)
 

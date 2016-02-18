@@ -1,5 +1,23 @@
 2016-02-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* arch-utils.c (default_adjust_pc_for_disassembly): Define new
+	function.
+	* arch-utils.h (default_adjust_pc_for_disassembly): Declare new
+	function.
+	* disasm.c: Add 'cli/cli-cmds.h' include.
+	(disassemble_address_adjustment): New global.
+	(show_disassemble_address_adjustment): New function.
+	(gdb_disassembly): Add call to gdbarch_adjust_pc_for_disassembly.
+	(_initialize_disasm): New function.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+	* gdbarch.sh (adjust_pc_for_disassembly): New entry.
+	* mrk3-tdep.c (mrk3_adjust_pc_for_disassembly): New function.
+	(mrk3_gdbarch_init): Initialise
+	set_gdbarch_adjust_pc_for_disassembly.
+
+2016-02-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdbarch.sh: Add unwind_stop_at_frame_p line.
 	* gdbarch.c: Regenerate.
 	* gdbarch.h: Regenerate.

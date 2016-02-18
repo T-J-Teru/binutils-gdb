@@ -1125,6 +1125,9 @@ m:const char *:gnu_triplet_regexp:void:::default_gnu_triplet_regexp::0
 # each address in memory.
 m:int:addressable_memory_unit_size:void:::default_addressable_memory_unit_size::0
 
+# Adjust the pc prior to performing disassembly.
+m:CORE_ADDR:adjust_pc_for_disassembly:CORE_ADDR pc:pc::default_adjust_pc_for_disassembly::0
+
 EOF
 }
 

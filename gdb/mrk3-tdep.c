@@ -2900,6 +2900,16 @@ mrk3_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
     }
 }
 
+/* We only support disassembly from a minimum of a 2-byte boundary, and
+   in fact the simulator (which we use for disassembly) will refuse to
+   disassemble miss-aligned addresses.  */
+
+static CORE_ADDR
+mrk3_adjust_pc_for_disassembly (struct gdbarch *gdbarch, CORE_ADDR pc)
+{
+  return pc & ~0x1;
+}
+
 /*! Initialize the gdbarch structure for the mrk3. */
 static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
@@ -2994,6 +3004,8 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_value_to_register (gdbarch, mrk3_value_to_register);
 
   set_gdbarch_unwind_stop_at_frame_p (gdbarch, mrk3_unwind_stop_at_frame_p);
+
+  set_gdbarch_adjust_pc_for_disassembly (gdbarch, mrk3_adjust_pc_for_disassembly);
 
   for (i = 0; i < ARRAY_SIZE (mrk3_register_aliases); i++)
     user_reg_add (gdbarch, mrk3_register_aliases[i].name,

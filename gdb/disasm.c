@@ -25,10 +25,30 @@
 #include "gdbcore.h"
 #include "dis-asm.h"
 #include "source.h"
+#include "cli/cli-cmds.h"
 
 /* Disassemble functions.
    FIXME: We should get rid of all the duplicate code in gdb that does
    the same thing: disassemble_command() and the gdbtk variation.  */
+
+/* When this is true gdb might adjust any address passed to the disassemble
+   function.  This adjustment is per target, not all targets make an
+   adjustment.  */
+
+static int disassemble_address_adjustment = 1;
+
+/* A function to show whether address adjustment for disassembly is turned
+   on.  */
+
+static void
+show_disassemble_address_adjustment (struct ui_file *file, int from_tty,
+				     struct cmd_list_element *c,
+				     const char *value)
+{
+  fprintf_filtered (file,
+		    _("Address adjustment before disassembly is %s.\n"),
+		    value);
+}
 
 /* This structure is used to store line number information for the
    deprecated /m option.
@@ -808,6 +828,10 @@ gdb_disassembly (struct gdbarch *gdbarch, struct ui_out *uiout,
   struct linetable_entry *le = NULL;
   int nlines = -1;
 
+  /* Allow the target to tweak where we disassemble from.  */
+  if (disassemble_address_adjustment)
+    low = gdbarch_adjust_pc_for_disassembly (gdbarch, low);
+
   /* Assume symtab is valid for whole PC range.  */
   symtab = find_pc_line_symtab (low);
 
@@ -924,4 +948,21 @@ gdb_buffered_insn_length (struct gdbarch *gdbarch,
   gdb_buffered_insn_length_init_dis (gdbarch, &di, insn, max_len, addr);
 
   return gdbarch_print_insn (gdbarch, addr, &di);
+}
+
+/* -Wmissing-prototypes.  */
+void _initialize_disasm (void);
+
+void
+_initialize_disasm (void)
+{
+  add_setshow_boolean_cmd ("disassemble-address-adjustment", class_support,
+			   &disassemble_address_adjustment,
+			   _("Set resolution of opaque struct/class/union"
+			     " types (if set before loading symbols)."),
+			   _("Show resolution of opaque struct/class/union"
+			     " types (if set before loading symbols)."),
+			   NULL, NULL,
+			   show_disassemble_address_adjustment,
+			   &setlist, &showlist);
 }

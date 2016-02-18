@@ -8319,6 +8319,32 @@ OFF, which means never display the disassembly of the next line or
 instruction.
 @end table
 
+@table @code
+@kindex set disassemble-address-adjustment
+@item set disassemble-address-adjustment on
+@itemx set disassemble-address-adjustment off
+Some targets are unable to disassemble particular address alignments.
+For example, a target that only support 16-bit word addresses for code
+maybe unable to disassemble from odd byte addresses.  For these
+targets, when @var{disassemble-address-adjustment} is on, @value{GDBN}
+will automatically adjust the start address passed to the disassembler
+to realighn it to a more appropriate value.  Setting this flag off
+will disable this feature.
+
+This only controls whether @value{GDBN} calls the target specific code
+to perform address alignment.  Not every target performs address
+alignment.  Refer to the target specific documentation to see if your
+target performs address alignment.
+
+@kindex show disassemble-address-adjustment
+@item show disassemble-address-adjustment
+Display whether the address adjustment feature of the disassembler is
+currently on or off.  This only displays whether @value{GDBN} will
+call the target specific function that performs address alignment.
+Not all targets perform address alignment at all, if a target performs
+address alignment this will be documented in the target specific
+documentation.
+@end table
 
 @node Data
 @chapter Examining Data

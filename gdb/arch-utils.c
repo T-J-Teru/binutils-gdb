@@ -897,6 +897,15 @@ default_addressable_memory_unit_size (struct gdbarch *gdbarch)
   return 1;
 }
 
+/* Default method for gdbarch_adjust_pc_for_disassembly.  By default, just
+   disassemble from the requested PC.  */
+
+CORE_ADDR
+default_adjust_pc_for_disassembly (struct gdbarch *gdbarch, CORE_ADDR pc)
+{
+  return pc;
+}
+
 /* -Wmissing-prototypes */
 extern initialize_file_ftype _initialize_gdbarch_utils;
 

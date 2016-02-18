@@ -331,6 +331,7 @@ struct gdbarch
   gdbarch_gcc_target_options_ftype *gcc_target_options;
   gdbarch_gnu_triplet_regexp_ftype *gnu_triplet_regexp;
   gdbarch_addressable_memory_unit_size_ftype *addressable_memory_unit_size;
+  gdbarch_adjust_pc_for_disassembly_ftype *adjust_pc_for_disassembly;
 };
 
 /* Create a new ``struct gdbarch'' based on information provided by
@@ -434,6 +435,7 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->gcc_target_options = default_gcc_target_options;
   gdbarch->gnu_triplet_regexp = default_gnu_triplet_regexp;
   gdbarch->addressable_memory_unit_size = default_addressable_memory_unit_size;
+  gdbarch->adjust_pc_for_disassembly = default_adjust_pc_for_disassembly;
   /* gdbarch_alloc() */
 
   return gdbarch;
@@ -677,6 +679,7 @@ verify_gdbarch (struct gdbarch *gdbarch)
   /* Skip verify of gcc_target_options, invalid_p == 0 */
   /* Skip verify of gnu_triplet_regexp, invalid_p == 0 */
   /* Skip verify of addressable_memory_unit_size, invalid_p == 0 */
+  /* Skip verify of adjust_pc_for_disassembly, invalid_p == 0 */
   buf = ui_file_xstrdup (log, &length);
   make_cleanup (xfree, buf);
   if (length > 0)
@@ -742,6 +745,9 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file,
                       "gdbarch_dump: adjust_dwarf2_line = <%s>\n",
                       host_address_to_string (gdbarch->adjust_dwarf2_line));
+  fprintf_unfiltered (file,
+                      "gdbarch_dump: adjust_pc_for_disassembly = <%s>\n",
+                      host_address_to_string (gdbarch->adjust_pc_for_disassembly));
   fprintf_unfiltered (file,
                       "gdbarch_dump: auto_charset = <%s>\n",
                       host_address_to_string (gdbarch->auto_charset));
@@ -4782,6 +4788,23 @@ set_gdbarch_addressable_memory_unit_size (struct gdbarch *gdbarch,
                                           gdbarch_addressable_memory_unit_size_ftype addressable_memory_unit_size)
 {
   gdbarch->addressable_memory_unit_size = addressable_memory_unit_size;
+}
+
+CORE_ADDR
+gdbarch_adjust_pc_for_disassembly (struct gdbarch *gdbarch, CORE_ADDR pc)
+{
+  gdb_assert (gdbarch != NULL);
+  gdb_assert (gdbarch->adjust_pc_for_disassembly != NULL);
+  if (gdbarch_debug >= 2)
+    fprintf_unfiltered (gdb_stdlog, "gdbarch_adjust_pc_for_disassembly called\n");
+  return gdbarch->adjust_pc_for_disassembly (gdbarch, pc);
+}
+
+void
+set_gdbarch_adjust_pc_for_disassembly (struct gdbarch *gdbarch,
+                                       gdbarch_adjust_pc_for_disassembly_ftype adjust_pc_for_disassembly)
+{
+  gdbarch->adjust_pc_for_disassembly = adjust_pc_for_disassembly;
 }
 
 
