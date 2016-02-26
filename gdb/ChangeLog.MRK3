@@ -28,12 +28,6 @@
 	(_initialize_symmisc): Register 'maint info line-table' command.
 	* NEWS: Mention new command.
 
-2016-02-15  Andrew Burgess  <andrew.burgess@embecosm.com>
-
-	* infrun.c (process_event_stop_test): Before restarting the step,
-	check we have not stepped out of the frame in which the step was
-	initiated.
-
 2016-02-02  Simon Cook  <simon.cook@embecosm.com>
 
 	* mrk3-tdep.c (MRK3_DM16_MASK): Define.

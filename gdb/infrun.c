@@ -6152,11 +6152,10 @@ static void
 process_event_stop_test (struct execution_control_state *ecs)
 {
   struct symtab_and_line stop_pc_sal;
-  struct frame_info *frame, *fi;
+  struct frame_info *frame;
   struct gdbarch *gdbarch;
   CORE_ADDR jmp_buf_pc;
   struct bpstat_what what;
-  int found;
 
   /* Handle cases caused by hitting a breakpoint.  */
 
@@ -6944,26 +6943,6 @@ process_event_stop_test (struct execution_control_state *ecs)
       if (debug_infrun)
 	 fprintf_unfiltered (gdb_stdlog,
 			     "infrun: stepped to a different line\n");
-      end_stepping_range (ecs);
-      return;
-    }
-
-  /* Check to see if we have stepped out of the original frame.  This can
-     happen when confronted with less than perfect debug information.  */
-  for (fi = get_current_frame (), found = 0;
-       fi != NULL && !found;
-       fi = get_prev_frame (fi))
-    {
-      if (frame_id_eq (get_frame_id (fi),
-		       ecs->event_thread->control.step_frame_id))
-	found = 1;
-    }
-
-  if (!found)
-    {
-      if (debug_infrun)
-	fprintf_unfiltered (gdb_stdlog,
-			    "infrun: stepped out of original frame\n");
       end_stepping_range (ecs);
       return;
     }
