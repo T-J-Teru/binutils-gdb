@@ -370,7 +370,7 @@ static int nxpload_logging = 1;
 
 /* Issue warnings when making changes, or when issues are detected while
    analysing a frames CALL / ECALL type.  */
-static int mrk3_frame_type_warnings = 1;
+static int mrk3_frame_type_warnings = 0;
 
 /* If a CALL / ECALL frame type is found by looking for a RET / ERET, but
    the call site suggests that the alternative frame type is more
@@ -719,7 +719,7 @@ static const struct
   const char *name;
   int regnum;
 } mrk3_register_aliases[] = {
-  { "R7", 15 },
+  { "R7", MRK3_SP_REGNUM },
 };
 
 /* This table is used to map register number onto register names.  The
