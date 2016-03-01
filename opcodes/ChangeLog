@@ -1,3 +1,7 @@
+2016-03-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* arc-opc.c (BASE): Delete.
+
 2016-02-24  Renlin Li  <renlin.li@arm.com>
 
 	* arm-dis.c (coprocessor_opcodes): Add fp16 instruction entries.
