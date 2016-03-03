@@ -1,3 +1,10 @@
+2016-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* buildsym.c (maybe_record_line): Remove stray debug print out.
+	(compare_line_numbers_for_inline): New function.
+	(reorder_linetable_entries): Use qsort and
+	compare_line_numbers_for_inline.
+
 2016-02-26  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_register_aliases): Alias R7 to SP.

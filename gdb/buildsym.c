@@ -973,10 +973,6 @@ record_line (struct subfile *subfile, int line, CORE_ADDR pc)
 void
 maybe_record_line (struct subfile *subfile, int line, CORE_ADDR pc)
 {
-  printf_filtered ("inline function at %s\t(line %d of %s)\n",
-		   core_addr_to_string (pc), line,
-		   subfile->symtab->filename);
-
   if (subfile->line_vector
       && subfile->line_vector->nitems > 0)
     {
@@ -1350,18 +1346,29 @@ end_symtab_get_static_block (CORE_ADDR end_addr, int expandable, int required)
     }
 }
 
-/* Helper function used when reordering the line table.  Due to the order
-   in which the line table is built up we will have the NORMAL entries,
-   those that originate from the actual line table first, followed by any
-   INLINE entries in reverse order.
+/* Reorder line table entries to take account of inline entries.  */
 
-   Reverse order here means that if we have a call hierarchy of A calls B
-   calls C then the first INLINE entry will identify the line from B, while
-   the second INLINE entry will identify the line in A.  The NORMAL entry,
-   which occurs first, will identify the line from C.
+static int
+compare_line_numbers_for_inline (const void *ln1p, const void *ln2p)
+{
+  struct linetable_entry *ln1 = (struct linetable_entry *) ln1p;
+  struct linetable_entry *ln2 = (struct linetable_entry *) ln2p;
 
-   The target is to move the NORMAL entries to be last, while all INLINE
-   entries will appear in call order first in the line table.  */
+  gdb_assert(ln1->pc == ln2->pc);
+
+  if (ln1->flags == LINETABLE_ENTRY_INLINE
+      && ln2->flags == LINETABLE_ENTRY_NORMAL)
+    return -1;
+  else if (ln2->flags == LINETABLE_ENTRY_INLINE
+      && ln1->flags == LINETABLE_ENTRY_NORMAL)
+    return 1;
+
+  /* As pc equal, sort by line.  */
+  return ln1->line - ln2->line;
+}
+
+/* Helper function used when reordering the line table to place INLINE
+   line table entries into the correct place.  */
 
 static int
 reorder_linetable_entries (struct linetable_entry *entry, int count)
@@ -1376,14 +1383,8 @@ reorder_linetable_entries (struct linetable_entry *entry, int count)
     {
       if (entry [i].pc == pc)
 	{
-	  ++same_pc_count;
 	  if (entry [i].flags == LINETABLE_ENTRY_NORMAL)
-	    {
-	      /* Inline entries should always appear after the normal
-		 entries.  */
-	      gdb_assert (inline_count == 0);
-	      ++normal_count;
-	    }
+	    ++normal_count;
 	  else
 	    ++inline_count;
 	}
@@ -1391,29 +1392,12 @@ reorder_linetable_entries (struct linetable_entry *entry, int count)
 	break;
     }
 
+  same_pc_count = inline_count + normal_count;
   if (inline_count == 0 || same_pc_count == 1)
     return same_pc_count;
 
-  /* Move NORMAL entries in a block to the end.  */
-  size_of_normal_entries = sizeof (struct linetable_entry) * normal_count;
-  buffer = alloca (size_of_normal_entries);
-  memmove (buffer, entry, size_of_normal_entries);
-  size_of_inline_entries = sizeof (struct linetable_entry) * inline_count;
-  memmove (entry, entry + normal_count, size_of_inline_entries);
-  memmove (entry + inline_count, buffer, size_of_normal_entries);
-
-  /* Reverse the order of the inline entries.  */
-  for (i = 0; i < inline_count / 2; ++i)
-    {
-      struct linetable_entry tmp;
-      int j = inline_count - 1 - i;
-      gdb_assert (i < j);
-
-      tmp = entry [j];
-      entry [j] = entry [i];
-      entry [i] = tmp;
-    }
-
+  qsort (entry, same_pc_count, sizeof (struct linetable_entry),
+	 compare_line_numbers_for_inline);
   return same_pc_count;
 }
 
