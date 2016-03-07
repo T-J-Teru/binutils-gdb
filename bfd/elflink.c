@@ -9822,13 +9822,18 @@ elf_link_input_bfd (struct elf_final_link_info *flinfo, bfd *input_bfd)
       osym.st_value += isec->output_offset;
       if (!bfd_link_relocatable (flinfo->info))
 	{
-	  osym.st_value += isec->output_section->vma;
-	  if (ELF_ST_TYPE (osym.st_info) == STT_TLS)
-	    {
-	      /* STT_TLS symbols are relative to PT_TLS segment base.  */
-	      BFD_ASSERT (elf_hash_table (flinfo->info)->tls_sec != NULL);
-	      osym.st_value -= elf_hash_table (flinfo->info)->tls_sec->vma;
-	    }
+          if (isec == NULL
+              || isec->owner == NULL
+              || elf_elfheader (isec->owner)->e_type != ET_EXEC)
+            {
+              osym.st_value += isec->output_section->vma;
+              if (ELF_ST_TYPE (osym.st_info) == STT_TLS)
+                {
+                  /* STT_TLS symbols are relative to PT_TLS segment base.  */
+                  BFD_ASSERT (elf_hash_table (flinfo->info)->tls_sec != NULL);
+                  osym.st_value -= elf_hash_table (flinfo->info)->tls_sec->vma;
+                }
+            }
 	}
 
       indx = bfd_get_symcount (output_bfd);
