@@ -55,7 +55,7 @@ extern void _initialize_f_valprint (void);
 static void info_common_command (char *, int);
 static void f77_create_arrayprint_offset_tbl (f77_array_dim *, struct type *,
 					      struct ui_file *);
-static void f77_get_dynamic_length_of_aggregate (struct type *);
+void f77_get_dynamic_length_of_aggregate (struct type *);
 
 int f77_array_offset_tbl[MAX_FORTRAN_DIMS + 1][2];
 
@@ -98,7 +98,7 @@ f77_get_upperbound (struct type *type)
 
 /* Obtain F77 adjustable array dimensions.  */
 
-static void
+void
 f77_get_dynamic_length_of_aggregate (struct type *type)
 {
   int upper_bound = -1;
@@ -300,6 +300,8 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
   struct type *elttype;
   CORE_ADDR addr;
   int index;
+  volatile struct gdb_exception exception;
+
 
   CHECK_TYPEDEF (type);
   switch (TYPE_CODE (type))
@@ -420,20 +422,29 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
     case TYPE_CODE_UNION:
       /* Starting from the Fortran 90 standard, Fortran supports derived
          types.  */
-      fprintf_filtered (stream, "( ");
-      for (index = 0; index < TYPE_NFIELDS (type); index++)
-        {
-          int offset = TYPE_FIELD_BITPOS (type, index) / 8;
-
-          val_print (TYPE_FIELD_TYPE (type, index), valaddr,
-		     embedded_offset + offset,
-		     address, stream, recurse + 1,
-		     original_value, options, current_language);
-          if (index != TYPE_NFIELDS (type) - 1)
-            fputs_filtered (", ", stream);
-        }
-      fprintf_filtered (stream, " )");
-      break;     
+      ++structure_depth;
+      if (structure_depth <= MAX_STRUCTURE_DEPTH) 
+	{
+	  fprintf_filtered (stream, "( ");
+	  TRY_CATCH (exception, -1)
+	    {
+	      for (index = 0; index < TYPE_NFIELDS (type); index++)
+		{
+		  int offset = TYPE_FIELD_BITPOS (type, index) / 8;
+		  fprintf_filtered (stream, "%s = ", TYPE_FIELD_NAME (type, index));
+		  val_print (TYPE_FIELD_TYPE (type, index), valaddr,
+			      embedded_offset + offset,
+			      address, stream, recurse + 1,
+			      original_value, options, current_language);
+		  if (index != TYPE_NFIELDS (type) - 1)
+		    fputs_filtered (", ", stream);
+		}
+	    }
+	  exception_print (gdb_stderr, exception);
+	  fprintf_filtered (stream, " )");
+	}
+      --structure_depth;
+      break;
 
     case TYPE_CODE_REF:
     case TYPE_CODE_FUNC:
