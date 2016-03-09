@@ -258,7 +258,7 @@ get_init_files (const char **system_gdbinit,
       memset (&homebuf, 0, sizeof (struct stat));
       memset (&cwdbuf, 0, sizeof (struct stat));
 
-      if (homedir)
+      if (homedir && !inhibit_gdbinit)
 	{
 	  homeinit = xstrprintf ("%s/%s", homedir, gdbinit);
 	  if (stat (homeinit, &homebuf) != 0)
@@ -268,7 +268,7 @@ get_init_files (const char **system_gdbinit,
 	    }
 	}
 
-      if (stat (gdbinit, &cwdbuf) == 0)
+      if (!inhibit_gdbinit && stat (gdbinit, &cwdbuf) == 0)
 	{
 	  if (!homeinit
 	      || memcmp ((char *) &homebuf, (char *) &cwdbuf,
