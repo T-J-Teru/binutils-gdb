@@ -1329,6 +1329,12 @@ execute_stack_op (struct dwarf_expr_context *ctx,
 	  }
 	  goto no_push;
 
+	case DW_OP_push_object_address:
+	  if (ctx->funcs->get_object_address) {
+	    result = ctx->funcs->get_object_address(ctx->baton);
+	    break;
+	  }
+
 	case DW_OP_GNU_uninit:
 	  if (op_ptr != op_end)
 	    error (_("DWARF-2 expression error: DW_OP_GNU_uninit must always "

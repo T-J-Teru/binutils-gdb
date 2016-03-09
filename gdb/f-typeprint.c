@@ -200,6 +200,11 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
       break;
 
     case TYPE_CODE_PTR:
+        if (TYPE_CODE (TYPE_TARGET_TYPE (type)) != TYPE_CODE_ARRAY)
+            {
+                f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 1, 0, arrayprint_recurse_level);
+                break;
+            }
     case TYPE_CODE_REF:
       f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 1, 0,
 				   arrayprint_recurse_level);
@@ -290,10 +295,17 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
       break;
 
     case TYPE_CODE_PTR:
-      fprintf_filtered (stream, "PTR TO -> ( ");
-      f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
-      break;
-
+        if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_ARRAY)
+            {
+                fprintf_filtered (stream, "PTR TO -> ( ");
+                f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
+                break;
+            }
+        else
+            {
+                f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
+                break;
+            }
     case TYPE_CODE_REF:
       fprintf_filtered (stream, "REF TO -> ( ");
       f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);

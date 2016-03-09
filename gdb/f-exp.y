@@ -48,6 +48,7 @@
 #include "parser-defs.h"
 #include "language.h"
 #include "f-lang.h"
+#include "f-module.h"
 #include "bfd.h" /* Required by objfiles.h.  */
 #include "symfile.h" /* Required by objfiles.h.  */
 #include "objfiles.h" /* For have_full_symbols and have_partial_symbols */
@@ -194,7 +195,7 @@ static int parse_number (char *, int, int, YYSTYPE *);
 
 %token <ssym> NAME_OR_INT 
 
-%token  SIZEOF 
+%token SIZEOF COLONCOLON
 %token ERROR
 
 /* Special type cases, put in to allow the parser to distinguish different
@@ -203,7 +204,7 @@ static int parse_number (char *, int, int, YYSTYPE *);
 %token LOGICAL_S8_KEYWORD
 %token LOGICAL_KEYWORD REAL_KEYWORD REAL_S8_KEYWORD REAL_S16_KEYWORD 
 %token COMPLEX_S8_KEYWORD COMPLEX_S16_KEYWORD COMPLEX_S32_KEYWORD 
-%token BOOL_AND BOOL_OR BOOL_NOT   
+%token BOOL_AND BOOL_OR BOOL_NOT BIN_MOD
 %token <lval> CHARACTER 
 
 %token <voidval> VARIABLE
@@ -230,6 +231,8 @@ static int parse_number (char *, int, int, YYSTYPE *);
 %right '%'
 %right UNARY 
 %right '('
+%right ARROW
+%left COLONCOLON
 
 
 %%
@@ -407,6 +410,14 @@ exp	:	exp GREATERTHAN exp
 			{ write_exp_elt_opcode (BINOP_GTR); }
 	;
 
+exp	:	exp '>' exp
+			{ write_exp_elt_opcode (BINOP_GTR); }
+	;
+
+exp	:	exp '<' exp
+			{ write_exp_elt_opcode (BINOP_LESS); }
+	;
+
 exp	:	exp '&' exp
 			{ write_exp_elt_opcode (BINOP_BITWISE_AND); }
 	;
@@ -426,6 +437,10 @@ exp     :       exp BOOL_AND exp
 
 exp	:	exp BOOL_OR exp
 			{ write_exp_elt_opcode (BINOP_LOGICAL_OR); }
+	;
+
+exp	:	exp BIN_MOD exp
+			{ write_exp_elt_opcode (BINOP_REM); }
 	;
 
 exp	:	exp '=' exp
@@ -489,6 +504,58 @@ exp	:	STRING_LITERAL
 			  write_exp_elt_opcode (OP_STRING);
 			}
 	;
+
+exp	:	exp ARROW name
+			{ write_exp_elt_opcode (STRUCTOP_PTR);
+			  write_exp_string ($3);
+			  write_exp_elt_opcode (STRUCTOP_PTR); }
+	;
+
+exp	:	exp '.' name
+			{ write_exp_elt_opcode (STRUCTOP_STRUCT);
+			  write_exp_string ($3);
+			  write_exp_elt_opcode (STRUCTOP_STRUCT); }
+	;
+
+variable:       TYPENAME COLONCOLON NAME
+                        {
+                          const struct modtab_entry *module =
+                                f_module_lookup (copy_name ($1.stoken));
+
+                          if (module)
+                            {
+                              struct symbol *sym =
+                                f_module_lookup_symbol (module,
+                                                        copy_name ($3.stoken));
+
+                              if (sym)
+                                {
+                                  write_exp_elt_opcode (OP_VAR_VALUE);
+                                  write_exp_elt_block (NULL);
+                                  write_exp_elt_sym (sym);
+                                  write_exp_elt_opcode (OP_VAR_VALUE);
+                                }
+                              else
+                                {
+                                  if (!have_full_symbols () &&
+                                      !have_partial_symbols ())
+                                    error ("No symbol table is loaded.  Use the \"file\" command.");
+                                  else
+                                    error ("No symbol \"%s\" in current context.",
+                                           copy_name ($3.stoken));
+                                }
+                            }
+                          else
+                            {
+			      if (!have_full_symbols () &&
+                                  !have_partial_symbols ())
+				error ("No symbol table is loaded.  Use the \"file\" command.");
+			      else
+				error ("No module \"%s\" in current context.",
+				       copy_name ($1.stoken));
+                            }
+                        }
+        ;
 
 variable:	name_not_typename
 			{ struct symbol *sym = $1.sym;
@@ -647,7 +714,11 @@ nonempty_typelist
 	;
 
 name	:	NAME
-		{  $$ = $1.stoken; }
+			{ $$ = $1.stoken; }
+	|	TYPENAME
+			{ $$ = $1.stoken; }
+	|	NAME_OR_INT
+			{ $$ = $1.stoken; }
 	;
 
 name_not_typename :	NAME
@@ -817,6 +888,9 @@ static const struct token dot_ops[] =
   { ".AND.", BOOL_AND, BINOP_END },
   { ".or.", BOOL_OR, BINOP_END },
   { ".OR.", BOOL_OR, BINOP_END },
+  { ".mod.", BIN_MOD, BINOP_END },
+  { ".MOD.", BIN_MOD, BINOP_END },
+  { "==", EQUAL, BINOP_END },
   { ".not.", BOOL_NOT, BINOP_END },
   { ".NOT.", BOOL_NOT, BINOP_END },
   { ".eq.", EQUAL, BINOP_END },
@@ -829,8 +903,10 @@ static const struct token dot_ops[] =
   { ".NE.", NOTEQUAL, BINOP_END },
   { ".le.", LEQ, BINOP_END },
   { ".LE.", LEQ, BINOP_END },
+  { "<=", LEQ, BINOP_END },
   { ".ge.", GEQ, BINOP_END },
   { ".GE.", GEQ, BINOP_END },
+  { ">=", GEQ, BINOP_END },
   { ".gt.", GREATERTHAN, BINOP_END },
   { ".GT.", GREATERTHAN, BINOP_END },
   { ".lt.", LESSTHAN, BINOP_END },
@@ -1104,8 +1180,12 @@ yylex (void)
 	return toktype;
       }
       
-    case '+':
     case '-':
+      if (tokstart[1] == '>'){
+	lexptr+=2;
+	return ARROW;
+      }
+    case '+':
     case '*':
     case '/':
     case '%':
@@ -1120,7 +1200,13 @@ yylex (void)
     case '[':
     case ']':
     case '?':
+      lexptr++;
+      return c;
     case ':':
+      if (tokstart[1] == ':'){
+	lexptr+=2;
+	return COLONCOLON;
+      }
     case '=':
     case '{':
     case '}':
