@@ -1140,6 +1140,7 @@ step_once (int skip_subroutines, int single_inst, int count, int thread)
 	      else
 		{
 		  /* Pretend that we've stopped.  */
+		  tp->control.stop_step = 1;
 		  normal_stop ();
 
 		  if (target_can_async_p ())
