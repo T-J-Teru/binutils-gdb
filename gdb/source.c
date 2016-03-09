@@ -1301,13 +1301,20 @@ identify_source_line (struct symtab *s, int line, int mid_statement,
 		      CORE_ADDR pc)
 {
   int charpos = -1;
+  char *fullname;
   if (s->line_charpos == 0)
     get_filename_and_charpos (s, (char **) NULL);
-  if (s->fullname == 0)
+  fullname = s->fullname;
+  
+  if (fullname == 0)
+    fullname = s->filename;
+  
+  if (fullname == 0)
     return 0;
+  
   if (line <= s->nlines && s->line_charpos != 0)
     charpos = s->line_charpos[line - 1];
-  annotate_source (s->fullname, line, charpos,
+  annotate_source (fullname, line, charpos,
 		   mid_statement, get_objfile_arch (s->objfile), pc);
 
   current_source_line = line;
