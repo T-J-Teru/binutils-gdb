@@ -86,6 +86,7 @@
 #include "cp-support.h"
 #include "dictionary.h"
 #include "addrmap.h"
+#include "hashtab.h"
 
 /* Ask buildsym.h to define the vars it normally declares `extern'.  */
 #define	EXTERN
@@ -199,6 +200,32 @@ static int compare_line_numbers (const void *ln1p, const void *ln2p);
 static void record_pending_block (struct objfile *objfile,
 				  struct block *block,
 				  struct pending_block *opblock);
+
+static htab_t subfiles_map;
+
+static void
+htab_free_ptr(PTR p)
+{
+  free(p);
+}
+
+static PTR
+htab_alloc_ptr(size_t t1, size_t t2)
+{
+  return xcalloc(t1, t2);
+}
+
+static int
+htab_eq_subfile(const void* s, const void* t)
+{
+  return !strcmp(((const struct subfile*) s)->name, ((const struct subfile*) t)->name);
+}
+
+static hashval_t
+htab_hash_subfile(const void *p)
+{
+  return htab_hash_string(((const struct subfile*) p)->name);
+}
 
 /* Initial sizes of data structures.  These are realloc'd larger if
    needed, and realloc'd down to the size actually used, when
@@ -494,9 +521,9 @@ finish_block_internal (struct symbol *symbol, struct pending **listhead,
 			     paddress (gdbarch, BLOCK_END (block)));
 		}
 	      if (BLOCK_START (pblock->block) < BLOCK_START (block))
-		BLOCK_START (pblock->block) = BLOCK_START (block);
+		BLOCK_START (block) = BLOCK_START (pblock->block);
 	      if (BLOCK_END (pblock->block) > BLOCK_END (block))
-		BLOCK_END (pblock->block) = BLOCK_END (block);
+		BLOCK_END (block) = BLOCK_END (pblock->block);
 	    }
 	  BLOCK_SUPERBLOCK (pblock->block) = block;
 	}
@@ -648,6 +675,21 @@ make_blockvector (void)
   return (blockvector);
 }
 
+
+struct subfile *find_subfile (const char *fullname)
+{
+  struct subfile dummy;
+  struct subfile *subfile;
+  dummy.name = (char*) fullname;
+
+  if ((subfile = htab_find (subfiles_map, &dummy)))
+    {
+      current_subfile = subfile;
+      return subfile;
+    }
+  return NULL;
+}
+
 /* Start recording information about source code that came from an
    included (or otherwise merged-in) source file with a different
    name.  NAME is the name of the file (cannot be NULL).  */
@@ -661,6 +703,23 @@ start_subfile (const char *name)
   gdb_assert (buildsym_compunit != NULL);
 
   subfile_dirname = buildsym_compunit->comp_dir;
+
+  /* APB-TODO: Conflict while merging d2819f0, not sure how these should be
+     resolved.  */
+  abort ();
+
+#if 0
+  /* See if this subfile is already known as a subfile of the current
+     main source file.  */
+  struct subfile dummy;
+  dummy.name = (char *) name;
+
+  if ((subfile = htab_find (subfiles_map, &dummy)))
+    {
+      current_subfile = subfile;
+      return;
+    }
+#endif
 
   /* See if this subfile is already registered.  */
 
@@ -747,6 +806,11 @@ start_subfile (const char *name)
     {
       subfile->language = subfile->next->language;
     }
+
+     { 
+         PTR *slot = htab_find_slot (subfiles_map, subfile, INSERT);
+         *slot = subfile;
+     }
 }
 
 /* Start recording information about a primary source file (IOW, not an
@@ -1077,6 +1141,11 @@ restart_symtab (struct compunit_symtab *cust,
   buildsym_compunit = start_buildsym_compunit (COMPUNIT_OBJFILE (cust),
 					       COMPUNIT_DIRNAME (cust));
   buildsym_compunit->compunit_symtab = cust;
+
+  /* Initialize the list of sub source files with one entry for this
+     file (the top-level source file).  */
+  subfiles_map = htab_create_alloc(100, htab_hash_subfile, htab_eq_subfile,
+				   NULL, htab_alloc_ptr, htab_free_ptr);
 }
 
 /* Subroutine of end_symtab to simplify it.  Look for a subfile that
