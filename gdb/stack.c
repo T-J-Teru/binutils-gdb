@@ -1204,6 +1204,13 @@ print_frame (struct frame_info *frame, int print_level,
       int numargs;
       struct cleanup *args_list_chain;
 
+      enum language prevlang = language_unknown;
+      if (funlang != current_language->la_language
+	  && funlang != language_unknown)
+	{
+	  prevlang = set_language (funlang);
+	}
+
       if (gdbarch_frame_num_args_p (gdbarch))
 	{
 	  numargs = gdbarch_frame_num_args (gdbarch, frame);
@@ -1226,6 +1233,9 @@ print_frame (struct frame_info *frame, int print_level,
 	  will have " that will not be properly escaped.  */
       /* Invoke ui_out_tuple_end.  */
       do_cleanups (args_list_chain);
+
+      if (prevlang != language_unknown)
+        set_language(prevlang);
       QUIT;
     }
   ui_out_text (uiout, ")");
