@@ -6242,7 +6242,10 @@ output_thread_groups (struct ui_out *uiout,
 	  else
 	    ui_out_text (uiout, ", ");
 
-	  ui_out_text (uiout, plongest (upc_thread_of_inferior(inf)));
+	  if (upcmode)
+	    ui_out_text (uiout, plongest (upc_thread_of_inferior(inf)));
+	  else
+	    ui_out_text (uiout, plongest (inf->num));
 	}
     }
 
