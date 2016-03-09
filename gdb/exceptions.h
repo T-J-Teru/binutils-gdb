@@ -90,6 +90,9 @@ enum errors {
      aborted as the inferior state is no longer valid.  */
   TARGET_CLOSE_ERROR,
 
+  /* Value optimised out. */
+  OPTIMIZED_OUT_ERROR,
+
   /* Add more errors here.  */
   NR_ERRORS
 };

@@ -954,7 +954,7 @@ frame_unwind_register (struct frame_info *frame, int regnum, gdb_byte *buf)
 			 &lval, &addr, &realnum, buf);
 
   if (optimized)
-    error (_("Register %d was optimized out"), regnum);
+    throw_error (OPTIMIZED_OUT_ERROR, _("Register %d was optimized out"), regnum);
   if (unavailable)
     throw_error (NOT_AVAILABLE_ERROR,
 		 _("Register %d is not available"), regnum);
