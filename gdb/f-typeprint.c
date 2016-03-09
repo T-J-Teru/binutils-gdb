@@ -258,6 +258,13 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
 {
   int upper_bound;
   int index;
+  int i, j;
+  int len, len2;
+  int real_len;
+  int need_access_label;
+
+  char *mangled_name;
+  char *demangled_name;  
 
   QUIT;
 
@@ -332,7 +339,7 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
          C-oriented, we must change these to "character" from "char".  */
 
       if (strcmp (TYPE_NAME (type), "char") == 0)
-	fprintfi_filtered (level, stream, "character");
+	fprintfi_filtered (level, stream, "CHARACTER");
       else
 	goto default_case;
       break;
@@ -341,7 +348,7 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
       /* Strings may have dynamic upperbounds (lengths) like arrays.  */
 
       if (TYPE_ARRAY_UPPER_BOUND_IS_UNDEFINED (type))
-	fprintfi_filtered (level, stream, "character*(*)");
+	fprintfi_filtered (level, stream, "CHARACTER(LEN=*)(*)");
       else
 	{
 	  upper_bound = f77_get_upperbound (type);
