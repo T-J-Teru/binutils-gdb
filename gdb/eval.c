@@ -1840,6 +1840,49 @@ evaluate_subexp_standard (struct type *expect_type,
 	    goto nosideret;
 	  goto do_call_it;
 
+  
+	case TYPE_CODE_COMPLEX:
+	  {
+	    /* selecting real/complex part */
+	    struct value *part;
+	    struct type* type;
+	    struct value *value;
+	    long index;
+	    if (nargs != 1)
+	      {
+		error(_("Too many/few arguments to select part of complex: need one argument")); 
+	      }
+	    part = evaluate_subexp_with_coercion (exp, pos, noside);
+	    index = value_as_long (part);
+
+	  
+	    if (index > 2 || index < 0)
+	      {
+		error(_("Invalid complex part -- needs 1 (real) or 2 (complex)"));
+	      }
+	    index--;
+
+
+	    type = value_type(arg1);
+	    switch (TYPE_LENGTH (type))
+	    {
+	    case 8:
+	      type = builtin_f_type(exp->gdbarch)->builtin_real;
+	      break;
+	    case 16:
+	      type = builtin_f_type(exp->gdbarch)->builtin_real_s8;
+	      break;
+	    case 32:
+	      type = builtin_f_type(exp->gdbarch)->builtin_real_s16;
+	      break;
+	    default:
+	      error (_("Cannot print out complex*%d variables"), TYPE_LENGTH (type));
+	    }	  
+	    
+	    return value_at(type, (value_as_address (value_addr(arg1))) + (CORE_ADDR) (index * TYPE_LENGTH(type)));
+	  }
+
+
 	default:
 	  error (_("Cannot perform substring on this type"));
 	}
