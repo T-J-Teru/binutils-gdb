@@ -3280,7 +3280,7 @@ rs6000_frame_cache (struct frame_info *this_frame, void **this_cache)
   if (fdata.lr_offset != 0)
     cache->saved_regs[tdep->ppc_lr_regnum].addr
       = cache->base + fdata.lr_offset;
-  else if (fdata.lr_register != -1)
+  else if (fdata.lr_register != -1 && fdata.used_bl)
     cache->saved_regs[tdep->ppc_lr_regnum].realreg = fdata.lr_register;
   /* The PC is found in the link register.  */
   cache->saved_regs[gdbarch_pc_regnum (gdbarch)] =
