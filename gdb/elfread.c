@@ -677,7 +677,7 @@ elf_rel_plt_read (struct objfile *objfile, asymbol **dyn_symbol_table)
 	 OBJFILE the symbol is undefined and the objfile having NAME defined
 	 may not yet have been loaded.  */
 
-      if (string_buffer_size < name_len + got_suffix_len + 1)
+      if (string_buffer_size <= name_len + got_suffix_len + 1)
 	{
 	  string_buffer_size = 2 * (name_len + got_suffix_len);
 	  string_buffer = xrealloc (string_buffer, string_buffer_size);
