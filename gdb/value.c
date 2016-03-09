@@ -3639,7 +3639,11 @@ value_from_contents_and_address (struct type *type,
   if (valaddr == NULL)
     v = allocate_value_lazy (resolved_type);
   else
-    v = value_from_contents (resolved_type, valaddr);
+    {
+      v = value_from_contents (resolved_type, valaddr);
+      /* APB: Is this still needed?  It's from 6acdb6370ae6f7b0c  */
+      set_value_lazy (v, 0);
+    }
   if (TYPE_DATA_LOCATION (resolved_type_no_typedef) != NULL
       && TYPE_DATA_LOCATION_KIND (resolved_type_no_typedef) == PROP_CONST)
     address = TYPE_DATA_LOCATION_ADDR (resolved_type_no_typedef);
