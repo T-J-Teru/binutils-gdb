@@ -170,7 +170,7 @@ static int parse_number (struct parser_state *, const char *, int,
 %}
 
 %type <voidval> exp  type_exp start variable 
-%type <tval> type typebase typebase_no_ambig_sizes
+%type <tval> type typebase
 /* %type <bval> block */
 
 /* Fancy type parsing.  */
@@ -203,7 +203,7 @@ static int parse_number (struct parser_state *, const char *, int,
 
 %token <ssym> NAME_OR_INT 
 
-%token POINTER SIZEOF COLONCOLON
+%token POINTER SIZEOF COLONCOLON KIND
 %token ERROR
 
 /* Special type cases, put in to allow the parser to distinguish different
@@ -620,7 +620,6 @@ variable:	name_not_typename
 type    :       ptype
         ;
 
-<<<<<<< HEAD
 ptype	:	typebase
 	|	typebase abs_decl
 		{
@@ -689,8 +688,7 @@ func_mod:	'(' ')'
 			{ $$ = 0; }
 	|	'(' nonempty_typelist ')'
 			{ free ($2); $$ = 0; }
-=======
-ptype	:	typebase_no_ambig_sizes
+ptype	:	typebase
 	|	typebase ',' POINTER
 			{ $$ = lookup_pointer_type ($1); }
 	|	typebase array_mod
@@ -752,47 +750,11 @@ signed_int:	INT
 			{ $$ = $1.val; }
 	|	'-' INT
 			{ $$ = -$2.val; }
->>>>>>> 6a7a3a9... patches/00650_7605-pathscale-array-types-7016-fortran-array-casts.patch
 	;
 
-typebase  /* Implements (approximately): (type-qualifier)* type-specifier */
-	:	typebase_no_ambig_sizes	
-	|	INT_KEYWORD '(' INT ')'	%prec SIZE
-			{ if ($3.val == 2)
-			  	$$ = parse_f_type->builtin_integer_s2;
-			  else if ($3.val == 4)
-			  	$$ = parse_f_type->builtin_integer;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_integer_s8; }
-	|	LOGICAL_KEYWORD '(' INT ')'	%prec SIZE
-			{ if ($3.val == 1)
-				$$ = parse_f_type->builtin_logical_s1;
-			  else if ($3.val == 2)
-				$$ = parse_f_type->builtin_logical_s2;
-			  else if ($3.val == 4)
-				$$ = parse_f_type->builtin_logical;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_logical_s8; }
-	|	REAL_KEYWORD '(' INT ')'	%prec SIZE
-			{ if ($3.val == 4)
-				$$ = parse_f_type->builtin_real;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_real_s8;
-			  else if ($3.val == 16)
-				$$ = parse_f_type->builtin_real_s16; }
-	|	COMPLEX_S8_KEYWORD '(' INT ')'	%prec SIZE
-			{ if ($3.val == 8)
-				$$ = parse_f_type->builtin_complex_s8;
-			  else if ($3.val == 16)
-				$$ = parse_f_type->builtin_complex_s16;
-			  else if ($3.val == 32)
-				$$ = parse_f_type->builtin_complex_s32; }
-	;
-
-typebase_no_ambig_sizes
+typebase
 	:	TYPENAME
 			{ $$ = $1.type; }
-<<<<<<< HEAD
 	|	INT_KEYWORD
 			{ $$ = parse_f_type (pstate)->builtin_integer; }
 	|	INT_S2_KEYWORD 
@@ -817,64 +779,6 @@ typebase_no_ambig_sizes
 			{ $$ = parse_f_type (pstate)->builtin_complex_s8; }
 	|	COMPLEX_S16_KEYWORD 
 			{ $$ = parse_f_type (pstate)->builtin_complex_s16; }
-=======
-	|	INT_KEYWORD	%prec BELOW_SIZE
-			{ $$ = parse_f_type->builtin_integer; }
-	|	INT_KEYWORD '*' INT
-			{ if ($3.val == 2)
-			  	$$ = parse_f_type->builtin_integer_s2;
-			  else if ($3.val == 4)
-			  	$$ = parse_f_type->builtin_integer;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_integer_s8; }
-	|	INT_S2_KEYWORD 
-			{ $$ = parse_f_type->builtin_integer_s2; }
-	|	INT_S8_KEYWORD 
-			{ $$ = parse_f_type->builtin_integer_s8; }
-	|	CHARACTER 
-			{ $$ = parse_f_type->builtin_character; }
-	|	LOGICAL_KEYWORD	%prec BELOW_SIZE
-			{ $$ = parse_f_type->builtin_logical;} 
-	|	LOGICAL_KEYWORD '*' INT
-			{ if ($3.val == 1)
-				$$ = parse_f_type->builtin_logical_s1;
-			  else if ($3.val == 2)
-				$$ = parse_f_type->builtin_logical_s2;
-			  else if ($3.val == 4)
-				$$ = parse_f_type->builtin_logical;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_logical_s8; }
-	|	LOGICAL_S8_KEYWORD
-			{ $$ = parse_f_type->builtin_logical_s8;}
-	|	LOGICAL_S2_KEYWORD
-			{ $$ = parse_f_type->builtin_logical_s2;}
-	|	LOGICAL_S1_KEYWORD 
-			{ $$ = parse_f_type->builtin_logical_s1;}
-	|	REAL_KEYWORD	 %prec BELOW_SIZE
-			{ $$ = parse_f_type->builtin_real;}
-	|	REAL_KEYWORD '*' INT
-			{ if ($3.val == 4)
-				$$ = parse_f_type->builtin_real;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_real_s8;
-			  else if ($3.val == 16)
-				$$ = parse_f_type->builtin_real_s16; }
-	|       REAL_S8_KEYWORD
-			{ $$ = parse_f_type->builtin_real_s8;}
-	|	REAL_S16_KEYWORD
-			{ $$ = parse_f_type->builtin_real_s16; }
-	|	COMPLEX_S8_KEYWORD '*' INT
-			{ if ($3.val == 8)
-				$$ = parse_f_type->builtin_complex_s8;
-			  else if ($3.val == 16)
-				$$ = parse_f_type->builtin_complex_s16;
-			  else if ($3.val == 32)
-				$$ = parse_f_type->builtin_complex_s32; }
-	|	COMPLEX_S8_KEYWORD	 %prec BELOW_SIZE
-			{ $$ = parse_f_type->builtin_complex_s8;}
-	|	COMPLEX_S16_KEYWORD 
-			{ $$ = parse_f_type->builtin_complex_s16;}
->>>>>>> 6a7a3a9... patches/00650_7605-pathscale-array-types-7016-fortran-array-casts.patch
 	|	COMPLEX_S32_KEYWORD 
 			{ $$ = parse_f_type (pstate)->builtin_complex_s32; }
 	;
@@ -1279,15 +1183,9 @@ yylex (void)
   
   /* See if it is a special .foo. operator.  */
   
-<<<<<<< HEAD
   for (i = 0; dot_ops[i].oper != NULL; i++)
-    if (strncmp (tokstart, dot_ops[i].oper,
+    if (strncasecmp (tokstart, dot_ops[i].oper,
 		 strlen (dot_ops[i].oper)) == 0)
-=======
-  for (i = 0; dot_ops[i].operator != NULL; i++)
-    if (strncasecmp (tokstart, dot_ops[i].operator,
-		 strlen (dot_ops[i].operator)) == 0)
->>>>>>> 6a7a3a9... patches/00650_7605-pathscale-array-types-7016-fortran-array-casts.patch
       {
 	lexptr += strlen (dot_ops[i].oper);
 	yylval.opcode = dot_ops[i].opcode;
@@ -1323,6 +1221,15 @@ yylex (void)
     case '(':
       paren_depth++;
       lexptr++;
+      if (strncasecmp(lexptr, "KIND", 4) == 0)
+	{
+	  /* yacc only supports one lookahead symbols but two are needed to
+	   * decide whether a left paranthesis is starting a size/kind or
+	   * array dimensions. */
+	  lexptr += 4;
+	  yylval.opcode = BINOP_END;
+	  return KIND;
+	}
       return c;
       
     case ')':
@@ -1464,15 +1371,9 @@ yylex (void)
   
   /* Catch specific keywords.  */
   
-<<<<<<< HEAD
   for (i = 0; f77_keywords[i].oper != NULL; i++)
     if (strlen (f77_keywords[i].oper) == namelen
-	&& strncmp (tokstart, f77_keywords[i].oper, namelen) == 0)
-=======
-  for (i = 0; f77_keywords[i].operator != NULL; i++)
-    if (strlen (f77_keywords[i].operator) == namelen
-	&& strncasecmp (tokstart, f77_keywords[i].operator, namelen) == 0)
->>>>>>> 6a7a3a9... patches/00650_7605-pathscale-array-types-7016-fortran-array-casts.patch
+	&& strncasecmp (tokstart, f77_keywords[i].oper, namelen) == 0)
       {
 	/* 	lexptr += strlen(f77_keywords[i].operator); */ 
 	yylval.opcode = f77_keywords[i].opcode;
