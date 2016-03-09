@@ -153,7 +153,8 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
 			     int show, int passed_a_ptr, int demangled_args,
 			     int arrayprint_recurse_level)
 {
-  int upper_bound, lower_bound;
+  int upper_bound, lower_bound, is_co_shape, target_is_co_shape;
+  struct type *target_type;
 
   /* No static variables are permitted as an error call may occur during
      execution of this function.  */
@@ -171,11 +172,23 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
     case TYPE_CODE_ARRAY:
       arrayprint_recurse_level++;
 
-      if (arrayprint_recurse_level == 1)
-	fprintf_filtered (stream, "(");
+      target_type = TYPE_TARGET_TYPE (type);
+      is_co_shape = range_is_co_shape_p (type);
+      target_is_co_shape = range_is_co_shape_p (target_type);
+      
+      if (is_co_shape
+	  && TYPE_CODE (target_type) == TYPE_CODE_ARRAY
+	  && !target_is_co_shape)
+	f_type_print_varspec_suffix (target_type, stream, 0, 0, 0,
+				     0);
 
-      if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_ARRAY)
-	f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 0, 0,
+      if (arrayprint_recurse_level == 1)
+	fprintf_filtered (stream, is_co_shape ? "[" : "(");
+
+      target_type = TYPE_TARGET_TYPE (type);
+      if (TYPE_CODE (target_type) == TYPE_CODE_ARRAY
+	  && is_co_shape == target_is_co_shape)
+	f_type_print_varspec_suffix (target_type, stream, 0, 0, 0,
 				     arrayprint_recurse_level);
 
       lower_bound = f77_get_lowerbound (type);
@@ -196,11 +209,11 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
              fprintf_filtered (stream, "%d", upper_bound);
 	}
 
-      if (TYPE_CODE (TYPE_TARGET_TYPE (type)) != TYPE_CODE_ARRAY)
-	f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 0, 0,
+      if (TYPE_CODE (target_type) != TYPE_CODE_ARRAY)
+	f_type_print_varspec_suffix (target_type, stream, 0, 0, 0,
 				     arrayprint_recurse_level);
       if (arrayprint_recurse_level == 1)
-	fprintf_filtered (stream, ")");
+	fprintf_filtered (stream, is_co_shape ? "]" : ")");
       else
 	fprintf_filtered (stream, ",");
       arrayprint_recurse_level--;

@@ -1811,6 +1811,11 @@ check_typedef (struct type *type)
 
   type = make_qualified_type (type, type_quals, NULL);
 
+  /* Ignore codimensions.  */
+  while (TYPE_CODE (type) == TYPE_CODE_ARRAY &&
+         range_is_co_shape_p (type))
+    type = TYPE_TARGET_TYPE (type);
+
   /* Cache TYPE_LENGTH for future use.  */
   TYPE_LENGTH (orig_type) = TYPE_LENGTH (type);
 
@@ -3246,6 +3251,10 @@ recursive_dump_type (struct type *type, int spaces)
       printf_filtered ("(UNKNOWN TYPE CODE)");
       break;
     }
+  if (TYPE_IS_CO_SHAPE (type))
+    {
+      puts_filtered (" TYPE_INSTANCE_FLAG_IS_CO_SHAPE");
+    }    
   puts_filtered ("\n");
   printfi_filtered (spaces, "length %d\n", TYPE_LENGTH (type));
   if (TYPE_OBJFILE_OWNED (type))
@@ -3882,6 +3891,22 @@ append_composite_type_field (struct type *t, char *name,
 			     struct type *field)
 {
   append_composite_type_field_aligned (t, name, field, 0);
+}
+
+int
+range_is_co_shape_p (struct type *type)
+{
+  if (TYPE_CODE (type) == TYPE_CODE_ARRAY)
+    {
+      if (TYPE_NFIELDS (type) && TYPE_FIELDS (type))
+	{
+	  struct type *subrange_type = TYPE_FIELDS (type)->type;
+	  if (subrange_type
+	      && TYPE_IS_CO_SHAPE (subrange_type))
+	    return 1;
+	}  
+    }
+  return 0;
 }
 
 static struct gdbarch_data *gdbtypes_data;
