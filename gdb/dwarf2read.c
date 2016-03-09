@@ -13264,7 +13264,7 @@ create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_
       baton->data = DW_BLOCK(attr)->data;
     }
   else 
-    if (attr->form == DW_FORM_ref4)
+    if (is_ref_attr (attr))
       {
 	int size;
 	struct die_info *ref_die =
@@ -13274,8 +13274,10 @@ create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_
 	  {
 	    attr = dwarf2_attr(ref_die, DW_AT_location, cu);
 	    
-	    if (attr && attr->form == DW_FORM_block1)
+	    if (attr && attr_form_is_block (attr))
 	      {
+		unsigned int major = 0, minor = 0;
+
 		baton = obstack_alloc (&cu->objfile->objfile_obstack,
 				       sizeof (struct dwarf2_loclist_baton));
 		
@@ -13284,7 +13286,11 @@ create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_
 		baton->per_cu = cu->per_cu;
 		baton->base_address = cu->base_address;
 
-		if (cu->producer && strstr (cu->producer, "GNU"))
+		// This GNU bug fixed in GCC 4.8
+		if (cu->producer)
+		  sscanf(cu->producer, "GNU %u.%u", &major, &minor);
+		if (major
+		    && (major == 3 || (major == 4 && minor <= 7)))
 		  {
 		    baton->size = size;
 		    baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
