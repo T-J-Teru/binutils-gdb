@@ -2905,6 +2905,9 @@ interrupt_target_1 (enum focus_kind focus)
 static void
 interrupt_target_command (char *args, int from_tty)
 {
+  if (ptid_equal (inferior_ptid, null_ptid))
+    error (_("The program is not being run."));
+  
   if (target_can_async_p ())
     {
       enum focus_kind focus;
