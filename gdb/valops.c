@@ -1005,11 +1005,16 @@ value_fetch_lazy (struct value *val)
   else if (VALUE_LVAL (val) == lval_memory)
     {
       CORE_ADDR addr = value_address (val);
-
-      if (value_length (val))
-	read_value_memory (val, 0, value_stack (val),
-			   addr, value_contents_all_raw (val),
-			   value_length (val));
+      int length = value_length (val);
+      struct type *type = check_typedef (value_type (val));
+      if (length && (addr
+		     || current_language->la_language != language_fortran
+		     || TYPE_CODE (type) != TYPE_CODE_ARRAY))
+	{
+	  read_value_memory (val, 0, value_stack (val),
+			    addr, value_contents_all_raw (val),
+			    length);
+	}
     }
   else if (VALUE_LVAL (val) == lval_register)
     {
