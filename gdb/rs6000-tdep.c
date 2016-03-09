@@ -3575,12 +3575,17 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   /* Check word size.  If INFO is from a binary file, infer it from
      that, else choose a likely default.  */
+
+  mach = info.bfd_arch_info->mach;
+
   if (from_xcoff_exec)
     {
       if (bfd_xcoff_is_xcoff64 (info.abfd))
 	wordsize = 8;
       else
 	wordsize = 4;
+      mach = (wordsize==8)?bfd_mach_ppc64:bfd_mach_ppc;
+      
     }
   else if (from_elf_exec)
     {
