@@ -40,6 +40,8 @@
 #include "exceptions.h"
 #include "amd64-tdep.h"
 #include "i387-tdep.h"
+#include "ui-file.h"
+#include "disasm.h"
 
 #include "features/i386/amd64.c"
 #include "features/i386/amd64-avx.c"
@@ -2081,28 +2083,140 @@ amd64_x32_analyze_stack_align (CORE_ADDR pc, CORE_ADDR current_pc,
   return min (pc + offset + 2, current_pc);
 }
 
-/* Do a limited analysis of the prologue at PC and update CACHE
-   accordingly.  Bail out early if CURRENT_PC is reached.  Return the
-   address where the analysis stopped.
+/* Return non-zero if the instruction at PC saves a register at
+   a location relative to the RSP register.  If it is, then set:
+     - INSN_LEN: The length of the instruction (in bytes);
+     - REGNUM: The register being saved;
+     - OFFSET: The offset from the stack pointer.  */
 
-   We will handle only functions beginning with:
+static int
+amd64_register_save (struct gdbarch *gdbarch, CORE_ADDR pc,
+		     int *insn_len, int *regnum, int *offset)
+{
+  gdb_byte buf[5];
+  int is_save = 0;
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
 
-      pushq %rbp        0x55
-      movq %rsp, %rbp   0x48 0x89 0xe5 (or 0x48 0x8b 0xec)
+  read_memory (pc, buf, sizeof (buf));
+  if (buf[0] == 0x48
+      && buf[1] == 0x89
+      && (buf[2] & 0xc0) == 0x40 /* ModRM mod == 01 in binary */
+      && (buf[2] & 0x07) == 0x04 /* Base register is %rsp */
+      && buf[3] == 0x24)
+    {
+      int mov_regnum = (buf[2] & 0x38) >> 3;
 
-   or (for the X32 ABI):
+      *insn_len = 5;
+      switch (mov_regnum)
+	{
+	  case 0: *regnum = AMD64_RAX_REGNUM; break;
+	  case 1: *regnum = AMD64_RCX_REGNUM; break;
+	  case 2: *regnum = AMD64_RDX_REGNUM; break;
+	  case 3: *regnum = AMD64_RBX_REGNUM; break;
+	  case 4: *regnum = AMD64_RSP_REGNUM; break;
+	  case 5: *regnum = AMD64_RBP_REGNUM; break;
+	  case 6: *regnum = AMD64_RSI_REGNUM; break;
+	  case 7: *regnum = AMD64_RDI_REGNUM; break;
+	}
+      *offset = extract_signed_integer (buf + 4, 1, byte_order);
+      is_save = 1;
+    }
+  else if (buf[0] == 0x4c
+	   && buf[1] == 0x89
+	   && (buf[2] & 0xc0) == 0x40 /* ModRM mod == 01 in binary */
+	   && (buf[2] & 0x07) == 0x04 /* Base register is %rsp */
+	   && buf[3] == 0x24)
+    {
+      int mov_regnum = (buf[2] & 0x38) >> 3;
 
-      pushq %rbp        0x55
-      movl %esp, %ebp   0x89 0xe5 (or 0x8b 0xec)
+      *insn_len = 5;
+      *regnum = AMD64_R8_REGNUM + mov_regnum;
+      *offset = extract_signed_integer (buf + 4, 1, byte_order);
+      is_save = 1;
+    }
 
-   Any function that doesn't start with one of these sequences will be
-   assumed to have no prologue and thus no valid frame pointer in
-   %rbp.  */
+  return is_save;
+}
+
+/* Return a string representation of the instruction at PC.
+   Set LEN to the number of bytes used by this instruction.
+
+   Disassembling code on x86_64 is so complicated compared to most
+   archictectures, that it can be easier to just parse a string
+   rather than disassembling by hand.  It's definitely overkill,
+   but definitly simpler.  */
+
+static char *
+amd64_disass_insn (struct gdbarch *gdbarch, CORE_ADDR pc, int *len)
+{
+  struct ui_file *tmp_stream;
+  struct cleanup *cleanups;
+  char *insn;
+  long dummy;
+
+  tmp_stream = mem_fileopen ();
+  cleanups = make_cleanup_ui_file_delete (tmp_stream);
+  *len = gdb_print_insn (gdbarch, pc, tmp_stream, NULL);
+  insn = ui_file_xstrdup (tmp_stream, &dummy);
+  do_cleanups (cleanups);
+
+  return insn;
+}
+
+/* Some prologues sometimes start with a few instructions that
+   are not part of a typical prologue.  Observed in the Windows
+   kernel32.dll, we had a couple of "mov" instructions before
+   the real prologue stared.  We have also seen GCC emit some
+   "mov %rN,OFFSET(%rsp)" instructions instead of "push" instructions
+   in order to save a register on the stack.  For lack of a better
+   word, let's call this section of the function the "pre-prologue".
+
+   This function analyzes the contents of the function pre-prologue,
+   updates the cache accordingly, and returns the address of the first
+   instruction past this pre-prologue.  */
 
 static CORE_ADDR
-amd64_analyze_prologue (struct gdbarch *gdbarch,
-			CORE_ADDR pc, CORE_ADDR current_pc,
-			struct amd64_frame_cache *cache)
+amd64_analyze_pre_prologue (struct gdbarch *gdbarch,
+			    CORE_ADDR pc, CORE_ADDR limit_pc,
+			    struct amd64_frame_cache *cache)
+{
+  while (pc < limit_pc)
+    {
+      int len = 0;
+      char *insn;
+      int regnum = 0;
+      int offset = 0;
+      int dummy;
+      int skip = 0;
+
+      if (amd64_register_save (gdbarch, pc, &len, &regnum, &offset))
+	{
+	  cache->saved_regs[regnum] = offset + 8;
+	  pc += len;
+	  continue;
+	}
+
+      insn = amd64_disass_insn (gdbarch, pc, &len);
+      if (pc + len < limit_pc && strncmp (insn, "mov", 3) == 0)
+	skip = 1;
+      xfree (insn);
+      if (skip)
+	pc += len;
+      else
+	break;
+    }
+
+ return pc;
+}
+
+/* If the instruction at PC establishes a frame pointer, then update
+   CACHE accordingly and return the address of the instruction
+   immediately following it.  Otherwise just return the same PC.  */
+
+static CORE_ADDR
+amd64_analyze_frame_pointer_setup (struct gdbarch *gdbarch,
+				   CORE_ADDR pc, CORE_ADDR limit_pc,
+				   struct amd64_frame_cache *cache)
 {
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   /* There are two variations of movq %rsp, %rbp.  */
@@ -2115,13 +2229,8 @@ amd64_analyze_prologue (struct gdbarch *gdbarch,
   gdb_byte buf[3];
   gdb_byte op;
 
-  if (current_pc <= pc)
-    return current_pc;
-
-  if (gdbarch_ptr_bit (gdbarch) == 32)
-    pc = amd64_x32_analyze_stack_align (pc, current_pc, cache);
-  else
-    pc = amd64_analyze_stack_align (pc, current_pc, cache);
+  if (limit_pc <= pc)
+    return limit_pc;
 
   op = read_memory_unsigned_integer (pc, 1, byte_order);
 
@@ -2133,8 +2242,8 @@ amd64_analyze_prologue (struct gdbarch *gdbarch,
       cache->sp_offset += 8;
 
       /* If that's all, return now.  */
-      if (current_pc <= pc + 1)
-        return current_pc;
+      if (limit_pc <= pc + 1)
+        return limit_pc;
 
       read_memory (pc + 1, buf, 3);
 
@@ -2161,6 +2270,116 @@ amd64_analyze_prologue (struct gdbarch *gdbarch,
 
       return pc + 1;
     }
+
+  return pc;
+}
+
+/* Analyzes the instructions in the part of the function prologue
+   where registers are being saved on stack.  Update CACHE accordingly.
+   Return the address of the first instruction past the last register
+   save.  */
+
+static CORE_ADDR
+amd64_analyze_register_saves (struct gdbarch *gdbarch,
+			      CORE_ADDR pc, CORE_ADDR limit_pc,
+			      struct amd64_frame_cache *cache)
+{
+  gdb_byte op;
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+
+  while (pc < limit_pc)
+    {
+      int insn_len;
+      int regnum = -1;
+      int offset;
+
+      op = read_memory_unsigned_integer (pc, 1, byte_order);
+      if (op >= 0x50 && op <= 0x57)
+	{
+	  /* This is a "push REG" insn where REG is %rax .. %rdi.  */
+	  regnum = amd64_arch_reg_to_regnum (op - 0x50);
+	  pc += 1;
+	}
+      else if (op == 0x41)
+	{
+	  op = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	  if (op >= 0x50 && op <= 0x57)
+	    {
+	      /* This is a "push REG" insn where REG is %r8 ..	%r15.  */
+	      regnum = amd64_arch_reg_to_regnum (op - 0x50 + AMD64_R8_REGNUM);
+	      pc += 2;
+	    }
+	}
+
+      if (regnum >= 0)
+	{
+	  cache->sp_offset += 8;
+	  cache->saved_regs[regnum] = cache->sp_offset;
+	}
+      else
+	return pc;  /* This instruction is not a register save.  Return.  */
+    }
+
+  return pc;
+}
+
+/* If PC points to an instruction that decrements the rsp register,
+   (thus finishing the frame setup), analyze it, adjust the CACHE
+   accordingly, and return the address of the instruction immediately
+   following it.  */
+
+static CORE_ADDR
+amd64_analyze_stack_pointer_adjustment (struct gdbarch *gdbarch,
+					CORE_ADDR pc, CORE_ADDR limit_pc,
+					struct amd64_frame_cache *cache)
+{
+  gdb_byte buf[3];
+  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+
+  /* There are several ways to encode the sub instruction.  Either way,
+     it starts with 3 bytes, so read these bytes first.  */
+  if (pc + sizeof (buf) >= limit_pc)
+    return pc;
+  read_memory (pc, buf, sizeof (buf));
+
+  if (pc + 4 < limit_pc && buf[0] == 0x48 && buf[1] == 0x83 && buf[2] == 0xec)
+    {
+      /* 4-byte version of the sub instruction.  The offset is encoded
+	 in the 4th byte.  */
+      cache->sp_offset +=
+	read_memory_unsigned_integer (pc + sizeof (buf), 1, byte_order);
+      pc += sizeof (buf) + 1;
+    }
+  else if (pc + 7 < limit_pc
+	   && buf [0] == 0x48 && buf[1] == 0x81 && buf[2] == 0xec)
+    {
+      /* 7-byte version of the sub instruction.  The offset is encoded
+	 as a word at the end of the instruction.  */
+      cache->sp_offset +=
+	read_memory_unsigned_integer (pc + sizeof (buf), 4, byte_order);
+      pc += sizeof (buf) + 4;
+    }
+
+  return pc;
+}
+
+/* Do an analysis of the prologue at PC and update CACHE
+   accordingly.  Bail out early if CURRENT_PC is reached.  Return the
+   address where the analysis stopped.  */
+
+static CORE_ADDR
+amd64_analyze_prologue (struct gdbarch *gdbarch,
+			CORE_ADDR pc, CORE_ADDR current_pc,
+			struct amd64_frame_cache *cache)
+{
+  pc = amd64_analyze_pre_prologue (gdbarch, pc, current_pc, cache);
+  if (gdbarch_ptr_bit (gdbarch) == 32)
+    pc = amd64_x32_analyze_stack_align (pc, current_pc, cache);
+  else
+    pc = amd64_analyze_stack_align (pc, current_pc, cache);
+  pc = amd64_analyze_frame_pointer_setup (gdbarch, pc, current_pc, cache);
+  pc = amd64_analyze_register_saves (gdbarch, pc, current_pc, cache);
+  pc = amd64_analyze_stack_pointer_adjustment (gdbarch, pc, current_pc, cache);
 
   return pc;
 }
