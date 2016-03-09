@@ -44,6 +44,11 @@ extern int find_and_open_source (const char *filename,
 				 const char *dirname,
 				 char **fullname);
 
+/* Controls whether gdb should stat/open source files or avoid touching the
+   file system as much as possible.
+   0 = don't stat/open files 1 = do stat/open files (default) */
+extern int source_open;
+
 /* Open a source file given a symtab S.  Returns a file descriptor or
    negative number for error.  */
 extern int open_source_file (struct symtab *s);
