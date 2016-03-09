@@ -3672,8 +3672,15 @@ read_struct_type (char **pp, struct type *type, enum type_code type_code,
      Obviously, GDB can't fix this by itself, but it can at least avoid
      scribbling on existing structure type objects when new definitions
      appear.  */
+  /* #12563: DDT - Derived type problem
+     XLF 12 may emit a bogus empty definition for a derived type before the
+     real definition, e.g.:
+     [193]   m   0x00000000        -2     0    0x8c         0x0000     type_gfld:T5=s0;
+     [198]   m   0x00000000        -2     0    0x8c         0x0000     type_gfld:t5=s12numflds:-29,0,32;numgpflds:-29,32,32;numflds9:-29,64,32;;
+     In this case let the second (correct) definition override the first. */  
   if (! (TYPE_CODE (type) == TYPE_CODE_UNDEF
-         || TYPE_STUB (type)))
+         || TYPE_STUB (type)
+         || TYPE_LENGTH (type) == 0))
     {
       complain_about_struct_wipeout (type);
 
