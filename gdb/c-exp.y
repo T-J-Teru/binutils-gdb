@@ -253,6 +253,8 @@ static void c_print_token (FILE *file, int type, YYSTYPE value);
 %token <sval> VARIABLE
 
 %token <opcode> ASSIGN_MODIFY
+%token <opcode> UNOP_INTRINSIC
+%token <opcode> BINOP_INTRINSIC
 
 /* C++ */
 %token TRUEKEYWORD
@@ -578,6 +580,14 @@ exp	:	UNKNOWN_CPP_NAME '('
 						 (LONGEST) end_arglist ());
 			  write_exp_elt_opcode (pstate, OP_FUNCALL);
 			}
+	;
+
+exp     :       UNOP_INTRINSIC '(' exp ')'
+			{ write_exp_elt_opcode ($1); }
+	;
+
+exp     :       BINOP_INTRINSIC '(' exp ',' exp ')'
+			{ write_exp_elt_opcode ($1); }
 	;
 
 lcurly	:	'{'
@@ -2493,6 +2503,20 @@ static int saw_name_at_eof;
    do field name completion.  */
 static int last_was_structop;
 
+static const struct token intrinsics[] =
+  {
+    {"isinf", UNOP_INTRINSIC, UNOP_ISINF},
+    {"isnan", UNOP_INTRINSIC, UNOP_ISNAN},
+    {"isfinite", UNOP_INTRINSIC, UNOP_ISFINITE},
+    {"isnormal", UNOP_INTRINSIC, UNOP_ISNORMAL},
+    {"creal", UNOP_INTRINSIC, UNOP_CREAL},
+    {"cimag", UNOP_INTRINSIC, UNOP_CIMAG},
+    {"fabs", UNOP_INTRINSIC, UNOP_FABS},
+    {"fmod", BINOP_INTRINSIC, BINOP_FMOD},
+    {"ceil", UNOP_INTRINSIC, UNOP_CEIL},
+    {"floor", UNOP_INTRINSIC, UNOP_FLOOR},
+  };
+
 /* Read one token, getting characters through lexptr.  */
 
 static int
@@ -2829,6 +2853,14 @@ lex_one_token (struct parser_state *par_state, int *is_quoted_name)
   lexptr += namelen;
 
   tryname:
+
+  for (i = 0; i < sizeof intrinsics / sizeof intrinsics[0]; i++)
+    if (strncmp (tokstart, intrinsics[i].operator, strlen(intrinsics[i].operator)) == 0
+	&& strlen(intrinsics[i].operator) == namelen)
+      {
+        yylval.opcode = intrinsics[i].opcode;
+        return intrinsics[i].token;
+      }
 
   yylval.sval.ptr = tokstart;
   yylval.sval.length = namelen;
