@@ -25,6 +25,11 @@
 #include "disasm.h"
 #include "gdbcore.h"
 #include "dis-asm.h"
+#include "gdbcmd.h"
+
+
+/* This variable limits the number of instructions that are disassembled (-1 = no limit). */
+static unsigned int disassemble_instruction_limit = -1;
 
 /* Disassemble functions.
    FIXME: We should get rid of all the duplicate code in gdb that does
@@ -100,6 +105,7 @@ dump_insns (struct gdbarch *gdbarch, struct ui_out *uiout,
 	    int how_many, int flags, struct ui_file *stb)
 {
   int num_displayed = 0;
+
   CORE_ADDR pc;
 
   /* parts of the symbolic representation of the address */
@@ -107,6 +113,11 @@ dump_insns (struct gdbarch *gdbarch, struct ui_out *uiout,
   int offset;
   int line;
   struct cleanup *ui_out_chain;
+
+  if(how_many<0 && disassemble_instruction_limit>0)  //how_many=-1 means no limit and we want to set a limit when disassemble_instruction_limit>0
+    how_many = disassemble_instruction_limit;
+  else if(disassemble_instruction_limit>0)
+    how_many = min(how_many,disassemble_instruction_limit);
 
   for (pc = low; pc < high;)
     {
@@ -533,3 +544,20 @@ gdb_buffered_insn_length (struct gdbarch *gdbarch,
 
   return gdbarch_print_insn (gdbarch, addr, &di);
 }
+
+/* Provide a prototype to silence -Wmissing-prototypes.  */
+void _initialize_disasm (void);
+
+void
+_initialize_disasm (void)
+{
+  add_setshow_zuinteger_unlimited_cmd ("disassemble-instruction-limit", no_class,
+			   & disassemble_instruction_limit, _("\
+Set disassemble instruction limit."), _("\
+Show disassemble instruction limit."), _("\
+The option disassemble_instruction_limit limits the number of instructions that are disassembled.\n"),
+			   NULL,
+			   NULL,
+			   &setlist, &showlist);
+}
+
