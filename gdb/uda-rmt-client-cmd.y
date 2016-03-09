@@ -21,8 +21,8 @@
 
 %{
 
-#include <ctype.h>
 #include "defs.h"
+#include <ctype.h>
 #include "gdb_string.h"
 #include "uda-types-client.h"
 #include "uda-rmt-utils.h"
