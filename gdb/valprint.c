@@ -1659,7 +1659,7 @@ val_print_array_elements (struct type *type,
 			  unsigned int i)
 {
   unsigned int things_printed = 0;
-  unsigned len;
+  unsigned len, typelen;
   struct type *elttype, *index_type, *base_index_type;
   unsigned eltlen;
   /* Position of the array element we are examining to see
@@ -1706,15 +1706,15 @@ val_print_array_elements (struct type *type,
       if (low_pos > high_pos)
 	len = 0;
       else
-	len = val
-	       ? min (high_pos - low_pos + 1, value_length (val) / eltlen)
-	       : (high_pos - low_pos + 1);
+	  len = val
+	    ? min (high_pos - low_pos + 1, value_length (val) / eltlen)
+	    : (high_pos - low_pos + 1;
     }
   else
     {
       warning (_("unable to get bounds of array, assuming null array"));
       low_bound = 0;
-      len = 0;
+      typelen = len = 0;
     }
 
   print_max = options->print_max;
@@ -1783,7 +1783,7 @@ val_print_array_elements (struct type *type,
 	}
     }
   annotate_array_section_end ();
-  if (i < len)
+  if (i < typelen)
     {
       fprintf_filtered (stream, "...");
     }
