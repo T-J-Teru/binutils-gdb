@@ -4181,7 +4181,6 @@ const struct symbol_computed_ops dwarf2_loclist_funcs = {
   loclist_tracepoint_var_ref
 };
 
-
 struct value *dwarf2_evaluate_int (struct type *type, void* locbaton, struct value *obj, void* frame)
 {
   struct dwarf2_loclist_baton* b =
@@ -4191,10 +4190,12 @@ struct value *dwarf2_evaluate_int (struct type *type, void* locbaton, struct val
   struct value *retval;
   struct dwarf_expr_baton baton;
   struct dwarf_expr_context *ctx;
-  struct cleanup *old_chain;
+  struct cleanup *old_chain, *value_chain;
   CORE_ADDR push_obj;
   struct objfile *objfile = dwarf2_per_cu_objfile (b->per_cu);
   struct value *val;
+  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  enum bfd_endian byte_order;
 
   if (type)
     type = check_typedef (type);
@@ -4206,7 +4207,8 @@ struct value *dwarf2_evaluate_int (struct type *type, void* locbaton, struct val
 
   ctx = new_dwarf_expr_context ();
   old_chain = make_cleanup_free_dwarf_expr_context (ctx);
-  ctx->gdbarch = get_objfile_arch (objfile);
+  value_chain = make_cleanup_value_free_to_mark (value_mark ());
+  ctx->gdbarch = gdbarch;
   ctx->addr_size = dwarf2_per_cu_addr_size (b->per_cu);
   ctx->offset = dwarf2_per_cu_text_offset (b->per_cu);  
   ctx->baton = &baton;
@@ -4225,10 +4227,86 @@ struct value *dwarf2_evaluate_int (struct type *type, void* locbaton, struct val
   
   dwarf_expr_eval (ctx, b->data, b->size);
   val = dwarf_expr_fetch (ctx, 0);
-  /* dwarf_expr_eval will return an unsigned value. We must convert it to a
-     signed value (with sign extension) here if necessary. */
-  if (type && TYPE_CODE (type) != TYPE_CODE_VOID)
-    val = value_cast (type, val);
+  if (TYPE_CODE (value_type (val)) != TYPE_CODE_INT
+      && TYPE_CODE (value_type (val)) != TYPE_CODE_CHAR
+      && TYPE_CODE (value_type (val)) != TYPE_CODE_BOOL
+      && TYPE_CODE (value_type (val)) != TYPE_CODE_PTR)
+    error (_("integral type expected in DWARF expression"));
+  if (!type || TYPE_CODE (type) != TYPE_CODE_INT)
+    type = builtin_type (gdbarch)->builtin_int;
+  byte_order = gdbarch_byte_order (gdbarch);
+  result = extract_signed_integer (value_contents (val),
+				   TYPE_LENGTH (value_type (val)),
+				   byte_order);
+  do_cleanups(value_chain);
+
+  val = value_from_longest (type, result);
+
+  do_cleanups (old_chain);
+
+  return val;
+}
+
+struct value *dwarf2_evaluate_address (struct type *type, void* locbaton, struct value *obj, void* frame)
+{
+  struct dwarf2_loclist_baton* b =
+    (struct dwarf2_loclist_baton*) locbaton;
+
+  CORE_ADDR result;
+  struct value *retval;
+  struct dwarf_expr_baton baton;
+  struct dwarf_expr_context *ctx;
+  struct cleanup *old_chain, *value_chain;
+  CORE_ADDR push_obj;
+  struct objfile *objfile = dwarf2_per_cu_objfile (b->per_cu);
+  struct value *val;
+  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  enum bfd_endian byte_order;
+
+  if (type)
+    type = check_typedef (type);
+
+  push_obj = value_address (obj);
+
+  baton.frame = (struct frame_info*) frame;
+  baton.object_address = push_obj;
+
+  ctx = new_dwarf_expr_context ();
+  old_chain = make_cleanup_free_dwarf_expr_context (ctx);
+  value_chain = make_cleanup_value_free_to_mark (value_mark ());
+  ctx->gdbarch = gdbarch;
+  ctx->addr_size = dwarf2_per_cu_addr_size (b->per_cu);
+  ctx->offset = dwarf2_per_cu_text_offset (b->per_cu);  
+  ctx->baton = &baton;
+  ctx->funcs = &dwarf_expr_ctx_funcs;
+
+  /* 
+     This next push statement added to prevent underflow when finding
+     array locations particularly PGI compiler inside structures/types
+     DW_OP_plus_uconst and others for example - seen in test_linear.
+     DWARF2 spec says it is fine to assume object base location is
+     already in stack - so we must allow it.
+     
+  */
+  dwarf_expr_push_address (ctx, push_obj, 0);
+
+  
+  dwarf_expr_eval (ctx, b->data, b->size);
+  val = dwarf_expr_fetch (ctx, 0);
+  if (TYPE_CODE (value_type (val)) != TYPE_CODE_INT
+      && TYPE_CODE (value_type (val)) != TYPE_CODE_CHAR
+      && TYPE_CODE (value_type (val)) != TYPE_CODE_BOOL
+      && TYPE_CODE (value_type (val)) != TYPE_CODE_PTR)
+    error (_("integral type expected in DWARF expression"));
+  if (!type || TYPE_CODE (type) != TYPE_CODE_PTR)
+    type = builtin_type (gdbarch)->builtin_data_ptr;
+  byte_order = gdbarch_byte_order (gdbarch);
+  result = extract_unsigned_integer (value_contents (val),
+				     TYPE_LENGTH (value_type (val)),
+				     byte_order);
+  do_cleanups(value_chain);
+
+  val = value_from_pointer (type, result);
 
   do_cleanups (old_chain);
 

@@ -3698,7 +3698,7 @@ stabs_create_generic_allocated_baton (struct type* type, struct stabs_alloc_bato
      TYPE_ALLOC (type, sizeof (struct array_location_batons));
   memset (generic_baton, 0, sizeof (struct array_location_batons));
 
-  generic_baton->baton_evaluation_function = (void*) stabs_evaluate_allocated;
+  generic_baton->evaluate_address = (void*) stabs_evaluate_allocated;
   generic_baton->intel_location_baton = (struct dwarf2_loclist_baton *) baton;
   generic_baton->pgi_lbase_baton = NULL;
   generic_baton->pgi_elem_skip_baton = NULL;

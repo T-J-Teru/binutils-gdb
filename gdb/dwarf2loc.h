@@ -176,6 +176,8 @@ extern struct call_site_chain *call_site_find_chain (struct gdbarch *gdbarch,
 
 struct value *dwarf2_evaluate_int (struct type *type, void *locbaton,
 				  struct value *obj, void *frame_info);
+struct value *dwarf2_evaluate_address (struct type *type, void *locbaton,
+				       struct value *obj, void *frame_info);
 
 
 
@@ -186,7 +188,8 @@ struct array_location_batons
     struct dwarf2_loclist_baton *pgi_lbase_baton;
     struct dwarf2_loclist_baton *pgi_elem_skip_baton;
 
-    void *baton_evaluation_function;
+    struct value *(*evaluate_int) (struct type *, void *, struct value *, void *);
+    struct value *(*evaluate_address) (struct type *, void *, struct value *, void *);
     struct objfile *objfile;
 };
 

@@ -12039,7 +12039,8 @@ read_array_type (struct die_info *die, struct dwarf2_cu *cu)
         TYPE_FIELD_TYPE (type, 1) = (struct type*) baton_holder;
         
         baton_holder->objfile = objfile; 
-        baton_holder->baton_evaluation_function = (void*) dwarf2_evaluate_int; 
+        baton_holder->evaluate_int = dwarf2_evaluate_int; 
+        baton_holder->evaluate_address = dwarf2_evaluate_address; 
 
         if (attr && attr_form_is_block (attr))
             {

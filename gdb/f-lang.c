@@ -324,13 +324,14 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
       int alloced = -1;
       struct value *rval;
 
-      struct value *(*f) (struct type *, void *, struct value *, void *);
-      f = (struct value *(*)(struct type *, void *, struct value *, void *))
-	baton_holder->baton_evaluation_function;
+      struct value *(*evaluate_int) (struct type *, void *, struct value *, void *);
+      struct value *(*evaluate_address) (struct type *, void *, struct value *, void *);
+      evaluate_int = baton_holder->evaluate_int;
+      evaluate_address = baton_holder->evaluate_address;
 
       if (baton_holder->allocated_baton)
         {
-	  rval = f (NULL, baton_holder->allocated_baton, objptr, frame);
+	  rval = evaluate_int (NULL, baton_holder->allocated_baton, objptr, frame);
 	  if (rval)
 	    alloced = value_as_long (rval);
 	  else
@@ -344,9 +345,9 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
       if (r && baton_holder->intel_location_baton)
         {
-	  rval = f (NULL, baton_holder->intel_location_baton, objptr, frame);
+	  rval = evaluate_address (NULL, baton_holder->intel_location_baton, objptr, frame);
 	  if (rval)
-	    r = value_as_long (rval);
+	    r = value_as_address (rval);
 	  else
 	    r = (CORE_ADDR) 0;
 	}
@@ -360,7 +361,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
 	  if (baton_holder->pgi_elem_skip_baton)
 	    {
-	      rval = f (NULL, baton_holder->pgi_elem_skip_baton,
+	      rval = evaluate_int (NULL, baton_holder->pgi_elem_skip_baton,
 		        objptr, frame);
 	      if (rval)
 		elem_skip = value_as_long (rval);
@@ -382,7 +383,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
 	   */
 
-	  rval = f (NULL, baton_holder->pgi_lbase_baton, objptr, frame);
+	  rval = evaluate_int (NULL, baton_holder->pgi_lbase_baton, objptr, frame);
 	  if (rval)
 	    lbase = value_as_long (rval);
 
@@ -424,7 +425,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			    {
 			      baton = 
 				TYPE_LOW_BOUND_BATON (range_type);
-			      rval = f (target_type, baton, objptr, frame);
+			      rval = evaluate_int (target_type, baton, objptr, frame);
 			      if (rval)
 				low = value_as_long (rval);
 			    }
@@ -434,7 +435,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			      baton =
 				(void *)
 				TYPE_STRIDE_BATON(range_type);
-			      rval = f (target_type, baton, objptr, frame);
+			      rval = evaluate_int (target_type, baton, objptr, frame);
 			      if (rval)
 				stride = value_as_long (rval);
 			    }
@@ -444,7 +445,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			      baton =
 				(void *)
 				TYPE_SOFFSET_BATON (range_type);
-			      rval = f (target_type, baton, objptr, frame);
+			      rval = evaluate_int (target_type, baton, objptr, frame);
 			      if (rval)
 				soffset = value_as_long (rval);
 			    }
@@ -454,7 +455,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			      baton =
 				(void *)
 				TYPE_LSTRIDE_BATON (range_type);
-			      rval = f (target_type, baton, objptr, frame);
+			      rval = evaluate_int (target_type, baton, objptr, frame);
 			      if (rval)
 				lstride = value_as_long (rval);
 			    }
