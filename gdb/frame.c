@@ -195,6 +195,16 @@ show_backtrace_past_entry (struct ui_file *file, int from_tty,
 		    value);
 }
 
+static int backtrace_exclude_start_thread = 1;
+static void
+show_backtrace_exclude_start_thread (struct ui_file *file, int from_tty,
+				  struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("\
+Whether backtraces should exclude \"start_thread\" and \"clone\" is %s.\n"),
+		    value);
+}
+
 static unsigned int backtrace_limit = UINT_MAX;
 static void
 show_backtrace_limit (struct ui_file *file, int from_tty,
@@ -1914,6 +1924,7 @@ get_prev_frame (struct frame_info *this_frame)
 {
   CORE_ADDR frame_pc;
   int frame_pc_p;
+  struct frame_info *prev_frame;
 
   /* There is always a frame.  If this assertion fails, suspect that
      something should be calling get_selected_frame() or
@@ -2001,7 +2012,50 @@ get_prev_frame (struct frame_info *this_frame)
       return NULL;
     }
 
-  return get_prev_frame_1 (this_frame);
+  prev_frame = get_prev_frame_1 (this_frame);
+  if (prev_frame == NULL)
+    {
+      frame_debug_got_null_frame (this_frame, "prev_frame");
+      return NULL;
+    }
+ 
+  if (get_frame_type (prev_frame) == NORMAL_FRAME
+      && backtrace_exclude_start_thread)
+    {
+      if (inside_func(prev_frame, "start_thread", NULL))
+	{
+	  struct frame_info *prev_prev_frame = get_prev_frame_1 (prev_frame);
+	  if (prev_prev_frame
+	      && inside_func(prev_prev_frame, "clone", NULL))
+	    {
+	      frame_debug_got_null_frame (this_frame, "prev frame is start_thread");
+	      return NULL;
+	    }
+	}
+      else if (inside_func(prev_frame, "clone", NULL))
+	{
+	  struct frame_info *prev_prev_frame = get_prev_frame_1 (prev_frame);
+	  if (prev_prev_frame
+	      && (get_frame_type (prev_prev_frame) == NORMAL_FRAME
+	          || get_frame_type (prev_prev_frame) == INLINE_FRAME)
+	      && get_frame_type (prev_frame) == NORMAL_FRAME
+	      && get_frame_pc (prev_prev_frame) == 0)
+	    frame_debug_got_null_frame (this_frame, "prev frame is clone");
+	    return NULL;
+	}
+      else if (inside_func(prev_frame, "_pthread_body", NULL))
+	{
+	  struct frame_info *prev_prev_frame = get_prev_frame_1 (prev_frame);
+	  if (prev_prev_frame
+	      && (get_frame_type (prev_prev_frame) == NORMAL_FRAME
+	          || get_frame_type (prev_prev_frame) == INLINE_FRAME)
+	      && get_frame_type (prev_frame) == NORMAL_FRAME
+	      && get_frame_pc (prev_prev_frame) == 0)
+	    frame_debug_got_null_frame (this_frame, "prev frame is _pthread_body");
+	    return NULL;
+	}
+    }
+  return prev_frame;
 }
 
 CORE_ADDR
@@ -2506,6 +2560,19 @@ the backtrace at \"main\".  Set this variable if you need to see the rest\n\
 of the stack trace."),
 			   NULL,
 			   show_backtrace_past_main,
+			   &set_backtrace_cmdlist,
+			   &show_backtrace_cmdlist);
+  
+  add_setshow_boolean_cmd ("exclude-start-thread", class_obscure,
+			   &backtrace_exclude_start_thread, _("\
+Set whether backtraces should exclude \"start_thread\" and \"clone\"."),
+			   _("\
+Show whether backtraces should exclude\"start_thread\" and \"clone\"."),
+			   _("\
+Normally \"start_thread\" and \"clone\" at the start of a threads' stack\n\
+are not of interest. Set this variable if you need to see them."),
+			   NULL,
+			   show_backtrace_exclude_start_thread,
 			   &set_backtrace_cmdlist,
 			   &show_backtrace_cmdlist);
 
