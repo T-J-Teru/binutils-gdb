@@ -1537,10 +1537,12 @@ linux_nat_detach (struct target_ops *ops, const char *args, int from_tty)
 
   iterate_over_lwps (pid_to_ptid (pid), detach_callback, NULL);
 
+  main_lwp = find_lwp_pid (pid_to_ptid (pid));
+  if (!main_lwp)
+    return;
+
   /* Only the initial process should be left right now.  */
   gdb_assert (num_lwps (ptid_get_pid (inferior_ptid)) == 1);
-
-  main_lwp = find_lwp_pid (pid_to_ptid (pid));
 
   /* Pass on any pending signal for the last LWP.  */
   if ((args == NULL || *args == '\0')
