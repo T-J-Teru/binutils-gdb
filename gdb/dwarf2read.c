@@ -1285,6 +1285,10 @@ struct die_info
 #define DW_AT_lbase 0x3a00
 #define DW_AT_soffset 0x3a01
 #define DW_AT_lstride 0x3a02
+// Coshape of Coarrays in Fortran 2008
+// http://dwarfstd.org/ShowIssue.php?issue=090824.1
+// DW_AT_is_co_shape is currently unassigned. 0x2029 is used by the Cray Fortran compiler.
+#define DW_AT_is_co_shape 0x2029
 
 /* Ends */
 
@@ -15461,6 +15465,11 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
                                  DW_AT_upc_threads_scaled, cu);
   if (is_upc_threads_scaled)
     TYPE_INSTANCE_FLAGS (range_type) |= TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR;
+  
+  is_coshape = dwarf2_flag_true_p (die,
+				   DW_AT_is_co_shape, cu);
+  if (is_coshape)
+    TYPE_INSTANCE_FLAGS (range_type) |= TYPE_INSTANCE_FLAG_IS_CO_SHAPE;
 
   set_die_type (die, range_type, cu);
 
