@@ -3454,6 +3454,23 @@ value_initialized (struct value *val)
   return val->initialized;
 }
 
+static void clear_value_history (char *arg, int from_tty)
+{
+  struct value_history_chunk *cur, *next;
+  int i;
+  
+  for (cur = value_history_chain; cur; cur = next)
+    {
+      for (i = 0; i < VALUE_HISTORY_CHUNK; i++)
+        if (cur->values[i])  
+	  xfree (cur->values[i]);
+      next = cur->next;
+      xfree(cur);
+    }
+  value_history_count = 0;
+  value_history_chain = NULL;
+}
+
 void
 _initialize_values (void)
 {
@@ -3486,4 +3503,7 @@ VARIABLE is already initialized."));
   add_prefix_cmd ("function", no_class, function_command, _("\
 Placeholder command for showing help on convenience functions."),
 		  &functionlist, "function ", 0, &cmdlist);
+
+  add_com ("clear-value-history", class_obscure, clear_value_history, _("\
+Clear the value history."));
 }
