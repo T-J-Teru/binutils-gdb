@@ -5274,6 +5274,9 @@ Enables printf debugging output."),
   /* Save this mask as the default.  */
   sigprocmask (SIG_SETMASK, NULL, &normal_mask);
 
+  /* Added because Cray environment masks this by default. */
+  sigdelset (&normal_mask, SIGINT);
+
   /* Install a SIGCHLD handler.  */
   sigchld_action.sa_handler = sigchld_handler;
   sigemptyset (&sigchld_action.sa_mask);
@@ -5286,6 +5289,9 @@ Enables printf debugging output."),
   sigprocmask (SIG_SETMASK, NULL, &suspend_mask);
   sigdelset (&suspend_mask, SIGCHLD);
 
+  /* Added because Cray environment masks this by default. */
+  sigdelset (&suspend_mask, SIGINT);
+ 
   sigemptyset (&blocked_mask);
 }
 
