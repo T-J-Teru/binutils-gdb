@@ -444,6 +444,20 @@ frame_id_artificial_p (struct frame_id l)
   return (l.artificial_depth != 0);
 }
 
+
+CORE_ADDR 
+frame_code_addr (struct frame_id l)
+{
+  if (l.code_addr_p) 
+    {
+      return l.code_addr;
+    }
+  else 
+    {
+      return 0;
+    }  
+}
+
 int
 frame_id_eq (struct frame_id l, struct frame_id r)
 {
