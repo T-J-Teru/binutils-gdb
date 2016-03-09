@@ -646,7 +646,7 @@ language_class_name_from_physname (const struct language_defn *lang,
   return NULL;
 }
 
-/* Return non-zero if TYPE should be passed (and returned) by
+/* Return non-zero if TYPE should be passed by
    reference at the language level.  */
 int
 language_pass_by_reference (struct type *type)
@@ -655,10 +655,27 @@ language_pass_by_reference (struct type *type)
 }
 
 /* Return zero; by default, types are passed by value at the language
-   level.  The target ABI may pass or return some structs by reference
+   level.  The target ABI may pass some structs by reference
    independent of this.  */
 int
 default_pass_by_reference (struct type *type)
+{
+  return 0;
+}
+
+/* Return non-zero if TYPE should be returned by
+   reference at the language level.  */
+int
+language_return_by_reference (struct type *type)
+{
+  return current_language->la_return_by_reference (type);
+}
+
+/* Return zero; by default, types are returned by value at the language
+   level.  The target ABI may return some structs by reference
+   independent of this.  */
+int
+default_return_by_reference (struct type *type)
 {
   return 0;
 }
@@ -824,6 +841,7 @@ const struct language_defn unknown_language_defn =
   unknown_language_arch_info,	/* la_language_arch_info.  */
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   default_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
@@ -867,6 +885,7 @@ const struct language_defn auto_language_defn =
   unknown_language_arch_info,	/* la_language_arch_info.  */
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   default_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
@@ -908,6 +927,7 @@ const struct language_defn local_language_defn =
   unknown_language_arch_info,	/* la_language_arch_info.  */
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   default_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,

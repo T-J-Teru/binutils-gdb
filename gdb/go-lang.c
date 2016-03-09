@@ -593,6 +593,7 @@ static const struct language_defn go_language_defn =
   go_language_arch_info,
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   c_get_string,
   NULL,
   iterate_over_symbols,

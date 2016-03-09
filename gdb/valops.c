@@ -1633,6 +1633,23 @@ value_coerce_to_target (struct value *val)
   return value_at_lazy (value_type (val), addr);
 }
 
+/* Make sure that VAL always lives in target memory.  */
+
+struct value *
+value_force_coerce_to_target (struct value *val)
+{
+  LONGEST length;
+  CORE_ADDR addr;
+
+  if (VALUE_LVAL (val) == lval_memory)
+      return val;
+
+  length = value_length (val);
+  addr = allocate_space_in_inferior (length);
+  write_memory (addr, value_contents (val), length);
+  return value_at_lazy (value_type (val), addr);
+}
+
 /* Given a value which is an array, return a value which is a pointer
    to its first element, regardless of whether or not the array has a
    nonzero lower bound.

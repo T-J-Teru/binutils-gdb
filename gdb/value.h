@@ -628,6 +628,8 @@ extern int value_must_coerce_to_target (struct value *arg1);
 
 extern struct value *value_coerce_to_target (struct value *arg1);
 
+extern struct value *value_force_coerce_to_target (struct value *arg1);
+
 extern struct value *value_coerce_array (struct value *arg1);
 
 extern struct value *value_coerce_function (struct value *arg1);
