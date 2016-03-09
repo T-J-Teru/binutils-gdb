@@ -767,6 +767,13 @@ val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 
   if (!options->raw)
     {
+        if (language->la_language == language_fortran
+            && TYPE_CODE (type) == TYPE_CODE_ARRAY
+            && TYPE_NFIELDS (type) == 2) /* a dynamic array - dont
+                                            know size yet */
+            
+            TYPE_LENGTH(type) = sizeof(long long);
+
       ret = apply_val_pretty_printer (type, valaddr, embedded_offset,
 				      address, stream, recurse,
 				      val, options, language);
