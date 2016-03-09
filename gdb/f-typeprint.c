@@ -46,6 +46,8 @@ void f_type_print_varspec_prefix (struct type *, struct ui_file *,
 				  int, int);
 
 void f_type_print_base (struct type *, struct ui_file *, int, int);
+
+static void f_type_print_modifier (struct type *, struct ui_file *);
 
 
 /* LEVEL is the depth to indent lines by.  */
@@ -467,6 +469,8 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
 	error (_("Invalid type code (%d) in symbol table."), TYPE_CODE (type));
       break;
     }
+    
+  f_type_print_modifier (type, stream);
 }
 
 static int
@@ -497,4 +501,15 @@ f_munge_type_name (const char *name)
       return newname;
     }
   return name;
+}
+
+/* Print out "allocatable" attributes.
+   TYPE is a pointer to the type being printed out.
+   STREAM is the output destination.  */
+
+static void
+f_type_print_modifier (struct type *type, struct ui_file *stream)
+{
+  if (TYPE_ALLOCATABLE (type))
+    fprintf_filtered (stream, ", ALLOCATABLE");
 }
