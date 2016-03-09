@@ -2701,7 +2701,7 @@ set_ignore_sigint (struct lwp_info *lp, void *data)
   if (lp->stopped && lp->status != 0 && WIFSTOPPED (lp->status)
       && WSTOPSIG (lp->status) == SIGINT)
     lp->status = 0;
-  else
+  else if (!lp->stopped)
     lp->ignore_sigint = 1;
 
   return 0;
