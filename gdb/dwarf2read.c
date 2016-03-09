@@ -69,6 +69,7 @@
 #include "source.h"
 #include "filestuff.h"
 #include "build-id.h"
+#include "f-module.h"
 
 #include <fcntl.h>
 #include <sys/types.h>
@@ -1274,18 +1275,18 @@ struct die_info
 #define DW_ADDR(attr)	   ((attr)->u.addr)
 #define DW_SIGNATURE(attr) ((attr)->u.signature)
 
-/* Blocks are a bunch of untyped bytes.  */
-struct dwarf_block
-  {
-    size_t size;
-
-    /* Valid only if SIZE is not zero.  */
-    const gdb_byte *data;
-  };
-
 #ifndef ATTR_ALLOC_CHUNK
 #define ATTR_ALLOC_CHUNK 4
 #endif
+#include <ctype.h>
+
+/* PGI Extensions */
+
+#define DW_AT_lbase 0x3a00
+#define DW_AT_soffset 0x3a01
+#define DW_AT_lstride 0x3a02
+
+/* Ends */
 
 /* Allocate fields for structs, unions and enums in this size.  */
 #ifndef DW_FIELD_ALLOC_CHUNK
@@ -6666,6 +6667,7 @@ scan_partial_symbols (struct partial_die_info *first_die, CORE_ADDR *lowpc,
 	    case DW_TAG_subprogram:
 	      add_partial_subprogram (pdi, lowpc, highpc, set_addrmap, cu);
 	      break;
+	    case DW_TAG_imported_declaration:
 	    case DW_TAG_constant:
 	    case DW_TAG_variable:
 	    case DW_TAG_typedef:
@@ -6934,6 +6936,7 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
 			     list, 0, 0, cu->language, objfile);
       }
       break;
+    case DW_TAG_imported_declaration:
     case DW_TAG_variable:
       if (pdi->d.locdesc)
 	addr = decode_locdesc (pdi->d.locdesc, cu);
@@ -7009,6 +7012,12 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
 			   VAR_DOMAIN, LOC_TYPEDEF,
 			   &objfile->global_psymbols,
 			   0, (CORE_ADDR) 0, cu->language, objfile);
+
+      /* Remember this symbol if it is for a Fortran module.  */
+      if (cu->language == language_fortran)
+        {
+          f_module_announce (actual_name, cu->per_cu->v.psymtab);
+        }
       break;
     case DW_TAG_module:
       add_psymbol_to_list (actual_name, strlen (actual_name),
@@ -8461,7 +8470,10 @@ dwarf2_compute_name (const char *name,
       if (attr == NULL)
 	attr = dwarf2_attr (die, DW_AT_MIPS_linkage_name, cu);
       if (attr && DW_STRING (attr))
-	return DW_STRING (attr);
+        {
+	  name = DW_STRING (attr);
+	  goto out;
+	}
     }
 
   /* These are the only languages we know how to qualify names in.  */
@@ -8581,7 +8593,8 @@ dwarf2_compute_name (const char *name,
 			v = dwarf2_evaluate_loc_desc (type, NULL,
 						      baton->data,
 						      baton->size,
-						      baton->per_cu);
+						      baton->per_cu,
+						      /* FIXME: What should be passed for object address here? */ 0);
 		      else if (bytes != NULL)
 			{
 			  v = allocate_value (type);
@@ -8672,6 +8685,21 @@ dwarf2_compute_name (const char *name,
 
 	  xfree (intermediate_name);
 	}
+    }
+    
+out:
+  if (name && cu->language_defn 
+      && (cu->language_defn->la_case_sensitivity == case_sensitive_off)) 
+    {
+      char *copy;
+      int len, i;
+
+      len = strlen (name);
+      copy = (char *) obstack_alloc (&cu->objfile->objfile_obstack, len + 1);
+      for (i= 0; i < len; i++)
+        copy[i] = tolower (name[i]);
+      copy[len] = 0;
+      name = copy;
     }
 
   return name;
@@ -12552,7 +12580,21 @@ dwarf2_add_field (struct field_info *fip, struct die_info *die,
 
       /* The name is already allocated along with this objfile, so we don't
 	 need to duplicate it for the type.  */
+
       fp->name = fieldname;
+
+
+      if (cu && cu->language_defn &&
+	  cu->language_defn->la_case_sensitivity == case_sensitive_off) 
+	{
+	  int i;
+	  int len;
+	  len = strlen(fieldname) + 1;
+	  fp->name = xmalloc (len);
+	  for (i= 0; i < len; i++)
+	    ((char *)fp->name)[i] = tolower (fieldname[i]);
+	}
+
 
       /* Change accessibility for artificial fields (e.g. virtual table
          pointer or virtual base class pointer) to private.  */
@@ -13669,6 +13711,19 @@ process_enumeration_scope (struct die_info *die, struct dwarf2_cu *cu)
   new_symbol (die, this_type, cu);
 }
 
+static struct dwarf2_loclist_baton *
+make_loclist_baton (struct dwarf2_cu *cu, struct dwarf_block *blk)
+{
+    struct dwarf2_loclist_baton *baton = obstack_alloc (&cu->objfile->objfile_obstack,
+                           sizeof (struct dwarf2_loclist_baton));
+    baton->per_cu = cu->per_cu;
+    baton->base_address = cu->base_address;
+    baton->size = blk->size;
+    baton->data = blk->data;
+    return baton;
+}
+
+
 /* Extract all information from a DW_TAG_array_type DIE and put it in
    the DIE's type field.  For now, this only handles one dimensional
    arrays.  */
@@ -13682,6 +13737,9 @@ read_array_type (struct die_info *die, struct dwarf2_cu *cu)
   struct type *element_type, *range_type, *index_type;
   struct type **range_types = NULL;
   struct attribute *attr;
+  struct attribute *attr_alloc;
+  struct attribute *attr_pgi;
+  struct die_info *subrange_die = NULL;
   int ndim = 0;
   struct cleanup *back_to;
   const char *name;
@@ -13782,6 +13840,61 @@ read_array_type (struct die_info *die, struct dwarf2_cu *cu)
 		   _("DW_AT_byte_size for array type smaller "
 		     "than the total size of elements"));
     }
+
+  attr = dwarf2_attr (die, DW_AT_data_location, cu);
+  if (attr || dwarf2_attr (die, DW_AT_lbase, cu)) 
+    {
+        struct array_location_batons *baton_holder;
+
+        struct type* range_type = TYPE_FIELD_TYPE (type, 0);
+
+        TYPE_NFIELDS (type) = 2;
+        TYPE_FIELDS (type) =
+	    (struct field *) TYPE_ALLOC (type, 2 * sizeof (struct field));
+        memset (TYPE_FIELDS (type), 0, sizeof (struct field));
+
+
+        TYPE_FIELD_TYPE (type, 0) = range_type;
+
+        baton_holder = OBSTACK_ZALLOC (&cu->objfile->objfile_obstack,
+                                       struct array_location_batons);
+
+        TYPE_FIELD_TYPE (type, 1) = (struct type*) baton_holder;
+        
+        baton_holder->baton_evaluation_function = (void*) dwarf2_evaluate_int; 
+
+        if (attr && attr_form_is_block (attr))
+            {
+                baton_holder->intel_location_baton = 
+                    make_loclist_baton(cu, DW_BLOCK(attr));
+
+                attr_alloc = dwarf2_attr(die, DW_AT_allocated, cu);
+                if (attr_alloc)
+                    baton_holder->allocated_baton = 
+                        make_loclist_baton (cu, DW_BLOCK(attr_alloc));
+            }
+
+        /* PGI extensions */
+
+        attr_pgi = dwarf2_attr (die, DW_AT_lbase, cu);
+        if (attr_pgi && attr_form_is_block (attr_pgi))
+           {
+               baton_holder->pgi_lbase_baton = 
+                   make_loclist_baton (cu, DW_BLOCK(attr_pgi));
+           }
+
+
+        attr_pgi = dwarf2_attr (die, DW_AT_stride_size, cu);
+        if (attr_pgi && attr_form_is_block (attr_pgi))
+            {
+                baton_holder->pgi_elem_skip_baton = 
+                   make_loclist_baton (cu, DW_BLOCK(attr_pgi));
+            }
+
+        /* end PGI */
+
+    }
+
 
   name = dwarf2_name (die, cu);
   if (name)
@@ -14476,12 +14589,41 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
   struct gdbarch *gdbarch = get_objfile_arch (objfile);
   struct type *type, *range_type, *index_type, *char_type;
   struct attribute *attr;
+  struct dwarf2_loclist_baton *len_compute = 0;
   unsigned int length;
 
   attr = dwarf2_attr (die, DW_AT_string_length, cu);
   if (attr)
     {
-      length = DW_UNSND (attr);
+       if (attr->form == DW_FORM_block1) 
+ 	{
+	  int size;
+
+ 	  struct dwarf2_loclist_baton *baton;
+ 	  baton = obstack_alloc (&cu->objfile->objfile_obstack,
+ 				 sizeof (struct dwarf2_loclist_baton));
+
+	  size = DW_BLOCK(attr)->size; 
+
+ 	  baton->per_cu = cu->per_cu;
+ 	  baton->base_address = cu->base_address;
+	  baton->size = size + 1;
+
+ 	  baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
+				       baton->size);
+	  
+ 	  memcpy ((gdb_byte *) baton->data, DW_BLOCK(attr)->data, size);
+	  ((gdb_byte *)baton->data)[size] = DW_OP_deref;
+	  
+ 
+ 	  len_compute = baton;
+ 	  length = 1;
+ 	  
+ 	}
+       else 
+ 	{
+ 	  length = DW_UNSND (attr);
+ 	}
     }
   else
     {
@@ -14927,6 +15069,62 @@ attr_to_dynamic_prop (const struct attribute *attr, struct die_info *die,
   return 1;
 }
 
+
+static struct dwarf2_loclist_baton *
+create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_cu *cu) 
+{
+  struct dwarf2_loclist_baton *baton = 0;
+
+  if (attr->form == DW_FORM_block1) 
+    {
+      baton = obstack_alloc (&cu->objfile->objfile_obstack,
+			     sizeof (struct dwarf2_loclist_baton));
+      baton->per_cu = cu->per_cu;
+      baton->base_address = cu->base_address;
+      baton->size = DW_BLOCK(attr)->size;
+      baton->data = DW_BLOCK(attr)->data;
+    }
+  else 
+    if (attr->form == DW_FORM_ref4)
+      {
+	int size;
+	struct die_info *ref_die =
+	  follow_die_ref (die, attr, &cu);
+	
+	if (ref_die) 
+	  {
+	    attr = dwarf2_attr(ref_die, DW_AT_location, cu);
+	    
+	    if (attr && attr->form == DW_FORM_block1)
+	      {
+		baton = obstack_alloc (&cu->objfile->objfile_obstack,
+				       sizeof (struct dwarf2_loclist_baton));
+		
+		size = DW_BLOCK(attr)->size; 
+		
+		baton->per_cu = cu->per_cu;
+		baton->base_address = cu->base_address;
+
+		if (cu->producer && strstr (cu->producer, "GNU"))
+		  {
+		    baton->size = size;
+		    baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
+						 baton->size);
+		  }
+		else
+		{
+		  baton->size = size + 1; 
+		  baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
+					       baton->size);
+		  ((gdb_byte *) baton->data)[size] = DW_OP_deref; 
+		}
+		memcpy((gdb_byte *) baton->data, DW_BLOCK(attr)->data, size);
+	      }
+	  }
+      }
+  return baton;
+}
+
 /* Read the given DW_AT_subrange DIE.  */
 
 static struct type *
@@ -14936,6 +15134,15 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   struct type *range_type;
   struct attribute *attr;
   struct dynamic_prop low, high;
+  struct dwarf2_loclist_baton *low_compute = 0;
+  struct dwarf2_loclist_baton *high_compute = 0;
+  struct dwarf2_loclist_baton *count_compute = 0;
+  struct dwarf2_loclist_baton *stride_compute = 0;
+  struct dwarf2_loclist_baton *soffset_compute = 0;
+  struct dwarf2_loclist_baton *lstride_compute = 0;
+  int stride = 1;
+  int soffset = 0;
+  int lstride = 0;
   int is_upc_threads_scaled = 0;
   int low_default_is_valid;
   int high_bound_is_count = 0;
@@ -14990,8 +15197,21 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
     }
 
   attr = dwarf2_attr (die, DW_AT_lower_bound, cu);
+
+  /* APB-TODO: Merge conflict in 1e257eb.  Note sure what to do.  */
+  abort ();
+
   if (attr)
     attr_to_dynamic_prop (attr, die, cu, &low);
+#if 0
+  if (attr) 
+    {
+      low_compute = create_bound_baton (die, attr, cu);
+
+      if (!low_compute)
+	low = dwarf2_get_attr_constant_value (attr, 0);
+    }
+#endif
   else if (!low_default_is_valid)
     complaint (&symfile_complaints, _("Missing DW_AT_lower_bound "
 				      "- DIE at 0x%x [in module %s]"),
@@ -15000,14 +15220,72 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   attr = dwarf2_attr (die, DW_AT_upper_bound, cu);
   if (!attr_to_dynamic_prop (attr, die, cu, &high))
     {
+      high_compute = create_bound_baton (die, attr, cu);
+      if (high_compute)
+	high = low - 1;
+      else
+        high = dwarf2_get_attr_constant_value (attr, 1);
+    }
+  else
+    {
+      /* seen in F90 compilers from Pathscale and IBM */
       attr = dwarf2_attr (die, DW_AT_count, cu);
       if (attr_to_dynamic_prop (attr, die, cu, &high))
+	{
+	  count_compute = create_bound_baton(die, attr, cu);
+	  if (count_compute)
+	    high = low - 1;
+	  else
+	    {
+	      int count = dwarf2_get_attr_constant_value (attr, 1);
+	      high = low + count - 1;
+	    }
+	}
+      else
 	{
 	  /* If bounds are constant do the final calculation here.  */
 	  if (low.kind == PROP_CONST && high.kind == PROP_CONST)
 	    high.data.const_val = low.data.const_val + high.data.const_val - 1;
 	  else
 	    high_bound_is_count = 1;
+	}
+    }
+
+  /* PGI Fortran extensions */
+  attr = dwarf2_attr (die, DW_AT_stride, cu);
+  if (attr)
+    {
+      stride_compute = create_bound_baton (die, attr, cu);
+      if (!stride_compute) 
+	stride = (int) dwarf2_get_attr_constant_value (attr, 1);
+    }
+
+  attr = dwarf2_attr (die, DW_AT_soffset, cu);
+  if (attr)
+    {
+      soffset_compute = create_bound_baton (die, attr, cu);
+      if (!soffset_compute) 
+	soffset = dwarf2_get_attr_constant_value (attr, 1);
+    }
+
+  attr = dwarf2_attr (die, DW_AT_lstride, cu);
+  if (attr)
+    {
+      lstride_compute = create_bound_baton (die, attr, cu);
+      if (!lstride_compute) 
+	lstride = dwarf2_get_attr_constant_value (attr, 1);
+     }
+
+  if (!low_compute && !high_compute && low > (high + 1))
+    {
+      if (cu->producer && strstr (cu->producer, "DBG_GEN"))
+	{
+	  /* Sun FORTE says 255 for -1; 254 for -2, etc.. yuk! */
+	  low |= (-1 ^ 0xff);
+	}
+      else 
+	{
+	  low = high;
 	}
     }
 
@@ -15065,8 +15343,20 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
       && !TYPE_UNSIGNED (base_type) && (high.data.const_val & negative_mask))
     high.data.const_val |= negative_mask;
 
-  range_type = create_range_type (NULL, orig_base_type, &low, &high);
+  /* APB-TODO: Merge conflict in 1e257eb.  Note sure what to do.  */
+  abort ();
 
+  range_type = create_range_type (NULL, orig_base_type, &low, &high);
+#if 0
+  range_type = create_range_type_d_pgi (NULL, orig_base_type, low, high,
+				       stride, soffset, lstride, 
+				       low_compute, high_compute,
+				       count_compute,
+				       stride_compute, soffset_compute,
+				       lstride_compute,
+				       (LONGEST (*)(void*, CORE_ADDR, void*)) dwarf2_evaluate_int);
+#endif
+  
   if (high_bound_is_count)
     TYPE_RANGE_DATA (range_type)->flag_upper_bound_is_count = 1;
 
@@ -15749,6 +16039,7 @@ load_partial_dies (const struct die_reader_specs *reader,
 	  || abbrev->tag == DW_TAG_subprogram
 	  || abbrev->tag == DW_TAG_variable
 	  || abbrev->tag == DW_TAG_namespace
+	  || abbrev->tag == DW_TAG_module
 	  || part_die->is_declaration)
 	{
 	  void **slot;
@@ -15776,6 +16067,7 @@ load_partial_dies (const struct die_reader_specs *reader,
       if (last_die->has_children
 	  && (load_all
 	      || last_die->tag == DW_TAG_namespace
+	      || last_die->tag == DW_TAG_subprogram	      
 	      || last_die->tag == DW_TAG_module
 	      || last_die->tag == DW_TAG_enumeration_type
 	      || (cu->language == language_cplus
@@ -18425,6 +18717,13 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	    {
 	      list_to_add = cu->list_in_scope;
 	    }
+
+          /* Remember this symbol if it is for a Fortran module.  */
+          if (cu->language == language_fortran &&
+              die->parent && die->parent->tag == DW_TAG_module)
+            {
+              f_module_sym_add(sym);
+            }
 	  break;
 	case DW_TAG_inlined_subroutine:
 	  /* SYMBOL_BLOCK_VALUE (sym) will be filled in later by
@@ -18433,8 +18732,30 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	  SYMBOL_INLINED (sym) = 1;
 	  list_to_add = cu->list_in_scope;
 	  break;
+	case DW_TAG_imported_declaration:
+	  attr = dwarf2_attr(die, DW_AT_import, cu);
+	  if (attr) 
+	    die = follow_die_ref (die, attr, &cu);
+	  else 
+	    {
+	      complaint (&symfile_complaints, _("cannot find DW_TAG_import in DW_TAG_imported_declaration: '%s'"),
+			name);
+	    }
+	  if (!die) 
+	    {
+	      complaint (&symfile_complaints, _("cannot follow die ref for DW_TAG_imported_declaration '%s'"),
+			name);
+	      /* Rather broken just add name anyway, it is likely to be
+		local to this block if imported.  Observed for
+		non-existant references with Pathscale 3.0, ticket #7903.
+	      */
+	      add_symbol_to_list (sym, cu->list_in_scope);
+	      return sym;
+	    }
+	  /* carry on through with the new die. */
 	case DW_TAG_template_value_param:
-	  suppress_add = 1;
+	  if (die->tag == DW_TAG_template_value_param)
+	    suppress_add = 1;
 	  /* Fall through.  */
 	case DW_TAG_constant:
 	case DW_TAG_variable:
@@ -18467,6 +18788,13 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 		  else
 		    list_to_add = cu->list_in_scope;
 		}
+
+              /* Remember this symbol if it is for a Fortran module.  */
+              if (cu->language == language_fortran &&
+                  die->parent && die->parent->tag == DW_TAG_module)
+                {
+                  f_module_sym_add(sym);
+                }
 	      break;
 	    }
 	  attr = dwarf2_attr (die, DW_AT_location, cu);
@@ -18513,6 +18841,13 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 		}
 	      else
 		list_to_add = cu->list_in_scope;
+
+              /* Remember this symbol if it is for a Fortran module.  */
+              if (cu->language == language_fortran &&
+                  die->parent && die->parent->tag == DW_TAG_module)
+                {
+                  f_module_sym_add(sym);
+                }
 	    }
 	  else
 	    {
@@ -18661,6 +18996,12 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	  SYMBOL_ACLASS_INDEX (sym) = LOC_TYPEDEF;
 	  SYMBOL_DOMAIN (sym) = MODULE_DOMAIN;
 	  list_to_add = &global_symbols;
+
+          /* Starting a new Fortran module.  */
+          if (cu->language == language_fortran)
+            {
+              f_module_enter(SYMBOL_LINKAGE_NAME(sym));
+            }
 	  break;
 	case DW_TAG_common_block:
 	  SYMBOL_ACLASS_INDEX (sym) = LOC_COMMON_BLOCK;
@@ -23576,3 +23917,5 @@ Usage: save gdb-index DIRECTORY"),
   dwarf2_loclist_block_index = register_symbol_block_impl (LOC_BLOCK,
 					&dwarf2_block_frame_base_loclist_funcs);
 }
+
+

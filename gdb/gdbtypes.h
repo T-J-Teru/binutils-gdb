@@ -599,6 +599,22 @@ struct range_bounds
 
   struct dynamic_prop high;
 
+      char low_undefined;
+      char high_undefined;
+
+      void* low_baton;
+      void* high_baton;
+      void* count_baton;
+      void* baton_function;
+
+      void* lstride_baton;
+      void* stride_baton;
+      void* soffset_baton;
+
+      LONGEST lstride_value;
+      LONGEST stride_value;
+      LONGEST soffset_value;
+
   /* True if HIGH range bound contains the number of elements in the
      subrange. This affects how the final hight bound is computed.  */
 
@@ -1298,6 +1314,18 @@ extern void allocate_gnat_aux_type (struct type *);
   TYPE_RANGE_DATA(range_type)->low.data.const_val
 #define TYPE_HIGH_BOUND(range_type) \
   TYPE_RANGE_DATA(range_type)->high.data.const_val
+
+#define TYPE_LOW_BOUND_BATON(range_type) TYPE_RANGE_DATA(range_type)->low_baton
+#define TYPE_HIGH_BOUND_BATON(range_type) TYPE_RANGE_DATA(range_type)->high_baton
+#define TYPE_COUNT_BOUND_BATON(range_type) TYPE_RANGE_DATA(range_type)->count_baton
+#define TYPE_LSTRIDE_BATON(range_type) TYPE_RANGE_DATA(range_type)->lstride_baton
+#define TYPE_LSTRIDE_VALUE(range_type) TYPE_RANGE_DATA(range_type)->lstride_value
+#define TYPE_STRIDE_BATON(range_type) TYPE_RANGE_DATA(range_type)->stride_baton
+#define TYPE_STRIDE_VALUE(range_type) TYPE_RANGE_DATA(range_type)->stride_value
+#define TYPE_SOFFSET_BATON(range_type) TYPE_RANGE_DATA(range_type)->soffset_baton
+#define TYPE_SOFFSET_VALUE(range_type) TYPE_RANGE_DATA(range_type)->soffset_value
+#define TYPE_BOUND_BATON_FUNCTION(range_type) TYPE_RANGE_DATA(range_type)->baton_function
+
 #define TYPE_LOW_BOUND_UNDEFINED(range_type) \
   (TYPE_RANGE_DATA(range_type)->low.kind == PROP_UNDEFINED)
 #define TYPE_HIGH_BOUND_UNDEFINED(range_type) \
@@ -1818,6 +1846,16 @@ extern struct type *create_array_type_with_stride
 extern struct type *create_range_type (struct type *, struct type *,
 				       const struct dynamic_prop *,
 				       const struct dynamic_prop *);
+ 
+extern struct type *create_range_type_d (struct type *, struct type *,
+				        int, int, void *, void *,  void*,
+					LONGEST (*)(void*, CORE_ADDR, void*));
+
+extern struct type * create_range_type_d_pgi (struct type *result_type, struct type *index_type,
+					    int low_bound, int high_bound, int stride, int soffset, int lstride,
+					    void *dwarf_low, void *dwarf_high, void *dwarf_count,
+					    void *dwarf_stride, void *dwarf_soffset, void *dwarf_lstride,
+					    LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*));
 
 extern struct type *create_array_type (struct type *, struct type *,
 				       struct type *);

@@ -856,6 +856,25 @@ create_range_type (struct type *result_type, struct type *index_type,
 		   const struct dynamic_prop *low_bound,
 		   const struct dynamic_prop *high_bound)
 {
+  return create_range_type_d (result_type, index_type, low_bound, high_bound, 0, 0, 0, 0);
+}
+
+struct type *
+create_range_type_d (struct type *result_type, struct type *index_type,
+		   int low_bound, int high_bound, void *dwarf_low, 
+		     void *dwarf_high, void *dwarf_count,
+		     LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
+{
+  return create_range_type_d_pgi (result_type, index_type, low_bound, high_bound, 0, 0, 0, dwarf_low, dwarf_high, dwarf_count, 0, 0, 0, expr_evaluate);
+}
+
+struct type *
+create_range_type_d_pgi (struct type *result_type, struct type *index_type,
+		         int low_bound, int high_bound, int stride, int soffset, int lstride,
+                         void *dwarf_low, void *dwarf_high, void *dwarf_count,
+                         void *dwarf_stride, void *dwarf_soffset, void *dwarf_lstride,
+		         LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
+{
   if (result_type == NULL)
     result_type = alloc_type_copy (index_type);
   TYPE_CODE (result_type) = TYPE_CODE_RANGE;
@@ -879,6 +898,21 @@ create_range_type (struct type *result_type, struct type *index_type,
      is negative as unsigned.  */
   if (high_bound->kind == PROP_CONST && high_bound->data.const_val < 0)
     TYPE_UNSIGNED (result_type) = 0;
+
+  /* APB-TODO: Conflict while merging 1e257eb, not sure how these should be
+     resolved.  */
+  abort ();
+
+  TYPE_LOW_BOUND_BATON (result_type) = dwarf_low;
+  TYPE_HIGH_BOUND_BATON (result_type) = dwarf_high;
+  TYPE_COUNT_BOUND_BATON (result_type) = dwarf_count;
+  TYPE_STRIDE_BATON (result_type) = dwarf_stride;
+  TYPE_LSTRIDE_BATON (result_type) = dwarf_lstride;
+  TYPE_SOFFSET_BATON (result_type) = dwarf_soffset;
+  TYPE_STRIDE_VALUE (result_type) = stride;
+  TYPE_LSTRIDE_VALUE (result_type) = lstride;
+  TYPE_SOFFSET_VALUE (result_type) = soffset;
+  TYPE_BOUND_BATON_FUNCTION (result_type) = expr_evaluate;
 
   return result_type;
 }

@@ -2329,9 +2329,13 @@ evaluate_subexp_standard (struct type *expect_type,
 
     multi_f77_subscript:
       {
-	LONGEST subscript_array[MAX_FORTRAN_DIMS];
+	LONGEST subscript_array[MAX_FORTRAN_DIMS] = {0};
 	int ndimensions = 1, i;
 	struct value *array = arg1;
+
+        if (VALUE_LVAL (array) == lval_memory
+	    && !value_address (array))
+	  error (_("cannot subscript an array that is not allocated"));
 
 	if (nargs > MAX_FORTRAN_DIMS)
 	  error (_("Too many subscripts for F77 (%d Max)"), MAX_FORTRAN_DIMS);

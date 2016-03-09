@@ -95,3 +95,5 @@ struct builtin_f_type
 /* Return the Fortran type table for the specified architecture.  */
 extern const struct builtin_f_type *builtin_f_type (struct gdbarch *gdbarch);
 
+/* Transparently follow pointers and fixup the size and address of dynamic arrays.  */
+extern struct value *f_fixup_value (struct value *, struct frame_info *);

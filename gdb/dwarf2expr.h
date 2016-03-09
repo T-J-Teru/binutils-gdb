@@ -126,6 +126,16 @@ struct dwarf_stack_value
   int in_stack_memory;
 };
 
+
+/* Blocks are a bunch of untyped bytes.  */
+struct dwarf_block
+  {
+    size_t size;
+
+    /* Valid only if SIZE is not zero.  */
+    gdb_byte *data;
+  };
+
 /* The expression evaluator works with a dwarf_expr_context, describing
    its current state and its callbacks.  */
 struct dwarf_expr_context
