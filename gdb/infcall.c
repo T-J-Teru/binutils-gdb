@@ -125,6 +125,23 @@ show_unwind_on_terminating_exception_p (struct ui_file *file, int from_tty,
 		    value);
 }
 
+/* This boolean is used to disable the function calls.
+*/
+
+static int disable_function_calls_p = 0;
+
+static void
+show_disable_function_calls_p (struct ui_file *file, int from_tty,
+					struct cmd_list_element *c,
+					const char *value)
+
+{
+  fprintf_filtered (file,
+		    _("Disable function calls is %s\n"),
+		    value);
+}
+
+
 /* Perform the standard coercions that are specified
    for arguments to be passed to C or Ada functions.
 
@@ -492,6 +509,9 @@ call_function_by_hand (struct value *function, int nargs, struct value **args)
 
   if (execution_direction == EXEC_REVERSE)
     error (_("Cannot call functions in reverse mode."));
+
+  if (disable_function_calls_p)
+    error(_("Function calls disabled."));
 
   frame = get_current_frame ();
   gdbarch = get_frame_arch (frame);
@@ -1127,6 +1147,17 @@ std::terminate call to proceed.\n\
 The default is to unwind the frame."),
 			   NULL,
 			   show_unwind_on_terminating_exception_p,
+			   &setlist, &showlist);
+
+  add_setshow_boolean_cmd ("disable-function-calls", no_class,
+			   &disable_function_calls_p,
+_("Disable function calls "),
+_("Show whether disable-function-calls is enabled"),
+_("When disable-function-calls is enabled and there is a function within \
+ an expression to be evaluated, then an error is reported and the function\
+ call is blocked."),
+			   NULL,
+			   show_disable_function_calls_p,
 			   &setlist, &showlist);
 
 }
