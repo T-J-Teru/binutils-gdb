@@ -214,7 +214,8 @@ struct value
        If lval == lval_register, this is the byte offset into the
        registers structure.  */
     CORE_ADDR address;
-
+    /* Pointer to UPC shared memory (when lval == lval_upc_shared_mem).  */
+    gdb_upc_pts_t upc_shared_addr;
     /* Pointer to internal variable.  */
     struct internalvar *internalvar;
 
@@ -1466,6 +1467,12 @@ set_value_address (struct value *value, CORE_ADDR addr)
 	      && value->lval != lval_internalvar_component
 	      && value->lval != lval_xcallable);
   value->location.address = addr;
+}
+
+gdb_upc_pts_t *
+deprecated_value_upc_shared_addr_hack (struct value *value)
+{
+  return &value->location.upc_shared_addr;
 }
 
 struct internalvar **
@@ -2992,6 +2999,8 @@ value_primitive_field (struct value *arg1, int offset,
 {
   struct value *v;
   struct type *type;
+  struct type_quals arg_quals = TYPE_QUALS (arg1->type);
+  struct type_quals field_quals;
 
   CHECK_TYPEDEF (arg_type);
   type = TYPE_FIELD_TYPE (arg_type, fieldno);
@@ -3003,6 +3012,16 @@ value_primitive_field (struct value *arg1, int offset,
      to keep the typedef in order to be able to print the type
      description correctly.  */
   check_typedef (type);
+
+  /* If the containing type is qualified, then propagate
+     the qualifiers to the selected field value.  */
+
+  field_quals = TYPE_QUALS (type);
+  if (!TYPE_QUALS_EQ (field_quals, arg_quals))
+    {
+      field_quals = merge_type_quals (field_quals, arg_quals);
+      type = make_qual_variant_type (field_quals, type, NULL);
+    }
 
   if (TYPE_FIELD_BITSIZE (arg_type, fieldno))
     {
@@ -3816,6 +3835,10 @@ value_fetch_lazy (struct value *val)
 			     value_bitpos (val), value_bitsize (val),
 			     value_contents_for_printing (parent),
 			     value_offset (val), parent);
+    }
+  else if (VALUE_LVAL (val) == lval_upc_shared)
+    {
+      upc_value_fetch_lazy (val);
     }
   else if (VALUE_LVAL (val) == lval_memory)
     {

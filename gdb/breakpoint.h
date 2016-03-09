@@ -763,7 +763,14 @@ struct breakpoint
 
     /* Same as py_bp_object, but for Scheme.  */
     struct gdbscm_breakpoint_object *scm_bp_object;
-  };
+
+    /* Report breakpoint after this number of threads reach
+       a collective breakpoint */
+    int max_threads_hit;
+
+    /* Number of threads that reached collective breakpoint */
+    int threads_hit;
+};
 
 /* An instance of this type is used to represent a watchpoint.  It
    includes a "struct breakpoint" as a kind of base class; users
@@ -1591,5 +1598,11 @@ extern struct gdbarch *get_sal_arch (struct symtab_and_line sal);
 extern void breakpoint_free_objfile (struct objfile *objfile);
 
 extern char *ep_parse_optional_if_clause (char **arg);
+
+/* Check if collective breakpoint on or off. */
+extern int is_collective_breakpoints (void);
+
+/* Check if collective stepping on or off. */
+extern int is_collective_stepping (void);
 
 #endif /* !defined (BREAKPOINT_H) */

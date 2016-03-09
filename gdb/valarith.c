@@ -24,6 +24,7 @@
 #include "expression.h"
 #include "target.h"
 #include "language.h"
+#include "upc-lang.h"
 #include "doublest.h"
 #include "dfp.h"
 #include <math.h>
@@ -83,16 +84,27 @@ find_size_for_pointer_math (struct type *ptr_type)
 struct value *
 value_ptradd (struct value *arg1, LONGEST arg2)
 {
-  struct type *valptrtype;
   LONGEST sz;
+  struct type *valptrtype, *tt;
+  struct gdbarch *gdbarch = get_type_arch (value_type (arg1));
   struct value *result;
 
   arg1 = coerce_array (arg1);
   valptrtype = check_typedef (value_type (arg1));
   sz = find_size_for_pointer_math (valptrtype);
 
-  result = value_from_pointer (valptrtype,
-			       value_as_address (arg1) + sz * arg2);
+  tt = check_typedef (TYPE_TARGET_TYPE (valptrtype));
+  if (upc_shared_type_p (tt))
+    {
+      struct value *valint;
+      valint = value_from_longest (builtin_type (gdbarch)->builtin_int, arg2);
+      result = upc_pts_index_add (valptrtype, arg1, valint, sz);
+    }
+  else
+    {
+      result = value_from_pointer (valptrtype,
+			          value_as_address (arg1) + sz * arg2);
+    }
   if (VALUE_LVAL (result) != lval_internalvar)
     set_value_component_location (result, arg1);
   return result;
@@ -106,20 +118,52 @@ value_ptrdiff (struct value *arg1, struct value *arg2)
 {
   struct type *type1, *type2;
   LONGEST sz;
+  struct gdbarch *gdbarch = get_type_arch (value_type (arg1));
 
   arg1 = coerce_array (arg1);
   arg2 = coerce_array (arg2);
   type1 = check_typedef (value_type (arg1));
   type2 = check_typedef (value_type (arg2));
 
-  gdb_assert (TYPE_CODE (type1) == TYPE_CODE_PTR);
-  gdb_assert (TYPE_CODE (type2) == TYPE_CODE_PTR);
-
-  if (TYPE_LENGTH (check_typedef (TYPE_TARGET_TYPE (type1)))
-      != TYPE_LENGTH (check_typedef (TYPE_TARGET_TYPE (type2))))
-    error (_("First argument of `-' is a pointer and "
-	     "second argument is neither\n"
-	     "an integer nor a pointer of the same type."));
+  if (TYPE_CODE (type1) == TYPE_CODE_PTR)
+    {
+      struct type *tt1 = check_typedef (TYPE_TARGET_TYPE (type1));
+      struct type *tt2 = (TYPE_CODE (type2) == TYPE_CODE_PTR)
+                         ? check_typedef (TYPE_TARGET_TYPE (type2)) : NULL;
+      if (is_integral_type (type2))
+	{
+	  /* Rewrite into pointer + (-integer) */
+	  return value_as_long (value_ptradd (arg1, value_as_long (value_neg (arg2))));
+	}
+      else if (TYPE_CODE (type2) == TYPE_CODE_PTR
+	       && TYPE_LENGTH (tt1) == TYPE_LENGTH (tt2))
+	{
+          struct value *retval;
+	  /* pointer to <type x> - pointer to <type x>.  */
+	  if (upc_shared_type_p (tt1) || upc_shared_type_p (tt2))
+	    {
+	      if (upc_shared_type_p (tt1) != upc_shared_type_p (tt2))
+		error (_("\
+First and second arguments of '-' are not both UPC pointer-to-shared types."));
+	      if (upc_blocksizeof (tt1) != upc_blocksizeof (tt2))
+		error (_("\
+First and second arguments of '-' do not have the same block size."));
+	      retval = upc_pts_diff (arg1, arg2);
+	    }
+	  else
+	    {
+	      LONGEST sz = TYPE_LENGTH (tt1);
+	      retval = value_from_longest
+		(builtin_type (gdbarch)->builtin_int,	/* FIXME -- should be ptrdiff_t */
+		 (value_as_long (arg1) - value_as_long (arg2)) / sz);
+	    }
+	  return value_as_long (retval);
+	}
+      else
+	error (_("First argument of `-' is a pointer and "
+		 "second argument is neither\n"
+		 "an integer nor a pointer of the same type."));
+    }
 
   sz = TYPE_LENGTH (check_typedef (TYPE_TARGET_TYPE (type1)));
   if (sz == 0) 
@@ -155,10 +199,11 @@ value_subscript (struct value *array, LONGEST index)
       || TYPE_CODE (tarray) == TYPE_CODE_STRING)
     {
       struct type *range_type = TYPE_INDEX_TYPE (tarray);
+      enum lval_type lval = VALUE_LVAL (array);      
       LONGEST lowerbound, upperbound;
 
       get_discrete_bounds (range_type, &lowerbound, &upperbound);
-      if (VALUE_LVAL (array) != lval_memory)
+      if (lval != lval_memory && lval != lval_upc_shared)
 	return value_subscripted_rvalue (array, index, lowerbound);
 
       if (c_style == 0)

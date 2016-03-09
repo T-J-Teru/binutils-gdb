@@ -181,4 +181,9 @@ extern int dict_size (const struct dictionary *dict);
 	     (sym);						\
 	     (sym) = dict_iterator_next (&(iter)))
 
+/* Return an expandable version of the specified dictionary, copied
+   from the original if the original was not expandable.  */
+
+extern struct dictionary *dict_convert_dictionary(struct dictionary *old_dict);
+
 #endif /* DICTIONARY_H */

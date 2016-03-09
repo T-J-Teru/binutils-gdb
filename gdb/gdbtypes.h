@@ -193,18 +193,18 @@ enum type_code
 
 enum type_flag_value
 {
-  TYPE_FLAG_UNSIGNED = (1 << 9),
-  TYPE_FLAG_NOSIGN = (1 << 10),
-  TYPE_FLAG_STUB = (1 << 11),
-  TYPE_FLAG_TARGET_STUB = (1 << 12),
-  TYPE_FLAG_STATIC = (1 << 13),
-  TYPE_FLAG_PROTOTYPED = (1 << 14),
-  TYPE_FLAG_INCOMPLETE = (1 << 15),
-  TYPE_FLAG_VARARGS = (1 << 16),
-  TYPE_FLAG_VECTOR = (1 << 17),
-  TYPE_FLAG_FIXED_INSTANCE = (1 << 18),
-  TYPE_FLAG_STUB_SUPPORTED = (1 << 19),
-  TYPE_FLAG_GNU_IFUNC = (1 << 20),
+  TYPE_FLAG_UNSIGNED = (1 << 13),
+  TYPE_FLAG_NOSIGN = (1 << 14),
+  TYPE_FLAG_STUB = (1 << 15),
+  TYPE_FLAG_TARGET_STUB = (1 << 16),
+  TYPE_FLAG_STATIC = (1 << 17),
+  TYPE_FLAG_PROTOTYPED = (1 << 18),
+  TYPE_FLAG_INCOMPLETE = (1 << 19),
+  TYPE_FLAG_VARARGS = (1 << 20),
+  TYPE_FLAG_VECTOR = (1 << 21),
+  TYPE_FLAG_FIXED_INSTANCE = (1 << 22),
+  TYPE_FLAG_STUB_SUPPORTED = (1 << 23),
+  TYPE_FLAG_GNU_IFUNC = (1 << 24),
 
   /* * Used for error-checking.  */
   TYPE_FLAG_MIN = TYPE_FLAG_UNSIGNED
@@ -224,7 +224,11 @@ enum type_instance_flag_value
   TYPE_INSTANCE_FLAG_ADDRESS_CLASS_2 = (1 << 5),
   TYPE_INSTANCE_FLAG_NOTTEXT = (1 << 6),
   TYPE_INSTANCE_FLAG_RESTRICT = (1 << 7),
-  TYPE_INSTANCE_FLAG_ATOMIC = (1 << 8)
+  TYPE_INSTANCE_FLAG_ATOMIC = (1 << 8),
+  TYPE_INSTANCE_FLAG_UPC_SHARED	= (1 << 9),
+  TYPE_INSTANCE_FLAG_UPC_STRICT	= (1 << 10),
+  TYPE_INSTANCE_FLAG_UPC_RELAXED = (1 << 11),
+  TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR = (1 << 12)
 };
 
 /* * Unsigned integer type.  If this is not set for a TYPE_CODE_INT,
@@ -402,6 +406,32 @@ enum type_instance_flag_value
   (TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1 | TYPE_INSTANCE_FLAG_ADDRESS_CLASS_2)
 #define TYPE_ADDRESS_CLASS_ALL(t) (TYPE_INSTANCE_FLAGS(t) \
 				   & TYPE_INSTANCE_FLAG_ADDRESS_CLASS_ALL)
+
+/* UPC shared type.  If this is set, the corresponding type
+   has a "shared" modifier.  */
+
+#define TYPE_UPC_SHARED(t)	(TYPE_INSTANCE_FLAGS (t) & TYPE_INSTANCE_FLAG_UPC_SHARED)
+
+/* UPC strict qualifier.  If this is set, the corresponding type
+ * has a "strict" modifier.  If this modifier is asserted, then
+ * the type must also be UPC shared type.
+ */
+
+#define TYPE_UPC_STRICT(t)	(TYPE_INSTANCE_FLAGS (t) & TYPE_INSTANCE_FLAG_UPC_STRICT)
+
+/* UPC relaxed qualifier.  If this is set, the corresponding type
+   has a "relaxed" qualifier.  If this modifier is asserted, then
+   the type must also be UPC shared type.  */
+
+#define TYPE_UPC_RELAXED(t)	(TYPE_INSTANCE_FLAGS (t) & TYPE_INSTANCE_FLAG_UPC_RELAXED)
+
+/* UPC attribute applied to array types indicating that the array
+   index is implicitly scaled by the number of UPC threads
+   (ie, multiplied by the language-defined THREADS value).
+   has a "relaxed" qualifier.  If this modifier is asserted, then
+   the type must also be UPC shared type.  */
+
+#define TYPE_UPC_HAS_THREADS_FACTOR(t)	(TYPE_INSTANCE_FLAGS (t) & TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR)
 
 enum dynamic_prop_kind
 {
@@ -743,6 +773,27 @@ struct main_type
   struct dynamic_prop_list *dyn_prop_list;
 };
 
+struct type_quals
+{
+  /* Flags specific to this instance of the type, indicating where
+     on the ring we are.  */
+  int instance_flags;
+  /* UPC defined layout specifier (blocking factor) which indicates
+     the multiple used to block objects on a per-thread basis.  */
+  ULONGEST upc_layout;
+};
+
+/* Access individual fields of type qualifiers and
+   test for equality.  */
+#define TYPE_QUAL_FLAGS(q)	((q).instance_flags)
+#define TYPE_QUAL_UPC_LAYOUT(q)	((q).upc_layout)
+#define TYPE_QUALS_EQ(q1,q2)	(TYPE_QUAL_FLAGS (q1) \
+                                   == TYPE_QUAL_FLAGS (q2) \
+			         && TYPE_QUAL_UPC_LAYOUT (q1) \
+				   == TYPE_QUAL_UPC_LAYOUT (q2))
+/* Empty type qualifiers.  */
+extern struct type_quals null_type_quals;
+
 /* * A ``struct type'' describes a particular instance of a type, with
    some particular qualification.  */
 
@@ -759,26 +810,24 @@ struct type
 
   struct type *reference_type;
 
-  /* * Variant chain.  This points to a type that differs from this
-     one only in qualifiers and length.  Currently, the possible
-     qualifiers are const, volatile, code-space, data-space, and
-     address class.  The length may differ only when one of the
-     address class flags are set.  The variants are linked in a
-     circular ring and share MAIN_TYPE.  */
-
+  /* Variant chain.  This points to a type that differs from this one only
+     in qualifiers and length.  Currently, the possible qualifiers are
+     const, volatile, code-space, data-space, and address class.
+     UPC adds the additional qualifiers shared, relaxed, strict,
+     and blocksize (layout factor).
+     The length may differ only when one of the address class flags are set.
+     The variants are linked in a circular ring and share MAIN_TYPE.  */
   struct type *chain;
 
-  /* * Flags specific to this instance of the type, indicating where
-     on the ring we are.
+  /*  Type qualifiers include instance flags and UPC layout qualifier.
 
-     For TYPE_CODE_TYPEDEF the flags of the typedef type should be
-     binary or-ed with the target type, with a special case for
-     address class and space class.  For example if this typedef does
-     not specify any new qualifiers, TYPE_INSTANCE_FLAGS is 0 and the
-     instance flags are completely inherited from the target type.  No
-     qualifiers can be cleared by the typedef.  See also
-     check_typedef.  */
-  int instance_flags;
+     For TYPE_CODE_TYPEDEF the flags of the typedef type should be binary
+     or-ed with the target type, with a special case for address class and
+     space class.  For example if this typedef does not specify any new
+     qualifiers, TYPE_INSTANCE_FLAGS is 0 and the instance flags are
+     completely inherited from the target type.  No qualifiers can be cleared
+     by the typedef.  See also check_typedef.  */
+  struct type_quals quals;
 
   /* * Length of storage for a value of this type.  This is what
      sizeof(type) would return; use it for address arithmetic, memory
@@ -1222,7 +1271,9 @@ extern void allocate_gnat_aux_type (struct type *);
      = TYPE_ZALLOC (type,						       \
 		    sizeof (*TYPE_MAIN_TYPE (type)->type_specific.func_stuff)))
 
-#define TYPE_INSTANCE_FLAGS(thistype) (thistype)->instance_flags
+#define TYPE_QUALS(thistype)	((thistype)->quals)
+#define TYPE_INSTANCE_FLAGS(t)	(TYPE_QUAL_FLAGS (TYPE_QUALS (t)))
+#define TYPE_UPC_LAYOUT(t)	(TYPE_QUAL_UPC_LAYOUT (TYPE_QUALS(t)))
 #define TYPE_MAIN_TYPE(thistype) (thistype)->main_type
 #define TYPE_NAME(thistype) TYPE_MAIN_TYPE(thistype)->name
 #define TYPE_TAG_NAME(type) TYPE_MAIN_TYPE(type)->tag_name
@@ -1705,7 +1756,9 @@ extern struct type *lookup_reference_type (struct type *);
 
 extern struct type *make_reference_type (struct type *, struct type **);
 
-extern struct type *make_cv_type (int, int, struct type *, struct type **);
+extern struct type_quals merge_type_quals (struct type_quals, struct type_quals);
+
+extern struct type *make_qual_variant_type (struct type_quals, struct type *, struct type **);
 
 extern struct type *make_restrict_type (struct type *);
 

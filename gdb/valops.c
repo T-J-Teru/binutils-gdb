@@ -27,6 +27,7 @@
 #include "target.h"
 #include "demangle.h"
 #include "language.h"
+#include "upc-lang.h"
 #include "gdbcmd.h"
 #include "regcache.h"
 #include "cp-abi.h"
@@ -996,6 +997,10 @@ value_assign (struct value *toval, struct value *fromval)
   struct value *val;
   struct frame_id old_frame;
 
+  /* Assignments to/from UPC shared memory, currently unimplemented.  */
+  gdb_assert (VALUE_LVAL(toval) != lval_upc_shared);
+  gdb_assert (VALUE_LVAL(fromval) != lval_upc_shared);
+
   if (!deprecated_value_modifiable (toval))
     error (_("Left operand of assignment is not a modifiable lvalue."));
 
@@ -1436,17 +1441,29 @@ struct value *
 value_coerce_array (struct value *arg1)
 {
   struct type *type = check_typedef (value_type (arg1));
+  struct type *tt   = check_typedef (TYPE_TARGET_TYPE (type));
+  struct type *pt   = lookup_pointer_type (tt);
+  enum lval_type lval = VALUE_LVAL (arg1);
+  struct value *retval;
 
   /* If the user tries to do something requiring a pointer with an
      array that has not yet been pushed to the target, then this would
      be a good time to do so.  */
   arg1 = value_coerce_to_target (arg1);
 
-  if (VALUE_LVAL (arg1) != lval_memory)
-    error (_("Attempt to take address of value not located in memory."));
-
-  return value_from_pointer (lookup_pointer_type (TYPE_TARGET_TYPE (type)),
+  switch (lval)
+    {
+    case lval_memory:
+      retval = value_from_pointer (lookup_pointer_type (TYPE_TARGET_TYPE (type)),
 			     value_address (arg1));
+      break;
+    case lval_upc_shared:
+      retval = upc_value_from_pts (pt, VALUE_SHARED_ADDR (arg1));
+      break;
+    default:
+      error (_("Attempt to take address of value not located in memory."));
+    }
+  return retval;
 }
 
 /* Given a value which is a function, return a value which is a pointer
@@ -1473,6 +1490,8 @@ value_addr (struct value *arg1)
 {
   struct value *arg2;
   struct type *type = check_typedef (value_type (arg1));
+  struct type *pt   = lookup_pointer_type (type);
+  enum lval_type lval = VALUE_LVAL (arg1);  
 
   if (TYPE_CODE (type) == TYPE_CODE_REF)
     {
@@ -1491,21 +1510,27 @@ value_addr (struct value *arg1)
      then this would be a good time to force it to memory.  */
   arg1 = value_coerce_to_target (arg1);
 
-  if (VALUE_LVAL (arg1) != lval_memory)
-    error (_("Attempt to take address of value not located in memory."));
+  switch (lval)
+    {
+    case lval_memory:
+      /* Get target memory address.  */
+      arg2 = value_from_pointer (lookup_pointer_type (value_type (arg1)),
+				(value_address (arg1)
+				 + value_embedded_offset (arg1)));
 
-  /* Get target memory address.  */
-  arg2 = value_from_pointer (lookup_pointer_type (value_type (arg1)),
-			     (value_address (arg1)
-			      + value_embedded_offset (arg1)));
-
-  /* This may be a pointer to a base subobject; so remember the
-     full derived object's type ...  */
-  set_value_enclosing_type (arg2,
-			    lookup_pointer_type (value_enclosing_type (arg1)));
-  /* ... and also the relative position of the subobject in the full
-     object.  */
-  set_value_pointed_to_offset (arg2, value_embedded_offset (arg1));
+      /* This may be a pointer to a base subobject; so remember the
+	 full derived object's type ...  */
+      set_value_enclosing_type (arg2,
+			       lookup_pointer_type (value_enclosing_type (arg1)));
+      /* ... and also the relative position of the subobject in the full
+	 object.  */
+      set_value_pointed_to_offset (arg2, value_embedded_offset (arg1));
+    case lval_upc_shared:
+      arg2 = upc_value_from_pts (pt, VALUE_SHARED_ADDR (arg1));
+      return arg2;
+    default:
+      error (_("Attempt to take address of value not located in memory."));
+    }
   return arg2;
 }
 
@@ -1555,6 +1580,14 @@ value_ind (struct value *arg1)
   if (TYPE_CODE (base_type) == TYPE_CODE_PTR)
     {
       struct type *enc_type;
+      struct type *tt = check_typedef (TYPE_TARGET_TYPE (base_type));
+
+      if (upc_shared_type_p (tt))
+        {
+	  /* FIXME: handle enclosing objects for UPC shared types. */
+	  arg2 = upc_value_at_lazy (tt, upc_value_as_pts(arg1));
+	  return arg2;
+	}      
 
       /* We may be pointing to something embedded in a larger object.
          Get the real type of the enclosing object.  */
@@ -3593,6 +3626,7 @@ value_rtti_indirect_type (struct value *v, int *full,
 {
   struct value *target = NULL;
   struct type *type, *real_type, *target_type;
+  struct type_quals type_quals;
 
   type = value_type (v);
   type = check_typedef (type);
@@ -3627,8 +3661,8 @@ value_rtti_indirect_type (struct value *v, int *full,
     {
       /* Copy qualifiers to the referenced object.  */
       target_type = value_type (target);
-      real_type = make_cv_type (TYPE_CONST (target_type),
-				TYPE_VOLATILE (target_type), real_type, NULL);
+      type_quals = TYPE_QUALS (target_type);
+      real_type = make_qual_variant_type (type_quals, real_type, NULL);
       if (TYPE_CODE (type) == TYPE_CODE_REF)
         real_type = lookup_reference_type (real_type);
       else if (TYPE_CODE (type) == TYPE_CODE_PTR)
@@ -3637,8 +3671,8 @@ value_rtti_indirect_type (struct value *v, int *full,
         internal_error (__FILE__, __LINE__, _("Unexpected value type."));
 
       /* Copy qualifiers to the pointer/reference.  */
-      real_type = make_cv_type (TYPE_CONST (type), TYPE_VOLATILE (type),
-				real_type, NULL);
+      type_quals = TYPE_QUALS (type);
+      real_type = make_qual_variant_type (type_quals, real_type, NULL);
     }
 
   return real_type;
