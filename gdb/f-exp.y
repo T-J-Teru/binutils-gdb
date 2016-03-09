@@ -218,6 +218,8 @@ static int parse_number (struct parser_state *, const char *, int,
 %token <voidval> VARIABLE
 
 %token <opcode> ASSIGN_MODIFY
+%token <opcode> UNOP_INTRINSIC
+%token <opcode> BINOP_INTRINSIC
 
 %left ','
 %left ABOVE_COMMA
@@ -301,6 +303,13 @@ exp	:	exp '('
 			  write_exp_elt_opcode (pstate,
 					      OP_F77_UNDETERMINED_ARGLIST); }
 	;
+
+exp     :       UNOP_INTRINSIC '(' exp ')'
+                        { write_exp_elt_opcode ($1); }
+        ;
+
+exp     :       BINOP_INTRINSIC '(' exp ',' exp ')'
+                        { write_exp_elt_opcode ($1); }
 
 arglist	:
 	;
@@ -1027,6 +1036,26 @@ static const struct token f77_keywords[] =
   { NULL, 0, 0 }
 }; 
 
+static const struct token intrinsics[] =
+  {
+    {"ABS", UNOP_INTRINSIC, UNOP_FABS},
+    {"AIMAG", UNOP_INTRINSIC, UNOP_CIMAG},
+    {"CMPLX", BINOP_INTRINSIC, BINOP_CMPLX},
+    {"REALPART", UNOP_INTRINSIC, UNOP_CREAL},
+    {"ISINF", UNOP_INTRINSIC, UNOP_IEEE_IS_INF},
+    {"IEEE_IS_INF", UNOP_INTRINSIC, UNOP_IEEE_IS_INF},
+    {"ISFINITE", UNOP_INTRINSIC, UNOP_IEEE_IS_FINITE},
+    {"IEEE_IS_FINITE", UNOP_INTRINSIC, UNOP_IEEE_IS_FINITE},
+    {"ISNAN", UNOP_INTRINSIC, UNOP_IEEE_IS_NAN},
+    {"IEEE_IS_NAN", UNOP_INTRINSIC, UNOP_IEEE_IS_NAN},
+    {"ISNORMAL", UNOP_INTRINSIC, UNOP_IEEE_IS_NORMAL},
+    {"IEEE_IS_NORMAL", UNOP_INTRINSIC, UNOP_IEEE_IS_NORMAL},
+    {"CEILING", UNOP_INTRINSIC, UNOP_CEIL},
+    {"FLOOR", UNOP_INTRINSIC, UNOP_FLOOR},
+    {"MOD", BINOP_INTRINSIC, BINOP_FMOD},
+    {"MODULO", BINOP_INTRINSIC, BINOP_MODULO},
+  };
+
 /* Implementation of a dynamically expandable buffer for processing input
    characters acquired through lexptr and building a value to return in
    yylval.  Ripped off from ch-exp.y */ 
@@ -1379,7 +1408,15 @@ yylex (void)
 	yylval.opcode = f77_keywords[i].opcode;
 	return f77_keywords[i].token;
       }
-  
+
+  for (i = 0; i < sizeof intrinsics / sizeof intrinsics[0]; i++)
+    if (strncasecmp (tokstart, intrinsics[i].operator, strlen(intrinsics[i].operator)) == 0
+ 	&& strlen(intrinsics[i].operator) == namelen)
+      {
+        yylval.opcode = intrinsics[i].opcode;
+        return intrinsics[i].token;
+      }
+
   yylval.sval.ptr = tokstart;
   yylval.sval.length = namelen;
   
@@ -1388,7 +1425,7 @@ yylex (void)
       write_dollar_variable (pstate, yylval.sval);
       return VARIABLE;
     }
-  
+
   /* Use token-type TYPENAME for symbols that happen to be defined
      currently as names of types; NAME for other symbols.
      The caller is not constrained to care about the distinction.  */
