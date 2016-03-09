@@ -1615,6 +1615,16 @@ extern struct type * create_range_type_d_pgi (struct type *result_type, struct t
 					    void *dwarf_stride, void *dwarf_soffset, void *dwarf_lstride,
 					    LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*));
 
+extern struct type *create_range_type_d (struct type *, struct type *,
+					 int, int, void *, void *,  void*,
+					 LONGEST (*)(void*, CORE_ADDR, void*));
+
+extern struct type * create_range_type_d_pgi (struct type *result_type, struct type *index_type,
+		         int low_bound, int high_bound, int stride, int soffset, int lstride,
+                         void *dwarf_low, void *dwarf_high, void *dwarf_count,
+                         void *dwarf_stride, void *dwarf_soffset, void *dwarf_lstride,
+		         LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*));
+
 extern struct type *create_array_type (struct type *, struct type *,
 				       struct type *);
 extern struct type *lookup_array_range_type (struct type *, LONGEST, LONGEST);
