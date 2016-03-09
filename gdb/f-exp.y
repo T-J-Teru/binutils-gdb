@@ -128,6 +128,8 @@ static void growbuf_by_size (int);
 
 static int match_string_literal (void);
 
+static struct type *follow_f_types (struct type *follow_type);
+
 %}
 
 /* Although the yacc "value" of an expression is not used,
@@ -162,13 +164,13 @@ static int parse_number (char *, int, int, YYSTYPE *);
 %}
 
 %type <voidval> exp  type_exp start variable 
-%type <tval> type typebase
-%type <tvec> nonempty_typelist
+%type <tval> type typebase typebase_no_ambig_sizes
 /* %type <bval> block */
 
 /* Fancy type parsing.  */
-%type <voidval> func_mod direct_abs_decl abs_decl
 %type <tval> ptype
+
+%type <lval> signed_int
 
 %token <typed_val> INT
 %token <dval> FLOAT
@@ -195,12 +197,12 @@ static int parse_number (char *, int, int, YYSTYPE *);
 
 %token <ssym> NAME_OR_INT 
 
-%token SIZEOF COLONCOLON
+%token POINTER SIZEOF COLONCOLON
 %token ERROR
 
 /* Special type cases, put in to allow the parser to distinguish different
    legal basetypes.  */
-%token INT_KEYWORD INT_S2_KEYWORD LOGICAL_S1_KEYWORD LOGICAL_S2_KEYWORD 
+%token INT_KEYWORD INT_S2_KEYWORD INT_S8_KEYWORD LOGICAL_S1_KEYWORD LOGICAL_S2_KEYWORD
 %token LOGICAL_S8_KEYWORD
 %token LOGICAL_KEYWORD REAL_KEYWORD REAL_S8_KEYWORD REAL_S16_KEYWORD 
 %token COMPLEX_S8_KEYWORD COMPLEX_S16_KEYWORD COMPLEX_S32_KEYWORD 
@@ -233,6 +235,8 @@ static int parse_number (char *, int, int, YYSTYPE *);
 %right '('
 %right ARROW
 %left COLONCOLON
+%left BELOW_SIZE
+%left SIZE
 
 
 %%
@@ -434,7 +438,6 @@ exp     :       exp BOOL_AND exp
 			{ write_exp_elt_opcode (BINOP_LOGICAL_AND); }
 	;
 
-
 exp	:	exp BOOL_OR exp
 			{ write_exp_elt_opcode (BINOP_LOGICAL_OR); }
 	;
@@ -596,121 +599,162 @@ variable:	name_not_typename
 			}
 	;
 
-
 type    :       ptype
         ;
 
-ptype	:	typebase
-	|	typebase abs_decl
-		{
-		  /* This is where the interesting stuff happens.  */
-		  int done = 0;
-		  int array_size;
-		  struct type *follow_type = $1;
-		  struct type *range_type;
-		  
-		  while (!done)
-		    switch (pop_type ())
-		      {
-		      case tp_end:
-			done = 1;
-			break;
-		      case tp_pointer:
-			follow_type = lookup_pointer_type (follow_type);
-			break;
-		      case tp_reference:
-			follow_type = lookup_reference_type (follow_type);
-			break;
-		      case tp_array:
-			array_size = pop_type_int ();
-			if (array_size != -1)
-			  {
-			    range_type =
-			      create_range_type ((struct type *) NULL,
-						 parse_f_type->builtin_integer,
-						 0, array_size - 1);
-			    follow_type =
-			      create_array_type ((struct type *) NULL,
-						 follow_type, range_type);
-			  }
-			else
-			  follow_type = lookup_pointer_type (follow_type);
-			break;
-		      case tp_function:
-			follow_type = lookup_function_type (follow_type);
-			break;
-		      }
-		  $$ = follow_type;
-		}
+ptype	:	typebase_no_ambig_sizes
+	|	typebase ',' POINTER
+			{ $$ = lookup_pointer_type ($1); }
+	|	typebase array_mod
+			{ $$ = follow_f_types ($1); }
+	|	typebase ',' POINTER array_mod
+			{ $$ = lookup_pointer_type (follow_f_types ($1)); }
 	;
 
-abs_decl:	'*'
-			{ push_type (tp_pointer); $$ = 0; }
-	|	'*' abs_decl
-			{ push_type (tp_pointer); $$ = $2; }
-	|	'&'
-			{ push_type (tp_reference); $$ = 0; }
-	|	'&' abs_decl
-			{ push_type (tp_reference); $$ = $2; }
-	|	direct_abs_decl
+array_mod:	'(' range ')'
 	;
 
-direct_abs_decl: '(' abs_decl ')'
-			{ $$ = $2; }
-	| 	direct_abs_decl func_mod
-			{ push_type (tp_function); }
-	|	func_mod
-			{ push_type (tp_function); }
+range:		subrange2 ',' subrange2
+	|	subrange2
 	;
 
-func_mod:	'(' ')'
-			{ $$ = 0; }
-	|	'(' nonempty_typelist ')'
-			{ free ($2); $$ = 0; }
+subrange2:	signed_int ':' signed_int
+			{
+			  push_type_int ($1);
+			  push_type_int ($3);
+			  push_type (tp_array); }
+	;
+
+subrange2:	signed_int colon_star
+			{
+			  push_type_int ($1);
+			  push_type_int ($1 - 1);
+			  push_type (tp_array); }
+	;
+
+subrange2:	':' signed_int
+			{ push_type_int (1);
+			  push_type_int ($2);
+			  push_type (tp_array); }
+	;
+
+subrange2:	colon_star
+			{ push_type_int (1);
+			  push_type_int (0);
+			  push_type (tp_array); }
+	;
+
+subrange2:	signed_int
+			{ push_type_int (1);
+			  push_type_int ($1);
+			  push_type (tp_array); }
+	;
+
+subrange2:	'*'
+			{ push_type_int (1);
+			  push_type_int (0);
+			  push_type (tp_array); }
+	;
+
+colon_star:	':'
+	|	':' '*'
+	;
+
+signed_int:	INT
+			{ $$ = $1.val; }
+	|	'-' INT
+			{ $$ = -$2.val; }
 	;
 
 typebase  /* Implements (approximately): (type-qualifier)* type-specifier */
-	:	TYPENAME
-			{ $$ = $1.type; }
-	|	INT_KEYWORD
-			{ $$ = parse_f_type->builtin_integer; }
-	|	INT_S2_KEYWORD 
-			{ $$ = parse_f_type->builtin_integer_s2; }
-	|	CHARACTER 
-			{ $$ = parse_f_type->builtin_character; }
-	|	LOGICAL_S8_KEYWORD
-			{ $$ = parse_f_type->builtin_logical_s8; }
-	|	LOGICAL_KEYWORD 
-			{ $$ = parse_f_type->builtin_logical; }
-	|	LOGICAL_S2_KEYWORD
-			{ $$ = parse_f_type->builtin_logical_s2; }
-	|	LOGICAL_S1_KEYWORD 
-			{ $$ = parse_f_type->builtin_logical_s1; }
-	|	REAL_KEYWORD 
-			{ $$ = parse_f_type->builtin_real; }
-	|       REAL_S8_KEYWORD
-			{ $$ = parse_f_type->builtin_real_s8; }
-	|	REAL_S16_KEYWORD
-			{ $$ = parse_f_type->builtin_real_s16; }
-	|	COMPLEX_S8_KEYWORD
-			{ $$ = parse_f_type->builtin_complex_s8; }
-	|	COMPLEX_S16_KEYWORD 
-			{ $$ = parse_f_type->builtin_complex_s16; }
-	|	COMPLEX_S32_KEYWORD 
-			{ $$ = parse_f_type->builtin_complex_s32; }
+	:	typebase_no_ambig_sizes	
+	|	INT_KEYWORD '(' INT ')'	%prec SIZE
+			{ if ($3.val == 2)
+			  	$$ = parse_f_type->builtin_integer_s2;
+			  else if ($3.val == 4)
+			  	$$ = parse_f_type->builtin_integer;
+			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_integer_s8; }
+	|	LOGICAL_KEYWORD '(' INT ')'	%prec SIZE
+			{ if ($3.val == 1)
+				$$ = parse_f_type->builtin_logical_s1;
+			  else if ($3.val == 2)
+				$$ = parse_f_type->builtin_logical_s2;
+			  else if ($3.val == 4)
+				$$ = parse_f_type->builtin_logical; }
+	|	REAL_KEYWORD '(' INT ')'	%prec SIZE
+			{ if ($3.val == 4)
+				$$ = parse_f_type->builtin_real;
+			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_real_s8;
+			  else if ($3.val == 16)
+				$$ = parse_f_type->builtin_real_s16; }
+	|	COMPLEX_S8_KEYWORD '(' INT ')'	%prec SIZE
+			{ if ($3.val == 8)
+				$$ = parse_f_type->builtin_complex_s8;
+			  else if ($3.val == 16)
+				$$ = parse_f_type->builtin_complex_s16;
+			  else if ($3.val == 32)
+				$$ = parse_f_type->builtin_complex_s32; }
 	;
 
-nonempty_typelist
-	:	type
-		{ $$ = (struct type **) malloc (sizeof (struct type *) * 2);
-		  $<ivec>$[0] = 1;	/* Number of types in vector */
-		  $$[1] = $1;
-		}
-	|	nonempty_typelist ',' type
-		{ int len = sizeof (struct type *) * (++($<ivec>1[0]) + 1);
-		  $$ = (struct type **) realloc ((char *) $1, len);
-		  $$[$<ivec>$[0]] = $3;
-		}
+typebase_no_ambig_sizes
+	:	TYPENAME
+			{ $$ = $1.type; }
+	|	INT_KEYWORD	%prec BELOW_SIZE
+			{ $$ = parse_f_type->builtin_integer; }
+	|	INT_KEYWORD '*' INT
+			{ if ($3.val == 2)
+			  	$$ = parse_f_type->builtin_integer_s2;
+			  else if ($3.val == 4)
+			  	$$ = parse_f_type->builtin_integer;
+			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_integer_s8; }
+	|	INT_S2_KEYWORD 
+			{ $$ = parse_f_type->builtin_integer_s2; }
+	|	INT_S8_KEYWORD 
+			{ $$ = parse_f_type->builtin_integer_s8; }
+	|	CHARACTER 
+			{ $$ = parse_f_type->builtin_character; }
+	|	LOGICAL_KEYWORD	%prec BELOW_SIZE
+			{ $$ = parse_f_type->builtin_logical;} 
+	|	LOGICAL_KEYWORD '*' INT
+			{ if ($3.val == 1)
+				$$ = parse_f_type->builtin_logical_s1;
+			  else if ($3.val == 2)
+				$$ = parse_f_type->builtin_logical_s2;
+			  else if ($3.val == 4)
+				$$ = parse_f_type->builtin_logical; }
+	|	LOGICAL_S2_KEYWORD
+			{ $$ = parse_f_type->builtin_logical_s2;}
+	|	LOGICAL_S1_KEYWORD 
+			{ $$ = parse_f_type->builtin_logical_s1;}
+	|	REAL_KEYWORD	 %prec BELOW_SIZE
+			{ $$ = parse_f_type->builtin_real;}
+	|	REAL_KEYWORD '*' INT
+			{ if ($3.val == 4)
+				$$ = parse_f_type->builtin_real;
+			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_real_s8;
+			  else if ($3.val == 16)
+				$$ = parse_f_type->builtin_real_s16; }
+	|       REAL_S8_KEYWORD
+			{ $$ = parse_f_type->builtin_real_s8;}
+	|	REAL_S16_KEYWORD
+			{ $$ = parse_f_type->builtin_real_s16; }
+	|	COMPLEX_S8_KEYWORD '*' INT
+			{ if ($3.val == 8)
+				$$ = parse_f_type->builtin_complex_s8;
+			  else if ($3.val == 16)
+				$$ = parse_f_type->builtin_complex_s16;
+			  else if ($3.val == 32)
+				$$ = parse_f_type->builtin_complex_s32; }
+	|	COMPLEX_S8_KEYWORD	 %prec BELOW_SIZE
+			{ $$ = parse_f_type->builtin_complex_s8;}
+	|	COMPLEX_S16_KEYWORD 
+			{ $$ = parse_f_type->builtin_complex_s16;}
+	|	COMPLEX_S32_KEYWORD 
+			{ $$ = parse_f_type->builtin_complex_s32; }
 	;
 
 name	:	NAME
@@ -941,12 +985,14 @@ static const struct token f77_keywords[] =
   { "logical_8", LOGICAL_S8_KEYWORD, BINOP_END },
   { "complex_8", COMPLEX_S8_KEYWORD, BINOP_END },
   { "integer", INT_KEYWORD, BINOP_END },
+  { "integer_8", INT_S8_KEYWORD, BINOP_END },
   { "logical", LOGICAL_KEYWORD, BINOP_END },
   { "real_16", REAL_S16_KEYWORD, BINOP_END },
   { "complex", COMPLEX_S8_KEYWORD, BINOP_END },
   { "sizeof", SIZEOF, BINOP_END },
   { "real_8", REAL_S8_KEYWORD, BINOP_END },
   { "real", REAL_KEYWORD, BINOP_END },
+  { "pointer", POINTER, BINOP_END },
   { NULL, 0, 0 }
 }; 
 
@@ -1024,6 +1070,53 @@ match_string_literal (void)
     }
 }
 
+static struct type *
+follow_f_types (struct type *follow_type)
+{
+  /* This is where the interesting stuff happens.  */
+  int done = 0;
+  int lower_bound, upper_bound;
+  int *bounds, index;
+  enum type_pieces type;
+  struct type *range_type;
+
+  while (!done)
+    switch (pop_type ())
+      {
+      case tp_end:
+		done = 1;
+		break;
+      case tp_pointer:
+		follow_type = lookup_pointer_type (follow_type);
+		break;
+      case tp_array:
+		bounds = xmalloc (80 * sizeof (int));
+		index = 0;
+		do {
+		  upper_bound = pop_type_int ();
+		  lower_bound = pop_type_int ();
+		  bounds[index++] = upper_bound;
+		  bounds[index++] = lower_bound;
+		} while ((type = pop_type()) == tp_array);
+		push_type (type);
+		while (index > 0)
+		  {
+			lower_bound = bounds[--index];
+			upper_bound = bounds[--index];
+			range_type =
+				create_range_type ((struct type *) NULL,
+				  parse_f_type->builtin_integer, lower_bound,
+				  upper_bound);
+			follow_type =
+				create_array_type ((struct type *) NULL,
+				  follow_type, range_type);
+		  }
+		xfree (bounds);
+		break;
+	  }
+  return follow_type;
+}
+
 /* Read one token, getting characters through lexptr.  */
 
 static int
@@ -1047,7 +1140,7 @@ yylex (void)
     { 
       for (i = 0; boolean_values[i].name != NULL; i++)
 	{
-	  if (strncmp (tokstart, boolean_values[i].name,
+	  if (strncasecmp (tokstart, boolean_values[i].name,
 		       strlen (boolean_values[i].name)) == 0)
 	    {
 	      lexptr += strlen (boolean_values[i].name); 
@@ -1060,7 +1153,7 @@ yylex (void)
   /* See if it is a special .foo. operator.  */
   
   for (i = 0; dot_ops[i].operator != NULL; i++)
-    if (strncmp (tokstart, dot_ops[i].operator,
+    if (strncasecmp (tokstart, dot_ops[i].operator,
 		 strlen (dot_ops[i].operator)) == 0)
       {
 	lexptr += strlen (dot_ops[i].operator);
@@ -1239,7 +1332,7 @@ yylex (void)
   
   for (i = 0; f77_keywords[i].operator != NULL; i++)
     if (strlen (f77_keywords[i].operator) == namelen
-	&& strncmp (tokstart, f77_keywords[i].operator, namelen) == 0)
+	&& strncasecmp (tokstart, f77_keywords[i].operator, namelen) == 0)
       {
 	/* 	lexptr += strlen(f77_keywords[i].operator); */ 
 	yylval.opcode = f77_keywords[i].opcode;
