@@ -39,6 +39,7 @@
 #include "bcache.h"
 #include "dwarf2loc.h"
 #include "gdbcore.h"
+#include "upc-thread.h"
 
 /* Initialize BADNESS constants.  */
 
@@ -2247,6 +2248,7 @@ add_dyn_prop (enum dynamic_prop_node_kind prop_kind, struct dynamic_prop prop,
 struct type *
 check_typedef (struct type *type)
 {
+  struct type *range_type;
   struct type *orig_type = type;
   /* While we're removing typedefs, we don't want to lose qualifiers.
      E.g., const/volatile.  */
@@ -2380,7 +2382,6 @@ check_typedef (struct type *type)
 
   if (TYPE_TARGET_STUB (type))
     {
-      struct type *range_type;
       struct type *target_type = check_typedef (TYPE_TARGET_TYPE (type));
 
       if (TYPE_STUB (target_type) || TYPE_TARGET_STUB (target_type))
@@ -2391,6 +2392,43 @@ check_typedef (struct type *type)
 	{
 	  TYPE_LENGTH (type) = TYPE_LENGTH (target_type);
 	  TYPE_TARGET_STUB (type) = 0;
+	}
+    }
+
+  if (TYPE_CODE (type) == TYPE_CODE_ARRAY
+      && TYPE_NFIELDS (type) == 1
+      && (TYPE_CODE (range_type = TYPE_INDEX_TYPE (type))
+	  == TYPE_CODE_RANGE)
+      && !currently_reading_symtab)
+    {
+      struct type *target_type = check_typedef (TYPE_TARGET_TYPE (type));
+      if (TYPE_STUB (target_type))
+	{
+	  /* Empty.  */
+	}
+      else if (upc_shared_type_p (target_type))
+	{
+	  LONGEST low_bound, high_bound;
+	  ULONGEST len;
+
+	  upc_expand_threads_factor (range_type);
+
+	  low_bound = TYPE_LOW_BOUND (range_type);
+	  high_bound = TYPE_HIGH_BOUND (range_type);
+
+	  if (high_bound < low_bound)
+	    len = 0;
+	  else
+	    {
+	      ULONGEST ulow = low_bound, uhigh = high_bound;
+	      ULONGEST tlen = TYPE_LENGTH (target_type);
+
+	      len = tlen * (uhigh - ulow + 1);
+	      if (tlen == 0 || (len / tlen - 1 + ulow) != uhigh 
+	         || len > UINT_MAX)
+	        len = 0;
+	    }
+	  TYPE_LENGTH (type) = len;
 	}
     }
 
