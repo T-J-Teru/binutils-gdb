@@ -228,6 +228,9 @@ struct thread_info
      bp_longjmp_call_dummy.  */
   struct frame_id initiating_frame;
 
+  struct frame_id selected_frame_id;
+  int selected_frame_level;
+
   /* Private data used by the target vector implementation.  */
   struct private_thread_info *private;
 

@@ -65,6 +65,7 @@ static void info_threads_command (char *, int);
 static void thread_apply_command (char *, int);
 void restore_current_thread (ptid_t);
 void prune_threads (void);
+static void restore_selected_frame (struct frame_id a_frame_id, int frame_level);
 
 struct thread_info*
 inferior_thread (void)
@@ -180,6 +181,8 @@ new_thread (ptid_t ptid)
   /* No collective breakpoint and step */
   tp->collective_bp_num = 0;
   tp->collective_step = 0;
+
+  tp->selected_frame_level = -1;
 
   return tp;
 }
@@ -672,13 +675,17 @@ set_executing (ptid_t ptid, int executing)
     {
       for (tp = thread_list; tp; tp = tp->next)
 	if (all || ptid_get_pid (tp->ptid) == ptid_get_pid (ptid))
-	  tp->executing = executing;
+	  {
+	    tp->executing = executing;
+	    tp->selected_frame_level = -1;
+	  }
     }
   else
     {
       tp = find_thread_ptid (ptid);
       gdb_assert (tp);
       tp->executing = executing;
+      tp->selected_frame_level = -1;
     }
 }
 
@@ -996,6 +1003,38 @@ info_threads_command (char *arg, int from_tty)
 void
 switch_to_thread (ptid_t ptid)
 {
+  struct thread_info *tp;
+  struct frame_info *frame;
+  
+  if (!ptid_equal (inferior_ptid, null_ptid) && !ptid_equal (inferior_ptid, ptid))
+    {
+      tp = find_thread_ptid (inferior_ptid);
+      if (tp)
+        {
+	  if (is_stopped (inferior_ptid)
+	      && target_has_registers
+	      && target_has_stack
+	      && target_has_memory)
+	    {
+	      volatile struct gdb_exception ex;
+
+	      TRY_CATCH (ex, RETURN_MASK_ALL)
+		{
+		  struct frame_info *frame;
+		  frame = get_selected_frame (NULL);
+		  tp->selected_frame_id = get_frame_id (frame);
+		  tp->selected_frame_level = frame_relative_level (frame);
+		}
+	      if (ex.reason < 0)
+		{
+		  tp->selected_frame_level = -1;
+		}
+	    }
+	  else
+	    tp->selected_frame_level = -1;
+	}
+    }
+
   /* Switch the program space as well, if we can infer it from the now
      current thread.  Otherwise, it's up to the caller to select the
      space it wants.  */
@@ -1011,7 +1050,7 @@ switch_to_thread (ptid_t ptid)
 
   if (ptid_equal (ptid, inferior_ptid))
     return;
-
+  
   inferior_ptid = ptid;
   reinit_frame_cache ();
 
@@ -1024,6 +1063,20 @@ switch_to_thread (ptid_t ptid)
     stop_pc = regcache_read_pc (get_thread_regcache (ptid));
   else
     stop_pc = ~(CORE_ADDR) 0;
+
+  if (!ptid_equal (inferior_ptid, null_ptid))
+    {
+      tp = find_thread_ptid (inferior_ptid);
+      if (tp)
+        {
+	  if (is_stopped (inferior_ptid)
+	      && target_has_registers
+	      && target_has_stack
+	      && target_has_memory
+	      && tp->selected_frame_level != -1)
+	    restore_selected_frame (tp->selected_frame_id, tp->selected_frame_level);
+	}
+    }
 }
 
 void
