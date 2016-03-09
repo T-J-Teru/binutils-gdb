@@ -34,9 +34,23 @@
 #include "block.h"
 #include "dictionary.h"
 
+static int structure_depth = 0; /* Don't unroll structs too deep -
+                                   pointers to structs with pointers
+                                   can be infinitely recursive if we
+                                   follow pointers. */
+
+#define MAX_STRUCTURE_DEPTH 10  /* That should be deep enough! */
+
+struct f77_dim_pair {
+  int size;
+  int offset;
+};
+
+typedef struct f77_dim_pair f77_array_dim[MAX_FORTRAN_DIMS] ;
+
 extern void _initialize_f_valprint (void);
 static void info_common_command (char *, int);
-static void f77_create_arrayprint_offset_tbl (struct type *,
+static void f77_create_arrayprint_offset_tbl (f77_array_dim *, struct type *,
 					      struct ui_file *);
 static void f77_get_dynamic_length_of_aggregate (struct type *);
 
@@ -48,11 +62,11 @@ int f77_array_offset_tbl[MAX_FORTRAN_DIMS + 1][2];
 /* The following macro gives us the size of the nth dimension, Where 
    n is 1 based.  */
 
-#define F77_DIM_SIZE(n) (f77_array_offset_tbl[n][1])
+#define F77_DIM_SIZE(t, n) (((*t)[(n)]).size)
 
 /* The following gives us the offset for row n where n is 1-based.  */
 
-#define F77_DIM_OFFSET(n) (f77_array_offset_tbl[n][0])
+#define F77_DIM_OFFSET(t, n) (((*t)[(n)]).offset)
 
 int
 f77_get_lowerbound (struct type *type)
@@ -115,7 +129,7 @@ f77_get_dynamic_length_of_aggregate (struct type *type)
    type "type".  */
 
 static void
-f77_create_arrayprint_offset_tbl (struct type *type, struct ui_file *stream)
+f77_create_arrayprint_offset_tbl (f77_array_dim* tbl, struct type *type, struct ui_file *stream)
 {
   struct type *tmp_type;
   int eltlen;
@@ -129,8 +143,11 @@ f77_create_arrayprint_offset_tbl (struct type *type, struct ui_file *stream)
       upper = f77_get_upperbound (tmp_type);
       lower = f77_get_lowerbound (tmp_type);
 
-      F77_DIM_SIZE (ndimen) = upper - lower + 1;
+      F77_DIM_SIZE (tbl, ndimen) = upper - lower + 1;
 
+      if (F77_DIM_SIZE (tbl, ndimen) == 0) /* deal with assumed size array - print single element */
+          F77_DIM_SIZE (tbl, ndimen) = 1;
+      
       tmp_type = TYPE_TARGET_TYPE (tmp_type);
       ndimen++;
     }
@@ -142,11 +159,11 @@ f77_create_arrayprint_offset_tbl (struct type *type, struct ui_file *stream)
 
   ndimen--;
   eltlen = TYPE_LENGTH (tmp_type);
-  F77_DIM_OFFSET (ndimen) = eltlen;
+  F77_DIM_OFFSET (tbl, ndimen) = eltlen;
   while (--ndimen > 0)
     {
-      eltlen *= F77_DIM_SIZE (ndimen + 1);
-      F77_DIM_OFFSET (ndimen) = eltlen;
+      eltlen *= F77_DIM_SIZE (tbl, ndimen + 1);
+      F77_DIM_OFFSET (tbl, ndimen) = eltlen;
     }
 }
 
@@ -156,7 +173,7 @@ f77_create_arrayprint_offset_tbl (struct type *type, struct ui_file *stream)
    the superior.  Address == the address in the inferior.  */
 
 static void
-f77_print_array_1 (int nss, int ndimensions, struct type *type,
+f77_print_array_1 (f77_array_dim *tbl, int nss, int ndimensions, struct type *type,
 		   const gdb_byte *valaddr,
 		   int embedded_offset, CORE_ADDR address,
 		   struct ui_file *stream, int recurse,
@@ -169,36 +186,36 @@ f77_print_array_1 (int nss, int ndimensions, struct type *type,
   if (nss != ndimensions)
     {
       for (i = 0;
-	   (i < F77_DIM_SIZE (nss) && (*elts) < options->print_max);
+	   (i < F77_DIM_SIZE (tbl, nss) && (*elts) < options->print_max);
 	   i++)
 	{
 	  fprintf_filtered (stream, "( ");
-	  f77_print_array_1 (nss + 1, ndimensions, TYPE_TARGET_TYPE (type),
+	  f77_print_array_1 (tbl, nss + 1, ndimensions, TYPE_TARGET_TYPE (type),
 			     valaddr,
-			     embedded_offset + i * F77_DIM_OFFSET (nss),
+			     embedded_offset + i * F77_DIM_OFFSET (tbl, nss),
 			     address,
 			     stream, recurse, val, options, elts);
 	  fprintf_filtered (stream, ") ");
 	}
-      if (*elts >= options->print_max && i < F77_DIM_SIZE (nss)) 
+      if (*elts >= options->print_max && i < F77_DIM_SIZE (tbl, nss)) 
 	fprintf_filtered (stream, "...");
     }
   else
     {
-      for (i = 0; i < F77_DIM_SIZE (nss) && (*elts) < options->print_max;
+      for (i = 0; i < F77_DIM_SIZE (tbl, nss) && (*elts) < options->print_max;
 	   i++, (*elts)++)
 	{
 	  val_print (TYPE_TARGET_TYPE (type),
 		     valaddr,
-		     embedded_offset + i * F77_DIM_OFFSET (ndimensions),
+		     embedded_offset + i * F77_DIM_OFFSET (tbl, ndimensions),
 		     address, stream, recurse,
 		     val, options, current_language);
 
-	  if (i != (F77_DIM_SIZE (nss) - 1))
+	  if (i != (F77_DIM_SIZE (tbl, nss) - 1))
 	    fprintf_filtered (stream, ", ");
 
 	  if ((*elts == options->print_max - 1)
-	      && (i != (F77_DIM_SIZE (nss) - 1)))
+	      && (i != (F77_DIM_SIZE (tbl, nss) - 1)))
 	    fprintf_filtered (stream, "...");
 	}
     }
@@ -217,6 +234,21 @@ f77_print_array (struct type *type, const gdb_byte *valaddr,
 {
   int ndimensions;
   int elts = 0;
+  f77_array_dim tbl;
+
+  if (TYPE_LENGTH (type) == 0
+      && TYPE_TARGET_TYPE (type)
+      && value_address ((struct value *) val))
+    {
+      fprintf_unfiltered (stream, "<unknown bounds>");
+      return;
+    }
+  else if (VALUE_LVAL ((struct value *) val) == lval_memory
+      && value_address ((struct value *) val) == 0)
+    {
+      fprintf_filtered (stream, "<not allocated>");
+      return;
+    }
 
   ndimensions = calc_f77_array_dims (type);
 
@@ -229,10 +261,12 @@ Type node corrupt! F77 arrays cannot have %d subscripts (%d Max)"),
      offset table to get at the various row's elements.  The 
      offset table contains entries for both offset and subarray size.  */
 
-  f77_create_arrayprint_offset_tbl (type, stream);
+  f77_create_arrayprint_offset_tbl (&tbl, type, stream);
 
-  f77_print_array_1 (1, ndimensions, type, valaddr, embedded_offset,
+  fprintf_filtered (stream, "(");
+  f77_print_array_1 (&tbl, 1, ndimensions, type, valaddr, embedded_offset,
 		     address, stream, recurse, val, options, &elts);
+  fprintf_filtered (stream, ")");
 }
 
 
@@ -275,22 +309,24 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
       break;
 
     case TYPE_CODE_ARRAY:
-      if (TYPE_CODE (TYPE_TARGET_TYPE (type)) != TYPE_CODE_CHAR)
+      elttype = check_typedef (TYPE_TARGET_TYPE (type));
+      if (TYPE_LENGTH (elttype) == 1
+	  && (TYPE_CODE (elttype) == TYPE_CODE_INT
+	      || TYPE_CODE (elttype) == TYPE_CODE_CHAR)
+	  && (options->format == 0 || options->format == 's'))
 	{
-	  fprintf_filtered (stream, "(");
-	  f77_print_array (type, valaddr, embedded_offset,
-			   address, stream, recurse, original_value, options);
-	  fprintf_filtered (stream, ")");
-	}
-      else
-	{
-	  struct type *ch_type = TYPE_TARGET_TYPE (type);
+	  struct type *ch_type = builtin_type (gdbarch)->builtin_char;
 
 	  f77_get_dynamic_length_of_aggregate (type);
 	  LA_PRINT_STRING (stream, ch_type,
 			   valaddr + embedded_offset,
 			   TYPE_LENGTH (type) / TYPE_LENGTH (ch_type),
 			   NULL, 0, options);
+	}
+      else
+	{
+	  f77_print_array (type, valaddr, embedded_offset,
+			   address, stream, recurse, original_value, options);
 	}
       break;
 
@@ -306,6 +342,14 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 	  int want_space = 0;
 
 	  addr = unpack_pointer (type, valaddr + embedded_offset);
+
+	  if (addr < 65536)
+	    {
+	      /* Assume if the pointer is < 65536 it is probably not associated or associated with a bogus target.  */
+	      fprintf_unfiltered (stream, "<not associated>");
+	      break;
+	    }
+
 	  elttype = check_typedef (TYPE_TARGET_TYPE (type));
 
 	  if (TYPE_CODE (elttype) == TYPE_CODE_FUNC)
@@ -327,7 +371,8 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 	  /* For a pointer to char or unsigned char, also print the string
 	     pointed to, unless pointer is null.  */
 	  if (TYPE_LENGTH (elttype) == 1
-	      && TYPE_CODE (elttype) == TYPE_CODE_INT
+	      && (TYPE_CODE (elttype) == TYPE_CODE_INT
+		  || TYPE_CODE (elttype) == TYPE_CODE_CHAR)
 	      && (options->format == 0 || options->format == 's')
 	      && addr != 0)
 	    {
