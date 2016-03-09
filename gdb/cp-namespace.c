@@ -829,6 +829,9 @@ lookup_namespace_scope (const struct language_defn *langdef,
   the_namespace = alloca (scope_len + 1);
   strncpy (the_namespace, scope, scope_len);
   the_namespace[scope_len] = '\0';
+  /* #18135: Ignore constructors in implicit search for members / methods.  */
+  if (strcmp (namespace, name) == 0)
+    return NULL;
   return cp_lookup_symbol_in_namespace (the_namespace, name,
 					block, domain, 1);
 }
