@@ -328,7 +328,7 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
       if (TYPE_LENGTH (elttype) == 1
 	  && (TYPE_CODE (elttype) == TYPE_CODE_INT
 	      || TYPE_CODE (elttype) == TYPE_CODE_CHAR)
-	  && (options->format == 0 || options->format == 's'))
+	  && options->format == 's')
 	{
 	  struct type *ch_type = builtin_type (gdbarch)->builtin_char;
 
