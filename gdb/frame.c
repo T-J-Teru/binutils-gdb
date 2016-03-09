@@ -2230,7 +2230,11 @@ get_prev_frame (struct frame_info *this_frame)
 CORE_ADDR
 get_frame_pc (struct frame_info *frame)
 {
-  gdb_assert (frame->next != NULL);
+  if (frame->next == NULL)
+      {
+           warning("frame->next is NULL, gdb will try to carry on");
+           return 0;
+      }
   return frame_unwind_pc (frame->next);
 }
 
