@@ -6902,8 +6902,12 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
   if (built_actual_name != NULL)
     actual_name = built_actual_name;
 
-  if (actual_name == NULL)
+  if (actual_name == NULL) {
     actual_name = pdi->name;
+    if (actual_name == NULL)
+        return; 
+  }
+
 
   switch (pdi->tag)
     {
