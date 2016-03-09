@@ -1248,6 +1248,7 @@ When the function is done executing, GDB will silently stop."),
 	if (stack_temporaries)
 	  {
 	    retval = value_from_contents_and_address (values_type, NULL,
+						      TYPE_LENGTH (values_type),
 						      struct_addr);
 	    push_thread_stack_temporary (inferior_ptid, retval);
 	  }

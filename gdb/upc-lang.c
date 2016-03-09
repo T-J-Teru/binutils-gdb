@@ -321,10 +321,7 @@ upc_value_fetch_lazy (struct value *val)
   int status;
   if (!uda_calls.uda_calc_pts_index_add)
     error (_("UPC language support is not initialised"));
-  if (!value_repeated (val))
-    length = get_limited_length (check_typedef (value_enclosing_type (val)));
-  else
-    length = TYPE_LENGTH (check_typedef (value_enclosing_type (val)));
+  length = value_length (val);
   if (TYPE_CODE (type) == TYPE_CODE_ARRAY)
     {
       struct type *elem_type;

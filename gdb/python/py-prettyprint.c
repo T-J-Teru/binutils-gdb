@@ -735,6 +735,7 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
   if (valaddr)
     valaddr += embedded_offset;
   value = value_from_contents_and_address (type, valaddr,
+					   val ? value_length (val) : TYPE_LENGTH (type),
 					   address + embedded_offset);
 
   set_value_component_location (value, val);
