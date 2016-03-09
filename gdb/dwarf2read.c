@@ -12355,9 +12355,11 @@ read_namespace (struct die_info *die, struct dwarf2_cu *cu)
       if (is_anonymous)
 	{
 	  const char *previous_prefix = determine_prefix (die, cu);
+	  const char* type_name = TYPE_NAME (type);
 
-	  cp_add_using_directive (previous_prefix, TYPE_NAME (type), NULL,
-				  NULL, NULL, 0, &objfile->objfile_obstack);
+	  if (type_name)
+	    cp_add_using_directive (previous_prefix, type_name, NULL,
+				    NULL, NULL, 0, &objfile->objfile_obstack);
 	}
     }
 
@@ -12446,9 +12448,11 @@ read_module (struct die_info *die, struct dwarf2_cu *cu)
       if (is_anonymous)
 	{
 	  const char *previous_prefix = determine_prefix (die, cu);
+	  const char* type_name = TYPE_NAME (type);
 
-	  cp_add_using_directive (previous_prefix, TYPE_NAME (type), NULL,
-				  NULL, NULL, 0, &objfile->objfile_obstack);
+	  if (type_name)
+	    cp_add_using_directive (previous_prefix, type_name, NULL,
+				    NULL, NULL, 0, &objfile->objfile_obstack);
 	}
     }
 
