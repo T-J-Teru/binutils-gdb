@@ -11450,7 +11450,27 @@ read_func_scope (struct die_info *die, struct dwarf2_cu *cu)
      it.  */
   attr = dwarf2_attr (die, DW_AT_frame_base, cu);
   if (attr)
-    dwarf2_symbol_mark_computed (attr, newobj->name, cu, 1);
+    {
+      if (cu->producer && strstr (cu->producer, "DBG_GEN"))
+	{
+	  if (attr_form_is_block (attr) && DW_BLOCK (attr)->data[0] == DW_OP_reg30)  
+	    {
+	      /* Sun Forte is emitting reg 30 - harks back to SPARC days
+		 but really means DW_OP_reg5 like everyone else. */
+	      DW_BLOCK (attr)->data[0] = DW_OP_reg5;
+	    }
+	}
+      /* FIXME: cagney/2004-01-26: The DW_AT_frame_base's location
+       expression is being recorded directly in the function's symbol
+       and not in a separate frame-base object.  I guess this hack is
+       to avoid adding some sort of frame-base adjunct/annex to the
+       function's symbol :-(.  The problem with doing this is that it
+       results in a function symbol with a location expression that
+       has nothing to do with the location of the function, ouch!  The
+       relationship should be: a function's symbol has-a frame base; a
+       frame-base has-a location expression.  */
+      dwarf2_symbol_mark_computed (attr, newobj->name, cu, 1);
+    }
 
   cu->list_in_scope = &local_symbols;
 
