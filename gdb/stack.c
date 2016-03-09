@@ -654,38 +654,48 @@ print_frame_args (struct symbol *func, struct frame_info *frame,
 	    ui_out_text (uiout, ", ");
 	  ui_out_wrap_hint (uiout, "    ");
 
-	  type = SYMBOL_TYPE (sym);
-	  if (!print_args
-	      || (summary && (TYPE_CODE (type) == TYPE_CODE_ARRAY
-			      || (TYPE_CODE (type) == TYPE_CODE_PTR
-				  && ((language_mode == language_mode_auto
-					&& SYMBOL_LANGUAGE (sym) == language_fortran) ||
-				      (language_mode != language_mode_auto
-					&& current_language->la_language == language_fortran))))))
+	  {
+	    volatile struct gdb_exception except;
+	    TRY_CATCH (except, RETURN_MASK_ERROR)
 	    {
-	      memset (&arg, 0, sizeof (arg));
-	      arg.sym = sym;
-	      arg.entry_kind = print_entry_values_no;
-	      memset (&entryarg, 0, sizeof (entryarg));
-	      entryarg.sym = sym;
-	      entryarg.entry_kind = print_entry_values_no;
-	    }
-	  else
-	    read_frame_arg (sym, frame, &arg, &entryarg);
-
-	  if (arg.entry_kind != print_entry_values_only)
-	    print_frame_arg (&arg);
-
-	  if (entryarg.entry_kind != print_entry_values_no)
-	    {
-	      if (arg.entry_kind != print_entry_values_only)
+	      type = SYMBOL_TYPE (sym);
+	      if (!print_args
+		  || (summary && (TYPE_CODE (type) == TYPE_CODE_ARRAY
+				  || (TYPE_CODE (type) == TYPE_CODE_PTR
+				      && ((language_mode == language_mode_auto
+					    && SYMBOL_LANGUAGE (sym) == language_fortran) ||
+					  (language_mode != language_mode_auto
+					    && current_language->la_language == language_fortran))))))
 		{
-		  ui_out_text (uiout, ", ");
-		  ui_out_wrap_hint (uiout, "    ");
+		  memset (&arg, 0, sizeof (arg));
+		  arg.sym = sym;
+		  arg.entry_kind = print_entry_values_no;
+		  memset (&entryarg, 0, sizeof (entryarg));
+		  entryarg.sym = sym;
+		  entryarg.entry_kind = print_entry_values_no;
 		}
+	      else
+		read_frame_arg (sym, frame, &arg, &entryarg);
 
-	      print_frame_arg (&entryarg);
+	      if (arg.entry_kind != print_entry_values_only)
+		print_frame_arg (&arg);
+
+	      if (entryarg.entry_kind != print_entry_values_no)
+		{
+		  if (arg.entry_kind != print_entry_values_only)
+		    {
+		      ui_out_text (uiout, ", ");
+		      ui_out_wrap_hint (uiout, "    ");
+		    }
+
+		  print_frame_arg (&entryarg);
+		}
 	    }
+	    if (except.reason < 0)
+	      fprintf_filtered(stream, "<error reading variable %s (%s)>",
+			      SYMBOL_PRINT_NAME (sym),
+			      except.message);
+	  }
 
 	  xfree (arg.error);
 	  xfree (entryarg.error);
