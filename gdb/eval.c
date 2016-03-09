@@ -1811,10 +1811,7 @@ evaluate_subexp_standard (struct type *expect_type,
       switch (code)
 	{
 	case TYPE_CODE_ARRAY:
-	  if (exp->elts[*pos].opcode == OP_F90_RANGE)
-	    return value_f90_subarray (arg1, exp, pos, noside);
-	  else
-	    goto multi_f77_subscript;
+	  goto multi_f77_subscript;
 
 	case TYPE_CODE_STRING:
 	  if (exp->elts[*pos].opcode == OP_F90_RANGE)
@@ -2338,9 +2335,18 @@ evaluate_subexp_standard (struct type *expect_type,
 
     multi_f77_subscript:
       {
-	LONGEST subscript_array[MAX_FORTRAN_DIMS] = {0};
+	enum f90_range_type range_types[MAX_FORTRAN_DIMS] = {NONE_BOUND_DEFAULT};
+	LONGEST low_bounds[MAX_FORTRAN_DIMS] = {0};
+	LONGEST high_bounds[MAX_FORTRAN_DIMS] = {0};
 	int ndimensions = 1, i;
 	struct value *array = arg1;
+	int seen_slice = 0, is_subscript = 1;
+	struct type *element_type;
+	struct type *range_type;
+	struct type *new_range_types[MAX_FORTRAN_DIMS];
+	LONGEST offset = 0;
+	LONGEST oldlowerbound, lowerbound, upperbound;	
+	const gdb_byte *valaddr = NULL;
 
         if (VALUE_LVAL (array) == lval_memory
 	    && !value_address (array))
@@ -2362,23 +2368,72 @@ evaluate_subexp_standard (struct type *expect_type,
 	/* Take array indices left to right.  */
 	for (i = 0; i < nargs; i++)
 	  {
-	    /* Evaluate each subscript; it must be a legal integer in F77.  */
-	    arg2 = evaluate_subexp_with_coercion (exp, pos, noside);
-
-	    /* Fill in the subscript array.  */
-
-	    subscript_array[i] = value_as_long (arg2);
+	    /* Evaluate each subscript, It must be a legal integer in F77 */
+	    if (exp->elts[*pos].opcode == OP_F90_RANGE)
+	      {
+		int pc = (*pos) + 1;
+		range_types[i] = longest_to_int (exp->elts[pc].longconst); 
+		*pos += 3;
+		if (range_types[i] != LOW_BOUND_DEFAULT && range_types[i] != BOTH_BOUND_DEFAULT)
+		  low_bounds[i] = value_as_long (evaluate_subexp (NULL_TYPE, exp, pos, noside));
+		if (range_types[i] != HIGH_BOUND_DEFAULT && range_types[i] != BOTH_BOUND_DEFAULT)
+		  high_bounds[i] = value_as_long (evaluate_subexp (NULL_TYPE, exp, pos, noside));
+		if (range_types[i] == NONE_BOUND_DEFAULT && low_bounds[i] > high_bounds[i])
+		  error(_("Upper bound must be less than lower bound"));
+		is_subscript = 0;
+	      }
+	    else
+	      {
+		range_types[i] = NONE_BOUND_DEFAULT;
+		low_bounds[i] = high_bounds[i] = value_as_long (evaluate_subexp_with_coercion (exp, pos, noside));
+	      }
+	      if (seen_slice && (range_types[i] != NONE_BOUND_DEFAULT || low_bounds[i] != high_bounds[i]))
+	        error(_("GDB does not (yet) support this kind of array slice"));
+	      if (range_types[i] != BOTH_BOUND_DEFAULT)
+	        seen_slice = 1;
 	  }
 
-	/* Internal type of array is arranged right to left.  */
 	for (i = nargs; i > 0; i--)
 	  {
-	    struct type *array_type = check_typedef (value_type (array));
-	    LONGEST index = subscript_array[i - 1];
-
-	    array = value_subscripted_rvalue (array, index,
-					      f77_get_lowerbound (array_type));
+	    oldlowerbound = lowerbound = f77_get_lowerbound (type);
+	    upperbound = f77_get_upperbound (type);
+	    if (range_types[i - 1] != LOW_BOUND_DEFAULT && range_types[i - 1] != BOTH_BOUND_DEFAULT)
+	      lowerbound = low_bounds[i - 1];
+	    if (range_types[i - 1] != HIGH_BOUND_DEFAULT && range_types[i - 1] != BOTH_BOUND_DEFAULT)
+	      upperbound = high_bounds[i - 1];
+	    if (!is_subscript)
+	      {
+		element_type = TYPE_TARGET_TYPE (type);
+		range_type = TYPE_INDEX_TYPE (type);
+		new_range_types[i - 1] = create_range_type ((struct type *) NULL,
+						            TYPE_TARGET_TYPE (range_type),
+						            lowerbound,
+						            upperbound);
+	      }
+	    type = check_typedef (TYPE_TARGET_TYPE (type));
+	    offset += (lowerbound - oldlowerbound) * TYPE_LENGTH (type);
 	  }
+	if (!is_subscript)
+	  {
+	    for (i = 0; i < nargs; i++)
+	      type = create_array_type ((struct type *) NULL, 
+					type,
+					new_range_types[i]);
+	  }
+	if (VALUE_LVAL (array) == lval_memory)
+	  {
+	    array = value_from_contents_and_address (type, NULL,
+						    get_limited_length (type),
+						    value_address (arg1) + offset);
+	  }
+	else if (!value_lazy (array))
+	  {
+	    valaddr = value_contents (array) + offset;
+	    array = allocate_value (type);
+	    memcpy (value_contents_raw (array), valaddr, value_length (array));
+	  }
+	else
+	  error (_("cannot subscript arrays that are not in memory"));
 
 	return array;
       }
