@@ -15570,7 +15570,7 @@ read_full_die_1 (const struct die_reader_specs *reader,
 {
   unsigned int abbrev_number, bytes_read, i;
   sect_offset offset;
-  struct abbrev_info *abbrev;
+  struct abbrev_info *abbrev = NULL;
   struct die_info *die;
   struct dwarf2_cu *cu = reader->cu;
   bfd *abfd = reader->abfd;
@@ -15578,18 +15578,18 @@ read_full_die_1 (const struct die_reader_specs *reader,
   offset.sect_off = info_ptr - reader->buffer;
   abbrev_number = read_unsigned_leb128 (abfd, info_ptr, &bytes_read);
   info_ptr += bytes_read;
-  if (!abbrev_number)
+  if (abbrev_number)
+    abbrev = abbrev_table_lookup_abbrev (cu->abbrev_table, abbrev_number);
+  if (!abbrev_number || !abbrev)
     {
+      if (abbrev_number)
+	warning (_("Dwarf Error: could not find abbrev number %d [in module %s]"),
+		 abbrev_number,
+		 bfd_get_filename (abfd));
       *diep = NULL;
       *has_children = 0;
       return info_ptr;
     }
-
-  abbrev = abbrev_table_lookup_abbrev (cu->abbrev_table, abbrev_number);
-  if (!abbrev)
-    error (_("Dwarf Error: could not find abbrev number %d [in module %s]"),
-	   abbrev_number,
-	   bfd_get_filename (abfd));
 
   die = dwarf_alloc_die (cu, abbrev->num_attrs + num_extra_attrs);
   die->offset = offset;
