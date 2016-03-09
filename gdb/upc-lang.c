@@ -67,6 +67,8 @@ extern int upc_threads;
 #define LONGEST_FMT "ll"
 #endif
 
+#define UPC_MAX_BUFFER_SIZE 1000 /* encoded size must be < sizeof(uda_string_t) */
+
 /* If the main procedure is written in UPC, then return its name.
    The result is good until the next call.  Return NULL if the main
    procedure doesn't appear to be in UPC.  */
@@ -313,20 +315,119 @@ upc_value_fetch_lazy (struct value *val)
     error (_("UPC language support is not initialised"));  
   if (TYPE_CODE (type) == TYPE_CODE_ARRAY)
     {
-      struct type *elem_type = check_typedef (TYPE_TARGET_TYPE (type));
-      unsigned elem_size = TYPE_LENGTH (elem_type);
-      unsigned n_elems = length / elem_size;
-      int i;
-      for (i = 0; i < n_elems; ++i)
-        {
-          gdb_upc_pts_t elem_pts;
-          status = (*uda_calls.uda_calc_pts_index_add) (&pts, i, elem_size, block_size, &elem_pts);
-	  if (status != uda_ok)
-	    error (_("upc_value_fetch_lazy: uda_calc_pts_index_add error"));
-	  upc_read_shared_mem (elem_pts.addrfield, elem_pts.thread,
-			       value_contents_all_raw (val) + i * elem_size,
-			       elem_size);
+      struct type *elem_type;
+      unsigned elem_size;
+      unsigned n_elems;
+      gdb_byte *buf = NULL;
+      unsigned buf_size, buf_elems, thread_elems, chunk_elems, elems_in_block;
+      unsigned thread, buf_index, thread_index, value_index;
+      gdb_upc_pts_t elem_pts, end_pts, thread_start_pts, thread_end_pts;
+      int direct, indefinite;
+      int num_threads = 0;      
+      struct cleanup *my_cleanups = NULL;
+      elem_type = type;
+      while (TYPE_CODE (elem_type) == TYPE_CODE_ARRAY)
+	elem_type = check_typedef (TYPE_TARGET_TYPE (elem_type));
+      elem_size = TYPE_LENGTH (elem_type);
+      n_elems = length / elem_size;
+      if (elem_size < UPC_MAX_BUFFER_SIZE)
+	{
+	  buf_elems = UPC_MAX_BUFFER_SIZE / elem_size;
+	  buf_size = buf_elems * elem_size;
+	  buf = xmalloc (buf_size);
+	  my_cleanups = make_cleanup (xfree, buf);
 	}
+      else
+	{
+	  buf_elems = 1;
+	  buf_size = elem_size;
+	}
+      num_threads = upc_thread_count ();
+      if (num_threads <= 0)
+	error (_("upc_value_fetch_lazy: no UPC threads."));
+      indefinite = (block_size == 0);
+      if (block_size == 0)
+        {
+	  end_pts.phase = 0;
+	  end_pts.thread = pts.thread;
+	  end_pts.addrfield = pts.addrfield + n_elems * elem_size;
+	}
+      else
+        {
+          uda_tint_t t1, t2, tincr, phase_diff;
+          t1 = pts.phase + n_elems;
+          tincr = t1 / block_size;
+          phase_diff = (t1 % block_size) - pts.phase;
+          end_pts.phase = pts.phase + phase_diff;
+          t2 = pts.thread + tincr;
+          if (t2 >= 0)
+            end_pts.thread = t2 % num_threads;
+          else
+            end_pts.thread = num_threads + t2 % num_threads;
+          end_pts.addrfield = pts.addrfield +
+             (phase_diff + ((t2 / num_threads) * block_size))
+                              * elem_size;
+	}      
+      for (thread = 0; thread < (indefinite?1:num_threads); thread++)
+	{
+	  thread_start_pts = pts;
+	  thread_start_pts.thread = (thread_start_pts.thread + thread) % num_threads;
+	  if (thread_start_pts.thread != pts.thread) {
+	      thread_start_pts.addrfield -= thread_start_pts.phase * elem_size;
+	      thread_start_pts.phase = 0;
+	  }
+	  if (thread_start_pts.thread < pts.thread)
+	      thread_start_pts.addrfield += block_size * elem_size;
+
+	  thread_end_pts = end_pts;
+	  thread_end_pts.thread = thread_start_pts.thread;
+	  if (thread_end_pts.thread != end_pts.thread) {
+	      thread_end_pts.addrfield -= thread_end_pts.phase * elem_size;
+	      thread_end_pts.phase = 0;
+	  }
+	  if (thread_end_pts.thread < end_pts.thread)
+	      thread_end_pts.addrfield += block_size * elem_size;
+
+	  if (thread_end_pts.addrfield < thread_start_pts.addrfield)
+	    break;
+
+	  thread_elems = (thread_end_pts.addrfield - thread_start_pts.addrfield) / elem_size;
+
+	  elem_pts = thread_start_pts;
+
+	  for (thread_index = 0; thread_index < thread_elems; thread_index += buf_elems)
+	    {
+	      chunk_elems = min (thread_elems - thread_index, buf_elems);
+	      direct = indefinite || elem_pts.phase + chunk_elems <= block_size;
+	      if (direct)
+		{
+		  value_index = (indefinite?1:num_threads) * (((LONGEST)elem_pts.addrfield - (LONGEST)pts.addrfield) / elem_size - elem_pts.phase + pts.phase) + block_size * (elem_pts.thread - pts.thread) + elem_pts.phase - pts.phase;
+		  upc_read_shared_mem (elem_pts.addrfield, elem_pts.thread,
+				       value_contents_all_raw (val) + value_index * elem_size,
+				       chunk_elems * elem_size);
+		  elem_pts.addrfield += chunk_elems * elem_size;
+		  if (block_size > 0)
+		    elem_pts.phase = (elem_pts.phase + chunk_elems) % block_size;
+		}
+	      else
+	        {
+		  upc_read_shared_mem (elem_pts.addrfield, elem_pts.thread,
+				       buf, chunk_elems * elem_size);
+		  for (buf_index = 0; buf_index < chunk_elems; )
+		    {
+		      value_index = (indefinite?1:num_threads) * (((LONGEST)elem_pts.addrfield - (LONGEST)pts.addrfield) / elem_size - elem_pts.phase + pts.phase) + block_size * (elem_pts.thread - pts.thread) + elem_pts.phase - pts.phase;
+		      elems_in_block = min (chunk_elems - buf_index, block_size - elem_pts.phase);
+		      memcpy (value_contents_all_raw (val) + value_index * elem_size, buf + buf_index * elem_size, elems_in_block * elem_size);
+		      buf_index += elems_in_block;
+		      elem_pts.addrfield += elems_in_block * elem_size;
+		      if (block_size > 0)
+		        elem_pts.phase = (elem_pts.phase + elems_in_block) % block_size;
+		    }
+		}
+	    }
+	}
+      if (my_cleanups)
+	do_cleanups (my_cleanups);
     }
   else
     {
