@@ -685,8 +685,9 @@ bad CFI data; mismatched DW_CFA_restore_state at %s"),
 	      break;
 
 	    default:
-	      internal_error (__FILE__, __LINE__,
-			      _("Unknown CFI encountered."));
+ 	      warning (_("Unknown CFI encountered."));
+ 	      insn_ptr = insn_end;
+ 	      break;
 	    }
 	}
     }
