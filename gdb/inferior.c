@@ -157,7 +157,8 @@ add_inferior (int pid)
   struct inferior *inf = add_inferior_silent (pid);
 
   if (print_inferior_events)
-    printf_unfiltered (_("[New inferior %d]\n"), pid);
+    printf_unfiltered (_("[New inferior %d [%s]]\n"), inf->num,
+		       target_pid_to_str (pid_to_ptid (inf->pid)));
 
   return inf;
 }
@@ -221,11 +222,13 @@ void
 delete_inferior (int pid)
 {
   struct inferior *inf = find_inferior_pid (pid);
-
+  int num = inf->num;
+  
   delete_inferior_1 (inf, 0);
 
   if (print_inferior_events)
-    printf_unfiltered (_("[Inferior %d exited]\n"), pid);
+    printf_unfiltered (_("[Inferior %d [%s] exited]\n"), num,
+		       target_pid_to_str (pid_to_ptid (pid)));
 }
 
 void
@@ -282,11 +285,13 @@ void
 exit_inferior (int pid)
 {
   struct inferior *inf = find_inferior_pid (pid);
+  int num = inf->num;
 
   exit_inferior_1 (inf, 0);
 
   if (print_inferior_events)
-    printf_unfiltered (_("[Inferior %d exited]\n"), pid);
+    printf_unfiltered (_("[Inferior %d [%s] exited]\n"), num,
+		       target_pid_to_str (pid_to_ptid (pid)));
 }
 
 void
@@ -309,11 +314,13 @@ void
 detach_inferior (int pid)
 {
   struct inferior *inf = find_inferior_pid (pid);
+  int num = inf->num;
 
   exit_inferior_1 (inf, 0);
 
   if (print_inferior_events)
-    printf_unfiltered (_("[Inferior %d detached]\n"), pid);
+    printf_unfiltered (_("[Inferior %d [%s] detached]\n"), num,
+		       target_pid_to_str (pid_to_ptid (pid)));
 }
 
 void
@@ -324,6 +331,10 @@ inferior_appeared (struct inferior *inf, int pid)
   inf->exit_code = 0;
 
   observer_notify_inferior_appeared (inf);
+
+  if (print_inferior_events)
+    printf_unfiltered (_("[Inferior %d [%s]]\n"), inf->num,
+		       target_pid_to_str (pid_to_ptid (pid)));
 }
 
 void
