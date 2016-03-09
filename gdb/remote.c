@@ -343,6 +343,12 @@ struct remote_state
   /* The status of the stub support for the various vCont actions.  */
   struct vCont_action_support supports_vCont;
 
+  /* True if the stub reports support for non-stop mode.  */
+  int non_stop_aware;
+
+  /* True if the stub reports support for inferior-stop mode.  */
+  int inferior_stop_aware;
+
   /* Nonzero if the user has pressed Ctrl-C, but the target hasn't
      responded to that.  */
   int ctrlc_pending_p;
@@ -3667,6 +3673,18 @@ remote_start_remote (int from_tty, struct target_ops *target, int extended_p)
       if (strcmp (rs->buf, "OK") != 0)
 	error (_("Remote refused setting non-stop mode with: %s"), rs->buf);
 
+      if (inferior_stop)
+        {
+	  if (!rs->inferior_stop_aware)
+	    error (_("Inferior-stop mode requested, but remote does not support inferior-stop"));
+      
+	  putpkt ("QInferiorStop:1");
+	  getpkt (&rs->buf, &rs->buf_size, 0);
+
+	  if (strcmp (rs->buf, "OK") != 0)
+	    error ("Remote refused setting inferior-stop mode with: %s", rs->buf);	  
+	}
+
       /* Find about threads and processes the stub is already
 	 controlling.  We default to adding them in the running state.
 	 The '?' query below will then tell us about which threads are
@@ -4121,6 +4139,15 @@ remote_packet_size (const struct protocol_feature *feature,
   rs->explicit_packet_size = packet_size;
 }
 
+static void
+remote_inferior_stop_feature (const struct protocol_feature *feature,
+			      enum packet_support support, const char *value)
+{
+  struct remote_state *rs = get_remote_state ();
+
+  rs->inferior_stop_aware = (support == PACKET_ENABLE);
+}
+
 static const struct protocol_feature remote_protocol_features[] = {
   { "PacketSize", PACKET_DISABLE, remote_packet_size, -1 },
   { "qXfer:auxv:read", PACKET_DISABLE, remote_supported_packet,
@@ -4156,6 +4183,7 @@ static const struct protocol_feature remote_protocol_features[] = {
   { "multiprocess", PACKET_DISABLE, remote_supported_packet,
     PACKET_multiprocess_feature },
   { "QNonStop", PACKET_DISABLE, remote_supported_packet, PACKET_QNonStop },
+  { "QInferiorStop", PACKET_DISABLE, remote_inferior_stop_feature, -1 },
   { "qXfer:siginfo:read", PACKET_DISABLE, remote_supported_packet,
     PACKET_qXfer_siginfo_read },
   { "qXfer:siginfo:write", PACKET_DISABLE, remote_supported_packet,
@@ -4508,6 +4536,8 @@ remote_open_1 (const char *name, int from_tty,
   rs->explicit_packet_size = 0;
   rs->noack_mode = 0;
   rs->extended = extended_p;
+  rs->non_stop_aware = 0;
+  rs->inferior_stop_aware = 0;
   rs->waiting_for_stop_reply = 0;
   rs->ctrlc_pending_p = 0;
 
@@ -4800,6 +4830,12 @@ extended_remote_attach (struct target_ops *target, const char *args,
 	inferior_ptid = thread->ptid;
       else
 	inferior_ptid = pid_to_ptid (pid);
+      
+      if (inferior_stop)
+	{
+	  set_executing (inferior_ptid, 1);
+	  set_running (inferior_ptid, 1);
+	}
 
       /* Invalidate our notion of the remote current thread.  */
       record_currthread (rs, minus_one_ptid);

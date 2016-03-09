@@ -214,6 +214,9 @@ show_non_stop (struct ui_file *file, int from_tty,
    non-stop, in which all GDB operations that might affect the
    target's execution have been disabled.  */
 
+static int non_stop_1 = 0;
+static int inferior_stop_1 = 0;
+
 int observer_mode = 0;
 static int observer_mode_1 = 0;
 
@@ -370,6 +373,17 @@ static int stop_print_frame;
    information is returned by get_last_target_status().  */
 static ptid_t target_last_wait_ptid;
 static struct target_waitstatus target_last_waitstatus;
+
+/* Per-inferior data key.  */
+static const struct inferior_data *infrun_inferior_data;
+
+struct target_status
+{
+  ptid_t wait_ptid;
+  struct target_waitstatus waitstatus;
+};
+
+static void set_last_target_status (ptid_t ptid,  struct target_waitstatus *status);
 
 static void context_switch (ptid_t ptid);
 
@@ -662,7 +676,7 @@ follow_fork (void)
   struct frame_id step_frame_id = { 0 };
   struct interp *command_interp = NULL;
 
-  if (!non_stop)
+  if (!non_stop || inferior_stop)
     {
       ptid_t wait_ptid;
       struct target_waitstatus wait_status;
@@ -1591,7 +1605,8 @@ show_can_use_displaced_stepping (struct ui_file *file, int from_tty,
 static int
 use_displaced_stepping (struct gdbarch *gdbarch)
 {
-  return (((can_use_displaced_stepping == AUTO_BOOLEAN_AUTO && non_stop)
+  return (((can_use_displaced_stepping == AUTO_BOOLEAN_AUTO
+	    && non_stop && !inferior_stop)
 	   || can_use_displaced_stepping == AUTO_BOOLEAN_TRUE)
 	  && gdbarch_displaced_step_copy_insn_p (gdbarch)
 	  && find_record_target () == NULL);
@@ -2032,7 +2047,14 @@ user_visible_resume_ptid (int step)
 {
   ptid_t resume_ptid;
 
-  if (non_stop)
+  /* Maybe resume a single thread after all.  */
+  if (inferior_stop)
+    {
+      /* With inferior-stop mode on, inferiors are always handled
+	 individually.  */
+      resume_ptid = pid_to_ptid (ptid_get_pid (inferior_ptid));
+    }
+  else if (non_stop)
     {
       /* With non-stop mode on, threads are always handled
 	 individually.  */
@@ -2495,9 +2517,18 @@ clear_proceed_status (int step)
 
       if (non_stop)
 	{
-	  /* If in non-stop mode, only delete the per-thread status of
-	     the current thread.  */
-	  clear_proceed_status_thread (inferior_thread ());
+	  if (inferior_stop)
+	    {
+	      /* If in inferior-stop mode, only delete the per-thread
+		status of the threads in the current inferior.  */
+              iterate_over_inferior_threads (ptid_get_pid (inferior_ptid), clear_proceed_status_callback, NULL);
+	    }
+	  else
+	    {
+	      /* If in non-stop mode, only delete the per-thread status of
+		the current thread.  */
+	      clear_proceed_status_thread (inferior_thread ());
+	    }
 	}
 
       inferior = current_inferior ();
@@ -2554,7 +2585,7 @@ find_thread_needs_step_over (struct thread_info *except)
   struct thread_info *tp, *current;
 
   /* With non-stop mode on, threads are always handled individually.  */
-  gdb_assert (! non_stop);
+  gdb_assert (! non_stop || inferior_stop);
 
   current = inferior_thread ();
 
@@ -2833,7 +2864,7 @@ init_wait_for_inferior (void)
 
   clear_proceed_status (0);
 
-  target_last_wait_ptid = minus_one_ptid;
+  set_last_target_status (minus_one_ptid, NULL);
 
   previous_inferior_ptid = inferior_ptid;
 
@@ -2988,8 +3019,20 @@ infrun_thread_stop_requested (ptid_t ptid)
 static void
 infrun_thread_thread_exit (struct thread_info *tp, int silent)
 {
+  struct target_status *info;
+  struct inferior *inf;
   if (ptid_equal (target_last_wait_ptid, tp->ptid))
-    nullify_last_target_wait_ptid ();
+    target_last_wait_ptid = minus_one_ptid;
+  if (!have_inferiors())
+      return;
+  inf = find_inferior_pid (ptid_get_pid (tp->ptid));
+  if (inf == NULL)
+      return;
+  info = inferior_data (inf, infrun_inferior_data);
+  if (info == NULL)
+    return;
+  if (ptid_equal (info->wait_ptid, tp->ptid))
+    info->wait_ptid = minus_one_ptid;
 }
 
 /* Delete the step resume, single-step and longjmp/exception resume
@@ -3016,7 +3059,14 @@ for_each_just_stopped_thread (for_each_just_stopped_thread_callback_func func)
   if (!target_has_execution || ptid_equal (inferior_ptid, null_ptid))
     return;
 
-  if (non_stop)
+  if (inferior_stop)
+    {
+        /* If in non-stop mode, only delete the step-resume or
+           longjmp-resume breakpoint of the inferior that just stopped
+           stepping.  */
+      iterate_over_inferior_threads (ptid_get_pid (inferior_ptid), delete_step_resume_breakpoint_callback, NULL);
+    }
+  else if (non_stop)
     {
       /* If in non-stop mode, only the current thread stopped.  */
       func (inferior_thread ());
@@ -3406,13 +3456,13 @@ fetch_inferior_event (void *client_data)
      debugging.  If we're looking at traceframes while the target is
      running, we're going to need to get back to that mode after
      handling the event.  */
-  if (non_stop)
+  if (non_stop && !inferior_stop)
     {
       make_cleanup_restore_current_traceframe ();
       set_current_traceframe (-1);
     }
 
-  if (non_stop)
+  if (non_stop && !inferior_stop)
     /* In non-stop mode, the user/frontend should not notice a thread
        switch due to internal events.  Make sure we reverse to the
        user selected thread and frame after handling the event and
@@ -3443,6 +3493,11 @@ fetch_inferior_event (void *client_data)
      state.  */
   if (!non_stop)
     ts_old_chain = make_cleanup (finish_thread_state_cleanup, &minus_one_ptid);
+  else if (inferior_stop)
+    {
+      ptid_t pid_ptid = pid_to_ptid (ptid_get_pid (ecs->ptid));
+      ts_old_chain = make_cleanup (finish_thread_state_cleanup, &pid_ptid);
+    }
   else
     ts_old_chain = make_cleanup (finish_thread_state_cleanup, &ecs->ptid);
 
@@ -3540,14 +3595,50 @@ set_last_target_status (ptid_t ptid, struct target_waitstatus status)
 void
 get_last_target_status (ptid_t *ptidp, struct target_waitstatus *status)
 {
-  *ptidp = target_last_wait_ptid;
-  *status = target_last_waitstatus;
+  struct target_status *info;
+  if (have_inferiors()
+      && (info = inferior_data (current_inferior (), infrun_inferior_data)))
+    {
+      if (ptidp)
+        *ptidp = info->wait_ptid;
+      if (status)
+        *status = info->waitstatus;
+    }
+  else
+    {
+      if (ptidp)
+        *ptidp = target_last_wait_ptid;
+      if (status)
+        *status = target_last_waitstatus;
+    }
+}
+
+static void
+set_last_target_status (ptid_t ptid,  struct target_waitstatus *status)
+{
+  struct target_status *info;
+  struct inferior *inf;
+  target_last_wait_ptid = ptid;
+  if (status)
+    target_last_waitstatus = *status;
+  inf = find_inferior_pid (ptid_get_pid (ptid));
+  if (inf == NULL)
+    return;
+  info = inferior_data (inf, infrun_inferior_data);
+  if (info == NULL)
+    {
+      info = XZALLOC (struct target_status);
+      set_inferior_data (inf, infrun_inferior_data, info);
+    }
+  info->wait_ptid = ptid;
+  if (status)
+    info->waitstatus = *status;
 }
 
 void
 nullify_last_target_wait_ptid (void)
 {
-  target_last_wait_ptid = minus_one_ptid;
+  set_last_target_status (minus_one_ptid, NULL);
 }
 
 /* Switch thread contexts.  */
@@ -3734,6 +3825,8 @@ handle_syscall_event (struct execution_control_state *ecs)
 {
   struct regcache *regcache;
   int syscall_number;
+  struct target_status *info;
+  struct inferior *inf;
 
   if (!ptid_equal (ecs->ptid, inferior_ptid))
     context_switch (ecs->ptid);
@@ -3851,7 +3944,7 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
     }
 
   /* Cache the last pid/waitstatus.  */
-  set_last_target_status (ecs->ptid, ecs->ws);
+  set_last_target_status (ecs->ptid, &ecs->ws);
 
   /* Always clear state belonging to the previous time we stopped.  */
   stop_stack_dummy = STOP_NONE;
@@ -3926,7 +4019,12 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
     set_executing (minus_one_ptid, 0);
   else if (ecs->ws.kind != TARGET_WAITKIND_SIGNALLED
 	   && ecs->ws.kind != TARGET_WAITKIND_EXITED)
-    set_executing (ecs->ptid, 0);
+    {
+      if (inferior_stop)
+	set_executing (pid_to_ptid (ptid_get_pid (ecs->ptid)), 0);
+      else
+	set_executing (ecs->ptid, 0);
+    }
 
   switch (ecs->ws.kind)
     {
@@ -4454,6 +4552,7 @@ handle_signal_stop (struct execution_control_state *ecs)
      they weren't stopped implicitly, then the stub will report a
      GDB_SIGNAL_0, meaning: stopped for no particular reason
      other than GDB's request.  */
+
   if (stop_soon == STOP_QUIETLY_NO_SIGSTOP
       && (ecs->event_thread->suspend.stop_signal == GDB_SIGNAL_STOP
 	  || ecs->event_thread->suspend.stop_signal == GDB_SIGNAL_TRAP
@@ -4566,6 +4665,7 @@ handle_signal_stop (struct execution_control_state *ecs)
 	 step past it.  */
       ecs->event_thread->stepping_over_watchpoint = 1;
       keep_going (ecs);
+
       return;
     }
 
@@ -6739,7 +6839,15 @@ normal_stop (void)
   else if (last.kind != TARGET_WAITKIND_SIGNALLED
 	   && last.kind != TARGET_WAITKIND_EXITED
 	   && last.kind != TARGET_WAITKIND_NO_RESUMED)
-    make_cleanup (finish_thread_state_cleanup, &inferior_ptid);
+    {
+      if (inferior_stop)
+	{
+	  ptid_t pid_ptid = pid_to_ptid (ptid_get_pid (inferior_ptid));
+	  make_cleanup (finish_thread_state_cleanup, &pid_ptid);
+	}
+      else
+	make_cleanup (finish_thread_state_cleanup, &inferior_ptid);
+    }
 
   /* As we're presenting a stop, and potentially removing breakpoints,
      update the thread list so we can tell whether there are threads
@@ -6795,7 +6903,12 @@ normal_stop (void)
   /* Note: this depends on the update_thread_list call above.  */
   if (!breakpoints_should_be_inserted_now () && target_has_execution)
     {
-      if (remove_breakpoints ())
+      int remove_status;
+      if (inferior_stop)
+        remove_status = remove_breakpoints_pid (ptid_get_pid (inferior_ptid));
+      else
+        remove_status = remove_breakpoints ();
+      if (remove_status)
 	{
 	  target_terminal_ours_for_output ();
 	  printf_filtered (_("Cannot remove breakpoints because "
@@ -7823,6 +7936,32 @@ static const struct internalvar_funcs siginfo_funcs =
   NULL
 };
 
+/* User interface for inferior-stop mode.  */
+
+int inferior_stop = 0;
+
+static void
+set_inferior_stop (char *args, int from_tty,
+		   struct cmd_list_element *c)
+{
+  if (target_has_execution)
+    {
+      inferior_stop_1 = inferior_stop;
+      error (_("Cannot change this setting while the inferior is running."));
+    }
+
+  inferior_stop = inferior_stop_1;
+}
+
+static void
+show_inferior_stop (struct ui_file *file, int from_tty,
+		    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file,
+		    _("Controlling the inferior in non-stop mode is %s.\n"),
+		    value);
+}
+
 void
 _initialize_infrun (void)
 {
@@ -7902,6 +8041,21 @@ to run freely.  You'll be able to step each thread independently,\n\
 leave it stopped or free to run as needed."),
 			   set_non_stop,
 			   show_non_stop,
+			   &setlist,
+			   &showlist);
+  
+  add_setshow_boolean_cmd ("inferior-stop", no_class,
+			   &inferior_stop_1, _("\
+Set whether gdb controls the inferior in inferior-stop mode."), _("\
+Show whether gdb controls the inferior in inferior-stop mode."), _("\
+When debugging a multi-inferior program and this setting is\n\
+off (the default), when a thread stops (for a breakpoint, watchpoint,\n\
+exception, or similar events), GDB stops only that thread.\n\
+\n\
+In inferior-stop mode, when a thread stops, GDB stops all other threads\n\
+in that inferior."),
+			   set_inferior_stop,
+			   show_inferior_stop,
 			   &setlist,
 			   &showlist);
 
@@ -8123,4 +8277,7 @@ Show printing of thread IDs for asynchronous events."), NULL,
          NULL,
          show_print_async_thread_ids,
          &setprintlist, &showprintlist);
+
+  infrun_inferior_data
+    = register_inferior_data ();
 }
