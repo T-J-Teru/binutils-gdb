@@ -446,6 +446,21 @@ upc_value_fetch_lazy (struct value *val)
     }
 }
 
+void
+upc_value_assign (struct value *toval, struct value *fromval)
+{
+  struct type *type = check_typedef (value_type (toval));
+  ULONGEST block_size = upc_blocksizeof (type);
+  gdb_upc_pts_t pts = VALUE_SHARED_ADDR (toval);
+  int written;
+  if (TYPE_CODE (type) == TYPE_CODE_ARRAY)
+    error (_("upc_value_assign: writing to entire UPC shared arrays is not supported."));
+  upc_write_shared_mem (pts, block_size, upc_elemsizeof (type),
+			value_contents (fromval),
+			TYPE_LENGTH (type),
+			&written);
+}
+
 unsigned
 upc_pts_len (struct type *target_type)
 {
@@ -563,6 +578,39 @@ upc_read_var_value (struct symbol *var, struct frame_info *frame)
   VALUE_LVAL (v) = lval_upc_shared;
   set_value_lazy (v, 1);
   return v;
+}
+
+int
+upc_write_shared_mem (const gdb_upc_pts_t pts,
+		      ULONGEST block_size,
+		      ULONGEST element_size,
+		      const gdb_byte *data,
+		      int length,
+		      int *bytes_written)
+{
+  int status;
+  uda_tword_t written;
+  uda_binary_data_t wdata;
+  wdata.len = length;
+  wdata.bytes = (gdb_byte *) data;
+  if (!uda_calls.uda_write_shared_mem)
+    error (_("UPC language support is not initialised"));  
+  status = (*uda_calls.uda_write_shared_mem) (pts.addrfield, pts.thread, pts.phase,
+					      block_size, element_size, length,
+					      &written, &wdata);
+  if (status != uda_ok)
+    {
+      const char *msg;
+      if (status == uda_thread_busy)
+	msg = _("one or more threads are busy");
+      else
+	msg = uda_db_error_string (status);
+      error (_("Cannot write shared memory: %s"), msg);
+      abort ();
+    }
+  if (bytes_written)
+    *bytes_written = written;
+  return 0;
 }
 
 void
