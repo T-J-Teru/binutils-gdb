@@ -3931,11 +3931,16 @@ value_fetch_lazy (struct value *val)
     {
       CORE_ADDR addr = value_address (val);
       struct type *type = check_typedef (value_enclosing_type (val));
+      int length = TYPE_LENGTH (type);
 
-      if (TYPE_LENGTH (type))
-	read_value_memory (val, 0, value_stack (val),
-			   addr, value_contents_all_raw (val),
-			   get_limited_length (type));
+      if (length && (addr
+                    || current_language->la_language != language_fortran
+                    || TYPE_CODE (type) != TYPE_CODE_ARRAY))
+       {
+         read_value_memory (val, 0, value_stack (val),
+                           addr, value_contents_all_raw (val),
+			    get_limited_length (type));
+       }
     }
   else if (VALUE_LVAL (val) == lval_register)
     {
