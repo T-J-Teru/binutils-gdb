@@ -38,6 +38,10 @@ static void f_type_print_args (struct type *, struct ui_file *);
 static void f_type_print_varspec_suffix (struct type *, struct ui_file *, int,
 					 int, int, int);
 
+static int f_has_valid_type_name (struct type *);
+
+static const char *f_munge_type_name (const char *name);
+
 void f_type_print_varspec_prefix (struct type *, struct ui_file *,
 				  int, int);
 
@@ -58,7 +62,7 @@ f_print_type (struct type *type, const char *varstring, struct ui_file *stream,
   if ((varstring != NULL && *varstring != '\0')
   /* Need a space if going to print stars or brackets;
      but not if we will print just a type name.  */
-      || ((show > 0 || TYPE_NAME (type) == 0)
+      || ((show > 0 || !f_has_valid_type_name( type ))
           && (code == TYPE_CODE_PTR || code == TYPE_CODE_FUNC
 	      || code == TYPE_CODE_METHOD
 	      || code == TYPE_CODE_ARRAY
@@ -93,7 +97,7 @@ f_type_print_varspec_prefix (struct type *type, struct ui_file *stream,
   if (type == 0)
     return;
 
-  if (TYPE_NAME (type) && show <= 0)
+  if (f_has_valid_type_name( type ) && show <= 0)
     return;
 
   QUIT;
@@ -154,7 +158,7 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
   if (type == 0)
     return;
 
-  if (TYPE_NAME (type) && show <= 0)
+  if (f_has_valid_type_name( type ) && show <= 0)
     return;
 
   QUIT;
@@ -197,11 +201,9 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
       break;
 
     case TYPE_CODE_PTR:
-        if (TYPE_CODE (TYPE_TARGET_TYPE (type)) != TYPE_CODE_ARRAY)
-            {
-                f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 1, 0, arrayprint_recurse_level);
-                break;
-            }
+      f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 1, 0, arrayprint_recurse_level);
+      break;
+
     case TYPE_CODE_REF:
       f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 1, 0,
 				   arrayprint_recurse_level);
@@ -300,9 +302,12 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
   /* When SHOW is zero or less, and there is a valid type name, then always
      just print the type name directly from the type.  */
 
-  if ((show <= 0) && (TYPE_NAME (type) != NULL))
+  if ((show <= 0) && f_has_valid_type_name( type ))
     {
-      fputs_filtered (TYPE_NAME (type), stream);
+      demangled_name = (char *) f_munge_type_name (TYPE_NAME (type));
+      fputs_filtered (demangled_name, stream);
+      if (demangled_name != TYPE_NAME (type))
+        xfree (demangled_name);
       return;
     }
 
@@ -323,8 +328,8 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
     case TYPE_CODE_PTR:
         if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_ARRAY)
             {
-                fprintf_filtered (stream, "PTR TO -> ( ");
                 f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
+                fprintf_filtered (stream, ", POINTER");
                 break;
             }
         else
@@ -416,4 +421,33 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
 	error (_("Invalid type code (%d) in symbol table."), TYPE_CODE (type));
       break;
     }
+}
+
+static int
+f_has_valid_type_name (struct type *type)
+{
+  return (TYPE_NAME (type) != NULL) &&
+	 ((TYPE_CODE (type) != TYPE_CODE_ARRAY && TYPE_CODE (type) != TYPE_CODE_STRING) ||
+	 strchr( TYPE_NAME (type), '(') != NULL);
+}
+
+static const char *
+f_munge_type_name (const char *name)
+{
+  char *newname;
+  int len = strlen (name);
+  if (((len > 4 && name[len - 4] == '(') ||
+       (len > 3 && name[len - 3] == '(')) &&
+      name[len - 1] == ')')
+    {
+      newname = xmalloc (len + 1);
+      strcpy (newname, name);
+      if (len > 4 && name[len - 4] == '(')
+	newname[len - 4] = '*';
+      else
+	newname[len - 3] = '*';
+      newname[len - 1] = 0;
+      return newname;
+    }
+  return name;
 }
