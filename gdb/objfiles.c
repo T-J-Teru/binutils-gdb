@@ -546,6 +546,9 @@ free_objfile_separate_debug (struct objfile *objfile)
 void
 free_objfile (struct objfile *objfile)
 {
+  /* First notify observers that this objfile is about to be freed.  */
+  observer_notify_free_objfile (objfile);
+
   /* Free all separate debug objfiles.  */
   free_objfile_separate_debug (objfile);
 

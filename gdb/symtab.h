@@ -426,6 +426,8 @@ typedef enum domain_enum_tag
   COMMON_BLOCK_DOMAIN
 } domain_enum;
 
+extern const char *domain_name (domain_enum);
+
 /* Searching domains, used for `search_symbols'.  Element numbers are
    hardcoded in GDB, check all enum uses before changing it.  */
 
@@ -1304,7 +1306,9 @@ void fixup_section (struct general_symbol_info *ginfo,
 
 struct objfile *lookup_objfile_from_block (const struct block *block);
 
-extern int symtab_create_debug;
+extern unsigned int symtab_create_debug;
+
+extern unsigned int symbol_lookup_debug;
 
 extern int basenames_may_differ;
 
