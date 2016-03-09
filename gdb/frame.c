@@ -1629,6 +1629,8 @@ get_prev_frame_1 (struct frame_info *this_frame)
 {
   struct frame_id this_id;
   struct gdbarch *gdbarch;
+  CORE_ADDR frame_pc;
+  int frame_pc_p;
 
   gdb_assert (this_frame != NULL);
   gdbarch = get_frame_arch (this_frame);
@@ -2039,6 +2041,17 @@ get_prev_frame (struct frame_info *this_frame)
       && frame_pc_p && frame_pc == 0)
     {
       frame_debug_got_null_frame (this_frame, "zero PC");
+      return NULL;
+    }
+    
+  /* PC in first page is bad.  */
+  if (this_frame->level > 0
+      && (get_frame_type (this_frame) == NORMAL_FRAME
+          || get_frame_type (this_frame) == INLINE_FRAME)
+      && get_frame_type (get_next_frame (this_frame)) == NORMAL_FRAME
+      && frame_pc_p && frame_pc < 0x1000)
+    {
+      frame_debug_got_null_frame (this_frame, "bad PC");
       return NULL;
     }
 
