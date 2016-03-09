@@ -659,6 +659,8 @@ static int value_history_count;	/* Abs number of last entry stored.  */
    This is so they can be freed after each command.  */
 
 static struct value *all_values;
+
+#define TYPE_CODE_IS_ARRAY_LIKE(x) ((TYPE_CODE(x) == TYPE_CODE_ARRAY) || (TYPE_CODE(x) == TYPE_CODE_STRING))
    
 unsigned int get_limited_length(struct type *type)
 {
@@ -667,13 +669,13 @@ unsigned int get_limited_length(struct type *type)
   get_user_print_options (&opts);
   if(type && (opts.print_max>0 || opts.print_smax>0))
   {
-    if(TYPE_CODE (type)==TYPE_CODE_ARRAY)
+    if(TYPE_CODE_IS_ARRAY_LIKE (type))
     {
       if (current_language->la_language == language_fortran) /* this ugly hack is needed because the C/C++ 
 								limited elements print of nested arrays isn't
 								quite right..*/
 	{
-	  for(base = TYPE_TARGET_TYPE (type); base && TYPE_CODE (base)==TYPE_CODE_ARRAY; base = TYPE_TARGET_TYPE (base))
+	  for(base = TYPE_TARGET_TYPE (type); base && TYPE_CODE_IS_ARRAY_LIKE (base); base = TYPE_TARGET_TYPE (base))
 	    { /* iterate down until we get to the element type (a non-array type) */ 
 	    }
 	}
@@ -697,6 +699,8 @@ unsigned int get_limited_length(struct type *type)
   
   return type->length;
 }
+
+#undef TYPE_CODE_IS_ARRAY_LIKE
 
 /* Allocate a lazy value for type TYPE.  Its actual content is
    "lazily" allocated too: the content field of the return value is
