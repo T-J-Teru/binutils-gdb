@@ -182,6 +182,10 @@ struct value
   /* Is it modifiable?  Only relevant if lval != not_lval.  */
   unsigned int modifiable : 1;
 
+  /* Did the user ask for an explicit number of repeats of this value?
+     (If so don't limit it to print_max elements when printing.)  */
+  unsigned int repeated : 1;
+
   /* If zero, contents of this value are in the contents field.  If
      nonzero, contents are in inferior.  If the lval field is lval_memory,
      the contents are in inferior memory at location.address plus offset.
@@ -718,6 +722,7 @@ allocate_value_lazy (struct type *type)
   val->pointed_to_offset = 0;
   val->modifiable = 1;
   val->initialized = 1;  /* Default to initialized.  */
+  val->repeated = 0;
 
   /* Values start out on the all_values chain.  */
   val->reference_count = 1;
@@ -1468,6 +1473,7 @@ value_copy (struct value *arg)
       if (funcs->copy_closure)
         val->location.computed.closure = funcs->copy_closure (val);
     }
+  val->repeated = arg->repeated;
   return val;
 }
 
@@ -3469,6 +3475,19 @@ static void clear_value_history (char *arg, int from_tty)
     }
   value_history_count = 0;
   value_history_chain = NULL;
+}
+
+void
+set_value_repeated (struct value *value,
+		    int repeated)
+{
+  value->repeated = repeated;
+}
+
+int
+value_repeated (const struct value *value)
+{
+  return value->repeated;
 }
 
 void

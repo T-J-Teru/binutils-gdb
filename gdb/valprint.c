@@ -1633,6 +1633,7 @@ val_print_array_elements (struct type *type,
   /* Number of repetitions we have detected so far.  */
   unsigned int reps;
   LONGEST low_bound, high_bound;
+  unsigned int print_max;
 
   elttype = TYPE_TARGET_TYPE (type);
   eltlen = TYPE_LENGTH (check_typedef (elttype));
@@ -1657,9 +1658,13 @@ val_print_array_elements (struct type *type,
       len = 0;
     }
 
+  print_max = options->print_max;
+  if (val && value_repeated (val) && recurse == 0)
+    print_max = INT_MAX;
+
   annotate_array_section_begin (i, elttype);
 
-  for (; i < len && things_printed < options->print_max; i++)
+  for (; i < len && things_printed < print_max; i++)
     {
       if (i != 0)
 	{
