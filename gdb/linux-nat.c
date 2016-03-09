@@ -3790,7 +3790,10 @@ retry:
 	 Otherwise, signals in pass_mask may be short-circuited.  */
       if (!lp->step
 	  && WSTOPSIG (status) && sigismember (&pass_mask, WSTOPSIG (status))
-	  && WSTOPSIG (status) != SIGSTOP)
+	  && WSTOPSIG (status) != SIGSTOP
+          && WSTOPSIG (status) != SIGSEGV
+          && WSTOPSIG (status) != SIGILL
+          && WSTOPSIG (status) != SIGTRAP)
 	{
 	  /* FIMXE: kettenis/2001-06-06: Should we resume all threads
 	     here?  It is not clear we should.  GDB may not expect
