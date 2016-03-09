@@ -276,7 +276,11 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 	    fputs_filtered (" = ", stream);
 	  annotate_field_value ();
 
-	  if (!field_is_static (&TYPE_FIELD (type, i))
+	  if (!scalar_or_string_type(TYPE_FIELD_TYPE (type, i)) && recurse >= options->max_depth)
+	    {
+	      fputs_filtered ("{...}", stream);
+	    }
+	  else if (!field_is_static (&TYPE_FIELD (type, i))
 	      && TYPE_FIELD_PACKED (type, i))
 	    {
 	      struct value *v;
