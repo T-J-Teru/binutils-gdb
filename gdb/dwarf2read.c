@@ -8373,6 +8373,7 @@ die_needs_namespace (struct die_info *die, struct dwarf2_cu *cu)
   switch (die->tag)
     {
     case DW_TAG_namespace:
+    case DW_TAG_module:
     case DW_TAG_typedef:
     case DW_TAG_class_type:
     case DW_TAG_interface_type:
@@ -13267,7 +13268,8 @@ read_structure_type (struct die_info *die, struct dwarf2_cu *cu)
   if (name != NULL)
     {
       if (cu->language == language_cplus
-	  || cu->language == language_java)
+	  || cu->language == language_java
+	  || cu->language == language_fortran)	
 	{
 	  const char *full_name = dwarf2_full_name (name, die, cu);
 
@@ -19136,7 +19138,8 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 		   class.  */
 		if (cu->language == language_cplus
 		    || cu->language == language_java
-		    || cu->language == language_ada)
+		    || cu->language == language_ada
+		    || cu->language == language_fortran)
 		  {
 		    /* The symbol's name is already allocated along
 		       with this objfile, so we don't need to
