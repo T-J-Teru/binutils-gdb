@@ -1014,6 +1014,14 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
       add_symbol_to_list (sym, &global_symbols);
       goto process_function_types;
 
+    case 'J':
+      /* An internal function definition.  */
+      SYMBOL_TYPE (sym) = read_type (&p, objfile);
+      SYMBOL_CLASS (sym) = LOC_BLOCK;
+      SYMBOL_DOMAIN (sym) = VAR_DOMAIN;
+      add_symbol_to_list (sym, &file_symbols);
+      goto process_function_types;
+
     case 'G':
       /* For a class G (global) symbol, it appears that the
          value is not correct.  It is necessary to search for the
