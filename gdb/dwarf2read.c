@@ -5961,7 +5961,7 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
   switch (pdi->tag)
     {
     case DW_TAG_subprogram:
-      if (pdi->is_external || cu->language == language_ada)
+      if (pdi->is_external || cu->language == language_ada || cu->language == language_fortran)
 	{
           /* brobecker/2007-12-26: Normally, only "external" DIEs are part
              of the global scope.  But in Ada, we want to be able to access
@@ -6210,7 +6210,8 @@ add_partial_subprogram (struct partial_die_info *pdi,
   if (! pdi->has_children)
     return;
 
-  if (cu->language == language_ada)
+  if (cu->language == language_ada
+      || cu->language == language_fortran)
     {
       pdi = pdi->die_child;
       while (pdi != NULL)
@@ -10322,7 +10323,8 @@ dwarf2_get_subprogram_pc_bounds (struct die_info *die,
 
   /* If the language does not allow nested subprograms (either inside
      subprograms or lexical blocks), we're done.  */
-  if (cu->language != language_ada)
+  if (cu->language != language_ada
+      && cu->language != language_fortran)
     return;
 
   /* Check all the children of the given DIE.  If it contains nested
@@ -14192,7 +14194,8 @@ load_partial_dies (const struct die_reader_specs *reader,
 		      || last_die->tag == DW_TAG_interface_type
 		      || last_die->tag == DW_TAG_structure_type
 		      || last_die->tag == DW_TAG_union_type))
-	      || (cu->language == language_ada
+	      || ((cu->language == language_ada
+		   || cu->language == language_fortran)
 		  && (last_die->tag == DW_TAG_subprogram
 		      || last_die->tag == DW_TAG_lexical_block))))
 	{
@@ -16752,7 +16755,8 @@ wellformed:
 	  SYMBOL_CLASS (sym) = LOC_BLOCK;
 	  attr2 = dwarf2_attr (die, DW_AT_external, cu);
 	  if ((attr2 && (DW_UNSND (attr2) != 0))
-              || cu->language == language_ada)
+              || cu->language == language_ada
+	      || cu->language == language_fortran)
 	    {
               /* Subprograms marked external are stored as a global symbol.
                  Ada subprograms, whether marked external or not, are always
