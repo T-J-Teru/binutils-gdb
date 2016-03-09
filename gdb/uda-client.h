@@ -63,11 +63,13 @@ extern int uda_length_of_pts (uda_tword_t block_size,
 extern int uda_unpack_pts (const size_t packed_pts_len,
                            const uda_target_pts_t *,
 	                   const uda_tword_t block_size,
+                           const uda_tword_t elem_size,			   
 	                   uda_debugger_pts_t *);
 extern int uda_pack_pts (const uda_taddr_t,
                          const uda_tword_t thread,
                          const uda_tword_t phase,
                          const uda_tword_t block_size,
+                         const uda_tword_t elem_size,
 	                 size_t *packed_pts_len,
                          uda_target_pts_t *);
 extern int uda_calc_pts_index_add (const uda_debugger_pts_t *,

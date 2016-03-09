@@ -154,14 +154,14 @@ upc_pts_index_add (struct type *ptrtype, struct value *ptrval,
     error (_("UPC language support is not initialised"));  
   tt = TYPE_TARGET_TYPE (ptrtype); CHECK_TYPEDEF (tt);
   block_size = upc_blocksizeof (tt);
-  status = (*uda_calls.uda_unpack_pts) (ptrtype_len, ptrval_raw, block_size, &pts);
+  status = (*uda_calls.uda_unpack_pts) (ptrtype_len, ptrval_raw, block_size, elem_size, &pts);
   if (status != uda_ok)
     error (_("upc_pts_index_add: uda_unpack_pts error"));
   status = (*uda_calls.uda_calc_pts_index_add) (&pts, index, elem_size, block_size, &sum);
   if (status != uda_ok)
     error (_("upc_pts_index_add: uda_calc_pts_index_add error"));
   status = (*uda_calls.uda_pack_pts) (sum.addrfield, sum.thread, sum.phase,
-                         block_size, (size_t *)&packed_pts_len, &packed_pts);
+                         block_size, elem_size, (size_t *)&packed_pts_len, &packed_pts);
   if (status != uda_ok)
     error (_("upc_pts_index_add: uda_pack_pts error"));
   gdb_assert (ptrtype_len == packed_pts_len);
@@ -194,10 +194,10 @@ upc_pts_diff (struct value *arg1, struct value *arg2)
   if (!uda_calls.uda_unpack_pts
       || !uda_calls.uda_calc_pts_diff)
     error (_("UPC language support is not initialised"));
-  status = (*uda_calls.uda_unpack_pts) (ptrtype_len, arg1_pts, block_size, &pts1);
+  status = (*uda_calls.uda_unpack_pts) (ptrtype_len, arg1_pts, block_size, elem_size, &pts1);
   if (status != uda_ok)
     error (_("upc_pts_diff: uda_unpack_pts(1) error"));
-  status = (*uda_calls.uda_unpack_pts) (ptrtype_len, arg2_pts, block_size, &pts2);
+  status = (*uda_calls.uda_unpack_pts) (ptrtype_len, arg2_pts, block_size, elem_size, &pts2);
   if (status != uda_ok)
     error (_("upc_pts_diff: uda_unpack_pts(2) error"));
   status = (*uda_calls.uda_calc_pts_diff) (&pts1, &pts2, elem_size, block_size, &diff);
@@ -256,6 +256,7 @@ upc_value_from_pts (struct type *ptrtype, gdb_upc_pts_t pts)
   int status;
   struct type *tt = check_typedef (TYPE_TARGET_TYPE (ptrtype));
   const ULONGEST block_size = upc_blocksizeof (tt);
+  const ULONGEST elem_size = upc_elemsizeof (tt);
   const ULONGEST ptrtype_len = TYPE_LENGTH (ptrtype);
   uda_tword_t packed_pts_len;
   uda_target_pts_t packed_pts;
@@ -263,7 +264,7 @@ upc_value_from_pts (struct type *ptrtype, gdb_upc_pts_t pts)
   if (!uda_calls.uda_pack_pts)
     error (_("UPC language support is not initialised"));  
   status = (*uda_calls.uda_pack_pts) (pts.addrfield, pts.thread, pts.phase,
-                         block_size, (size_t *)&packed_pts_len, &packed_pts);
+                         block_size, elem_size, (size_t *)&packed_pts_len, &packed_pts);
   if (status != uda_ok)
     error (_("upc_value_from_pts: uda_pack_pts error"));
   gdb_assert (ptrtype_len == packed_pts_len);
@@ -279,13 +280,14 @@ upc_value_as_pts (struct value *val)
   struct type *type = check_typedef (value_type (val));
   struct type *tt = check_typedef (TYPE_TARGET_TYPE (type));
   ULONGEST block_size = upc_blocksizeof (tt);
+  ULONGEST elem_size = upc_elemsizeof (tt);
   unsigned pts_len = upc_pts_len (type);
   gdb_upc_pts_t pts;
   uda_target_pts_t *pts_raw;
   if (!uda_calls.uda_unpack_pts)
     error (_("UPC language support is not initialised"));    
   pts_raw = (uda_target_pts_t *) value_contents (val);
-  status = (*uda_calls.uda_unpack_pts) (pts_len, pts_raw, block_size, &pts);
+  status = (*uda_calls.uda_unpack_pts) (pts_len, pts_raw, block_size, elem_size, &pts);
   if (status != uda_ok)
     error (_("upc_value_as_pts: uda_unpack_pts error"));
   return pts;
@@ -465,17 +467,18 @@ upc_print_pts (struct ui_file *stream,
 {
   int status;
   struct type *tt;
-  ULONGEST block_size, pts_len;
+  ULONGEST block_size, elem_size, pts_len;
   char buf[100];
   uda_debugger_pts_t pts;
   tt = target_type; CHECK_TYPEDEF (tt);
   block_size = upc_blocksizeof (tt);
+  elem_size = upc_elemsizeof (tt);
   pts_len = upc_pts_len (tt);
   gdb_assert (pts_len <= sizeof(uda_target_pts_t));
   if (!uda_calls.uda_unpack_pts)
     error (_("UPC language support is not initialised"));  
   status = (*uda_calls.uda_unpack_pts) (pts_len, (const uda_target_pts_t *)pts_bytes,
-                           block_size, &pts);
+                           block_size, elem_size, &pts);
   if (status != uda_ok)
     error (_("upc_print_pts: uda_unpack_pts error"));
   if (!format && pts.thread < 10 && (ULONGEST)pts.phase < 10)

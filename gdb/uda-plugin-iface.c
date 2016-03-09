@@ -333,6 +333,7 @@ int
 uda_iface_unpack_pts (const size_t packed_pts_len,
                    const uda_target_pts_t * packed_pts,
 		   const uda_tword_t block_size,
+		   const uda_tword_t elem_size,		   
 		   uda_debugger_pts_t * pts)
 {
   uda_thread_t *thread = uda_job->current_thread;
@@ -347,6 +348,7 @@ uda_iface_pack_pts (const uda_taddr_t addrfield,
                  const uda_tword_t thread,
 		 const uda_tword_t phase,
 		 const uda_tword_t block_size,
+		 const uda_tword_t elem_size,		 
 		 size_t * packed_pts_len,
 		 uda_target_pts_t * packed_pts)
 {

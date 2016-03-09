@@ -386,8 +386,8 @@ uda_pts_to_addr (const uda_debugger_pts_t *pts,
 		 uda_taddr_t *addr)
 {
   int status;
-  uda_rmt_send_cmd ("qupc.pts.address:%lux,%lux,%lux,%lux",
-                    pts->addrfield, pts->thread,
+  uda_rmt_send_cmd ("qupc.pts.address:%lux,%lux,%lux,%lux,%lux",
+                    pts->addrfield, pts->thread, pts->phase,
 		    block_size, elem_size);
   *addr = 0;
   status = uda_rmt_recv_reply ("%lux", addr);
@@ -398,11 +398,12 @@ int
 uda_unpack_pts (const size_t packed_pts_len,
                 const uda_target_pts_t *packed_pts,
 	        const uda_tword_t block_size,
+		const uda_tword_t elem_size,
 	        uda_debugger_pts_t *pts)
 {
   int status;
-  uda_rmt_send_cmd ("qupc.pts.unpack:%*X,%lux",
-                    packed_pts_len, packed_pts, block_size);
+  uda_rmt_send_cmd ("qupc.pts.unpack:%*X,%lux,%lux",
+                    packed_pts_len, packed_pts, block_size, elem_size);
   status = uda_rmt_recv_reply ("%lux,%lux,%lux,%lux",
                                &pts->addrfield, &pts->thread,
                                &pts->phase, &pts->opaque);
@@ -414,12 +415,13 @@ uda_pack_pts (const uda_taddr_t addrfield,
               const uda_tword_t thread,
               const uda_tword_t phase,
               const uda_tword_t block_size,
+	      const uda_tword_t elem_size,
 	      size_t *packed_pts_len,
               uda_target_pts_t *packed_pts)
 {
   int status;
-  uda_rmt_send_cmd ("qupc.pts.pack:%lux,%lux,%lux,%lux",
-                    addrfield, thread, phase, block_size);
+  uda_rmt_send_cmd ("qupc.pts.pack:%lux,%lux,%lux,%lux,%lux",
+                    addrfield, thread, phase, block_size, elem_size);
   status = uda_rmt_recv_reply ("%*X", packed_pts_len, &packed_pts);
   return status;
 }
