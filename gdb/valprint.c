@@ -2342,20 +2342,17 @@ print_converted_chars_to_obstack (struct obstack *obstack,
 
 	case INCOMPLETE:
 	  /* We are outputting an incomplete sequence.  */
+	  /* Output the incomplete sequence string.  */
+	  obstack_grow_wstr (obstack, LCST ("<incomplete sequence "));
+	  print_wchar (gdb_WEOF, elem->buf, elem->buflen, width, byte_order,
+		       obstack, 0, &need_escape);
+	  obstack_grow_wstr (obstack, LCST (">"));
 	  if (last == SINGLE)
 	    {
 	      /* If we were outputting a string of SINGLE characters,
 		 terminate the quote.  */
 	      obstack_grow (obstack, &wide_quote_char, sizeof (gdb_wchar_t));
 	    }
-	  if (last != START)
-	    obstack_grow_wstr (obstack, LCST (", "));
-
-	  /* Output the incomplete sequence string.  */
-	  obstack_grow_wstr (obstack, LCST ("<incomplete sequence "));
-	  print_wchar (gdb_WEOF, elem->buf, elem->buflen, width, byte_order,
-		       obstack, 0, &need_escape);
-	  obstack_grow_wstr (obstack, LCST (">"));
 
 	  /* We do not attempt to outupt anything after this.  */
 	  state = FINISH;
