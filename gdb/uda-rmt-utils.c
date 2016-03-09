@@ -20,12 +20,14 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include <ctype.h>
+#include <poll.h>
 #include "defs.h"
 #include "gdb_assert.h"
 #include "gdb_string.h"
 #include "gdbcmd.h"
 #include "uda-types.h"
 #include "uda-rmt-utils.h"
+#include "event-loop.h"
 
 static FILE *uda_rmt_in;
 static FILE *uda_rmt_out;
@@ -904,6 +906,49 @@ uda_rmt_swap_bytes (gdb_byte *dest,
     }
 }
 
+static void
+uda_rmt_async_callback (int error, gdb_client_data client_data)
+{
+  int slen;
+  va_list ap;
+  uda_string_t reply;
+  struct pollfd fds[1];
+
+  if (error)
+    {
+      delete_file_handler (fileno (uda_rmt_in));
+      return;
+    }
+
+  /* The callback may have been queued, but the command has been read by
+     uda_rmt_recv_reply in the meantime.  Double-check there is still
+     something to read.  */
+  fds[0].fd = fileno (uda_rmt_in);
+  fds[0].events = POLLIN;
+  fds[0].revents = 0;
+  if (poll (fds, 1, 0) != 1 ||
+      !(fds[0].revents & POLLIN))
+    return;
+
+  if (!fgets (reply, sizeof (reply), uda_rmt_in))
+    return;
+
+  slen = strlen (reply);
+  if (reply[slen - 1] == '\n')
+    reply[--slen] = '\0';
+  /* Callback commands (are prefixed by '$'.  */
+  if (reply[0] == '$')
+    {
+      if (debug_uda)
+	printf ("<-- command: %s\n", reply);
+      /* Parse and execute the command. */
+      gdb_assert (uda_rmt_cmd_exec);
+      (*uda_rmt_cmd_exec) (reply + 1);
+    }
+  else
+    fprintf_filtered (gdb_stderr, _("invalid UDA callback"));
+}
+
 void
 uda_rmt_init (FILE *rmt_in, FILE *rmt_out,
 	      const uda_rmt_cmd_fp_t rmt_cmd_exec)
@@ -914,6 +959,7 @@ uda_rmt_init (FILE *rmt_in, FILE *rmt_out,
   uda_rmt_in = rmt_in;
   uda_rmt_out = rmt_out;
   uda_rmt_cmd_exec = rmt_cmd_exec;
+  add_file_handler (fileno (uda_rmt_in), uda_rmt_async_callback, NULL);
 }
 
 static void
