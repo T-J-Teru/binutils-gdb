@@ -1431,6 +1431,8 @@ static void dwarf2_start_subfile (char *, const char *, const char *);
 static void dwarf2_start_symtab (struct dwarf2_cu *,
 				 const char *, const char *, CORE_ADDR);
 
+static struct subfile *dwarf2_find_subfile (char *, char *, char *);
+
 static struct symbol *new_symbol (struct die_info *, struct type *,
 				  struct dwarf2_cu *);
 
@@ -15887,10 +15889,50 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
   if (comp_dir)
     {
       struct subfile *first_subfile = current_subfile;
+      int first_subfile_index = -1;
 
       /* Make sure a symtab is created for every file, even files
          which contain only variables (i.e. no code with associated
          line numbers).  */
+
+      /* #30917: Sometimes the name of the main file in the linetable does
+         not match that of the DW_TAG_compile_unit. Check that at least one of
+         the entries matches and if not do a second pass checking the 
+         basename only. */
+
+      for (i = 0; i < lh->num_file_names; i++)
+        {
+          char *dir = NULL;
+
+          fe = &lh->file_names[i];
+          if (fe->dir_index)
+            dir = lh->include_dirs[fe->dir_index - 1];
+
+          if (dwarf2_find_subfile (fe->name, dir, comp_dir) == first_subfile)
+            {
+              first_subfile_index = i;
+              break;
+            }
+        }
+
+      if (first_subfile_index == -1)
+        {
+          const char *first_subfile_basename = lbasename(first_subfile->name);
+          for (i = 0; i < lh->num_file_names; i++)
+            {
+              char *dir = NULL;
+
+              fe = &lh->file_names[i];
+              if (fe->dir_index)
+                dir = lh->include_dirs[fe->dir_index - 1];
+
+              if (strcmp(lbasename(fe->name), first_subfile_basename) == 0)
+                {
+                  first_subfile_index = i;
+                  break;
+                }
+            }
+        }
 
       for (i = 0; i < lh->num_file_names; i++)
         {
@@ -15904,7 +15946,7 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
           /* Skip the main file; we don't need it, and it must be
              allocated last, so that it will show up before the
              non-primary symtabs in the objfile's symtab list.  */
-          if (current_subfile == first_subfile)
+          if (i == first_subfile_index || current_subfile == first_subfile)
             continue;
 
           if (current_subfile->symtab == NULL)
@@ -16436,6 +16478,35 @@ dwarf2_start_symtab (struct dwarf2_cu *cu,
   processing_gcc_compilation = 2;
 
   cu->processing_has_namespace_info = 0;
+}
+
+static struct subfile *
+dwarf2_find_subfile (char *filename, char *dirname, char *comp_dir)
+{
+  char *fullname;
+  struct subfile *ret;
+
+  /* While reading the DIEs, we call start_symtab(DW_AT_name, DW_AT_comp_dir).
+     `start_symtab' will always pass the contents of DW_AT_comp_dir as
+     second argument to start_subfile.  To be consistent, we do the
+     same here.  In order not to lose the line information directory,
+     we concatenate it to the filename when it makes sense.
+     Note that the Dwarf3 standard says (speaking of filenames in line
+     information): ``The directory index is ignored for file names
+     that represent full path names''.  Thus ignoring dirname in the
+     `else' branch below isn't an issue.  */
+
+  if (!IS_ABSOLUTE_PATH (filename) && dirname != NULL)
+    fullname = concat (dirname, SLASH_STRING, filename, (char *)NULL);
+  else
+    fullname = filename;
+
+  ret = find_subfile (fullname, comp_dir);
+
+  if (fullname != filename)
+    xfree (fullname);
+  
+  return ret;
 }
 
 static void
