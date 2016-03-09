@@ -3371,6 +3371,7 @@ find_line_symtab (struct symtab *symtab, int line,
   int best_index;
   struct linetable *best_linetable;
   struct symtab *best_symtab;
+  int flen = strlen (symtab->filename);
 
   /* First try looking it up in the given symtab.  */
   best_linetable = SYMTAB_LINETABLE (symtab);
@@ -3410,8 +3411,16 @@ find_line_symtab (struct symtab *symtab, int line,
       {
 	struct linetable *l;
 	int ind;
+	int slen = strlen (s->filename);
 
-	if (FILENAME_CMP (symtab->filename, s->filename) != 0)
+        if ((slen > flen &&
+              (!IS_DIR_SEPARATOR (s->filename[slen - flen - 1]) ||
+              strcmp (symtab->filename, s->filename + slen - flen) != 0)) ||
+             (flen > slen &&
+              (!IS_DIR_SEPARATOR (symtab->filename[flen - slen - 1]) ||
+               strcmp (symtab->filename + flen - slen, s->filename) != 0)) ||
+             (flen == slen &&
+              FILENAME_CMP (symtab->filename, s->filename) != 0))
 	  continue;
 	if (FILENAME_CMP (symtab_to_fullname (symtab),
 			  symtab_to_fullname (s)) != 0)
