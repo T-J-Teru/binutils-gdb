@@ -534,6 +534,14 @@ uda_db_error_string (int error_code)
       msg = "UDA: relocation failed"; break;
     case uda_target_sizes_already_set:
       msg = "UDA: target sizes already set"; break;
+    case uda_incompatible_version:
+      msg = "UDA: incompatible version"; break;
+    case uda_init_already_done:
+      msg = "UDA: init already done"; break;
+    case uda_thread_busy:
+      msg = "UDA: thread busy"; break;
+    case uda_need_init_first:
+      msg = "UDA: need init first"; break;
     default:
       sprintf (mbuf, "UDA: error %d",  error_code);
       msg = mbuf;

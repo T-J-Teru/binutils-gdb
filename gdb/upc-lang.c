@@ -404,6 +404,9 @@ upc_print_pts (struct ui_file *stream,
   fputs_filtered (buf, stream);
 }
 
+extern const char *
+uda_db_error_string (int error_code);
+
 int
 upc_read_shared_mem (ULONGEST address, ULONGEST thread,
                      gdb_byte *data, int length)
@@ -416,7 +419,12 @@ upc_read_shared_mem (ULONGEST address, ULONGEST thread,
 
   if (status != uda_ok)
     {
-      error (_("Cannot read shared memory"));
+      const char *msg;
+      if (status == uda_thread_busy)
+	msg = _("one or more threads are busy");
+      else
+	msg = uda_db_error_string (status);
+      error (_("Cannot read shared memory: %s"), msg);
       abort ();
     }
   gdb_assert (rdata.len == length);
