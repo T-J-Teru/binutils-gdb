@@ -54,6 +54,10 @@ uda_callouts_t uda_calls;
 /* upc language initilaized */
 int upc_lang_initialized = 0;
 
+uda_tword_t mythread = (uda_tword_t) -1;
+
+extern int upc_threads;
+
 #define UPC_MAIN_PROGRAM_SYMBOL_NAME "upc_main"
 
 /* printf format strings */
@@ -438,28 +442,12 @@ upc_lang_init (char *cmd, int from_tty)
   uda_target_type_sizes_t targ_info;
   struct gdbarch *arch = target_gdbarch ();
   int is_big_endian = gdbarch_byte_order (arch) == BFD_ENDIAN_BIG;
-  uda_tword_t num_threads = 0;
+  uda_tword_t num_threads;
   ptid_t  current_ptid = inferior_ptid;
-  int status, mythread = -1;
+  int status;
   char *uda_service;
   char *uda_path;
 
-  num_threads = upc_thread_count ();
-    
-  /* UPC program initialized? */
-  if (num_threads <= 0)
-    error (_("upc_lang_init: Can't find value of THREADS. Is UPC program initialized?"));
-
-  if (upcsingle)
-    {
-      mythread = upc_read_thread_sym ("MYTHREAD");
-      if (mythread == -1)
-	{
-	  error (_("upc_lang_init: Can't find MYTHREAD variable. Is this a UPC program?"));
-	  return;	  
-	}
-    }
-  
   /* Select UDA plugin you wish to use. By default try to
    * connect to UDA server. */
 
@@ -494,14 +482,40 @@ upc_lang_init (char *cmd, int from_tty)
     error (_("uda_set_type_sizes_and_byte_order() failed."));
   if (from_tty)
     printf_filtered("upc_lang_init: set THREADS value for UDA.\n");
-  status = (*uda_calls.uda_set_num_threads) (num_threads);
-  if (status != uda_ok)
-    error (_("upc_lang_init: uda_set_num_threads() failed."));
+  status = (*uda_calls.uda_get_num_threads) (&num_threads);
+  if (status == uda_ok && num_threads > 0)
+    {
+      upc_threads = num_threads;
+    }
+  else
+    {
+      struct symbol *threads_sym;
+      struct value *threads_val;
+
+      if (from_tty)
+        printf_filtered("upc_lang_init: send THREADS value to UDA server.\n");
+      
+      /* UPC program? */
+      threads_sym = lookup_symbol ("THREADS", 0, VAR_DOMAIN, NULL);
+      if (threads_sym)
+        {
+          threads_val = read_var_value (threads_sym, NULL);
+          if (threads_val)
+	    upc_threads = value_as_long (threads_val);
+        }
+      else
+        {
+          error (_("upc_lang_init: Can't find THREADS variable. Is this a UPC program?"));
+        }
+      status = (*uda_calls.uda_set_num_threads) (upc_threads);
+      if (status != uda_ok)
+        error (_("upc_lang_init: uda_set_num_threads() failed."));
+    }
   if (upcsingle)
     {
-      status = (*uda_calls.uda_set_thread_num) (mythread);
+      status = (*uda_calls.uda_get_thread_num) (&mythread);
       if (status != uda_ok)
-	error (_("upc_lang_init: uda_set_thread_num() failed."));
+	error (_("upc_lang_init: uda_get_thread_num() failed."));
     }
   if (from_tty)
     printf_filtered("upc_lang_init: done.\n");
