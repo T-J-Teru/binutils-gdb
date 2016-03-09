@@ -19,16 +19,15 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include <signal.h>
-#include <wait.h>
 #include "defs.h"
+#include <signal.h>
+#include <sys/wait.h>
 #include "command.h"
 #include "gdbcmd.h"
 #include "gdbcore.h"
 #include "target.h"
 #include "observer.h"
 #include <sys/procfs.h>
-#include "gregset.h"
 #include "regcache.h"
 #include "inferior.h"
 #include "gdbthread.h"
