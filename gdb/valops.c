@@ -1007,13 +1007,6 @@ value_assign (struct value *toval, struct value *fromval)
   type = value_type (toval);
   if (VALUE_LVAL (toval) != lval_internalvar)
     fromval = value_cast (type, fromval);
-  else
-    {
-      /* Coerce arrays and functions to pointers, except for arrays
-	 which only live in GDB's storage.  */
-      if (!value_must_coerce_to_target (fromval))
-	fromval = coerce_array (fromval);
-    }
 
   CHECK_TYPEDEF (type);
 
