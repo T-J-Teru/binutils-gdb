@@ -1434,6 +1434,10 @@ static void add_partial_subprogram (struct partial_die_info *pdi,
 				    CORE_ADDR *lowpc, CORE_ADDR *highpc,
 				    int need_pc, struct dwarf2_cu *cu);
 
+static void add_partial_type (struct partial_die_info *pdi,
+			      CORE_ADDR *lowpc, CORE_ADDR *highpc,
+			      int need_pc, struct dwarf2_cu *cu);
+
 static void dwarf2_read_symtab (struct partial_symtab *,
 				struct objfile *);
 
@@ -6024,6 +6028,11 @@ process_psymtab_comp_unit_reader (const struct die_reader_specs *reader,
 	  best_lowpc = lowpc;
 	  best_highpc = highpc;
 	}
+      else
+        {
+	  best_lowpc = min (lowpc, best_lowpc);
+	  best_highpc = max (highpc, best_highpc);
+	}
     }
   pst->textlow = gdbarch_adjust_dwarf2_addr (gdbarch, best_lowpc + baseaddr);
   pst->texthigh = gdbarch_adjust_dwarf2_addr (gdbarch, best_highpc + baseaddr);
@@ -6693,7 +6702,7 @@ scan_partial_symbols (struct partial_die_info *first_die, CORE_ADDR *lowpc,
 	    case DW_TAG_structure_type:
 	      if (!pdi->is_declaration)
 		{
-		  add_partial_symbol (pdi, cu);
+		  add_partial_type (pdi, lowpc, highpc, need_pc, cu);
 		}
 	      break;
 	    case DW_TAG_enumeration_type:
@@ -16782,6 +16791,48 @@ find_partial_die (sect_offset offset, int offset_in_dwz, struct dwarf2_cu *cu)
 		      "in cache [from module %s]\n"),
 		    offset.sect_off, bfd_get_filename (objfile->obfd));
   return pd;
+}
+
+static void
+add_partial_type (struct partial_die_info *pdi,
+		  CORE_ADDR *lowpc, CORE_ADDR *highpc,
+		  int need_pc, struct dwarf2_cu *cu)
+{
+  add_partial_symbol (pdi, cu);
+
+  if (! pdi->has_children)
+    return;
+
+  /* Workaround for compilation units with erroneous DW_AT_lowpc / DW_AT_highpc
+     that doesn't contain class methods defined in the unit.  */
+  pdi = pdi->die_child;
+  while (pdi != NULL)
+    {
+      fixup_partial_die (pdi, cu);
+      if (pdi->tag == DW_TAG_subprogram)
+	{
+	  if (pdi->has_pc_info)
+	    {
+	      if (pdi->lowpc < *lowpc)
+		*lowpc = pdi->lowpc;
+	      if (pdi->highpc > *highpc)
+		*highpc = pdi->highpc;
+	      if (need_pc)
+		{
+		  CORE_ADDR baseaddr;
+		  struct objfile *objfile = cu->objfile;
+
+		  baseaddr = ANOFFSET (objfile->section_offsets,
+				       SECT_OFF_TEXT (objfile));
+		  addrmap_set_empty (objfile->psymtabs_addrmap,
+				     pdi->lowpc + baseaddr,
+				     pdi->highpc - 1 + baseaddr,
+				     cu->per_cu->v.psymtab);
+		}
+	    }
+	}
+      pdi = pdi->die_sibling;
+    }
 }
 
 /* See if we can figure out if the class lives in a namespace.  We do
