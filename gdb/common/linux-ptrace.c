@@ -103,6 +103,7 @@ linux_ptrace_test_ret_to_nx (void)
 		 strerror (errno));
       else
 	{
+	  alarm(2);
 #if defined __i386__
 	  asm volatile ("pushl %0;"
 			".globl linux_ptrace_test_ret_to_nx_instr;"
