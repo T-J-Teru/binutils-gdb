@@ -764,12 +764,18 @@ read_ptid (char *buf, char **obuf)
   /* No multi-process.  Just a tid.  */
   tid = hex_or_minus_one (p, &pp);
 
+  if (obuf)
+    *obuf = pp;
+
+  if (tid == -1)
+    return minus_one_ptid;
+  else if (tid == 0)
+    return null_ptid;
+
   /* Since the stub is not sending a process id, then default to
      what's in the current inferior.  */
   pid = ptid_get_pid (current_ptid);
 
-  if (obuf)
-    *obuf = pp;
   return ptid_build (pid, tid, 0);
 }
 
