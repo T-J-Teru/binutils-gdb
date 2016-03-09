@@ -1371,13 +1371,13 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 		}
 	      new = pop_context ();
 	      /* Stack must be empty now.  */
-	      if (context_stack_depth > 0 || new == NULL)
+              /*	      if (context_stack_depth > 0 || new == NULL)
 		{
 		  ef_complaint (cs->c_symnum);
 		  within_function = 0;
 		  break;
 		}
-
+              */
 	      finish_block (new->name, &local_symbols, new->old_blocks,
 			    new->start_addr,
 			    (fcn_cs_saved.c_value
@@ -1385,6 +1385,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 			     + ANOFFSET (objfile->section_offsets,
 					 SECT_OFF_TEXT (objfile))),
 			    objfile);
+	      local_symbols = new->locals;
 	      within_function = 0;
 	    }
 	  break;
