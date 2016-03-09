@@ -1134,7 +1134,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 	}
 
       if ((cs->c_sclass == C_EXT || cs->c_sclass == C_HIDEXT)
-	  && cs->c_naux == 1)
+	  && cs->c_naux > 0)
 	{
 	  /* Dealing with a symbol with a csect entry.  */
 
@@ -1144,9 +1144,11 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 #define	CSECT_SMTYP(PP) (SMTYP_SMTYP(CSECT(PP).x_smtyp))
 #define	CSECT_SCLAS(PP) (CSECT(PP).x_smclas)
 
-	  /* Convert the auxent to something we can access.  */
-	  bfd_coff_swap_aux_in (abfd, raw_auxptr, cs->c_type, cs->c_sclass,
-				0, cs->c_naux, &main_aux);
+          /* Use the last aux entry.   */
+	  bfd_coff_swap_aux_in (abfd,
+                                raw_symbol - coff_data(abfd)->local_auxesz,
+                                cs->c_type, cs->c_sclass,
+				cs->c_naux - 1, cs->c_naux, &main_aux);
 
 	  switch (CSECT_SMTYP (&main_aux))
 	    {
@@ -1240,7 +1242,8 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 		  /* save the function header info, which will be used
 		     when `.bf' is seen.  */
 		  fcn_cs_saved = *cs;
-		  fcn_aux_saved = main_aux;
+		  bfd_coff_swap_aux_in (abfd, raw_auxptr, cs->c_type, cs->c_sclass,
+ 				        0, cs->c_naux, &fcn_aux_saved);
 		  continue;
 
 		case XMC_GL:
@@ -1278,8 +1281,6 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 	 after the above CSECT check.  */
       if (ISFCN (cs->c_type) && cs->c_sclass != C_TPDEF)
 	{
-	  bfd_coff_swap_aux_in (abfd, raw_auxptr, cs->c_type, cs->c_sclass,
-				0, cs->c_naux, &main_aux);
 	  goto function_entry_point;
 	}
 
@@ -1352,6 +1353,12 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 		 fcn_stab_saved.c_name, 0, 0, objfile);
 	      if (new->name != NULL)
 		SYMBOL_SECTION (new->name) = SECT_OFF_TEXT (objfile);
+	      /* Store the end address now. Don't defer until .ef as we may
+* 	         see a nested function in the meantime. */
+	      new->end_addr = fcn_cs_saved.c_value
+			    + fcn_aux_saved.x_sym.x_misc.x_fsize
+			    + ANOFFSET (objfile->section_offsets,
+					SECT_OFF_TEXT (objfile));
 	    }
 	  else if (strcmp (cs->c_name, ".ef") == 0)
 	    {
@@ -1379,11 +1386,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
 		}
               */
 	      finish_block (new->name, &local_symbols, new->old_blocks,
-			    new->start_addr,
-			    (fcn_cs_saved.c_value
-			     + fcn_aux_saved.x_sym.x_misc.x_fsize
-			     + ANOFFSET (objfile->section_offsets,
-					 SECT_OFF_TEXT (objfile))),
+			    new->start_addr, new->end_addr,
 			    objfile);
 	      local_symbols = new->locals;
 	      within_function = 0;
