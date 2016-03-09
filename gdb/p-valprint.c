@@ -106,7 +106,7 @@ pascal_val_print (struct type *type, const gdb_byte *valaddr,
 		       extract_unsigned_integer (valaddr + embedded_offset +
 						 temp_len * eltlen, eltlen,
 						 byte_order)
-		       && temp_len < len && temp_len < options->print_max;
+		       && temp_len < len && temp_len < options->print_smax;
 		       temp_len++);
 		  len = temp_len;
 		}

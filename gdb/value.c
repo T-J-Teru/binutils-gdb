@@ -41,6 +41,7 @@
 #include "cp-abi.h"
 #include "user-regs.h"
 #include "f-lang.h"
+#include "valprint.h"
 
 /* Prototypes for exported functions.  */
 
@@ -906,18 +907,13 @@ static int value_history_count;	/* Abs number of last entry stored.  */
    This is so they can be freed after each command.  */
 
 static struct value *all_values;
-
-#define MARKS_HARD_LIMIT 1000000
    
 unsigned int get_limited_length(struct type *type)
 {
   struct type *base;
-  /* read_element_limit (defined in value.h) is set in valprint.c. It's our
-     safety-net to make sure we don't try limiting anything that's not
-     going to be used for printing - and the 'print' command is specifically
-     excluded. 'output' is included, which is what DDT, 'info locals' and
-     'info args' use */
-  if(type->length>MARKS_HARD_LIMIT && read_element_limit>0 && type)
+  struct value_print_options opts;
+  get_user_print_options (&opts);
+  if(type && (opts.print_max>0 || opts.print_smax>0))
   {
     if(TYPE_CODE (type)==TYPE_CODE_ARRAY)
     {
@@ -935,7 +931,13 @@ unsigned int get_limited_length(struct type *type)
 	}
       if(base)
       {
-        unsigned int length = read_element_limit * TYPE_LENGTH (base);
+	unsigned limit = opts.print_max;
+	unsigned length;
+	/* Use print_smax for arrays that might be strings. */
+	if (TYPE_LENGTH (base) == 1
+	    && TYPE_CODE (base) == TYPE_CODE_INT)
+	  limit = max(limit, opts.print_smax);
+        length = limit * TYPE_LENGTH (base);
 	return length > type->length ? type->length : length;
       }
     }
@@ -990,6 +992,15 @@ allocate_value_lazy (struct type *type)
 
 static void
 allocate_value_contents (struct value *val)
+{
+  if (!val->contents)
+    val->contents = (gdb_byte *) xzalloc (TYPE_LENGTH (val->enclosing_type));
+}
+
+/* Allocate the contents of VAL (limited by get_limited_length) if it has not been allocated yet.  */
+
+void
+allocate_value_contents_limited (struct value *val)
 {
   if (!val->contents)
     val->contents = (gdb_byte *) xzalloc (get_limited_length (val->enclosing_type));
@@ -2739,7 +2750,7 @@ value_as_address (struct value *val)
      for pointers to char, in which the low bits *are* significant.  */
   return gdbarch_addr_bits_remove (gdbarch, value_as_long (val));
 #else
-  int l;
+  int old_print_max;
   CORE_ADDR r;
   /* There are several targets (IA-64, PowerPC, and others) which
      don't represent pointers to functions as simply the address of
@@ -2827,10 +2838,10 @@ value_as_address (struct value *val)
     return gdbarch_integer_to_address (gdbarch, value_type (val),
 				       value_contents (val));
 
-  l = read_element_limit;
-  read_element_limit = 16;  
+    old_print_max = user_print_options.print_max;
+    user_print_options.print_max = 16;
   r = unpack_long (value_type (val), value_contents (val));
-  read_element_limit = l;
+    user_print_options.print_max = old_print_max;
   return r;
 #endif
 }
@@ -3865,7 +3876,7 @@ void
 value_fetch_lazy (struct value *val)
 {
   gdb_assert (value_lazy (val));
-  allocate_value_contents (val);
+  allocate_value_contents_limited (val);
   /* A value is either lazy, or fully fetched.  The
      availability/validity is only established as we try to fetch a
      value.  */

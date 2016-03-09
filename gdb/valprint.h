@@ -52,6 +52,9 @@ struct value_print_options
      "unlimited".  */
   unsigned int print_max;
 
+  /* Maxiumum number of string chars to print */
+  unsigned int print_smax;
+
   /* Print repeat counts if there are more than this many repetitions
      of an element in an array.  */
   unsigned int repeat_count_threshold;

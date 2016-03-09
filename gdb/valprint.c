@@ -111,6 +111,7 @@ struct value_print_options user_print_options =
   1,				/* addressprint */
   0,				/* objectprint */
   PRINT_MAX_DEFAULT,		/* print_max */
+  PRINT_MAX_DEFAULT,		/* print_smax */
   10,				/* repeat_count_threshold */
   0,				/* output_format */
   0,				/* format */
@@ -155,8 +156,16 @@ show_print_max (struct ui_file *file, int from_tty,
 		struct cmd_list_element *c, const char *value)
 {
   fprintf_filtered (file,
-		    _("Limit on string chars or array "
-		      "elements to print is %s.\n"),
+		    _("Limit on array elements to print is %s.\n"),
+		    value);
+}
+
+static void
+show_print_smax (struct ui_file *file, int from_tty,
+		struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file,
+		    _("Limit on string chars to print is %s.\n"),
 		    value);
 }
 
@@ -2382,7 +2391,7 @@ print_converted_chars_to_obstack (struct obstack *obstack,
 /* Print the character string STRING, printing at most LENGTH
    characters.  LENGTH is -1 if the string is nul terminated.  TYPE is
    the type of each character.  OPTIONS holds the printing options;
-   printing stops early if the number hits print_max; repeat counts
+   printing stops early if the number hits print_smax; repeat counts
    are printed as appropriate.  Print ellipses at the end if we had to
    stop before printing LENGTH characters, or if FORCE_ELLIPSES.
    QUOTE_CHAR is the character to print at each end of the string.  If
@@ -2444,7 +2453,7 @@ generic_printstr (struct ui_file *stream, struct type *type,
   /* Convert characters until the string is over or the maximum
      number of printed characters has been reached.  */
   i = 0;
-  while (i < options->print_max)
+  while (i < options->print_smax)
     {
       int r;
 
@@ -2500,7 +2509,7 @@ generic_printstr (struct ui_file *stream, struct type *type,
 /* Print a string from the inferior, starting at ADDR and printing up to LEN
    characters, of WIDTH bytes a piece, to STREAM.  If LEN is -1, printing
    stops at the first null byte, otherwise printing proceeds (including null
-   bytes) until either print_max or LEN characters have been printed,
+   bytes) until either print_smax or LEN characters have been printed,
    whichever is smaller.  ENCODING is the name of the string's
    encoding.  It can be NULL, in which case the target encoding is
    assumed.  */
@@ -2525,13 +2534,13 @@ val_print_string (struct type *elttype, const char *encoding,
   /* First we need to figure out the limit on the number of characters we are
      going to attempt to fetch and print.  This is actually pretty simple.  If
      LEN >= zero, then the limit is the minimum of LEN and print_max.  If
-     LEN is -1, then the limit is print_max.  This is true regardless of
-     whether print_max is zero, UINT_MAX (unlimited), or something in between,
+     LEN is -1, then the limit is print_smax.  This is true regardless of
+     whether print_smax is zero, UINT_MAX (unlimited), or something in between,
      because finding the null byte (or available memory) is what actually
      limits the fetch.  */
 
-  fetchlimit = (len == -1 ? options->print_max : min (len,
-						      options->print_max));
+  fetchlimit = (len == -1 ? options->print_smax : min (len,
+						      options->print_smax));
 
   errcode = read_string (addr, len, width, fetchlimit, byte_order,
 			 &buffer, &bytes_read);
@@ -2792,6 +2801,15 @@ Show limit on string chars or array elements to print."), _("\
 \"set print elements unlimited\" causes there to be no limit."),
 			    NULL,
 			    show_print_max,
+			    &setprintlist, &showprintlist);
+
+  add_setshow_uinteger_cmd ("characters", no_class,
+			    &user_print_options.print_smax, _("\
+Set limit on string chars to print."), _("\
+Show limit on string chars to print."), _("\
+\"set print characters 0\" causes there to be no limit."),
+			    NULL,
+			    show_print_smax,
 			    &setprintlist, &showprintlist);
 
   add_setshow_boolean_cmd ("null-stop", no_class,
