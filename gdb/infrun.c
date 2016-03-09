@@ -911,6 +911,8 @@ follow_exec (ptid_t pid, char *execd_pathname)
      previous incarnation of this process.  */
   no_shared_libraries (NULL, 0);
 
+  target_clear_description();
+
   if (follow_exec_mode_string == follow_exec_mode_new)
     {
       struct program_space *pspace;
