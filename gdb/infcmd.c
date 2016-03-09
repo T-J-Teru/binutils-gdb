@@ -757,7 +757,7 @@ continue_1 (enum focus_kind focus)
   ERROR_NO_INFERIOR;
   ensure_not_tfind_mode ();
 
-  if (non_stop && focus != FOCUS_CURRENT_THREAD)
+  if (non_stop && !inferior_stop && focus != FOCUS_CURRENT_THREAD)
     {
       /* Don't error out if the current thread is running, because
 	 there may be other stopped threads.  */
@@ -833,7 +833,7 @@ continue_command (char *args, int from_tty)
     }
   if (upcmode && is_collective_breakpoints()) focus = FOCUS_ALL_THREADS;
 
-  if (!non_stop && focus != FOCUS_CURRENT_THREAD)
+  if ((!non_stop || inferior_stop) && focus != FOCUS_CURRENT_THREAD)
     error (_("`%s' is meaningless in all-stop mode."),
            (focus == FOCUS_ALL_THREADS) ? "-a" : "-i");
 
@@ -850,7 +850,7 @@ continue_command (char *args, int from_tty)
       int stopped = 0;
       struct thread_info *tp;
 
-      if (non_stop)
+      if (non_stop && !inferior_stop)
 	tp = find_thread_ptid (inferior_ptid);
       else
 	{
@@ -1920,7 +1920,7 @@ program_info (char *args, int from_tty)
       return;
     }
 
-  if (non_stop)
+  if (non_stop && !inferior_stop)
     ptid = inferior_ptid;
   else
     {
@@ -2568,7 +2568,7 @@ attach_command_post_wait (char *args, int from_tty, int async_exec, int async_st
 	 and this inferior only.  This should have no effect on
 	 already running threads.  If a thread has been stopped with a
 	 signal, leave it be.  */
-      if (non_stop)
+      if (non_stop && !inferior_stop)
 	proceed_after_attach (inferior->pid);
       else
 	{
@@ -2594,7 +2594,7 @@ attach_command_post_wait (char *args, int from_tty, int async_exec, int async_st
 	 selected thread is stopped, others may still be executing.
 	 Be sure to explicitly stop all threads of the process.  This
 	 should have no effect on already stopped threads.  */
-      if (non_stop)
+      if (non_stop && !inferior_stop)
 	target_stop (pid_to_ptid (inferior->pid));
 
       /* Tell the user/frontend where we're stopped.  */
@@ -2697,7 +2697,7 @@ attach_command (char *args, int from_tty)
   init_wait_for_inferior ();
   clear_proceed_status ();
 
-  if (non_stop)
+  if (non_stop && !inferior_stop)
     {
       /* If we find that the current thread isn't stopped, explicitly
 	 do so now, because we're going to install breakpoints and
@@ -2910,7 +2910,8 @@ interrupt_target_command (char *args, int from_tty)
   
   if (target_can_async_p ())
     {
-      enum focus_kind focus;
+      enum focus_kind focus =
+          inferior_stop ? FOCUS_CURRENT_INFERIOR : FOCUS_CURRENT_THREAD;
 
       dont_repeat ();		/* Not for the faint of heart.  */
 
@@ -2923,7 +2924,7 @@ interrupt_target_command (char *args, int from_tty)
       if (upcmode && is_collective_breakpoints()) focus = FOCUS_ALL_THREADS;
 
       if (!non_stop && focus != FOCUS_CURRENT_THREAD)
-	error (_("%s is meaningless in all-stop mode."),
+        error (_("%s is meaningless in all-stop mode."),
 	       (focus == FOCUS_ALL_THREADS) ? "-a" : "-i");
 
       interrupt_target_1 (focus);

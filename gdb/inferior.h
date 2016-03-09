@@ -123,6 +123,13 @@ extern int step_stop_if_no_debug;
    are kept running freely.  */
 extern int non_stop;
 
+/* If set, the inferior should be controlled in inferior-stop mode.  In
+   this mode, each inferior is controlled independently.  Execution
+   commands apply only to the the selected inferior by default, and stop
+   events stop only the inferior that had the event -- the other inferiors
+   are kept running freely.  */
+extern int inferior_stop;
+
 /* If set (default), when following a fork, GDB will detach from one
    the fork branches, child or parent.  Exactly which branch is
    detached depends on 'set follow-fork-mode' setting.  */

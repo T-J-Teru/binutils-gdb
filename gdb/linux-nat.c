@@ -1729,13 +1729,13 @@ get_pending_status (struct lwp_info *lp, int *status)
     signo = GDB_SIGNAL_0; /* a pending ptrace event, not a real signal.  */
   else if (lp->status)
     signo = gdb_signal_from_host (WSTOPSIG (lp->status));
-  else if (non_stop && !is_executing (lp->ptid))
+  else if (non_stop && !inferior_stop && !is_executing (lp->ptid))
     {
       struct thread_info *tp = find_thread_ptid (lp->ptid);
 
       signo = tp->suspend.stop_signal;
     }
-  else if (!non_stop)
+  else if (!non_stop || inferior_stop)
     {
       struct target_waitstatus last;
       ptid_t last_ptid;

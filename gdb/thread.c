@@ -383,6 +383,26 @@ iterate_over_threads (int (*callback) (struct thread_info *, void *),
   return NULL;
 }
 
+struct thread_info *
+iterate_over_inferior_threads (int pid,
+			       int (*callback) (struct thread_info *, void *),
+			       void *data)
+{
+  struct thread_info *tp, *next;
+
+  for (tp = thread_list; tp; tp = next)
+    {
+      next = tp->next;
+      if (ptid_get_pid (tp->ptid) != pid)
+        continue;
+      if (!upcmode || is_upc_thread(tp))
+        if ((*callback) (tp, data))
+ 	  return tp;
+    }
+
+  return NULL;
+}
+
 int
 thread_count (void)
 {

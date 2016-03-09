@@ -316,6 +316,7 @@ extern void switch_to_thread (ptid_t ptid);
    once for each known thread.  */
 typedef int (*thread_callback_func) (struct thread_info *, void *);
 extern struct thread_info *iterate_over_threads (thread_callback_func, void *);
+extern struct thread_info *iterate_over_inferior_threads (int pid, thread_callback_func, void *);
 
 /* Traverse all threads.  */
 
