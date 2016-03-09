@@ -1102,4 +1102,9 @@ extern struct value *call_xmethod (struct value *method,
 				   int argc, struct value **argv);
 
 extern const gdb_byte * value_contents_all_safe (struct value *value);
+
+extern int value_repeated (const struct value *value);
+extern void set_value_repeated (struct value *value,
+				int repeated);
+
 #endif /* !defined (VALUE_H) */
