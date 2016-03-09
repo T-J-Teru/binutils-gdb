@@ -845,6 +845,7 @@ SFILES = ada-exp.y ada-lang.c ada-typeprint.c ada-valprint.c ada-tasks.c \
 	exceptions.c expprint.c extension.c \
 	f-exp.y f-lang.c f-typeprint.c f-valprint.c filesystem.c \
 	findcmd.c findvar.c frame.c frame-base.c frame-unwind.c \
+	f-module.c \
 	gdbarch.c arch-utils.c gdb_bfd.c gdb_obstack.c \
 	gdbtypes.c gnu-v2-abi.c gnu-v3-abi.c \
 	go-exp.y go-lang.c go-typeprint.c go-valprint.c \
@@ -1035,6 +1036,7 @@ COMMON_OBS = $(DEPFILES) $(CONFIG_OBS) $(YYOBJ) \
 	extension.o \
 	filesystem.o \
 	filestuff.o \
+	f-module.o \
 	inf-child.o \
 	interps.o \
 	minidebug.o \
