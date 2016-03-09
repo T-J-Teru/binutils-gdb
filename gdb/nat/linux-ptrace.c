@@ -23,6 +23,11 @@
 #include "buffer.h"
 #include "gdb_wait.h"
 
+/* If PaX or NX prevents execution of stack memory then calls to functions in
+   the inferior must use the entry point as the return address.  */
+
+int linux_ptrace_force_use_entry_point_to_call_inferior_functions = 0;
+
 /* Stores the ptrace options supported by the running kernel.
    A value of -1 means we did not check for features yet.  A value
    of 0 means there are no supported features.  */
@@ -181,6 +186,7 @@ linux_ptrace_test_ret_to_nx (void)
   /* We may get SIGSEGV due to missing PROT_EXEC of the return_address.  */
   if (WSTOPSIG (status) != SIGTRAP && WSTOPSIG (status) != SIGSEGV)
     {
+      linux_ptrace_force_use_entry_point_to_call_inferior_functions = 1;
       warning (_("linux_ptrace_test_ret_to_nx: "
 		 "WSTOPSIG %d is neither SIGTRAP nor SIGSEGV!"),
 	       (int) WSTOPSIG (status));
