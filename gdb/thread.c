@@ -1131,7 +1131,8 @@ do_restore_current_thread_cleanup (void *arg)
       && is_stopped (inferior_ptid)
       && target_has_registers
       && target_has_stack
-      && target_has_memory)
+      && target_has_memory
+      && old->selected_frame_level != -1)
     restore_selected_frame (old->selected_frame_id,
 			    old->selected_frame_level);
 }
