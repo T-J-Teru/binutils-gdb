@@ -419,6 +419,20 @@ upc_read_var_value (struct symbol *var, struct frame_info *frame)
 }
 
 void
+upc_expand_threads_factor (struct type *type)
+{
+  int threads;
+  if (TYPE_CODE (type) != TYPE_CODE_RANGE
+      || !TYPE_UPC_HAS_THREADS_FACTOR (type))
+    return;
+  threads = upc_thread_count();
+  if (threads == 0)
+    return;
+  TYPE_HIGH_BOUND (type) = (TYPE_HIGH_BOUND (type) + 1) * threads - 1;
+  TYPE_INSTANCE_FLAGS (type) &= ~TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR;  
+}
+
+void
 upc_lang_init (char *cmd, int from_tty)
 {
   uda_target_type_sizes_t targ_info;
