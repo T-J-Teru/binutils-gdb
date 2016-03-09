@@ -1672,7 +1672,7 @@ frame_info (char *addr_exp, int from_tty)
    frames.  */
 
 static void
-backtrace_command_1 (char *count_exp, int show_locals, int from_tty)
+backtrace_command_1 (char *count_exp, int show_locals, int no_args, int from_tty)
 {
   struct frame_info *fi;
   int count;
@@ -1748,7 +1748,7 @@ backtrace_command_1 (char *count_exp, int show_locals, int from_tty)
          means further attempts to backtrace would fail (on the other
          hand, perhaps the code does or could be fixed to make sure
          the frame->prev field gets set to NULL in that case).  */
-      print_frame_info (fi, 1, LOCATION, 1);
+      print_frame_info (fi, 1, LOCATION, no_args == 0);
       if (show_locals)
 	{
 	  struct frame_id frame_id = get_frame_id (fi);
@@ -1791,6 +1791,7 @@ backtrace_command (char *arg, int from_tty)
 {
   struct cleanup *old_chain = make_cleanup (null_cleanup, NULL);
   int fulltrace_arg = -1, arglen = 0, argc = 0;
+  int argIndicatingNoArgs = -1;
 
   if (arg)
     {
@@ -1809,6 +1810,8 @@ backtrace_command (char *arg, int from_tty)
 
 	  if (fulltrace_arg < 0 && subset_compare (argv[i], "full"))
 	    fulltrace_arg = argc;
+          else if (argIndicatingNoArgs < 0 && subset_compare (argv[i], "noargs"))
+            argIndicatingNoArgs = argc; 
 	  else
 	    {
 	      arglen += strlen (argv[i]);
@@ -1816,7 +1819,7 @@ backtrace_command (char *arg, int from_tty)
 	    }
 	}
       arglen += argc;
-      if (fulltrace_arg >= 0)
+      if (fulltrace_arg >= 0  || argIndicatingNoArgs >= 0)
 	{
 	  if (arglen > 0)
 	    {
@@ -1825,7 +1828,7 @@ backtrace_command (char *arg, int from_tty)
 	      arg[0] = 0;
 	      for (i = 0; i < (argc + 1); i++)
 		{
-		  if (i != fulltrace_arg)
+		  if (i != fulltrace_arg && i != argIndicatingNoArgs)
 		    {
 		      strcat (arg, argv[i]);
 		      strcat (arg, " ");
@@ -1837,7 +1840,7 @@ backtrace_command (char *arg, int from_tty)
 	}
     }
 
-  backtrace_command_1 (arg, fulltrace_arg >= 0 /* show_locals */, from_tty);
+  backtrace_command_1 (arg, fulltrace_arg >= 0 /* show_locals */, argIndicatingNoArgs >= 0 /* show_args */, from_tty);
 
   do_cleanups (old_chain);
 }
@@ -1845,7 +1848,7 @@ backtrace_command (char *arg, int from_tty)
 static void
 backtrace_full_command (char *arg, int from_tty)
 {
-  backtrace_command_1 (arg, 1 /* show_locals */, from_tty);
+  backtrace_command_1 (arg, 1 /* show_locals */, 1 /* show_args */, from_tty);
 }
 
 
@@ -2588,7 +2591,7 @@ With a negative argument, print outermost -COUNT frames.\nUse of the \
 Print backtrace of all stack frames, or innermost COUNT frames\n\
 and the values of the local variables.\n\
 With a negative argument, print outermost -COUNT frames.\n\
-Usage: T <count>\n"));
+Usage: T <count>\n.  If \"noargs\" is an argument, don't print out the arguments."));
     }
 
   add_com_alias ("where", "backtrace", class_alias, 0);
