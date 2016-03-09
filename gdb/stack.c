@@ -1723,8 +1723,8 @@ frame_info (char *addr_exp, int from_tty)
    frames.  */
 
 static void
-backtrace_command_1 (char *count_exp, int show_locals, int no_filters,
-		     int from_tty)
+backtrace_command_1 (char *count_exp, int show_locals, int no_args,
+		     int no_filters, int from_tty)
 {
   struct frame_info *fi;
   int count;
@@ -1880,6 +1880,7 @@ backtrace_command (char *arg, int from_tty)
   struct cleanup *old_chain = make_cleanup (null_cleanup, NULL);
   int fulltrace_arg = -1, arglen = 0, argc = 0, no_filters  = -1;
   int user_arg = 0;
+  int argIndicatingNoArgs = -1;
 
   if (arg)
     {
@@ -1898,6 +1899,10 @@ backtrace_command (char *arg, int from_tty)
 
 	  if (no_filters < 0 && subset_compare (argv[i], "no-filters"))
 	    no_filters = argc;
+	  else if (fulltrace_arg < 0 && subset_compare (argv[i], "full"))
+	    fulltrace_arg = argc;
+          else if (argIndicatingNoArgs < 0 && subset_compare (argv[i], "noargs"))
+            argIndicatingNoArgs = argc; 
 	  else
 	    {
 	      if (fulltrace_arg < 0 && subset_compare (argv[i], "full"))
@@ -1910,8 +1915,8 @@ backtrace_command (char *arg, int from_tty)
 	    }
 	  argc++;
 	}
-      arglen += user_arg;
-      if (fulltrace_arg >= 0 || no_filters >= 0)
+      arglen += argc;
+      if (fulltrace_arg >= 0 || no_filters >= 0 || argIndicatingNoArgs >= 0)
 	{
 	  if (arglen > 0)
 	    {
@@ -1920,7 +1925,9 @@ backtrace_command (char *arg, int from_tty)
 	      arg[0] = 0;
 	      for (i = 0; i < argc; i++)
 		{
-		  if (i != fulltrace_arg && i != no_filters)
+		  if (i != fulltrace_arg
+		      && i != no_filters
+		      && i != argIndicatingNoArgs)
 		    {
 		      strcat (arg, argv[i]);
 		      strcat (arg, " ");
@@ -1933,10 +1940,18 @@ backtrace_command (char *arg, int from_tty)
     }
 
   backtrace_command_1 (arg, fulltrace_arg >= 0 /* show_locals */,
+		       argIndicatingNoArgs >= 0 /* show_args */,
 		       no_filters >= 0 /* no frame-filters */, from_tty);
 
   do_cleanups (old_chain);
 }
+
+static void
+backtrace_full_command (char *arg, int from_tty)
+{
+  backtrace_command_1 (arg, 1 /* show_locals */, 1 /* show_args */, from_tty);
+}
+
 
 /* Iterate over the local variables of a block B, calling CB with
    CB_DATA.  */
@@ -2656,6 +2671,15 @@ With a negative argument, print outermost -COUNT frames.\nUse of the \
 Use of the 'no-filters' qualifier prohibits frame filters from executing\n\
 on this backtrace.\n"));
   add_com_alias ("bt", "backtrace", class_stack, 0);
+  if (xdb_commands)
+    {
+      add_com_alias ("t", "backtrace", class_stack, 0);
+      add_com ("T", class_stack, backtrace_full_command, _("\
+Print backtrace of all stack frames, or innermost COUNT frames\n\
+and the values of the local variables.\n\
+With a negative argument, print outermost -COUNT frames.\n\
+Usage: T <count>\n.  If \"noargs\" is an argument, don't print out the arguments."));
+    }
 
   add_com_alias ("where", "backtrace", class_alias, 0);
   add_info ("stack", backtrace_command,
