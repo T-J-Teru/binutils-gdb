@@ -5416,7 +5416,8 @@ bpstat_check_breakpoint_conditions (bpstat bs, ptid_t ptid)
      breakpoint or a single step breakpoint.  */
 
   if (frame_id_p (b->frame_id)
-      && !frame_id_eq (b->frame_id, get_stack_frame_id (get_current_frame ())))
+      && !frame_id_eq (b->frame_id, get_stack_frame_id (get_current_frame ()))
+      && !(b->type == bp_finish && frame_code_addr (b->frame_id) == frame_code_addr( get_frame_id (get_current_frame ()))))
     {
       bs->stop = 0;
       return;
