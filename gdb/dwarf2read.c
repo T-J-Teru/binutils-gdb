@@ -13114,6 +13114,10 @@ dwarf2_add_member_fn (struct field_info *fip, struct die_info *die,
 
 	  if (!fnp->fcontext)
 	    {
+	      /* APB: While merging 5fcd8359eca5850f76950d58d45cd9 the
+		 extra if case appeared, I think this is a duplicate of the
+		 first error case, but really need to check this.  */
+	      abort ();
 	      /* If there is no `this' field and no DW_AT_containing_type,
 		 we cannot actually find a base class context for the
 		 vtable!  */
@@ -13125,6 +13129,15 @@ dwarf2_add_member_fn (struct field_info *fip, struct die_info *die,
 			       "function \"%s\" (offset %d)"),
 			     fieldname, die->offset.sect_off);
 		}
+#if 0
+	      else if (TYPE_MAIN_TYPE(this_type)->nfields == 0)
+		{
+                 const char *physname = dwarf2_physname (fieldname, die, cu);
+	          complaint(&symfile_complaints,
+	                    _("Member function \"%s\" has 0 fields and no <this>!"), 
+	                    physname);
+	    }
+#endif
 	      else
 		{
 		  fnp->fcontext
