@@ -640,7 +640,7 @@ gcmp (const void *t1v, const void *t2v)
 }
 
 /* Search through the list of all kernel threads for the thread
-   that has stopped on a SIGTRAP signal, and return its TID.
+   that has stopped, and return its TID.
    Return 0 if none found.  */
 
 static pthdb_tid_t
@@ -656,11 +656,11 @@ get_signaled_thread (void)
           	  sizeof (thrinf), &ktid, 1) != 1)
       break;
 
-    if (thrinf.ti_cursig == SIGTRAP)
+    if (thrinf.ti_flag & TTRCSIG)
       return thrinf.ti_tid;
   }
 
-  /* Didn't find any thread stopped on a SIGTRAP signal.  */
+  /* Didn't find any thread stopped.  */
   return 0;
 }
 
@@ -1762,6 +1762,9 @@ aix_thread_extra_thread_info (struct thread_info *thread)
   if (tid != PTHDB_INVALID_TID)
     /* i18n: Like "thread-identifier %d, [state] running, suspended" */
     fprintf_unfiltered (buf, _("tid %d"), (int)tid);
+
+  /* pthdb_pthread_state and pthdb_pthread_suspendstate both seem to return
+   * nonsense on AIX 5.2. */
 
   status = pthdb_pthread_state (pd_session, pdtid, &state);
   if (status != PTHDB_SUCCESS)
