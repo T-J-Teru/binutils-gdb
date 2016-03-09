@@ -183,10 +183,15 @@ f77_print_array_1 (f77_array_dim *tbl, int nss, int ndimensions, struct type *ty
 {
   int i;
 
+  unsigned int print_max = options->print_max;
+
+  if (val && value_repeated (val) && recurse == 0)
+      print_max = INT_MAX;
+ 
   if (nss != ndimensions)
     {
       for (i = 0;
-	   (i < F77_DIM_SIZE (tbl, nss) && (*elts) < options->print_max);
+	   (i < F77_DIM_SIZE (tbl, nss) && (*elts) < print_max);
 	   i++)
 	{
 	  fprintf_filtered (stream, "( ");
@@ -197,12 +202,12 @@ f77_print_array_1 (f77_array_dim *tbl, int nss, int ndimensions, struct type *ty
 			     stream, recurse, val, options, elts);
 	  fprintf_filtered (stream, ") ");
 	}
-      if (*elts >= options->print_max && i < F77_DIM_SIZE (tbl, nss)) 
+      if (*elts >= print_max && i < F77_DIM_SIZE (tbl, nss)) 
 	fprintf_filtered (stream, "...");
     }
   else
     {
-      for (i = 0; i < F77_DIM_SIZE (tbl, nss) && (*elts) < options->print_max;
+      for (i = 0; i < F77_DIM_SIZE (tbl, nss) && (*elts) < print_max;
 	   i++, (*elts)++)
 	{
 	  val_print (TYPE_TARGET_TYPE (type),
@@ -214,7 +219,7 @@ f77_print_array_1 (f77_array_dim *tbl, int nss, int ndimensions, struct type *ty
 	  if (i != (F77_DIM_SIZE (tbl, nss) - 1))
 	    fprintf_filtered (stream, ", ");
 
-	  if ((*elts == options->print_max - 1)
+	  if ((*elts == print_max - 1)
 	      && (i != (F77_DIM_SIZE (tbl, nss) - 1)))
 	    fprintf_filtered (stream, "...");
 	}
