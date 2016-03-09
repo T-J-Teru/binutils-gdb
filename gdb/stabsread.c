@@ -1612,6 +1612,9 @@ again:
   type_descriptor = (*pp)[-1];
   switch (type_descriptor)
     {
+    case 'V':
+        ++*pp;                  /* volatile */
+        goto again;
     case 'x':
       {
 	enum type_code code;
