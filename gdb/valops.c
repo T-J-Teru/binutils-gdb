@@ -1275,19 +1275,29 @@ value_repeat (struct value *arg1, int count)
 {
   struct value *val;
 
-  if (VALUE_LVAL (arg1) != lval_memory)
+  if (VALUE_LVAL (arg1) != lval_memory &&
+      VALUE_LVAL (arg1) != lval_upc_shared)
     error (_("Only values in memory can be extended with '@'."));
   if (count < 1)
     error (_("Invalid number %d of repetitions."), count);
 
   val = allocate_repeat_value (value_enclosing_type (arg1), count);
 
-  VALUE_LVAL (val) = lval_memory;
-  set_value_address (val, value_address (arg1));
+  if (VALUE_LVAL (arg1) == lval_upc_shared)
+    {
+      VALUE_LVAL (val) = lval_upc_shared;
+      VALUE_SHARED_ADDR (val) = VALUE_SHARED_ADDR (arg1);
+      upc_value_fetch_lazy (val);
+    }
+  else
+    {
+      VALUE_LVAL (val) = lval_memory;
+      set_value_address (val, value_address (arg1));
 
-  read_value_memory (val, 0, value_stack (val), value_address (val),
-		     value_contents_all_raw (val),
-		     TYPE_LENGTH (value_enclosing_type (val)));
+      read_value_memory (val, 0, value_stack (val), value_address (val),
+		         value_contents_all_raw (val),
+		         TYPE_LENGTH (value_enclosing_type (val)));
+    }
 
   return val;
 }
