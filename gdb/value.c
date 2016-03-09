@@ -4047,6 +4047,23 @@ isvoid_internal_fn (struct gdbarch *gdbarch,
   return value_from_longest (builtin_type (gdbarch)->builtin_int, ret);
 }
 
+static void clear_value_history (char *arg, int from_tty)
+{
+  struct value_history_chunk *cur, *next;
+  int i;
+
+  for (cur = value_history_chain; cur; cur = next)
+    {
+      for (i = 0; i < VALUE_HISTORY_CHUNK; i++)
+        if (cur->values[i])
+	  xfree (cur->values[i]);
+      next = cur->next;
+      xfree(cur);
+    }
+  value_history_count = 0;
+  value_history_chain = NULL;
+}
+
 void
 _initialize_values (void)
 {
@@ -4085,4 +4102,7 @@ Check whether an expression is void.\n\
 Usage: $_isvoid (expression)\n\
 Return 1 if the expression is void, zero otherwise."),
 			 isvoid_internal_fn, NULL);
+
+  add_com ("clear-value-history", class_obscure, clear_value_history, _("\
+Clear the value history."));
 }
