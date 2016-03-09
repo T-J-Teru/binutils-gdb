@@ -1666,6 +1666,9 @@ val_print_array_elements (struct type *type,
   elttype = TYPE_TARGET_TYPE (type);
   eltlen = TYPE_LENGTH (check_typedef (elttype));
   index_type = TYPE_INDEX_TYPE (type);
+  /* Check index_type is actually capable of holding an index. */
+  if (TYPE_LENGTH (index_type) < sizeof(int))
+      index_type = builtin_type (get_type_arch (type))->builtin_int;
 
   if (get_array_bounds (type, &low_bound, &high_bound))
     {
