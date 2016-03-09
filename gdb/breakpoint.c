@@ -15125,8 +15125,8 @@ deprecated_remove_raw_breakpoint (struct gdbarch *gdbarch, void *bp)
 /* One (or perhaps two) breakpoints used for software single
    stepping.  */
 
-static void *single_step_breakpoints[2];
-static struct gdbarch *single_step_gdbarch[2];
+static void *single_step_breakpoints[2] = { NULL, NULL };
+static struct gdbarch *single_step_gdbarch[2] = { NULL, NULL };
 
 /* Create and insert a breakpoint for software single step.  */
 
