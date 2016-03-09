@@ -88,6 +88,9 @@ struct thread_db
   td_err_e (*td_thr_tls_get_addr_p) (const td_thrhandle_t *th,
 				     psaddr_t map_address,
 				     size_t offset, psaddr_t *address);
+  td_err_e (*td_thr_tlsbase_p) (const td_thrhandle_t *th,
+				unsigned long int modid,
+				psaddr_t *base);
   const char ** (*td_symbol_list_p) (void);
 };
 
@@ -497,7 +500,10 @@ thread_db_get_tls_address (struct thread_info *thread, CORE_ADDR offset,
   if (thread_db == NULL || !thread_db->all_symbols_looked_up)
     return TD_ERR;
 
-  if (thread_db->td_thr_tls_get_addr_p == NULL)
+  /* If td_thr_tls_get_addr is missing rather do not expect td_thr_tlsbase
+     could work.  */
+  if (thread_db->td_thr_tls_get_addr_p == NULL
+      || (load_module == 0 && thread_db->td_thr_tlsbase_p == NULL))
     return -1;
 
   lwp = get_thread_lwp (thread);
@@ -508,12 +514,23 @@ thread_db_get_tls_address (struct thread_info *thread, CORE_ADDR offset,
 
   saved_inferior = current_inferior;
   current_inferior = thread;
-  /* Note the cast through uintptr_t: this interface only works if
-     a target address fits in a psaddr_t, which is a host pointer.
-     So a 32-bit debugger can not access 64-bit TLS through this.  */
-  err = thread_db->td_thr_tls_get_addr_p (&lwp->th,
-					  (psaddr_t) (uintptr_t) load_module,
-					  offset, &addr);
+
+  if (load_module != 0)
+    {
+      /* Note the cast through uintptr_t: this interface only works if
+	 a target address fits in a psaddr_t, which is a host pointer.
+	 So a 32-bit debugger can not access 64-bit TLS through this.  */
+      err = thread_db->td_thr_tls_get_addr_p (&lwp->th,
+					     (psaddr_t) (uintptr_t) load_module,
+					      offset, &addr);
+    }
+  else
+    {
+      /* GNU __libc_setup_tls initializes l_tls_modid as 1.  */
+      err = thread_db->td_thr_tlsbase_p (&lwp->th, 1, &addr);
+      addr = (char *) addr + offset;
+    }
+
   current_inferior = saved_inferior;
   if (err == TD_OK)
     {
@@ -565,6 +582,7 @@ thread_db_load_search (void)
   tdb->td_ta_set_event_p = &td_ta_set_event;
   tdb->td_ta_event_getmsg_p = &td_ta_event_getmsg;
   tdb->td_thr_tls_get_addr_p = &td_thr_tls_get_addr;
+  tdb->td_thr_tlsbase_p = &td_thr_tlsbase;
 
   return 1;
 }
@@ -633,6 +651,7 @@ try_thread_db_load_1 (void *handle)
   CHK (0, tdb->td_ta_set_event_p = dlsym (handle, "td_ta_set_event"));
   CHK (0, tdb->td_ta_event_getmsg_p = dlsym (handle, "td_ta_event_getmsg"));
   CHK (0, tdb->td_thr_tls_get_addr_p = dlsym (handle, "td_thr_tls_get_addr"));
+  CHK (0, tdb->td_thr_tlsbase_p = dlsym (handle, "td_thr_tlsbase"));
 
 #undef CHK
 
