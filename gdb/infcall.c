@@ -37,6 +37,10 @@
 #include "gdbthread.h"
 #include "exceptions.h"
 
+#if defined (__linux__)
+extern int linux_ptrace_force_use_entry_point_to_call_inferior_functions;
+#endif
+
 /* If we can't find a function's name from its address,
    we print this instead.  */
 #define RAW_FUNCTION_ADDRESS_FORMAT "at 0x%s"
@@ -637,7 +641,16 @@ call_function_by_hand (struct value *function, int nargs, struct value **args)
      not just the breakpoint but also an extra word containing the
      size (?) of the structure being passed.  */
 
-  switch (gdbarch_call_dummy_location (gdbarch))
+  const int call_dummy_location =
+#if defined (__linux__)
+    (linux_ptrace_force_use_entry_point_to_call_inferior_functions
+     ? AT_ENTRY_POINT
+     : gdbarch_call_dummy_location (gdbarch));
+#else
+    gdbarch_call_dummy_location (gdbarch);
+#endif
+
+  switch (call_dummy_location)
     {
     case ON_STACK:
       {

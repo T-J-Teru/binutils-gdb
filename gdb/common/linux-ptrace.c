@@ -29,6 +29,12 @@
 #include "gdb_assert.h"
 #include "gdb_wait.h"
 
+/* If PaX or NX prevents execution of stack memory then calls to functions in
+   the inferior must use the entry point as the return address.  */
+
+int
+linux_ptrace_force_use_entry_point_to_call_inferior_functions = 0;
+
 /* Find all possible reasons we could fail to attach PID and append these
    newline terminated reason strings to initialized BUFFER.  '\0' termination
    of BUFFER must be done by the caller.  */
@@ -156,6 +162,7 @@ linux_ptrace_test_ret_to_nx (void)
   /* We may get SIGSEGV due to missing PROT_EXEC of the return_address.  */
   if (WSTOPSIG (status) != SIGTRAP && WSTOPSIG (status) != SIGSEGV)
     {
+      linux_ptrace_force_use_entry_point_to_call_inferior_functions = 1;
       warning (_("linux_ptrace_test_ret_to_nx: "
 		 "WSTOPSIG %d is neither SIGTRAP nor SIGSEGV!"),
 	       (int) WSTOPSIG (status));

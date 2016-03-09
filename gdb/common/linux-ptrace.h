@@ -67,6 +67,7 @@ struct buffer;
 #define __WALL          0x40000000 /* Wait for any child.  */
 #endif
 
+extern int linux_ptrace_force_use_entry_point_to_call_inferior_functions;
 extern void linux_ptrace_attach_warnings (pid_t pid, struct buffer *buffer);
 extern void linux_ptrace_init_warnings (void);
 
