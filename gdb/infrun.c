@@ -2719,6 +2719,99 @@ prepare_for_detach (void)
   discard_cleanups (old_chain_1);
 }
 
+/* Print thread IDs for asynchronous events, set with
+   `set print async-thread-ids'.  */
+static int print_async_thread_ids = 0;
+
+static void
+show_print_async_thread_ids (struct ui_file *file, int from_tty,
+			     struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Printing of thread IDs for asynchronous events is %s.\n"), value);
+}
+
+struct wrapper_data
+{
+  struct ui_file *wrapped;
+  ptid_t ptid;
+  int last_char_was_nl;
+};
+
+static void
+wrap_file_delete (struct ui_file *wrapper)
+{
+  struct wrapper_data *data = ui_file_data (wrapper);
+  xfree (data);
+}
+
+static void
+wrap_file_flush (struct ui_file *wrapper)
+{
+  struct wrapper_data *data = ui_file_data (wrapper);
+  gdb_flush (data->wrapped);
+}
+
+static void
+wrap_file_write (struct ui_file *wrapper,
+		 const char *buf,
+		 long length_buf)
+{
+  struct wrapper_data *data = ui_file_data (wrapper);
+  const char *cur, *last = buf, *end = buf + length_buf;
+  for (cur = buf; cur < end; cur++)
+    {
+      if (data->last_char_was_nl)
+        {
+          ui_file_write (data->wrapped, last, cur - last);	  
+          last = cur;	  
+          fprintf_filtered (data->wrapped, "[%s] ",
+			    target_pid_to_str (data->ptid));
+        }
+      data->last_char_was_nl = (*cur == '\n');
+    }
+  ui_file_write (data->wrapped, last, cur - last);
+}
+
+static int
+wrap_file_isatty (struct ui_file *wrapper)
+{
+  struct wrapper_data *data = ui_file_data (wrapper);
+  return ui_file_isatty (data->wrapped);
+}
+
+static struct ui_file *wrap_ui_file (struct ui_file *to_wrap, ptid_t ptid)
+{
+  struct ui_file *wrapper = ui_file_new ();
+  struct wrapper_data *data = xzalloc (sizeof (struct wrapper_data));
+  data->wrapped = to_wrap;
+  data->ptid = ptid;  
+  data->last_char_was_nl = 1;
+  set_ui_file_data (wrapper, data, wrap_file_delete);
+  set_ui_file_flush (wrapper, wrap_file_flush);
+  set_ui_file_write (wrapper, wrap_file_write);
+  set_ui_file_isatty (wrapper, wrap_file_isatty);
+  return wrapper;
+}
+
+static void
+restore_stdout (void *old_stdout)
+{
+  gdb_stdout = *(struct ui_file **) old_stdout;
+}
+
+static void
+restore_stderr (void *old_stderr)
+{
+  gdb_stderr = *(struct ui_file **) old_stderr;
+}
+
+static void
+restore_uiout (void *ignored)
+{
+  struct ui_out *uiout = current_uiout;
+  ui_out_redirect (uiout, NULL);
+}
+
 /* Wait for control to return from inferior to debugger.
 
    If inferior gets a signal, we may decide to start it up again
@@ -2730,6 +2823,7 @@ void
 wait_for_inferior (void)
 {
   struct cleanup *old_cleanups;
+  struct ui_file *old_stdout, *old_stderr;
 
   if (debug_infrun)
     fprintf_unfiltered
@@ -2755,6 +2849,19 @@ wait_for_inferior (void)
 
       if (debug_infrun)
 	print_target_wait_results (waiton_ptid, ecs->ptid, &ecs->ws);
+
+      if (print_async_thread_ids)
+	{
+	  struct ui_out *uiout = current_uiout;
+	  old_stdout = gdb_stdout;
+	  make_cleanup (restore_stdout, &old_stdout);
+	  old_stderr = gdb_stderr;
+	  make_cleanup (restore_stderr, &old_stderr);
+	  gdb_stdout = wrap_ui_file (gdb_stdout, ecs->ptid);
+	  gdb_stderr = wrap_ui_file (gdb_stderr, ecs->ptid);
+	  ui_out_redirect (uiout, gdb_stdout);
+	  make_cleanup (restore_uiout, &old_stdout);  
+	}
 
       /* If an error happens while handling the event, propagate GDB's
 	 knowledge of the executing state to the frontend/user running
@@ -7613,4 +7720,12 @@ or signalled."),
 			   show_observer_mode,
 			   &setlist,
 			   &showlist);
+
+  add_setshow_boolean_cmd ("async-thread-ids", no_class,
+         &print_async_thread_ids, _("\
+Set printing of thread IDs for asynchronus events."), _("\
+Show printing of thread IDs for asynchronous events."), NULL,
+         NULL,
+         show_print_async_thread_ids,
+         &setprintlist, &showprintlist);
 }
