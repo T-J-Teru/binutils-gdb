@@ -51,6 +51,8 @@ extern const char *gdb_bfd_errmsg (bfd_error_type error_tag, char **matching);
 void reset_prompt_for_continue_wait_time (void);
 /* Return the time spent in prompt_for_continue.  */
 struct timeval get_prompt_for_continue_wait_time (void);
+
+int isstartoftemplate (const char *s);
 
 /* Parsing utilites.  */
 
@@ -135,6 +137,8 @@ extern void substitute_path_component (char **stringp, const char *from,
 				       const char *to);
 
 char *ldirname (const char *filename);
+
+void simplify_path (char *pathl);
 
 /* GDB output, ui_file utilities.  */
 

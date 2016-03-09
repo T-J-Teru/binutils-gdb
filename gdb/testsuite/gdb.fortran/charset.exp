@@ -36,9 +36,9 @@ gdb_test "print x" \
     "print fortran narrow character"
 
 gdb_test "print c" \
-    " = 4_'k'" \
+    " = 'k'" \
     "print fortran wide character"
 
 gdb_test "print str" \
-    " = 4_'lmnop'" \
+    " = 'lmnop'" \
     "print fortran wide string"

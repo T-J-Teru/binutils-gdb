@@ -642,7 +642,8 @@ make_blockvector (void)
 }
 
 
-struct subfile *find_subfile (const char *name, const char *dirname)
+struct subfile *
+find_subfile (const char *name, const char *dirname)
 {
   struct subfile *subfile;
   char *abs_name;

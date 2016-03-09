@@ -62,10 +62,10 @@ gdb_test_no_output "set print null on"
 gdb_test "print repeat" "= L\"A\", '$cent' <repeats 21 times>, \"B\"" \
     "print repeat (print null on)"
 
-gdb_test_no_output "set print elements 3"
+gdb_test_no_output "set print characters 3"
 
 gdb_test "print repeat" "= L\"A$cent$cent\"\.\.\." \
-    "print repeat (print elements 3)"
+    "print repeat (print characters 3)"
 
 gdb_test "print repeat_p" "= $hex L\"A$cent$cent\"\.\.\." \
-    "print repeat_p (print elements 3)"
+    "print repeat_p (print characters 3)"

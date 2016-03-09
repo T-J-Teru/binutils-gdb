@@ -2338,7 +2338,7 @@ check_typedef (struct type *type)
 	if ((type_quals.instance_flags & ALL_CLASSES) != 0)
 	  new_instance_flags &= ~ALL_CLASSES;
 
-	type_quals.instance_flags = new_instance_flags;
+	type_quals.instance_flags |= new_instance_flags;
       }
     }
 

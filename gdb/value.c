@@ -216,6 +216,12 @@ struct value
   /* Register number if the value is from a register.  */
   short regnum;
 
+  /* If value is not allocated. */
+  unsigned int not_allocated : 1;
+
+  /* If value is not associated. */
+  unsigned int not_associated : 1;
+
   /* Location of value (if lval).  */
   union
   {
@@ -994,6 +1000,8 @@ allocate_value_lazy (struct type *type)
   val->repeated = 0;
   val->from_infcall = 0;
   val->length = 0;
+  val->not_allocated = 0;
+  val->not_associated = 0;
 
   /* Values start out on the all_values chain.  */
   val->reference_count = 1;
@@ -1238,6 +1246,20 @@ require_available (const struct value *value)
     throw_error (NOT_AVAILABLE_ERROR, _("value is not available"));
 }
 
+static void
+require_allocated (const struct value *value)
+{
+  if (value->not_allocated)
+    error (_("array value is not allocated"));
+}
+
+static void
+require_associated (const struct value *value)
+{
+  if (value->not_associated)
+    error (_("pointer value is not associated"));
+}
+
 const gdb_byte *
 value_contents_for_printing (struct value *value)
 {
@@ -1265,6 +1287,8 @@ value_contents_all (struct value *value)
   const gdb_byte *result = value_contents_for_printing (value);
   require_not_optimized_out (value);
   require_available (value);
+  require_allocated (value);
+  require_associated (value);
   return result;
 }
 
@@ -1370,6 +1394,10 @@ void
 value_contents_copy (struct value *dst, int dst_offset,
 		     struct value *src, int src_offset, int length)
 {
+  require_not_optimized_out (src);
+  require_allocated (src);
+  require_associated (src);
+
   if (src->lazy)
     value_fetch_lazy (src);
 
@@ -1406,6 +1434,8 @@ value_contents (struct value *value)
   const gdb_byte *result = value_contents_writeable (value);
   require_not_optimized_out (value);
   require_available (value);
+  require_allocated (value);
+  require_associated (value);
   return result;
 }
 
@@ -1781,6 +1811,8 @@ value_copy (struct value *arg)
         val->location.computed.closure = funcs->copy_closure (val);
     }
   val->repeated = arg->repeated;
+  val->not_allocated = arg->not_allocated;
+  val->not_associated = arg->not_associated;
   return val;
 }
 
@@ -3897,6 +3929,14 @@ void
 value_fetch_lazy (struct value *val)
 {
   gdb_assert (value_lazy (val));
+  if (value_optimized_out (val)
+      || value_not_allocated (val)
+      || value_not_associated (val))
+    {
+      /* Keep it optimized out.  */;
+      set_value_lazy (val, 0);
+      return 0;
+    }
   allocate_value_contents_limited (val);
   /* A value is either lazy, or fully fetched.  The
      availability/validity is only established as we try to fetch a
@@ -4136,6 +4176,30 @@ value_copy_contents_all_raw (struct value *to, struct value *from)
 {
   memcpy (value_contents_all_raw (to), value_contents_all_raw (from),
 	  min (value_length (from), value_length (to)));
+}
+
+void
+set_value_not_allocated (struct value *v, int not_allocated)
+{
+  v->not_allocated = not_allocated;
+}
+
+void
+set_value_not_associated (struct value *v, int not_associated)
+{
+  v->not_associated = not_associated;
+}
+
+int
+value_not_allocated (const struct value *v)
+{
+  return v->not_allocated;
+}
+
+int
+value_not_associated (const struct value *v)
+{
+  return v->not_associated;
 }
 
 void

@@ -5982,14 +5982,12 @@ process_psymtab_comp_unit_reader (const struct die_reader_specs *reader,
 
   /* This must be done before calling dwarf2_build_include_psymtabs.  */
   attr = dwarf2_attr (comp_unit_die, DW_AT_comp_dir, cu);
-  if (attr != NULL)
+  if (attr != NULL && DW_STRING (attr))
     {
       char *s = strstr(DW_STRING (attr), ":");
       if (s != NULL) pst->dirname = xstrdup(s + 1); /* DWARF 2/3 suggest host:path (but not suggested for DWARF4)*/
       else pst->dirname = DW_STRING (attr);
     }
-  if (attr != NULL)
-    pst->dirname = DW_STRING (attr);
 
   baseaddr = ANOFFSET (objfile->section_offsets, SECT_OFF_TEXT (objfile));
 
@@ -9095,7 +9093,7 @@ find_file_and_directory (struct die_info *die, struct dwarf2_cu *cu,
     }
 
   attr = dwarf2_attr (die, DW_AT_comp_dir, cu);
-  if (attr != NULL)
+  if (attr != NULL && DW_STRING (attr))
     {
       char *s = strstr(DW_STRING (attr), ":");
       if (s != NULL) *comp_dir = xstrdup(s + 1); /* DWARF 2/3 suggest host:path (but not suggested for DWARF4)*/
@@ -11282,6 +11280,7 @@ inherit_abstract_dies (struct die_info *die, struct dwarf2_cu *cu)
   struct attribute *attr;
   struct dwarf2_cu *origin_cu;
   struct pending **origin_previous_list_in_scope;
+  struct die_info *parent_die;
 
   attr = dwarf2_attr (die, DW_AT_abstract_origin, cu);
   if (!attr)
@@ -11314,7 +11313,7 @@ inherit_abstract_dies (struct die_info *die, struct dwarf2_cu *cu)
         {
           complaint (&symfile_complaints,
                      _("DIE 0x%x is a child of its abstract origin 0x%x"),
-                     die->offset, origin_die->offset);
+                     die->offset.sect_off, origin_die->offset.sect_off);
           return;
         }
       parent_die = parent_die->parent;
@@ -13980,6 +13979,8 @@ read_array_type (struct die_info *die, struct dwarf2_cu *cu)
                     make_loclist_baton(cu, DW_BLOCK(attr));
 
                 attr_alloc = dwarf2_attr(die, DW_AT_allocated, cu);
+                if (!attr_alloc)
+                    attr_alloc = dwarf2_attr(die, DW_AT_associated, cu);
                 if (attr_alloc)
                   {
                     TYPE_INSTANCE_FLAGS (type) |= TYPE_INSTANCE_FLAG_ALLOCATABLE;
@@ -19971,7 +19972,6 @@ dwarf2_const_value (const struct attribute *attr, struct symbol *sym,
 static struct type *
 die_type (struct die_info *die, struct dwarf2_cu *cu)
 {
-  struct type *type = NULL;  
   struct attribute *type_attr;
 
   type_attr = dwarf2_attr (die, DW_AT_type, cu);

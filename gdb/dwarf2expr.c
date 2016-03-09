@@ -1479,6 +1479,8 @@ execute_stack_op (struct dwarf_expr_context *ctx,
 
 	case DW_OP_push_object_address:
 	  /* Return the address of the object we are currently observing.  */
+	  if (ctx->funcs->get_object_address == NULL)
+	    error (_("DW_OP_push_object_address: no get_object_address function."));
 	  result = (ctx->funcs->get_object_address) (ctx->baton);
 	  result_val = value_from_ulongest (address_type, result);
 	  break;

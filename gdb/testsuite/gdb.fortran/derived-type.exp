@@ -37,17 +37,21 @@ if ![runto MAIN__] then {
 set int4 "(int4|integer\\(kind=4\\)|INTEGER\\(4\\))"
 set real4 "(real4|real\\(kind=4\\)|REAL\\(4\\))"
 
-gdb_test "ptype p" "type = Type bar\r\n *${int4} :: c\r\n *${real4} :: d\r\n *End Type bar"
+gdb_test "ptype p" "type = TYPE bar\r\n *${int4} :: c\r\n *${real4} :: d\r\n *END TYPE bar"
 
 set test "type-printing for derived type"
 gdb_test_multiple "ptype q" $test {
-    -re "type = Type foo\r\n *${real4} :: a\r\n *Type bar\r\n *${int4} :: c\r\n *${real4} :: d\r\n *End Type bar :: x\r\n *character\\*7 :: b\r\n *End Type foo\r\n$gdb_prompt $" {
+    -re "type = TYPE foo\r\n *${real4} :: a\r\n *TYPE bar\r\n *${int4} :: c\r\n *${real4} :: d\r\n *END TYPE bar :: x\r\n *character\\*7 :: b\r\n *END TYPE foo\r\n$gdb_prompt $" {
 	pass $test
     }
-    -re "type = Type foo\r\n *${real4} :: a\r\n *Type bar\r\n *${int4} :: c\r\n *${real4} :: d\r\n *End Type bar :: x\r\n *character :: b\\(7\\)\r\n *End Type foo\r\n$gdb_prompt $" {
+    -re "type = TYPE foo\r\n *${real4} :: a\r\n *TYPE bar\r\n *${int4} :: c\r\n *${real4} :: d\r\n *END TYPE bar :: x\r\n *character :: b\\(7\\)\r\n *END TYPE foo\r\n$gdb_prompt $" {
 	# Compiler should produce string, not an array of characters.
 	setup_xfail "*-*-*"
 	fail $test
+    }
+    -re "type = TYPE foo\r\n *${real4} :: a\r\n *TYPE\\(bar\\) :: x\r\n *character\\*7 :: b\r\n *END TYPE foo\r\n$gdb_prompt $" {
+        # We don't print the full type definition for nested type (as some compilers like to nest a type inside itself!)
+	kfail "allinea" $test
     }
 }
 

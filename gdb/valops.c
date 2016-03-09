@@ -1533,6 +1533,7 @@ value_addr (struct value *arg1)
       /* ... and also the relative position of the subobject in the full
 	 object.  */
       set_value_pointed_to_offset (arg2, value_embedded_offset (arg1));
+      break;
     case lval_upc_shared:
       arg2 = upc_value_from_pts (pt, VALUE_SHARED_ADDR (arg1));
       return arg2;
@@ -3589,7 +3590,7 @@ value_namespace_elt (const struct type *curtype,
   struct value *retval = value_maybe_namespace_elt (curtype, name,
 						    want_address, 
 						    noside);
-
+   printf("lookup symbol in namespace valops\n");
   if (retval == NULL)
     error (_("No symbol \"%s\" in namespace \"%s\"."), 
 	   name, TYPE_TAG_NAME (curtype));
