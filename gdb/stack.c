@@ -424,10 +424,11 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
 
 		      /* If the reference addresses match but dereferenced
 			 content does not match print them.  */
-		      if (val != val_deref
-			  && value_contents_eq (val_deref, 0,
+		      if (value_optimized_out (entryval_deref)
+			  || ((val != val_deref
+			       && value_contents_eq (val_deref, 0,
 						entryval_deref, 0,
-						TYPE_LENGTH (type_deref)))
+						     TYPE_LENGTH (type_deref)))))
 			val_equal = 1;
 		    }
 		  CATCH (except, RETURN_MASK_ERROR)
