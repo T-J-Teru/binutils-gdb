@@ -72,7 +72,5 @@ for opt in opt_flags:
                     libs.insert(0, '-L' + getvar('LIBPL'))
                 elif os.name == 'nt':
                     libs.insert(0, '-L' + sysconfig.PREFIX + '/libs')
-            if getvar('LINKFORSHARED') is not None:
-                libs.extend(getvar('LINKFORSHARED').split())
         print (to_unix_path(' '.join(libs)))
 
