@@ -128,6 +128,8 @@ GDB_AC_WITH_DIR(DEBUGDIR, separate-debug-dir,
 # config.h would not get so translated, the path prefixes no longer match.
 AC_DEFINE_DIR(BINDIR, bindir, [Directory of programs.])
 
+AC_DEFINE_DIR(LIBDIR, libdir, [Directory of libraries.])
+
 # GDB's datadir relocation
 
 GDB_AC_WITH_DIR(GDB_DATADIR, gdb-datadir,

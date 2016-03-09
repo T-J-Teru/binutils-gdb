@@ -4910,6 +4910,18 @@ _ACEOF
 
 
 
+
+  test "x$prefix" = xNONE && prefix="$ac_default_prefix"
+  test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
+  ac_define_dir=`eval echo $libdir`
+  ac_define_dir=`eval echo $ac_define_dir`
+
+cat >>confdefs.h <<_ACEOF
+#define LIBDIR "$ac_define_dir"
+_ACEOF
+
+
+
 # GDB's datadir relocation
 
 

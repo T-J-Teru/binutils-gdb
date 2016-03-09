@@ -1527,7 +1527,6 @@ message == an error message without a stack will be printed."),
 			&user_show_python_list);
 
 #ifdef HAVE_PYTHON
-#ifdef WITH_PYTHON_PATH
   /* Work around problem where python gets confused about where it is,
      and then can't find its libraries, etc.
      NOTE: Python assumes the following layout:
@@ -1565,7 +1564,6 @@ message == an error message without a stack will be printed."),
   Py_SetProgramName (progname_copy);
 #else
   Py_SetProgramName (progname);
-#endif
 #endif
 
   Py_Initialize ();
