@@ -298,7 +298,7 @@ do_serial_close (struct serial *scb, int really_close)
 {
   struct serial *tmp_scb;
 
-  if (serial_logfp)
+  if (serial_logfp && really_close)
     {
       fputs_unfiltered ("\nEnd of log\n", serial_logfp);
       serial_current_type = 0;
