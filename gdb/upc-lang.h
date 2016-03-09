@@ -43,5 +43,6 @@ extern int upc_thread_count ();
 extern struct value *upc_read_var_value (struct symbol *var, struct frame_info *frame);
 extern void upc_lang_init (char *cmd, int from_tty);
 extern void upc_expand_threads_factor (struct type *type);
+extern struct value *upc_value_subscript (struct value *, LONGEST index);
 
 #endif /* !defined (UPC_LANG_H) */
