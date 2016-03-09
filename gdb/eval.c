@@ -1778,6 +1778,16 @@ evaluate_subexp_standard (struct type *expect_type,
 
       /* First determine the type code we are dealing with.  */
       arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+
+      if (noside == EVAL_SKIP)
+        {
+          int i;
+          /* We need to skip the arguments.  */
+          for (i = 0; i < nargs; i++)
+            evaluate_subexp (NULL_TYPE, exp, pos, noside);
+          goto nosideret;
+        }
+
       type = check_typedef (value_type (arg1));
       code = TYPE_CODE (type);
 

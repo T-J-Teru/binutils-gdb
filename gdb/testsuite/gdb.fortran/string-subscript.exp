@@ -1,0 +1,32 @@
+if $tracelevel then {
+	strace $tracelevel
+}
+
+if { [skip_fortran_tests] } { return -1 }
+
+set testfile "string-subscript"
+set srcfile ${testfile}.f90
+set binfile ${objdir}/${subdir}/${testfile}
+
+if {[gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" \
+	 executable {debug f90}] != ""} {
+    return -1
+}
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+if ![runto MAIN__] then {
+    perror "couldn't run to breakpoint MAIN__"
+    continue
+}
+
+if ![runto [gdb_get_line_number "breakpoint1"] ] then {
+    perror "couldn't run to breakpoint "
+    continue
+}
+
+gdb_test "print test(3)" "'i'"
+gdb_test "print test(3:7)" "'is is'"
