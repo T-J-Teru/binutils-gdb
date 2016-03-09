@@ -2522,7 +2522,10 @@ map_command (char *arg, int from_tty)
       get_user_print_options (&opts);
       for (i = 0; i < len && things_printed < opts.print_max; i++)
         {
-	  struct value *ind = value_from_longest(builtin_type (get_type_arch(type))->builtin_int, i);
+          int is_fortran = 
+                (current_language->la_language == language_fortran);
+	  
+          struct value *ind = value_from_longest(builtin_type (get_type_arch(type))->builtin_int, is_fortran ? (i + 1) : i );
 	  struct value *subscript = value_subscript(val, value_as_long (ind));
 	  set_internalvar (lookup_internalvar ("value"),
 		           subscript);
