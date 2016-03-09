@@ -2325,7 +2325,8 @@ evaluate_subexp_standard (struct type *expect_type,
 	LONGEST oldlowerbound, lowerbound, upperbound;	
 	const gdb_byte *valaddr = NULL;
 
-        if (VALUE_LVAL (array) == lval_memory
+	if (noside == EVAL_NORMAL
+	    && VALUE_LVAL (array) == lval_memory
 	    && !value_address (array))
 	  error (_("cannot subscript an array that is not allocated"));
 
