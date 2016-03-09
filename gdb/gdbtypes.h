@@ -193,18 +193,18 @@ enum type_code
 
 enum type_flag_value
 {
-  TYPE_FLAG_UNSIGNED = (1 << 14),
-  TYPE_FLAG_NOSIGN = (1 << 15),
-  TYPE_FLAG_STUB = (1 << 16),
-  TYPE_FLAG_TARGET_STUB = (1 << 17),
-  TYPE_FLAG_STATIC = (1 << 18),
-  TYPE_FLAG_PROTOTYPED = (1 << 19),
-  TYPE_FLAG_INCOMPLETE = (1 << 20),
-  TYPE_FLAG_VARARGS = (1 << 21),
-  TYPE_FLAG_VECTOR = (1 << 22),
-  TYPE_FLAG_FIXED_INSTANCE = (1 << 23),
-  TYPE_FLAG_STUB_SUPPORTED = (1 << 24),
-  TYPE_FLAG_GNU_IFUNC = (1 << 25),
+  TYPE_FLAG_UNSIGNED = (1 << 15),
+  TYPE_FLAG_NOSIGN = (1 << 16),
+  TYPE_FLAG_STUB = (1 << 17),
+  TYPE_FLAG_TARGET_STUB = (1 << 18),
+  TYPE_FLAG_STATIC = (1 << 19),
+  TYPE_FLAG_PROTOTYPED = (1 << 20),
+  TYPE_FLAG_INCOMPLETE = (1 << 21),
+  TYPE_FLAG_VARARGS = (1 << 22),
+  TYPE_FLAG_VECTOR = (1 << 23),
+  TYPE_FLAG_FIXED_INSTANCE = (1 << 24),
+  TYPE_FLAG_STUB_SUPPORTED = (1 << 25),
+  TYPE_FLAG_GNU_IFUNC = (1 << 26),
 
   /* Used for error-checking.  */
   TYPE_FLAG_MIN = TYPE_FLAG_UNSIGNED
@@ -229,7 +229,8 @@ enum type_instance_flag_value
   TYPE_INSTANCE_FLAG_UPC_STRICT	= (1 << 10),
   TYPE_INSTANCE_FLAG_UPC_RELAXED = (1 << 11),
   TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR = (1 << 12),
-  TYPE_INSTANCE_FLAG_IS_CO_SHAPE = (1 << 13)
+  TYPE_INSTANCE_FLAG_IS_CO_SHAPE = (1 << 13),
+  TYPE_INSTANCE_FLAG_ALLOCATABLE = (1 << 14)
 };
 
 /* * Unsigned integer type.  If this is not set for a TYPE_CODE_INT,
@@ -490,6 +491,10 @@ struct dynamic_prop_list
    coshape.  */
 
 #define TYPE_IS_CO_SHAPE(t)	(TYPE_INSTANCE_FLAGS (t) & TYPE_INSTANCE_FLAG_IS_CO_SHAPE)
+
+/* ALLOCATABLE Fortran 90 array.  */
+
+#define TYPE_ALLOCATABLE(t)  (TYPE_INSTANCE_FLAGS (t) & TYPE_INSTANCE_FLAG_ALLOCATABLE)
 
 /* Determine which field of the union main_type.fields[x].loc is used.  */
 
