@@ -55,4 +55,8 @@ char *apply_type_printers (void *, struct type *type);
 
 void free_type_printers (void *arg);
 
+struct value *apply_val_child (struct value *object,
+			       struct value *index,
+			       const struct language_defn *language);
+
 #endif /* GDB_PYTHON_H */

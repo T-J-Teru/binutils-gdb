@@ -2568,7 +2568,11 @@ strcmp_iw (const char *string1, const char *string2)
 	  string2++;
 	}
     }
-  return (*string1 != '\0' && *string1 != '(') || (*string2 != '\0');
+  while (isspace (*string1))
+    {
+      string1++;
+    }
+  return (*string1 != '\0' && *string1 != '(' && !isstartoftemplate (string1)) || (*string2 != '\0');
 }
 
 /* This is like strcmp except that it ignores whitespace and treats
@@ -2664,8 +2668,16 @@ strcmp_iw_ordered (const char *string1, const char *string2)
 	    return 1;
 	  else
 	    return -1;
+	case '<':
+	  if (isstartoftemplate (string1))
+	    {
+	      if (*string2 == '\0')
+		return 1;
+	      else
+		return -1;
+	    }
 	default:
-	  if (*string2 == '\0' || *string2 == '(')
+	  if (*string2 == '\0' || *string2 == '(' || isstartoftemplate (string2))
 	    return 1;
 	  else if (c1 > c2)
 	    return 1;
@@ -2684,6 +2696,26 @@ strcmp_iw_ordered (const char *string1, const char *string2)
       string1 = saved_string1;
       string2 = saved_string2;
     }
+}
+
+static int
+isidentstartchar (char c)
+{
+  return (c >= 'A' && c <= 'Z')
+	 || (c >= 'a' && c <= 'z')
+	 || c == '_';
+}
+
+int
+isstartoftemplate (const char *s)
+{
+  if (*s++ != '<')
+    return 0;
+  while (isspace (*s))
+    {
+      s++;
+    }
+  return isidentstartchar (*s);
 }
 
 /* A simple comparison function with opposite semantics to strcmp.  */

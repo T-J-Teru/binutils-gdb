@@ -837,6 +837,139 @@ gdbpy_default_visualizer (PyObject *self, PyObject *args)
   return cons;
 }
 
+static int
+my_value_equal (struct value *arg1, struct value *arg2, const struct language_defn *language)
+{
+  if (binop_user_defined_p (BINOP_EQUAL, arg1, arg2))
+    {
+      return !value_as_long (value_x_binop (arg1, arg2, BINOP_LESS, OP_NULL, EVAL_NORMAL)) &&
+	     !value_as_long (value_x_binop (arg2, arg1, BINOP_LESS, OP_NULL, EVAL_NORMAL));
+    }
+  else
+    {
+      binop_promote (language, get_type_arch (value_type (arg1)), &arg1, &arg2);
+      return value_equal (arg1, arg2);      
+    }  
+}
+
+struct value *
+apply_val_child (struct value *object,
+		 struct value *index,
+		 const struct language_defn *language)
+{
+  struct gdbarch *gdbarch = get_type_arch (value_type (object));
+  PyObject *printer, *val_obj, *index_obj;
+  struct value *result = NULL, *key;
+  struct cleanup *cleanups;
+  volatile struct gdb_exception except;
+  PyObject *child, *children, *iter, *frame, *item, *name;
+  char *hint = NULL;
+  int is_map;
+  cleanups = ensure_python_env (gdbarch, language);
+
+  /* Instantiate the printer.  */
+  val_obj = value_to_value_object (object);
+  if (! val_obj)
+    goto done;
+  
+  /* Find the constructor.  */
+  printer = find_pretty_printer (val_obj);
+  Py_DECREF (val_obj);
+  make_cleanup_py_decref (printer);
+  if (! printer || printer == Py_None)
+    goto done;
+
+  hint = gdbpy_get_display_hint (printer);
+  make_cleanup (free_current_contents, &hint);
+  
+  index_obj = value_to_value_object (index);
+  if (! index_obj)
+    goto done;
+  make_cleanup_py_decref (index_obj);
+  
+  if (PyObject_HasAttr (printer, gdbpy_child_cst))
+    {
+      TRY_CATCH (except, RETURN_MASK_ALL)
+	{
+	  child = PyObject_CallMethodObjArgs (printer, gdbpy_child_cst, index_obj, NULL);
+	  if (! child)
+	    goto done;
+	  make_cleanup_py_decref (child);
+	  result = convert_value_from_python (child);
+	}
+    }
+  else if (PyObject_HasAttr (printer, gdbpy_children_cst))
+    {
+      is_map = hint && ! strcmp (hint, "map");      
+      children = PyObject_CallMethodObjArgs (printer, gdbpy_children_cst,
+					     NULL);
+      if (! children)
+	goto done;
+      make_cleanup_py_decref (children);
+      iter = PyObject_GetIter (children);
+      if (!iter)
+	goto done;
+      make_cleanup_py_decref (iter);
+      /* Manufacture a dummy Python frame to work around Python 2.4 bug,
+	where it insists on having a non-NULL tstate->frame when
+	a generator is called.  */
+      frame = push_dummy_python_frame ();
+      if (!frame)
+	goto done;
+      make_cleanup_py_decref (frame);
+      if (is_map)
+	{
+	  int found;
+	  for (;;)
+	    {
+	      item = PyIter_Next (iter);
+	      if (!item)
+		goto done;
+	      if (! PyArg_ParseTuple (item, "sO", &name, &child))
+		{
+		  Py_DECREF (item);
+		  goto done;
+		}
+	      key = convert_value_from_python (child);
+	      found = my_value_equal (key, index, language);
+	      item = PyIter_Next (iter);
+	      if (!item)
+		goto done;
+	      if (found)
+		break;
+	      Py_DECREF (item);
+	    }
+	  make_cleanup_py_decref (item);
+	}
+      else
+	{
+	  LONGEST lindex = value_as_long (index);
+	  for (;;lindex--)
+	    {
+	      item = PyIter_Next (iter);
+	      if (!item)
+		goto done;
+	      if (lindex == 0)
+		break;
+	      Py_DECREF (item);
+	    }
+	}
+      make_cleanup_py_decref (item);
+      if (! PyArg_ParseTuple (item, "sO", &name, &child))
+	goto done;
+      result = convert_value_from_python (child);
+    }
+
+ done:
+  if (PyErr_Occurred ())
+    {
+      result = NULL;
+      gdbpy_print_stack ();
+    }
+  do_cleanups (cleanups);
+  return result;
+}
+
 #else /* HAVE_PYTHON */
 
 int
@@ -848,6 +981,14 @@ apply_val_pretty_printer (struct type *type, const gdb_byte *valaddr,
 			  const struct language_defn *language)
 {
   return 0;
+}
+
+struct value *
+apply_val_child (struct value *object,
+		 struct value *index,
+		 const struct language_defn *language)
+{
+  return NULL;
 }
 
 #endif /* HAVE_PYTHON */

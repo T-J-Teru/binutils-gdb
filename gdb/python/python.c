@@ -89,6 +89,7 @@ PyObject *gdbpy_display_hint_cst;
 PyObject *gdbpy_doc_cst;
 PyObject *gdbpy_enabled_cst;
 PyObject *gdbpy_value_cst;
+PyObject *gdbpy_child_cst;
 
 /* The GdbError exception.  */
 PyObject *gdbpy_gdberror_exc;
@@ -1638,6 +1639,7 @@ message == an error message without a stack will be printed."),
   gdbpy_doc_cst = PyString_FromString ("__doc__");
   gdbpy_enabled_cst = PyString_FromString ("enabled");
   gdbpy_value_cst = PyString_FromString ("value");
+  gdbpy_child_cst = PyString_FromString ("child");  
 
   /* Release the GIL while gdb runs.  */
   PyThreadState_Swap (NULL);

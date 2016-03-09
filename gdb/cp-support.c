@@ -1145,7 +1145,7 @@ overload_list_add_symbol (struct symbol *sym,
     return;
 
   /* skip symbols that cannot match */
-  if (strcmp (sym_name, oload_name) != 0)
+  if (strcmp_iw (sym_name, oload_name) != 0)
     {
       xfree (sym_name);
       return;
