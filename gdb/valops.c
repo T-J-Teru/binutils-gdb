@@ -1283,6 +1283,7 @@ value_repeat (struct value *arg1, int count)
     error (_("Invalid number %d of repetitions."), count);
 
   val = allocate_repeat_value (value_enclosing_type (arg1), count);
+  set_value_repeated (val, 1);
 
   if (VALUE_LVAL (arg1) == lval_upc_shared)
     {
