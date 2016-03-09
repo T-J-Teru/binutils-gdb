@@ -8,6 +8,7 @@
 #include "psympriv.h"
 #include "f-module.h"
 
+#include "block.h"
 #include "command.h"
 #include "gdb_string.h"
 #include "hashtab.h"
@@ -301,6 +302,23 @@ f_lookup_symbol_nonlocal (const char *name,
     {
       return sym;
     }
+   {
+       const char* block_name = block_scope (block);
+       int i;
+       char* lowercase_block = (char*) xmalloc(strlen (block_name) + strlen (name) + 3);
+       for (i = 0; block_name[i]; ++i)
+           lowercase_block[i] = tolower(block_name[i]);
+       lowercase_block[i++] = ':';
+       lowercase_block[i++] = ':';
+       strncpy (lowercase_block + i, name, strlen(name) + 1);
+ 
+       sym = lookup_symbol_global(lowercase_block, block, domain);
+       xfree(lowercase_block);
+       if (sym) 
+         {
+           return sym; 
+         }
+   }
 
   /* If we can't find it in our module list, let the default symbol-lookup
      have a go.  */
