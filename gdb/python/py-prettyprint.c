@@ -658,6 +658,8 @@ print_children (PyObject *printer, const char *hint,
 	      gdbpy_print_stack ();
 	      error (_("Error while executing Python code."));
 	    }
+	  else if (is_map && i % 2 == 0)
+	    common_val_print (value, stream, 0, options, language);
 	  else
 	    common_val_print (value, stream, recurse + 1, options, language);
 	}
