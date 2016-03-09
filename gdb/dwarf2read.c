@@ -1406,7 +1406,8 @@ static void add_file_name (struct line_header *, char *, unsigned int,
                            unsigned int, unsigned int);
 
 static struct line_header *dwarf_decode_line_header (unsigned int offset,
-						     struct dwarf2_cu *cu);
+						     struct dwarf2_cu *cu,
+						     const char *comp_dir);
 
 static void dwarf_decode_lines (struct line_header *, const char *,
 				struct dwarf2_cu *, struct partial_symtab *,
@@ -2880,6 +2881,8 @@ dw2_get_file_names_reader (const struct die_reader_specs *reader,
   slot = NULL;
   line_offset = 0;
 
+  find_file_and_directory (comp_unit_die, cu, &name, &comp_dir);
+
   attr = dwarf2_attr (comp_unit_die, DW_AT_stmt_list, cu);
   if (attr)
     {
@@ -2899,7 +2902,7 @@ dw2_get_file_names_reader (const struct die_reader_specs *reader,
 	  return;
 	}
 
-      lh = dwarf_decode_line_header (line_offset, cu);
+      lh = dwarf_decode_line_header (line_offset, cu, comp_dir);
     }
   if (lh == NULL)
     {
@@ -2912,8 +2915,6 @@ dw2_get_file_names_reader (const struct die_reader_specs *reader,
   qfn->hash.line_offset.sect_off = line_offset;
   gdb_assert (slot != NULL);
   *slot = qfn;
-
-  find_file_and_directory (comp_unit_die, cu, &name, &comp_dir);
 
   qfn->num_file_names = lh->num_file_names;
   qfn->file_names = obstack_alloc (&objfile->objfile_obstack,
@@ -4126,7 +4127,7 @@ dwarf2_build_include_psymtabs (struct dwarf2_cu *cu,
 
   attr = dwarf2_attr (die, DW_AT_stmt_list, cu);
   if (attr)
-    lh = dwarf_decode_line_header (DW_UNSND (attr), cu);
+    lh = dwarf_decode_line_header (DW_UNSND (attr), cu, NULL);
   if (lh == NULL)
     return;  /* No linetable, so no includes.  */
 
@@ -7958,7 +7959,7 @@ find_file_and_directory (struct die_info *die, struct dwarf2_cu *cu,
 	  int k;
 	  struct line_header *lh = 0;
 	  unsigned int loffset = DW_UNSND (attr);
-	  lh = dwarf_decode_line_header (loffset, cu);
+	  lh = dwarf_decode_line_header (loffset, cu, *comp_dir);
 	  if (lh && lh->num_include_dirs)
 	    {
 	      make_cleanup ((make_cleanup_ftype *) free_line_header,
@@ -8002,13 +8003,12 @@ handle_DW_AT_stmt_list (struct die_info *die, struct dwarf2_cu *cu,
     {
       unsigned int line_offset = DW_UNSND (attr);
       struct line_header *line_header
-	= dwarf_decode_line_header (line_offset, cu);
+	= dwarf_decode_line_header (line_offset, cu, comp_dir);
 
       if (line_header)
 	{
 	  cu->line_header = line_header;
 	  make_cleanup (free_cu_line_header, cu);
-	  dwarf_decode_lines (line_header, comp_dir, cu, NULL, 1);
 	}
     }
 }
@@ -8071,6 +8071,13 @@ read_file_scope (struct die_info *die, struct dwarf2_cu *cu)
 	  child_die = sibling_die (child_die);
 	}
     }
+
+  /* Process the actual line numbers after processing the dies so
+     check_cu_function works properly.  */
+  if (cu->line_header)
+    {
+      dwarf_decode_lines (cu->line_header, comp_dir, cu, NULL, 1);
+    } 
 
   /* Decode macro information, if present.  Dwarf 2 macro information
      refers to information in the line number info statement program
@@ -8138,7 +8145,7 @@ setup_type_unit_groups (struct die_info *die, struct dwarf2_cu *cu)
   if (attr != NULL)
     {
       line_offset = DW_UNSND (attr);
-      lh = dwarf_decode_line_header (line_offset, cu);
+      lh = dwarf_decode_line_header (line_offset, cu, NULL);
     }
   if (lh == NULL)
     {
@@ -15387,7 +15394,8 @@ get_debug_line_section (struct dwarf2_cu *cu)
    and must not be freed.  */
 
 static struct line_header *
-dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu)
+dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
+			   const char *comp_dir)
 {
   struct cleanup *back_to;
   struct line_header *lh;
@@ -15397,6 +15405,7 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu)
   char *cur_dir, *cur_file;
   struct dwarf2_section_info *section;
   bfd *abfd;
+  struct file_entry *fe;
 
   section = get_debug_line_section (cu);
   dwarf2_read_section (dwarf2_per_objfile->objfile, section);
@@ -15509,6 +15518,36 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu)
     complaint (&symfile_complaints,
 	       _("line number info header doesn't "
 		 "fit in `.debug_line' section"));
+
+  if (comp_dir)
+    {
+      struct subfile *first_subfile = current_subfile;
+
+      /* Make sure a symtab is created for every file, even files
+         which contain only variables (i.e. no code with associated
+         line numbers).  */
+
+      for (i = 0; i < lh->num_file_names; i++)
+        {
+          char *dir = NULL;
+
+          fe = &lh->file_names[i];
+          if (fe->dir_index)
+            dir = lh->include_dirs[fe->dir_index - 1];
+          dwarf2_start_subfile (fe->name, dir, comp_dir);
+
+          /* Skip the main file; we don't need it, and it must be
+             allocated last, so that it will show up before the
+             non-primary symtabs in the objfile's symtab list.  */
+          if (current_subfile == first_subfile)
+            continue;
+
+          if (current_subfile->symtab == NULL)
+            current_subfile->symtab = allocate_symtab (current_subfile->name,
+                                                       cu->objfile);
+          fe->symtab = current_subfile->symtab;
+        }
+    }
 
   discard_cleanups (back_to);
   return lh;
@@ -15963,35 +16002,6 @@ dwarf_decode_lines (struct line_header *lh, const char *comp_dir,
 	    if (include_name != NULL)
               dwarf2_create_include_psymtab (include_name, pst, objfile);
           }
-    }
-  else
-    {
-      /* Make sure a symtab is created for every file, even files
-	 which contain only variables (i.e. no code with associated
-	 line numbers).  */
-      int i;
-
-      for (i = 0; i < lh->num_file_names; i++)
-	{
-	  char *dir = NULL;
-	  struct file_entry *fe;
-
-	  fe = &lh->file_names[i];
-	  if (fe->dir_index)
-	    dir = lh->include_dirs[fe->dir_index - 1];
-	  dwarf2_start_subfile (fe->name, dir, comp_dir);
-
-	  /* Skip the main file; we don't need it, and it must be
-	     allocated last, so that it will show up before the
-	     non-primary symtabs in the objfile's symtab list.  */
-	  if (current_subfile == first_subfile)
-	    continue;
-
-	  if (current_subfile->symtab == NULL)
-	    current_subfile->symtab = allocate_symtab (current_subfile->name,
-						       objfile);
-	  fe->symtab = current_subfile->symtab;
-	}
     }
 }
 
