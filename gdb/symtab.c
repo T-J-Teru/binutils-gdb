@@ -227,6 +227,12 @@ iterate_over_some_symtabs (const char *name,
 	  return 1;
       }
 
+    /* Can only match if their ends agree.  
+       Avoid this costly step for rest.  */
+    if (name && s->filename && 
+        FILENAME_CMP (lbasename (name), lbasename(s->filename)) != 0)
+      continue;
+
     /* If the user gave us an absolute path, try to find the file in
        this symtab and use its absolute path.  */
 
