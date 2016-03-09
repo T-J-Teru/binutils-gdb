@@ -1144,7 +1144,13 @@ expand_symtab_containing_pc (CORE_ADDR pc, struct obj_section *section)
   /* If we know that this is not a text address, return failure.  This is
      necessary because we loop based on texthigh and textlow, which do
      not include the data ranges.  */
-  msymbol = lookup_minimal_symbol_by_pc_section (pc, section);
+  if (section == NULL)
+    {
+      struct obj_section *obj_section = find_pc_section (pc);
+      msymbol = lookup_minimal_symbol_by_pc_section (pc, obj_section);
+    }
+  else
+    msymbol = lookup_minimal_symbol_by_pc_section (pc, section);
   if (msymbol.minsym
       && (MSYMBOL_TYPE (msymbol.minsym) == mst_data
 	  || MSYMBOL_TYPE (msymbol.minsym) == mst_bss
@@ -2959,7 +2965,13 @@ find_pc_sect_compunit_symtab (CORE_ADDR pc, struct obj_section *section)
      addresses, which do not include the data ranges, and because
      we call find_pc_sect_psymtab which has a similar restriction based
      on the partial_symtab's texthigh and textlow.  */
-  msymbol = lookup_minimal_symbol_by_pc_section (pc, section);
+  if (section == NULL)
+    {
+      struct obj_section *obj_section = find_pc_section (pc);
+      msymbol = lookup_minimal_symbol_by_pc_section (pc, obj_section);
+    }
+  else
+    msymbol = lookup_minimal_symbol_by_pc_section (pc, section);
   if (msymbol.minsym
       && (MSYMBOL_TYPE (msymbol.minsym) == mst_data
 	  || MSYMBOL_TYPE (msymbol.minsym) == mst_bss
