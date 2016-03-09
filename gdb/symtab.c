@@ -2201,6 +2201,36 @@ lookup_symbol_aux (const char *name, const struct block *block,
   return sym;
 }
 
+/* Search all static file-level symbols for NAME from DOMAIN.  Do the symtabs
+   first, then check the psymtabs.  If a psymtab indicates the existence of the
+   desired name as a file-level static, then do psymtab-to-symtab conversion on
+   the fly and return the found symbol.  */
+
+struct symbol *
+lookup_static_symbol_aux (const char *name, const domain_enum domain)
+{
+  struct objfile *objfile;
+  struct symbol *sym;
+  
+  sym = lookup_symbol_aux_symtabs (STATIC_BLOCK, name, domain);
+  if (sym != NULL)
+    return sym;
+
+  ALL_OBJFILES (objfile)
+  {
+    sym = lookup_symbol_aux_quick (objfile, STATIC_BLOCK, name, domain);
+    if (sym != NULL)
+      return sym;
+    /* If 'quick' symbol lookup fails but minimal symbol works then don't search
+       any more objfiles (weak aliases don't appear in DWARF debug symbols, only
+       in the minimal symbols, but should trump later objfiles).  */
+    if (lookup_minimal_symbol (name, NULL, objfile) != NULL)
+      break;    
+  }
+
+  return NULL;
+}
+
 /* Check to see if the symbol is defined in BLOCK or its superiors.
    Don't search STATIC_BLOCK or GLOBAL_BLOCK.  */
 
@@ -2370,6 +2400,12 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile, int block_index,
 	  block_found = block;
 	  return fixup_symbol_section (sym, objfile);
 	}
+
+      /* If 'quick' symbol lookup fails but minimal symbol works then don't search
+	 any more objfiles (weak aliases don't appear in DWARF debug symbols, only
+	 in the minimal symbols, but should trump later objfiles).  */
+      if (lookup_minimal_symbol (name, NULL, objfile) != NULL)
+	break;
     }
 
   if (symbol_lookup_debug > 1)
