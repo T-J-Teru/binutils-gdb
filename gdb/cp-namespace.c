@@ -663,7 +663,7 @@ lookup_symbol_file (const char *name,
 	  struct symbol *this;
 
 	  this = lookup_language_this (language_def (language_cplus), block);
-	  if (this == NULL)
+	  if (this == NULL || SYMBOL_TYPE (this) == NULL || TYPE_TARGET_TYPE (SYMBOL_TYPE (this)) == NULL)
 	    {
 	      do_cleanups (cleanup);
 	      return NULL;
