@@ -487,7 +487,7 @@ f_fixup_value (struct value *v, struct frame_info *frame)
   /* Automatically follow pointers.  */
   if (current_language->la_language == language_fortran)
     {
-      while (TYPE_CODE (type) == TYPE_CODE_PTR)
+      while ((TYPE_CODE (type) == TYPE_CODE_PTR) || (TYPE_CODE (type) == TYPE_CODE_REF))
 	{
 	  address = unpack_pointer (type, value_contents (v));
 
