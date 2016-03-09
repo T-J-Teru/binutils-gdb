@@ -146,6 +146,10 @@ upc_pts_index_add (struct type *ptrtype, struct value *ptrval,
   uda_target_pts_t packed_pts;
   uda_debugger_pts_t pts, sum;
   struct value *val;
+  if (!uda_calls.uda_unpack_pts
+      || !uda_calls.uda_calc_pts_index_add
+      || !uda_calls.uda_pack_pts)
+    error (_("UPC language support is not initialised"));  
   tt = TYPE_TARGET_TYPE (ptrtype); CHECK_TYPEDEF (tt);
   block_size = upc_blocksizeof (tt);
   status = (*uda_calls.uda_unpack_pts) (ptrtype_len, ptrval_raw, block_size, &pts);
@@ -185,6 +189,9 @@ upc_pts_diff (struct value *arg1, struct value *arg2)
   uda_debugger_pts_t pts1, pts2;
   uda_tint_t diff;
   struct value *val;
+  if (!uda_calls.uda_unpack_pts
+      || !uda_calls.uda_calc_pts_diff)
+    error (_("UPC language support is not initialised"));
   status = (*uda_calls.uda_unpack_pts) (ptrtype_len, arg1_pts, block_size, &pts1);
   if (status != uda_ok)
     error (_("upc_pts_diff: uda_unpack_pts(1) error"));
@@ -208,6 +215,8 @@ upc_shared_var_address (struct symbol *var)
   struct type *elem_type = SYMBOL_TYPE (var);
   const char *sym_name = SYMBOL_LINKAGE_NAME (var);
   int status;
+  if (!uda_calls.uda_symbol_to_pts)
+    error (_("UPC language support is not initialised"));  
   if ((SYMBOL_CLASS (var) == LOC_STATIC) && !overlay_debugging)
     sym_addr = SYMBOL_VALUE_ADDRESS (var);
   else if (SYMBOL_CLASS (var) == LOC_UNRESOLVED)
@@ -243,6 +252,8 @@ upc_value_from_pts (struct type *ptrtype, gdb_upc_pts_t pts)
   uda_tword_t packed_pts_len;
   uda_target_pts_t packed_pts;
   struct value *val;
+  if (!uda_calls.uda_pack_pts)
+    error (_("UPC language support is not initialised"));  
   status = (*uda_calls.uda_pack_pts) (pts.addrfield, pts.thread, pts.phase,
                          block_size, (size_t *)&packed_pts_len, &packed_pts);
   if (status != uda_ok)
@@ -263,6 +274,8 @@ upc_value_as_pts (struct value *val)
   unsigned pts_len = upc_pts_len (type);
   gdb_upc_pts_t pts;
   uda_target_pts_t *pts_raw;
+  if (!uda_calls.uda_unpack_pts)
+    error (_("UPC language support is not initialised"));    
   pts_raw = (uda_target_pts_t *) value_contents_all (val);
   status = (*uda_calls.uda_unpack_pts) (pts_len, pts_raw, block_size, &pts);
   if (status != uda_ok)
@@ -296,6 +309,8 @@ upc_value_fetch_lazy (struct value *val)
   ULONGEST block_size = upc_blocksizeof (type);
   gdb_upc_pts_t pts = VALUE_SHARED_ADDR (val);
   int status;
+  if (!uda_calls.uda_calc_pts_index_add)
+    error (_("UPC language support is not initialised"));  
   if (TYPE_CODE (type) == TYPE_CODE_ARRAY)
     {
       struct type *elem_type = check_typedef (TYPE_TARGET_TYPE (type));
@@ -350,6 +365,8 @@ upc_print_pts (struct ui_file *stream,
   block_size = upc_blocksizeof (tt);
   pts_len = upc_pts_len (tt);
   gdb_assert (pts_len <= sizeof(uda_target_pts_t));
+  if (!uda_calls.uda_unpack_pts)
+    error (_("UPC language support is not initialised"));  
   status = (*uda_calls.uda_unpack_pts) (pts_len, (const uda_target_pts_t *)pts_bytes,
                            block_size, &pts);
   if (status != uda_ok)
@@ -393,6 +410,8 @@ upc_read_shared_mem (ULONGEST address, ULONGEST thread,
 {
   int status;
   uda_binary_data_t rdata;
+  if (!uda_calls.uda_read_shared_mem)
+    error (_("UPC language support is not initialised"));  
   status = (*uda_calls.uda_read_shared_mem) (address, thread, length, &rdata);
 
   if (status != uda_ok)
