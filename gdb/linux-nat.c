@@ -3366,6 +3366,7 @@ linux_nat_filter_event (int lwpid, int status)
 	 except signals that might be caused by a breakpoint.  */
       if (!lp->step
 	  && WSTOPSIG (status) && sigismember (&pass_mask, WSTOPSIG (status))
+	  && WSTOPSIG (status) != SIGSTOP
 	  && !linux_wstatus_maybe_breakpoint (status))
 	{
 	  linux_resume_one_lwp (lp, lp->step, signo);
