@@ -9097,6 +9097,36 @@ find_file_and_directory (struct die_info *die, struct dwarf2_cu *cu,
       if (cp && cp != *comp_dir && cp[-1] == '.' && cp[1] == '/')
 	*comp_dir = cp + 1;
     }
+  if (!attr && *name && !IS_ABSOLUTE_PATH (*name)) 
+    {
+      /* Cover unusual compiler (Pathscale F90 1.2/3/4 */
+      attr = dwarf2_attr (die, DW_AT_stmt_list, cu);
+      if (attr)
+	{
+	  int k;
+	  struct line_header *lh = 0;
+	  unsigned int loffset = DW_UNSND (attr);
+	  lh = dwarf_decode_line_header (loffset, cu);
+	  if (lh && lh->num_include_dirs)
+	    {
+	      make_cleanup ((make_cleanup_ftype *) free_line_header,
+			    (void *) lh);
+	      for (k = 0; k < lh->num_file_names; k++)
+		{
+		  if (strcmp(lh->file_names[k].name, *name) == 0
+		      && lh->file_names[k].dir_index)
+		    {
+		      char *dirname = 
+			lh->include_dirs[lh->file_names[k].dir_index - 1];
+		      if (dirname != NULL && IS_ABSOLUTE_PATH(dirname))
+			{
+			  *comp_dir = dirname;
+			}
+		    }
+		}
+	    }
+	}
+    }
 
   if (*name == NULL)
     *name = "<unknown>";
