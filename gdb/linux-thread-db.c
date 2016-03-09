@@ -712,6 +712,12 @@ dladdr_to_soname (const void *addr)
   return NULL;
 }
 
+static int
+dummy_callback (const td_thrhandle_t *th_p, void *data)
+{
+  return 0;
+}
+
 /* Attempt to initialize dlopen()ed libthread_db, described by INFO.
    Return 1 on success.
    Failure could happen if libthread_db does not have symbols we expect,
@@ -803,6 +809,20 @@ try_thread_db_load_1 (struct thread_db_info *info)
       /* Even if libthread_db initializes, if the thread list is
          corrupted, we'd not manage to list any threads.  Better reject this
          thread_db, and fall back to at least listing LWPs.  */
+      return 0;
+    }
+
+  /* #22887: Check it actually works.  */
+  err = info->td_ta_thr_iter_p (info->thread_agent,
+				dummy_callback,
+				NULL,
+				TD_THR_ANY_STATE,
+				TD_THR_LOWEST_PRIORITY,
+				TD_SIGNO_MASK,
+				TD_THR_ANY_USER_FLAGS);
+  if (err != TD_OK)
+    {
+      /* It doesn't actually work yet (probably libpthread.so hasn't finished loading). */
       return 0;
     }
 
