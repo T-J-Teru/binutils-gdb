@@ -127,14 +127,29 @@ static char *subfile_fullname (const struct subfile *subfile)
 static int
 htab_eq_subfile(const void* s, const void* t)
 {
-  char *fullname1 = subfile_fullname ((const struct subfile *) s);
-  char *fullname2 = subfile_fullname ((const struct subfile *) t);
   int ret;
-  simplify_path (fullname1);
-  simplify_path (fullname2);
-  ret = !strcmp (fullname1, fullname2);
-  xfree (fullname1);
-  xfree (fullname2);
+  /* emulate strcmp() return values extended to handle null values, so
+	 s, t both null => s == t => return 0
+	 s null, t not null => s < t => return -1
+	 s not null, t null => s > t => return +1 */
+  if (!s)
+	{
+	  ret = t ? -1 : 0; 
+	}
+  else if (!t)
+	{
+	  ret = 1;
+	}
+  else
+	{
+	  char *fullname1 = subfile_fullname ((const struct subfile *) s);
+	  char *fullname2 = subfile_fullname ((const struct subfile *) t);
+	  simplify_path (fullname1);
+	  simplify_path (fullname2);
+	  ret = !strcmp (fullname1, fullname2);
+	  xfree (fullname1);
+	  xfree (fullname2);
+	}
   return ret;
 }
 
