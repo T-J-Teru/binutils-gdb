@@ -1675,6 +1675,10 @@ value_equal_contents (struct value *arg1, struct value *arg2)
 {
   struct type *type1, *type2;
 
+  /* make sure the the contents are not of a capped length due to lazy fetching */
+  value_contents_ensure_unlimited(arg1);
+  value_contents_ensure_unlimited(arg2);
+
   type1 = check_typedef (value_type (arg1));
   type2 = check_typedef (value_type (arg2));
 

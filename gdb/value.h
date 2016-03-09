@@ -1006,4 +1006,6 @@ extern unsigned value_length (const struct value *value);
 extern void value_copy_contents (struct value *to, struct value *from);
 extern void value_copy_contents_all_raw (struct value *to, struct value *from);
 
+extern void value_contents_ensure_unlimited(struct value* val);
+
 #endif /* !defined (VALUE_H) */

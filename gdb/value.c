@@ -3572,3 +3572,22 @@ Placeholder command for showing help on convenience functions."),
   add_com ("clear-value-history", class_obscure, clear_value_history, _("\
 Clear the value history."));
 }
+
+/**
+ * Reads the full value in for contents that have been capped by value_fetch_lazy().
+ * This is necessary when using value_equal_contents(), otherwise the comparison may go beyond
+ * the capped size.
+ */
+void
+value_contents_ensure_unlimited(struct value* val)
+{
+    struct type* type = check_typedef (value_type (val));
+    if (value_length (val) < TYPE_LENGTH (type))
+    {
+        xfree (val->contents);
+        val->contents = NULL;
+        read_memory (value_address (val),
+                     value_contents_all_raw (val), /* allocates the full memory requirement */
+                     TYPE_LENGTH (type));
+    }
+}
