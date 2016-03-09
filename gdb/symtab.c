@@ -226,6 +226,14 @@ static unsigned int symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
    Default set to "off" to not slow down the common case.  */
 int basenames_may_differ = 0;
 
+/* The size of the cache is staged here.  */
+static unsigned int new_symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
+
+/* The current value of the symbol cache size.
+   This is saved so that if the user enters a value too big we can restore
+   the original value from here.  */
+static unsigned int symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
+
 /* Allow the user to configure the debugger behavior with respect
    to multiple-choice menus when more than one symbol matches during
    a symbol lookup.  */
@@ -248,6 +256,23 @@ const char *
 multiple_symbols_select_mode (void)
 {
   return multiple_symbols_mode;
+}
+
+/* Return the name of a domain_enum.  */
+
+const char *
+domain_name (domain_enum e)
+{
+  switch (e)
+    {
+    case UNDEF_DOMAIN: return "UNDEF_DOMAIN";
+    case VAR_DOMAIN: return "VAR_DOMAIN";
+    case STRUCT_DOMAIN: return "STRUCT_DOMAIN";
+	  /*    case MODULE_DOMAIN: return "MODULE_DOMAIN"; */
+    case LABEL_DOMAIN: return "LABEL_DOMAIN";
+    case COMMON_BLOCK_DOMAIN: return "COMMON_BLOCK_DOMAIN";
+    default: gdb_assert_not_reached ("bad domain_enum");
+    }
 }
 
 /* Block in which the most recently searched-for symbol was found.
@@ -1019,6 +1044,7 @@ symbol_set_names (struct general_symbol_info *gsymbol,
 const char *
 symbol_natural_name (const struct general_symbol_info *gsymbol)
 {
+  const char *dem_name = NULL;
   switch (gsymbol->language)
     {
     case language_cplus:
@@ -1028,15 +1054,14 @@ symbol_natural_name (const struct general_symbol_info *gsymbol)
     case language_objc:
     case language_fortran:
     case language_upc:
-      if (symbol_get_demangled_name (gsymbol) != NULL)
-	return symbol_get_demangled_name (gsymbol);
+	  dem_name = symbol_get_demangled_name (gsymbol);
       break;
     case language_ada:
       return ada_decode_symbol (gsymbol);
     default:
       break;
     }
-  return gsymbol->name;
+  return (dem_name != NULL) ? dem_name : gsymbol->name;
 }
 
 /* Return the demangled name for a symbol based on the language for
@@ -2235,18 +2260,40 @@ lookup_symbol_aux (const char *name, const struct block *block,
 struct symbol *
 lookup_static_symbol_aux (const char *name, const domain_enum domain)
 {
+  struct symbol_cache *cache = get_symbol_cache (current_program_space);
   struct objfile *objfile;
-  struct symbol *sym;
-  
-  sym = lookup_symbol_aux_symtabs (STATIC_BLOCK, name, domain);
-  if (sym != NULL)
-    return sym;
+  struct symbol *result;
+  struct block_symbol_cache *bsc;
+  struct symbol_cache_slot *slot;
 
+  /* Lookup in STATIC_BLOCK is not current-objfile-dependent, so just pass
+	 NULL for OBJFILE_CONTEXT.  */
+  result = symbol_cache_lookup (cache, NULL, STATIC_BLOCK, name, domain,
+								&bsc, &slot);
+  if (result != NULL)
+	{
+	  if (result == SYMBOL_LOOKUP_FAILED)
+		return NULL;
+	  return result;
+	}
+  
+  result = lookup_symbol_aux_symtabs (STATIC_BLOCK, name, domain);
+  if (result != NULL)
+	{
+	  /* Still pass NULL for OBJFILE_CONTEXT here.  */
+	  symbol_cache_mark_found (bsc, slot, NULL, result);
+	  return result;
+	}
+  
   ALL_OBJFILES (objfile)
   {
-    sym = lookup_symbol_aux_quick (objfile, STATIC_BLOCK, name, domain);
-    if (sym != NULL)
-      return sym;
+    result = lookup_symbol_aux_quick (objfile, STATIC_BLOCK, name, domain);
+    if (result != NULL)
+	  {
+		/* Still pass NULL for OBJFILE_CONTEXT here.  */
+		symbol_cache_mark_found (bsc, slot, NULL, result);
+		return result;
+	  }
     /* If 'quick' symbol lookup fails but minimal symbol works then don't search
        any more objfiles (weak aliases don't appear in DWARF debug symbols, only
        in the minimal symbols, but should trump later objfiles).  */
@@ -2254,6 +2301,8 @@ lookup_static_symbol_aux (const char *name, const domain_enum domain)
       break;    
   }
 
+  /* Still pass NULL for OBJFILE_CONTEXT here.  */
+  symbol_cache_mark_not_found (bsc, slot, NULL, name, domain);
   return NULL;
 }
 
@@ -6748,6 +6797,24 @@ If zero then the symbol cache is disabled."),
 	   maintenance_flush_symbol_cache,
 	   _("Flush the symbol cache for each program space."),
 	   &maintenancelist);
+
+  add_setshow_zuinteger_cmd ("symbol-lookup", no_class, &symbol_lookup_debug,
+			   _("\
+Set debugging of symbol lookup."), _("\
+Show debugging of symbol lookup."), _("\
+When enabled (non-zero), symbol lookups are logged."),
+			   NULL, NULL,
+			   &setdebuglist, &showdebuglist);
+
+  add_setshow_zuinteger_cmd ("symbol-cache-size", no_class,
+			     &new_symbol_cache_size,
+			     _("Set the size of the symbol cache."),
+			     _("Show the size of the symbol cache."), _("\
+The size of the symbol cache.\n\
+If zero then the symbol cache is disabled."),
+			     set_symbol_cache_size_handler, NULL,
+			     &maintenance_set_cmdlist,
+			     &maintenance_show_cmdlist);
 
   observer_attach_executable_changed (symtab_observer_executable_changed);
   observer_attach_new_objfile (symtab_new_objfile_observer);
