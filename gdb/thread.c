@@ -1307,6 +1307,7 @@ thread_apply_all_command (char *cmd, int from_tty)
       if (upcmode && !is_upc_thread(tp)) continue;
       if (thread_alive (tp))
         {
+		  volatile struct gdb_exception ex;
 	  switch_to_thread (tp->ptid);
 
           if (upcmode)
@@ -1314,7 +1315,14 @@ thread_apply_all_command (char *cmd, int from_tty)
           else
 	    printf_filtered (_("\nThread %d (%s):\n"),
 			 tp->num, target_pid_to_str (inferior_ptid));
-	  execute_command (cmd, from_tty);
+		  TRY_CATCH (ex, RETURN_MASK_ALL)
+			{
+			  execute_command (cmd, from_tty);
+			}
+		  if (ex.reason < 0)
+			{
+			  printf_filtered("<%s>\n", ex.message);
+			}
 	  strcpy (cmd, saved_cmd);	/* Restore exact command used
 					   previously.  */
 	}
@@ -1364,6 +1372,7 @@ thread_apply_command (char *tidlist, int from_tty)
 	warning (_("Thread %d has terminated."), start);
       else
 	{
+	  volatile struct gdb_exception ex;
 	  switch_to_thread (tp->ptid);
 
           if (upcmode)
@@ -1371,7 +1380,14 @@ thread_apply_command (char *tidlist, int from_tty)
           else
 	    printf_filtered (_("\nThread %d (%s):\n"), tp->num,
 			   target_pid_to_str (inferior_ptid));
-	  execute_command (cmd, from_tty);
+	  TRY_CATCH (ex, RETURN_MASK_ALL)
+	  {
+	    execute_command (cmd, from_tty);
+	  }
+	  if (ex.reason < 0)
+	  {
+	    printf_filtered("<%s>\n", ex.message);
+	  }
 
 	  /* Restore exact command used previously.  */
 	  strcpy (cmd, saved_cmd);
