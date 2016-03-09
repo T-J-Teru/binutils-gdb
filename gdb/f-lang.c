@@ -664,6 +664,15 @@ f_make_symbol_completion_list (const char *text, const char *word,
   return default_make_symbol_completion_list_break_on (text, word, ":", code);
 }
 
+/* In Fortran all data is passed by reference by default, except the hidden
+   length argument of strings.  */
+
+static int
+f_pass_by_reference (struct type *type)
+{
+  return 1;
+}
+
 const struct language_defn f_language_defn =
 {
   "fortran",
@@ -699,7 +708,8 @@ const struct language_defn f_language_defn =
   f_make_symbol_completion_list,
   f_language_arch_info,
   default_print_array_index,
-  default_pass_by_reference,
+  f_pass_by_reference,
+  default_return_by_reference,
   default_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,

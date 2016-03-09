@@ -873,7 +873,7 @@ call_function_by_hand_dummy (struct value *function,
 				    param_type, prototyped, &sp);
 
 	if (param_type != NULL && language_pass_by_reference (param_type))
-	  args[i] = value_addr (args[i]);
+	  args[i] = value_addr (value_force_coerce_to_target (args[i]));
       }
   }
 
