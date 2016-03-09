@@ -677,7 +677,7 @@ lookup_partial_symbol (struct objfile *objfile,
     {
       simple_name = alloca (strlen (name));
       memcpy (simple_name, name, paren - name);
-      simple_name[name - paren] = '\0';
+      simple_name[paren - name] = '\0';
       name = simple_name;
     }
 
