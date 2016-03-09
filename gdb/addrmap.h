@@ -102,4 +102,10 @@ typedef int (*addrmap_foreach_fn) (void *data, CORE_ADDR start_addr,
    Otherwise, this function returns 0.  */
 int addrmap_foreach (struct addrmap *map, addrmap_foreach_fn fn, void *data);
 
+/* Assigns FN to MAP. FN will be used to determine precedence of
+   objects inserted using addrmap_set_empty.  This does not overwrite
+   a previously applied function.  */
+void addrmap_assign_precedence_fn (struct addrmap *map,
+                                   int (*fn) (void *, void *));
+
 #endif /* ADDRMAP_H */
