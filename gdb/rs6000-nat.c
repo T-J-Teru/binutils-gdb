@@ -58,6 +58,12 @@
 #define __LDINFO_PTRACE64__	/* for __ld_info64 */
 #include <sys/ldr.h>
 #include <sys/systemcfg.h>
+#include <procinfo.h>
+#include <sys/pthdebug.h>
+
+/* getthrds(3) isn't prototyped in any AIX 4.3.3 #include file.  */
+extern int getthrds (pid_t, struct thrdsinfo64 *, 
+		     int, pthdb_tid_t *, int);
 
 /* On AIX4.3+, sys/ldr.h provides different versions of struct ld_info for
    debugging 32-bit and 64-bit processes.  Define a typedef and macros for
@@ -1292,6 +1298,84 @@ find_toc_address (CORE_ADDR pc)
   error (_("Unable to find TOC entry for pc %s."), hex_string (pc));
 }
 
+static int
+rs6000_can_use_hw_breakpoint (int type, int cnt, int ot)
+{
+  if (type != bp_hardware_watchpoint
+      && type != bp_watchpoint)
+    return 0; /* not supported */
+  return (cnt <= 1) ? 1 : -1;
+}
+  
+static int
+rs6000_region_ok_for_hw_watchpoint (CORE_ADDR addr, int len)
+{
+  /* Handle sub-8-byte quantities.  */
+  if (len <= 0)
+    return 0;
+  
+  /* AIX ptrace PT_WATCH only supports watching a double word aligned 8 byte
+     region. Check addr - addr + len falls within such a region. */
+  if ((addr + len) > (addr & ~7) + 8)
+    return 0;
+
+  return 1;
+}
+
+static int
+rs6000_insert_watchpoint (CORE_ADDR addr, int len, int rw,
+			     struct expression *cond)
+{
+  int arch64 = ARCH64 ();  
+  int ret = -1;
+  if (arch64)
+    ret = rs6000_ptrace64 (PT_WATCH, PIDGET (inferior_ptid),
+			    addr & ~7, 8, 0);
+  else
+    ret = rs6000_ptrace32 (PT_WATCH, PIDGET (inferior_ptid),
+			    (int *) (uintptr_t) (addr & ~7), 8, 0);
+  return (ret != -1) ? 0 : -1;
+}
+
+static int
+rs6000_remove_watchpoint (CORE_ADDR addr, int len, int rw,
+			     struct expression *cond)
+{
+  return rs6000_ptrace32 (PT_WATCH, PIDGET (inferior_ptid), 0, 0, 0);
+}
+
+static int
+rs6000_stopped_by_watchpoint (void)
+{
+  struct thrdsinfo64 thrinf;
+  pthdb_tid_t ktid = 0;
+  int result = 0;
+
+  while (1)
+  {
+    if (getthrds (PIDGET (inferior_ptid), &thrinf, 
+          	  sizeof (thrinf), &ktid, 1) != 1)
+      break;
+
+    if ((thrinf.ti_flag & TTRCSIG) != 0 &&
+	 ((thrinf.ti_flag & TWPDABR) != 0 ||
+	 ((thrinf.ti_flag & TWPSYSCALL) != 0)))
+      return 1;
+  }
+
+  /* Didn't find any thread stopped by a watchpoint.  */
+  return 0;
+}
+
+static int
+rs6000_watchpoint_addr_within_range (struct target_ops *target,
+					CORE_ADDR addr,
+					CORE_ADDR start, int length)
+{
+  /* Check whether [start, start+length-1] intersects [addr, addr+mask]. */
+  return start <= (addr & ~7) + 7 && start + length - 1 >= (addr & ~7);
+}
+
 
 void _initialize_rs6000_nat (void);
 
@@ -1305,6 +1389,14 @@ _initialize_rs6000_nat (void)
   t->to_store_registers = rs6000_store_inferior_registers;
   t->to_xfer_partial = rs6000_xfer_partial;
 
+  /* Power5 h/w watchpoint support. */
+  t->to_can_use_hw_breakpoint = rs6000_can_use_hw_breakpoint;
+  t->to_region_ok_for_hw_watchpoint = rs6000_region_ok_for_hw_watchpoint;
+  t->to_insert_watchpoint = rs6000_insert_watchpoint;
+  t->to_remove_watchpoint = rs6000_remove_watchpoint;
+  t->to_stopped_by_watchpoint = rs6000_stopped_by_watchpoint;
+  t->to_watchpoint_addr_within_range = rs6000_watchpoint_addr_within_range;  
+  
   super_create_inferior = t->to_create_inferior;
   t->to_create_inferior = rs6000_create_inferior;
 
