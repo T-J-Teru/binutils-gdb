@@ -2129,7 +2129,9 @@ decode_frame_entry_1 (struct comp_unit *unit, const gdb_byte *start,
 
       fde->eh_frame_p = eh_frame_p;
 
-      add_fde (fde_table, fde);
+      /* Only add the FDE if it looks sane (i.e. spans < 16Mb code).  */
+      if (fde->address_range < 0x1000000)
+        add_fde (fde_table, fde);
     }
 
   return end;
