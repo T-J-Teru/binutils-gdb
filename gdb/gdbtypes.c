@@ -1809,6 +1809,12 @@ get_vptr_fieldno (struct type *type, struct type **basetypep)
     {
       int i;
 
+      if (TYPE_CPLUS_SPECIFIC (type) == NULL)
+	{
+	  complaint (&symfile_complaints, "TYPE_CPLUS_SPECIFIC is NULL");
+	  return -1;
+	}
+
       /* We must start at zero in case the first (and only) baseclass
          is virtual (and hence we cannot share the table pointer).  */
       for (i = 0; i < TYPE_N_BASECLASSES (type); i++)
