@@ -3381,6 +3381,10 @@ linux_nat_filter_event (int lwpid, int status)
       if (!lp->step
 	  && WSTOPSIG (status) && sigismember (&pass_mask, WSTOPSIG (status))
 	  && WSTOPSIG (status) != SIGSTOP
+	  && WSTOPSIG (status) != SIGSTOP
+	  && WSTOPSIG (status) != SIGSEGV
+	  && WSTOPSIG (status) != SIGILL
+	  && WSTOPSIG (status) != SIGTRAP
 	  && !linux_wstatus_maybe_breakpoint (status))
 	{
 	  linux_resume_one_lwp (lp, lp->step, signo);
