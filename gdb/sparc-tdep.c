@@ -967,7 +967,38 @@ static CORE_ADDR
 sparc_unwind_pc (struct gdbarch *gdbarch, struct frame_info *this_frame)
 {
   struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
-  return frame_unwind_register_unsigned (this_frame, tdep->pc_regnum);
+  CORE_ADDR pc  = frame_unwind_register_unsigned (this_frame, tdep->pc_regnum);
+  CORE_ADDR npc = frame_unwind_register_unsigned (this_frame, tdep->npc_regnum);
+
+  /* #32831: unwind fails for delay slot
+
+        (gdb) disas
+        Dump of assembler code for function simple:
+           0x0000000000100480 <+0>:     save  %sp, -176, %sp
+        => 0x0000000000100484 <+4>:     rett  %i7 + 8
+           0x0000000000100488 <+8>:     nop 
+        End of assembler dump.
+
+        (gdb) stepi
+
+        # We are already in the frame of "main", but PC is still in simple:
+
+        (gdb) info registers
+        ...
+        pc             0x100488 0x100488 <simple+8>
+        npc            0x100498 0x100498 <main+12>
+        ...
+
+        So the idea is to use NPC in that case.
+
+        A simple heuristic to detect that case is PC+4 != NPC, which will be
+        triggered for every JMPL as well of course, but it seems to be no
+        problem. 
+  */
+  if (pc+4 != npc)
+    pc = npc;
+
+  return pc;
 }
 
 /* Return PC of first real instruction of the function starting at
