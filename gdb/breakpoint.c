@@ -14919,6 +14919,54 @@ invalidate_bp_value_on_memory_change (struct inferior *inferior,
       }
 }
 
+/* Create and insert a raw software breakpoint at PC.  Return an
+   identifier, which should be used to remove the breakpoint later.
+   In general, places which call this should be using something on the
+   breakpoint chain instead; this function should be eliminated
+   someday.  */
+
+void *
+deprecated_insert_raw_breakpoint (struct gdbarch *gdbarch,
+				  struct address_space *aspace, CORE_ADDR pc)
+{
+  struct bp_target_info *bp_tgt;
+
+  bp_tgt = XZALLOC (struct bp_target_info);
+
+  bp_tgt->placed_address_space = aspace;
+  bp_tgt->placed_address = pc;
+
+  if (target_insert_breakpoint (gdbarch, bp_tgt) != 0)
+    {
+      /* Could not insert the breakpoint.  */
+      xfree (bp_tgt);
+      return NULL;
+    }
+
+  return bp_tgt;
+}
+
+/* Remove a breakpoint BP inserted by
+   deprecated_insert_raw_breakpoint.  */
+
+int
+deprecated_remove_raw_breakpoint (struct gdbarch *gdbarch, void *bp)
+{
+  struct bp_target_info *bp_tgt = bp;
+  int ret;
+
+  ret = target_remove_breakpoint (gdbarch, bp_tgt);
+  xfree (bp_tgt);
+
+  return ret;
+}
+
+/* One (or perhaps two) breakpoints used for software single
+   stepping.  */
+
+static void *single_step_breakpoints[2] = { NULL, NULL };
+static struct gdbarch *single_step_gdbarch[2] = { NULL, NULL };
+
 /* Create and insert a breakpoint for software single step.  */
 
 void
