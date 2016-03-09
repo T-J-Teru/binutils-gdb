@@ -674,6 +674,7 @@ lookup_partial_symbol (struct objfile *objfile,
   int do_linear_search = 1;
   char *search_name;
   struct cleanup *cleanup;
+  char *simple_name = NULL, *paren = 0;
 
   if (length == 0)
     {
@@ -685,6 +686,16 @@ lookup_partial_symbol (struct objfile *objfile,
   start = (global ?
 	   objfile->global_psymbols.list + pst->globals_offset :
 	   objfile->static_psymbols.list + pst->statics_offset);
+ 
+  /* FIXME: What about "(anonymous namespace)".  */
+  paren = strchr (name, '(');
+  if (paren)
+    {
+      simple_name = alloca (strlen (name));
+      memcpy (simple_name, name, paren - name);
+      simple_name[name - paren] = '\0';
+      name = simple_name;
+    }
 
   if (global)			/* This means we can use a binary search.  */
     {
