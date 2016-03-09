@@ -21,6 +21,8 @@
 
 #include <sys/types.h>
 #include <fcntl.h>
+#include <libgen.h>
+#include "gdb_string.h"
 #include "symtab.h"
 #include "bfd.h"
 #include "symfile.h"
@@ -256,6 +258,65 @@ solib_find_1 (char *in_pathname, int *fd, int is_solib)
       return temp_pathname;
     }
 
+  if (!gdb_sysroot_is_empty) 
+      {
+          char buf[PATH_MAX + 1]; 
+          ssize_t s;
+          int depth = 0;
+          char *stub;          
+          char *p = temp_pathname;
+
+          do {
+              while (!IS_DIR_SEPARATOR (*p) && *p)
+                  {
+                      ++p;
+                  }
+              stub = NULL;
+              if (IS_DIR_SEPARATOR (*p)) 
+                  {
+                      stub = xstrdup (p + 1);
+                      *p = '\0';
+                  }
+
+              /* at the end.  Can still go back to sq 1 */ 
+              if ((s = readlink (temp_pathname, buf, PATH_MAX)) != -1)
+                  {
+                      buf[s] = '\0';
+
+                      if (IS_ABSOLUTE_PATH (buf)) {
+                          /* can be absolute... */
+
+                          xfree(temp_pathname);
+                          temp_pathname = concat (sysroot, "", buf, NULL);
+                          p = temp_pathname + strlen (sysroot);
+                      }
+                      else {
+                          /* or relative */
+                          char* old_temp = temp_pathname;
+                          int old_len = strlen (dirname (temp_pathname));
+                          temp_pathname[old_len] = '\0';
+                          temp_pathname = concat (temp_pathname, SLASH_STRING, buf, NULL);
+                          xfree (old_temp);
+                          p = temp_pathname + old_len;
+                      }
+
+                      if (stub) { 
+                          int len = p - temp_pathname;
+                          temp_pathname = concat (temp_pathname, *stub ? SLASH_STRING : "", stub, NULL);
+                          p = temp_pathname + len;
+                          xfree (stub);
+                      }
+                  }
+              else {
+                  /* replace the dir sep!  */
+                  if (stub != NULL)
+                      *p = '/';
+                  ++p;
+
+              }
+          }
+          while (*p != '\0' && depth++ < 50);        
+      }
   /* Now see if we can open it.  */
   found_file = gdb_open_cloexec (temp_pathname, O_RDONLY | O_BINARY, 0);
   if (found_file < 0)
@@ -371,6 +432,10 @@ solib_find_1 (char *in_pathname, int *fd, int is_solib)
     }
   else
     *fd = found_file;
+
+  if (found_file < 0) {
+      fprintf(stderr, "Could not find solib: %s.", in_pathname);
+  }
 
   return temp_pathname;
 }
