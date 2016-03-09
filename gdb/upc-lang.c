@@ -302,7 +302,7 @@ upc_value_at_lazy (struct type *type, gdb_upc_pts_t pts)
   if (TYPE_CODE (type) == TYPE_CODE_VOID)
     error (_("Attempt to dereference a generic pointer-to-shared."));
 
-  val = allocate_value (type);
+  val = allocate_value_lazy (type);
 
   VALUE_LVAL (val) = lval_upc_shared;
   VALUE_SHARED_ADDR (val) = pts;
