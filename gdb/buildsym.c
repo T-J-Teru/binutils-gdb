@@ -86,6 +86,7 @@
 #include "cp-support.h"
 #include "dictionary.h"
 #include "addrmap.h"
+#include "hashtab.h"
 
 /* Ask buildsym.h to define the vars it normally declares `extern'.  */
 #define	EXTERN
@@ -494,9 +495,9 @@ finish_block_internal (struct symbol *symbol, struct pending **listhead,
 			     paddress (gdbarch, BLOCK_END (block)));
 		}
 	      if (BLOCK_START (pblock->block) < BLOCK_START (block))
-		BLOCK_START (pblock->block) = BLOCK_START (block);
+		BLOCK_START (block) = BLOCK_START (pblock->block);
 	      if (BLOCK_END (pblock->block) > BLOCK_END (block))
-		BLOCK_END (pblock->block) = BLOCK_END (block);
+		BLOCK_END (block) = BLOCK_END (pblock->block);
 	    }
 	  BLOCK_SUPERBLOCK (pblock->block) = block;
 	}
@@ -648,6 +649,53 @@ make_blockvector (void)
   return (blockvector);
 }
 
+
+struct subfile *find_subfile (const char *fullname)
+{
+  struct subfile *subfile;
+  char *abs_name;
+
+  /* In allinea-7.6.2 there was a hash table introduced to speed up
+     searching for subfiles.  With the move to allinea-7.10.1 subfiles are
+     now stored in a list off the current buildsym_compunit, so the
+     requirements for any hash table are now more complex.  For now the
+     hash table has been removed and we are instead relying on the standard
+     GDB 7.10.1 mechanism for subfile lookup, even though this might be
+     slightly slower.  */
+
+  if (!IS_ABSOLUTE_PATH (name) && dirname != NULL)
+    abs_name = concat (dirname, SLASH_STRING, name, (char *) NULL);
+  else
+    abs_name = xstrdup (name);
+  simplify_path (abs_name);
+
+  for (subfile = buildsym_compunit->subfiles; subfile; subfile = subfile->next)
+    {
+      char *subfile_name;
+
+      /* If NAME is an absolute path, and this subfile is not, then
+	 attempt to create an absolute path to compare.  */
+      if (!IS_ABSOLUTE_PATH (subfile->name) && dirname != NULL)
+	subfile_name = concat (dirname, SLASH_STRING,
+			       subfile->name, (char *) NULL);
+      else
+	subfile_name = xstrdup (subfile->name);
+      simplify_path (subfile_name);
+
+      if (FILENAME_CMP (subfile_name, abs_name) == 0)
+	{
+	  xfree (subfile_name);
+	  xfree (abs_name);
+	  return subfile;
+	}
+
+      xfree (subfile_name);
+    }
+
+  xfree (abs_name);
+  return NULL;
+}
+
 /* Start recording information about source code that came from an
    included (or otherwise merged-in) source file with a different
    name.  NAME is the name of the file (cannot be NULL).  */
@@ -663,30 +711,10 @@ start_subfile (const char *name)
   subfile_dirname = buildsym_compunit->comp_dir;
 
   /* See if this subfile is already registered.  */
-
-  for (subfile = buildsym_compunit->subfiles; subfile; subfile = subfile->next)
+  if ((subfile = find_subfile (name, subfile_dirname)) != NULL)
     {
-      char *subfile_name;
-
-      /* If NAME is an absolute path, and this subfile is not, then
-	 attempt to create an absolute path to compare.  */
-      if (IS_ABSOLUTE_PATH (name)
-	  && !IS_ABSOLUTE_PATH (subfile->name)
-	  && subfile_dirname != NULL)
-	subfile_name = concat (subfile_dirname, SLASH_STRING,
-			       subfile->name, (char *) NULL);
-      else
-	subfile_name = subfile->name;
-
-      if (FILENAME_CMP (subfile_name, name) == 0)
-	{
-	  current_subfile = subfile;
-	  if (subfile_name != subfile->name)
-	    xfree (subfile_name);
-	  return;
-	}
-      if (subfile_name != subfile->name)
-	xfree (subfile_name);
+      current_subfile = subfile;
+      return;
     }
 
   /* This subfile is not known.  Add an entry for it.  */
