@@ -179,7 +179,8 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
 				     arrayprint_recurse_level);
 
       lower_bound = f77_get_lowerbound (type);
-      if (lower_bound != 1)	/* Not the default.  */
+      upper_bound = f77_get_upperbound (type);
+      if (lower_bound != 1 && upper_bound >= lower_bound)	/* Not the default.  */
 	fprintf_filtered (stream, "%d:", lower_bound);
 
       /* Make sure that, if we have an assumed size array, we
@@ -189,8 +190,10 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
 	fprintf_filtered (stream, "*");
       else
 	{
-	  upper_bound = f77_get_upperbound (type);
-	  fprintf_filtered (stream, "%d", upper_bound);
+	  if (lower_bound > upper_bound)
+             fprintf_filtered (stream, "*");
+           else
+             fprintf_filtered (stream, "%d", upper_bound);
 	}
 
       if (TYPE_CODE (TYPE_TARGET_TYPE (type)) != TYPE_CODE_ARRAY)
