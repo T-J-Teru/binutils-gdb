@@ -3901,6 +3901,7 @@ static void
 dwarf2_find_base_address (struct die_info *die, struct dwarf2_cu *cu)
 {
   struct attribute *attr;
+  struct die_info* parent_die = NULL;
 
   cu->base_known = 0;
   cu->base_address = 0;
@@ -9457,6 +9458,21 @@ inherit_abstract_dies (struct die_info *die, struct dwarf2_cu *cu)
     complaint (&symfile_complaints,
 	       _("DIE 0x%x and its abstract origin 0x%x have different tags"),
 	       die->offset.sect_off, origin_die->offset.sect_off);
+
+  /* #32561: Check the origin die is not a parent of the current DIE -
+     otherwise we get an infinite loop. */
+  parent_die = die;
+  while (parent_die)
+    {
+      if (parent_die == origin_die)
+        {
+          complaint (&symfile_complaints,
+                     _("DIE 0x%x is a child of its abstract origin 0x%x"),
+                     die->offset, origin_die->offset);
+          return;
+        }
+      parent_die = parent_die->parent;
+    }
 
   child_die = die->child;
   die_children_count = 0;
