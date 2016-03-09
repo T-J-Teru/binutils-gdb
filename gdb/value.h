@@ -996,4 +996,8 @@ extern int value_repeated (const struct value *value);
 extern void set_value_repeated (struct value *value,
 				int repeated);
 
+extern int value_from_infcall (const struct value *value);
+extern void set_value_from_infcall (struct value *value,
+				    int from_infcall);
+
 #endif /* !defined (VALUE_H) */

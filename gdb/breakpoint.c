@@ -11309,14 +11309,11 @@ can_use_hardware_watchpoint (struct value *v)
      register lvalues, computed values, etcetera.  So we can evaluate
      the expression, and then scan the chain of values that leaves
      behind to decide whether we can detect any possible change to the
-     expression's final value using only hardware watchpoints.
-
-     However, I don't think that the values returned by inferior
-     function calls are special in any way.  So this function may not
-     notice that an expression involving an inferior function call
-     can't be watched with hardware watchpoints.  FIXME.  */
+     expression's final value using only hardware watchpoints.  */
   for (; v; v = value_next (v))
     {
+      if (value_from_infcall (v))
+	error (_("Watchpoint expressions must not contain function calls."));
       if (VALUE_LVAL (v) == lval_memory)
 	{
 	  if (v != head && value_lazy (v))
