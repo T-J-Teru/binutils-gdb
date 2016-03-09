@@ -2826,6 +2826,10 @@ value_fn_field (struct value **arg1p, struct fn_field *f,
 	return NULL;
     }
 
+
+  if (sym && SYMBOL_BLOCK_VALUE (sym) == NULL)
+      return NULL;
+
   v = allocate_value (ftype);
   if (sym)
     {
