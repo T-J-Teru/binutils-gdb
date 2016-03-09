@@ -463,6 +463,28 @@ put_objfile_before (struct objfile *objfile, struct objfile *before_this)
 		  _("put_objfile_before: before objfile not in list"));
 }
 
+
+/* Put OBJFILE at the back of the list.  */
+
+void
+objfile_to_back (struct objfile *objfile)
+{
+  struct objfile **objp;
+  for (objp = &object_files; *objp != NULL; objp = &((*objp)->next))
+    {
+      if (*objp == objfile)
+	{
+	  /* Unhook it from where it is.  */
+	  *objp = objfile->next;
+	  /* Put it in the back.  */
+	  objfile->next = NULL;
+	  for (; *objp != NULL; objp = &((*objp)->next)) ;
+	  *objp = objfile;
+	  break;
+	}
+    }
+}
+
 /* Unlink OBJFILE from the list of known objfiles, if it is found in the
    list.
 
