@@ -320,7 +320,7 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
   switch (TYPE_CODE (type))
     {
     case TYPE_CODE_STRING:
-      f77_get_dynamic_length_of_aggregate (type);
+      f77_get_dynamic_length_of_aggregate (type); /* probably unnecessary - setup_array_bounds / reset_lengths should have already done this.  */
       LA_PRINT_STRING (stream, builtin_type (gdbarch)->builtin_char,
 		       valaddr + embedded_offset,
 		       TYPE_LENGTH (type), NULL, 0, options);
@@ -335,7 +335,7 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 	{
 	  struct type *ch_type = builtin_type (gdbarch)->builtin_char;
 
-	  f77_get_dynamic_length_of_aggregate (type);
+	  f77_get_dynamic_length_of_aggregate (type); /* probably unnecessary - setup_array_bounds / reset_lengths should have already done this.  */
 	  LA_PRINT_STRING (stream, ch_type,
 			   valaddr + embedded_offset,
 			   TYPE_LENGTH (type) / TYPE_LENGTH (ch_type),

@@ -669,6 +669,10 @@ typebase
 			{ $$ = parse_f_type->builtin_integer_s8; }
 	|	CHARACTER 
 			{ $$ = parse_f_type->builtin_character; }
+	|	CHARACTER '*' INT	%prec SIZE
+			{ if ($3.val == 1) $$ = parse_f_type->builtin_character; }
+	|       CHARACTER KIND '=' INT ')'      %prec SIZE
+			{ if ($4.val == 1) $$ = parse_f_type->builtin_character; }
 	|	LOGICAL_KEYWORD	%prec BELOW_SIZE
 			{ $$ = parse_f_type->builtin_logical;} 
 	|	LOGICAL_KEYWORD '*' INT	%prec SIZE

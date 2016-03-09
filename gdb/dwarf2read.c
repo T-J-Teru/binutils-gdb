@@ -12733,7 +12733,7 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
     }
 
   index_type = objfile_type (objfile)->builtin_int;
-  range_type = create_range_type (NULL, index_type, 1, length);
+  range_type = create_range_type_d (NULL, index_type, 1, length, NULL, NULL, len_compute, (LONGEST (*)(void*, CORE_ADDR, void*)) dwarf2_evaluate_int);
   char_type = language_string_char_type (cu->language_defn, gdbarch);
   type = create_string_type (NULL, char_type, range_type);
 
