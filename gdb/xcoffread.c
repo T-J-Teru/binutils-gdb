@@ -1012,7 +1012,7 @@ read_xcoff_symtab (struct objfile *objfile, struct partial_symtab *pst)
   unsigned int max_symnum;
   int just_started = 1;
   int depth = 0;
-  int fcn_start_addr = 0;
+  CORE_ADDR fcn_start_addr = 0;
 
   struct coff_symbol fcn_stab_saved = { 0 };
 
