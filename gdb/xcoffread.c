@@ -95,7 +95,7 @@ struct coff_symbol
     char *c_name;
     int c_symnum;		/* Symbol number of this entry.  */
     int c_naux;			/* 0 if syment only, 1 if syment + auxent.  */
-    long c_value;
+    long long c_value;
     unsigned char c_sclass;
     int c_secnum;
     unsigned int c_type;
