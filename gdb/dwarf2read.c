@@ -10319,8 +10319,11 @@ get_scope_pc_bounds (struct die_info *die,
       best_high = current_high;
     }
   else
-    {
+    { 
+      int nested;
       struct die_info *child = die->child;
+      
+      nested = (die->tag == DW_TAG_compile_unit);
 
       while (child && child->tag)
 	{
@@ -10344,6 +10347,26 @@ get_scope_pc_bounds (struct die_info *die,
 	      {
 		best_low = min (best_low, current_low);
 		best_high = max (best_high, current_high);
+
+                if (nested)
+                  {
+                    CORE_ADDR child_low  = (CORE_ADDR) -1; 
+                    CORE_ADDR child_high = (CORE_ADDR) 0;                    
+
+                    struct die_info* grandchild = child->child;
+                    while (grandchild && grandchild->tag)
+                      {
+                        switch (grandchild->tag)
+                          {
+                          case DW_TAG_subprogram:
+                            get_scope_pc_bounds (grandchild, &child_low, &child_high, cu);
+                            best_low = min (best_low, child_low);
+                            best_high = max (best_high, child_high);
+                            break;
+                          }
+                        grandchild =grandchild->sibling;
+                      }
+                  }
 	      }
 	    break;
 	  default:
