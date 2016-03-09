@@ -1491,6 +1491,35 @@ quit_confirm (void)
   return qr;
 }
 
+/* Helper routine for quit_force that requires error handling.  */
+
+static int
+quit_target (void *arg)
+{
+  struct qt_args *qt = (struct qt_args *)arg;
+
+  /* Kill or detach all inferiors.  */
+  iterate_over_inferiors (kill_or_detach, qt);
+
+  /* Give all pushed targets a chance to do minimal cleanup, and pop
+     them all out.  */
+  pop_all_targets (1);
+
+  /* Save the history information if it is appropriate to do so.  */
+  if (write_history_p && history_filename)
+    write_history (history_filename);
+
+  do_final_cleanups (all_cleanups ());    /* Do any final cleanups before
+					     exiting.  */
+  return 0;
+}
+
+static void
+emergency_exit(int signo)
+{
+    exit(1);
+}
+
 /* Quit without asking for confirmation.  */
 
 void
@@ -1512,6 +1541,11 @@ quit_force (char *args, int from_tty)
 
   qt.args = args;
   qt.from_tty = from_tty;
+
+  /* ALL-1028: quit_target may deadlock if the process heald a needed lock when
+     the signal arrived. */
+  signal (SIGALRM, emergency_exit);
+  alarm (2);
 
   /* We want to handle any quit errors and exit regardless.  */
 
