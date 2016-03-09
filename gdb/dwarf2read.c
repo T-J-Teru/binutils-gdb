@@ -8506,10 +8506,7 @@ dwarf2_compute_name (const char *name,
       if (attr == NULL)
 	attr = dwarf2_attr (die, DW_AT_MIPS_linkage_name, cu);
       if (attr && DW_STRING (attr))
-        {
-	  name = DW_STRING (attr);
-	  goto out;
-	}
+        return DW_STRING (attr);
     }
 
   /* These are the only languages we know how to qualify names in.  */
@@ -8721,21 +8718,6 @@ dwarf2_compute_name (const char *name,
 
 	  xfree (intermediate_name);
 	}
-    }
-    
-out:
-  if (name && cu->language_defn 
-      && (cu->language_defn->la_case_sensitivity == case_sensitive_off)) 
-    {
-      char *copy;
-      int len, i;
-
-      len = strlen (name);
-      copy = (char *) obstack_alloc (&cu->objfile->objfile_obstack, len + 1);
-      for (i= 0; i < len; i++)
-        copy[i] = tolower (name[i]);
-      copy[len] = 0;
-      name = copy;
     }
 
   return name;
@@ -12722,19 +12704,6 @@ dwarf2_add_field (struct field_info *fip, struct die_info *die,
 
       fp->name = fieldname;
 
-
-      if (cu && cu->language_defn &&
-	  cu->language_defn->la_case_sensitivity == case_sensitive_off) 
-	{
-	  int i;
-	  int len;
-	  len = strlen(fieldname) + 1;
-	  fp->name = xmalloc (len);
-	  for (i= 0; i < len; i++)
-	    ((char *)fp->name)[i] = tolower (fieldname[i]);
-	}
-
-
       /* Change accessibility for artificial fields (e.g. virtual table
          pointer or virtual base class pointer) to private.  */
       if (dwarf2_attr (die, DW_AT_artificial, cu))
@@ -14396,19 +14365,6 @@ read_module_type (struct die_info *die, struct dwarf2_cu *cu)
 	}
    }
 
-  if (module_name && cu->language_defn 
-      && (cu->language_defn->la_case_sensitivity == case_sensitive_off)) 
-    {
-      char *copy;
-      int len, i;
-
-      len = strlen (module_name);
-      copy = (char *) obstack_alloc (&cu->objfile->objfile_obstack, len + 1);
-      for (i= 0; i < len; i++)
-        copy[i] = tolower (module_name[i]);
-      copy[len] = 0;
-      module_name = copy;
-    }
   type = init_type (TYPE_CODE_MODULE, 0, 0, NULL, objfile);
 
   /* determine_prefix uses TYPE_TAG_NAME.  */
