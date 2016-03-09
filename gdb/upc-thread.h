@@ -40,6 +40,7 @@ extern struct thread_info *upc_thread0;
 extern int is_upc_thread(struct thread_info *);
 extern int upc_thread_num (struct thread_info *);
 extern int upc_thread_of_inferior (struct inferior *);
+extern int upc_current_thread_num (void);
 extern int valid_upc_thread_id (int);
 extern int valid_input_thread_id (int);
 extern int show_thread_id (int);

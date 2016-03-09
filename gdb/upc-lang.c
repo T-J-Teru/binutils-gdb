@@ -436,6 +436,59 @@ upc_expand_threads_factor (struct type *type)
   TYPE_INSTANCE_FLAGS (type) &= ~TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR;  
 }
 
+static void
+thread_value_read (struct value *v)
+{
+  pack_long (value_contents_raw (v), value_type (v), upc_threads);
+}
+
+static struct lval_funcs thread_value_funcs =
+  {
+    thread_value_read,
+  };
+
+static struct value *
+thread_make_value (struct gdbarch *gdbarch, struct internalvar *var, void *data)
+{
+  struct type *type = builtin_type (gdbarch)->builtin_int;
+  return allocate_computed_value (type, &thread_value_funcs, NULL);
+}
+
+static const struct internalvar_funcs thread_funcs =
+{
+  thread_make_value,
+  NULL,
+  NULL
+};
+
+static void
+mythread_value_read (struct value *v)
+{
+  if (upcsingle)
+    pack_long (value_contents_raw (v), value_type (v), mythread);
+  else
+    pack_long (value_contents_raw (v), value_type (v), upc_current_thread_num ());
+}
+
+static struct lval_funcs mythread_value_funcs =
+  {
+    mythread_value_read,
+  };
+
+static struct value *
+mythread_make_value (struct gdbarch *gdbarch, struct internalvar *var, void *data)
+{
+  struct type *type = builtin_type (gdbarch)->builtin_int;
+  return allocate_computed_value (type, &mythread_value_funcs, NULL);
+}
+
+static const struct internalvar_funcs mythread_funcs =
+{
+  mythread_make_value,
+  NULL,
+  NULL
+};
+
 void
 upc_lang_init (char *cmd, int from_tty)
 {
@@ -519,6 +572,8 @@ upc_lang_init (char *cmd, int from_tty)
     }
   if (from_tty)
     printf_filtered("upc_lang_init: done.\n");
+  create_internalvar_type_lazy ("THREADS", &thread_funcs, NULL);
+  create_internalvar_type_lazy ("MYTHREAD", &mythread_funcs, NULL);
   upc_lang_initialized = 1;
 }
 

@@ -147,6 +147,19 @@ upc_thread_num (struct thread_info *tp)
     return tp->num;
 }
 
+int
+upc_current_thread_num ()
+{
+  struct thread_info *tp;
+  /* find current and target threads */
+  for (tp = thread_list; tp; tp = tp->next)
+    {
+      if (ptid_equal (tp->ptid, inferior_ptid))
+	return UPC_THR_NUM (tp);
+    }
+  return -1;
+}
+
 /* Return thread number for given inferior */
 int
 upc_thread_of_inferior (struct inferior *inf)
