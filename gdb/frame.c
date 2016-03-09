@@ -2092,14 +2092,14 @@ frame_debug_got_null_frame (struct frame_info *this_frame,
 /* Is this (non-sentinel) frame in the "main"() function?  */
 
 static int
-inside_main_func (struct frame_info *this_frame)
+inside_func (struct frame_info *this_frame, const char *name)
 {
   struct bound_minimal_symbol msymbol;
   CORE_ADDR maddr;
 
-  if (symfile_objfile == 0)
+  if (name == NULL)
     return 0;
-  msymbol = lookup_minimal_symbol (main_name (), NULL, symfile_objfile);
+  msymbol = lookup_minimal_symbol (name, NULL, symfile_objfile);
   if (msymbol.minsym == NULL)
     return 0;
   /* Make certain that the code, and not descriptor, address is
@@ -2108,6 +2108,18 @@ inside_main_func (struct frame_info *this_frame)
 					      BMSYMBOL_VALUE_ADDRESS (msymbol),
 					      &current_target);
   return maddr == get_frame_func (this_frame);
+}
+
+static int
+inside_main_func (struct frame_info *this_frame)
+{
+  if (symfile_objfile == 0)
+    return 0;
+  return inside_func(this_frame, main_name ()) ||
+         inside_func(this_frame, "MAIN__") ||
+         inside_func(this_frame, "_main_") ||
+         inside_func(this_frame, "start__") ||
+         inside_func(this_frame, "main");
 }
 
 /* Test whether THIS_FRAME is inside the process entry point function.  */
