@@ -55,7 +55,10 @@ uda_rmt_send_status (const int status)
     msg = "OK";
   else
     {
-      sprintf (msg_buf, "E%02x", status & 0xff);
+      if (status > 0xff)
+          sprintf (msg_buf, "E%04x", status & 0xffff);
+      else
+          sprintf (msg_buf, "E%02x", status & 0xff);
       msg = msg_buf;
     }
   if (debug_uda)
@@ -122,9 +125,18 @@ uda_rmt_recv_reply (const char *fmt, ...)
 	      int status;
 	      if (debug_uda)
 		printf ("<-- error: %s\n", reply);
-	      gdb_assert (strlen (reply) == 4);
-	      gdb_assert (isxdigit (reply[2]) && isxdigit (reply[3]));
-	      sscanf (reply, "+E%2x", &status);
+              gdb_assert (strlen (reply) == 4 || strlen(reply) == 6);
+              if (strlen (reply) == 6)
+                {
+                  gdb_assert (isxdigit (reply[2]) && isxdigit (reply[3])
+                              && isxdigit (reply[4]) && isxdigit (reply[5]));
+                  sscanf (reply, "+E%4x", &status);
+                }
+              else
+                {
+                  gdb_assert (isxdigit (reply[2]) && isxdigit (reply[3]));
+                  sscanf (reply, "+E%2x", &status);
+                }
 	      return status;
 	    }
 	  else if (!reply[1])
