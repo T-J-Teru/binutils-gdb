@@ -228,7 +228,8 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
     }
   tmp_type = value_type (v);
   
-  if (TYPE_CODE(tmp_type) == TYPE_CODE_ARRAY)
+  if (TYPE_CODE(tmp_type) == TYPE_CODE_ARRAY
+      || TYPE_CODE(tmp_type) == TYPE_CODE_STRING)
     {
       reset_lengths(tmp_type);
     }
