@@ -2018,7 +2018,7 @@ program_info (char *args, int from_tty)
       get_last_target_status (&ptid, &ws);
     }
 
-  if (ptid_equal (ptid, null_ptid) || is_exited (ptid))
+  if (ptid_equal (ptid, null_ptid) || !find_thread_ptid (ptid) || is_exited (ptid))
     error (_("Invalid selected thread."));
   else if (is_running (ptid))
     error (_("Selected thread is running."));
