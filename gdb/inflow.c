@@ -793,7 +793,11 @@ set_sigint_trap (void)
   struct inferior *inf = current_inferior ();
   struct terminal_info *tinfo = get_inflow_inferior_data (inf);
 
-  if (inf->attach_flag || tinfo->run_terminal)
+/* Our previous patches (00540, 00550) are designed to make sure we always send sigint to gdb.
+ * This being the case, we always want gdb to pass that on to the target, regardless of attach
+ * or terminal status.
+ */
+ /*if (inf->attach_flag || tinfo->run_terminal)*/
     {
       void (*old)(int);
       sent_sigint = 0;
