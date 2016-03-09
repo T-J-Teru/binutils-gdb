@@ -2489,7 +2489,7 @@ proceed_after_attach (int pid)
    and wait for the trace-trap that results from attaching.  */
 
 static void
-attach_command_post_wait (char *args, int from_tty, int async_exec)
+attach_command_post_wait (char *args, int from_tty, int async_exec, int async_stop)
 {
   char *exec_file;
   char *full_exec_path = NULL;
@@ -2535,7 +2535,7 @@ attach_command_post_wait (char *args, int from_tty, int async_exec)
   /* Install inferior's terminal modes.  */
   target_terminal_inferior ();
 
-  if (async_exec)
+  if (async_exec && !async_stop)
     {
       /* The user requested an `attach&', so be sure to leave threads
 	 that didn't get a signal running.  */
@@ -2585,6 +2585,7 @@ struct attach_command_continuation_args
   char *args;
   int from_tty;
   int async_exec;
+  int async_stop;
 };
 
 static void
@@ -2595,7 +2596,7 @@ attach_command_continuation (void *args, int err)
   if (err)
     return;
 
-  attach_command_post_wait (a->args, a->from_tty, a->async_exec);
+  attach_command_post_wait (a->args, a->from_tty, a->async_exec, a->async_stop);
 }
 
 static void
@@ -2610,7 +2611,7 @@ attach_command_continuation_free_args (void *args)
 void
 attach_command (char *args, int from_tty)
 {
-  int async_exec = 0;
+  int async_exec = 0, async_stop = 0;
   struct cleanup *back_to = make_cleanup (null_cleanup, NULL);
 
   dont_repeat ();		/* Not for the faint of heart */
@@ -2643,6 +2644,12 @@ attach_command (char *args, int from_tty)
          doesn't support it, error out.  */
       if (async_exec && !target_can_async_p ())
 	error (_("Asynchronous execution not supported on this target."));
+      
+      if (strncmp(args, "-s ", 3) == 0)
+        {
+	  async_stop = 1;
+	  args += 3;
+	}
     }
   if (upcmode) async_exec = 1;
 
@@ -2672,7 +2679,7 @@ attach_command (char *args, int from_tty)
 	 do so now, because we're going to install breakpoints and
 	 poke at memory.  */
 
-      if (async_exec)
+      if (async_exec && !async_stop)
 	/* The user requested an `attach&'; stop just one thread.  */
 	target_stop (inferior_ptid);
       else
@@ -2703,6 +2710,7 @@ attach_command (char *args, int from_tty)
 	  a->args = xstrdup (args);
 	  a->from_tty = from_tty;
 	  a->async_exec = async_exec;
+	  a->async_stop = async_stop;
 	  add_inferior_continuation (attach_command_continuation, a,
 				     attach_command_continuation_free_args);
 	  discard_cleanups (back_to);
@@ -2712,7 +2720,7 @@ attach_command (char *args, int from_tty)
       wait_for_inferior ();
     }
 
-  attach_command_post_wait (args, from_tty, async_exec);
+  attach_command_post_wait (args, from_tty, async_exec, async_stop);
   discard_cleanups (back_to);
 }
 
@@ -2766,6 +2774,7 @@ notice_new_inferior (ptid_t ptid, int leave_running, int from_tty)
 	  a->args = xstrdup ("");
 	  a->from_tty = from_tty;
 	  a->async_exec = async_exec;
+	  a->async_stop = 0;
 	  add_inferior_continuation (attach_command_continuation, a,
 				     attach_command_continuation_free_args);
 
@@ -2777,7 +2786,7 @@ notice_new_inferior (ptid_t ptid, int leave_running, int from_tty)
     }
 
   async_exec = leave_running;
-  attach_command_post_wait ("" /* args */, from_tty, async_exec);
+  attach_command_post_wait ("" /* args */, from_tty, async_exec, 0);
 
   do_cleanups (old_chain);
 }
