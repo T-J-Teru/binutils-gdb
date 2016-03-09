@@ -236,7 +236,7 @@ static void check_parameter_typelist (VEC (type_ptr) *);
 
 /* Special type cases, put in to allow the parser to distinguish different
    legal basetypes.  */
-%token SIGNED_KEYWORD LONG SHORT INT_KEYWORD CONST_KEYWORD VOLATILE_KEYWORD DOUBLE_KEYWORD
+%token SIGNED_KEYWORD LONG SHORT INT_KEYWORD CONST_KEYWORD VOLATILE_KEYWORD DOUBLE_KEYWORD VOID_KEYWORD
 %token SHARED_KEYWORD RELAXED_KEYWORD STRICT_KEYWORD
 
 %token <sval> VARIABLE
@@ -1130,7 +1130,6 @@ direct_abs_decl: '(' abs_decl ')'
 			  push_type (tp_array);
 			  $$ = get_type_stack ();
 			}
-
 	| 	direct_abs_decl func_mod
 			{
 			  push_type_stack ($1);
@@ -1286,6 +1285,8 @@ typebase  /* Implements (approximately): (type-qualifier)* type-specifier */
 			{ $$ = lookup_typename (parse_language, parse_gdbarch,
 						"long double",
 						(struct block *) NULL, 0); }
+	|	VOID_KEYWORD
+			{ $$ = parse_type->builtin_void; }
 	|	STRUCT name
 			{ $$ = lookup_struct (copy_name ($2),
 					      expression_context_block); }
@@ -1395,6 +1396,12 @@ typename:	TYPENAME
 		  $$.type = lookup_signed_typename (parse_language,
 						    parse_gdbarch,
 						    "short");
+		}
+	|	VOID_KEYWORD
+		{
+		  $$.stoken.ptr = "void";
+		  $$.stoken.length = 4;
+		  $$.type = parse_type->builtin_void;
 		}
 	;
 
@@ -2276,6 +2283,7 @@ static const struct token ident_tokens[] =
     {"new", NEW, OP_NULL, FLAG_CXX},
     {"delete", DELETE, OP_NULL, FLAG_CXX},
     {"operator", OPERATOR, OP_NULL, FLAG_CXX},
+    {"void", VOID_KEYWORD, OP_NULL, 0},
 
     {"and", ANDAND, BINOP_END, FLAG_CXX},
     {"and_eq", ASSIGN_MODIFY, BINOP_BITWISE_AND, FLAG_CXX},
