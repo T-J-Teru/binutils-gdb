@@ -2510,6 +2510,10 @@ decode_line_full (char **argptr, int flags,
     decode_line_2 (state, &result, select_mode);
 
   do_cleanups (cleanups);
+
+  
+
+  
 }
 
 /* See linespec.h.  */
@@ -3351,6 +3355,7 @@ decode_digits_ordinary (struct linespec_state *self,
 	  sal.symtab = elt;
 	  sal.line = line;
 	  sal.pc = pc;
+	  sal.explicit_line = 1; //added by kdavis@cray.com
 	  add_sal_to_sals_basic (sals, &sal);
 	}
 

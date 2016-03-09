@@ -78,6 +78,10 @@
 typedef struct symbol *symbolp;
 DEF_VEC_P (symbolp);
 
+ /***************** Fast track debugging code *********************/
+extern int enable_fast_track_debugging;
+/****************** End - Fast track debugging code **************/
+
 /* When == 1, print basic high level tracing messages.
    When > 1, be more verbose.
    This is in contrast to the low level DIE reading of dwarf_die_debug.  */
@@ -19168,6 +19172,17 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
       CORE_ADDR bupc_baseaddr = 0;
       const char *linkagename;
       int suppress_add = 0;
+
+      /***************** Fast track debugging code *********************
+      added by kdavis@cray.com*/
+	  if (strncmp("dbg$", name, 4) == 0)
+      {
+          /* is a fast track debug entry */
+          enable_fast_track_debugging = 1;
+      }
+      /****************** End - Fast track debugging code ***************/
+
+      
 
       /* Berkeley mangled local variable.  */
       /* e.g. int __BLN__N1_i_L2168_L2169; */

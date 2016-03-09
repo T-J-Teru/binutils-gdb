@@ -17,9 +17,12 @@
 #if !defined (LINESPEC_H)
 #define LINESPEC_H 1
 
+#include "common/vec.h" //modified path the vec.h  kdavis@cray.com
+#include "symtab.h" //added symtab.h include statement kdavis@cray.com
+
 struct symtab;
 
-#include "vec.h"
+
 
 /* Flags to pass to decode_line_1 and decode_line_full.  */
 
