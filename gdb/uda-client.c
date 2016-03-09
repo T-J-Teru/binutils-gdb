@@ -194,7 +194,7 @@ write_local_bytes (const uda_tword_t thread_num,
   int status;
   uda_tword_t old_thread_num;
   if (upcsingle && thread_num != mythread)
-    return uda_no_information;  
+    return uda_no_information;
   old_thread_num = upc_thread_set (thread_num);
   status = target_write_memory (local_addr, data, length);
   upc_thread_restore (old_thread_num);
@@ -485,6 +485,7 @@ uda_client_connect (const char *service_name)
       perror_with_name ("fdopen of c_out failed");
     }
   setlinebuf (c_out);
+  setvbuf (c_in, (char *) NULL, _IONBF, 0);
   uda_rmt_init (c_in, c_out, uda_client_cmd_exec);
 }
 
