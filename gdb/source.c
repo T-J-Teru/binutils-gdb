@@ -45,7 +45,7 @@
 #include "readline/readline.h"
 
 #include "psymtab.h"
-
+#include "block.h"
 
 #define OPEN_MODE (O_RDONLY | O_BINARY)
 #define FDOPEN_MODE FOPEN_RB
@@ -1571,6 +1571,9 @@ line_info (char *arg, int from_tty)
 	    }
 	  else
 	    {
+              struct block *b;
+              char *name;
+                
 	      printf_filtered ("Line %d of \"%s\"",
 			       sal.line,
 			       symtab_to_filename_for_display (sal.symtab));
@@ -1581,6 +1584,29 @@ line_info (char *arg, int from_tty)
 	      printf_filtered (" and ends at ");
 	      print_address (gdbarch, end_pc, gdb_stdout);
 	      printf_filtered (".\n");
+
+	      /* If this address is a inlined function, print out call site
+	       * information */
+	      b = block_for_pc_sect (sal.pc, sal.section);
+	      while (b != NULL)
+	        {
+	          if (BLOCK_FUNCTION (b) != NULL && block_inlined_p (b))
+                    {
+                      if (SYMBOL_LINE (BLOCK_FUNCTION (b)) != 0)
+                        {
+                          name = SYMBOL_SYMTAB (BLOCK_FUNCTION (b))->fullname;
+                          if (name==0)
+                            name = SYMBOL_SYMTAB (BLOCK_FUNCTION (b))->filename;
+                          printf_filtered ("This is at an inlined function \"%s\" called from line %d of \"%s\".\n",
+                              SYMBOL_PRINT_NAME (BLOCK_FUNCTION (b)),
+                              SYMBOL_LINE (BLOCK_FUNCTION (b)),
+                              name);
+                        }
+                    }
+	          else if (BLOCK_FUNCTION (b) != NULL)
+	            break;
+	          b = BLOCK_SUPERBLOCK (b);
+	        }
 	    }
 
 	  /* x/i should display this line's code.  */
