@@ -1818,6 +1818,8 @@ thread_db_update_thread_list (struct target_ops *ops)
 		       update_thread_core, NULL);
 }
 
+extern int print_task_groups;
+
 static char *
 thread_db_pid_to_str (struct target_ops *ops, ptid_t ptid)
 {
@@ -1829,9 +1831,13 @@ thread_db_pid_to_str (struct target_ops *ops, ptid_t ptid)
       static char buf[64];
       thread_t tid;
 
-      tid = thread_info->priv->tid;
-      snprintf (buf, sizeof (buf), "Thread 0x%lx (LWP %ld)",
-		tid, ptid_get_lwp (ptid));
+      tid = thread_info->private->tid;
+      if (print_task_groups)
+	snprintf (buf, sizeof (buf), "Thread 0x%lx (LWP %d.%ld)",
+		  tid, ptid_get_pid (ptid), ptid_get_lwp (ptid));
+      else
+	snprintf (buf, sizeof (buf), "Thread 0x%lx (LWP %ld)",
+		  tid, ptid_get_lwp (ptid));
 
       return buf;
     }
