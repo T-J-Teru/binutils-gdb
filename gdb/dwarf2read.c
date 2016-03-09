@@ -7009,6 +7009,7 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
       break;
     case DW_TAG_imported_declaration:
     case DW_TAG_namespace:
+    case DW_TAG_module:
       add_psymbol_to_list (actual_name, strlen (actual_name),
 			   built_actual_name != NULL,
 			   VAR_DOMAIN, LOC_TYPEDEF,
@@ -14342,11 +14343,49 @@ read_module (struct die_info *die, struct dwarf2_cu *cu)
   type = read_type_die (die, cu);
   new_symbol (die, type, cu);
 
+
+  /* APB: While merging 232a53f63a850490bf5289e88059c25d463ef4e2 the
+     following block was added, not sure if this is still needed.  */
+  abort ();
+#if 0
+  struct objfile *objfile = cu->objfile;
+  int is_anonymous;
+
+  /* Add a symbol associated to this if we haven't seen the namespace
+     before.  Also, add a using directive if it's an anonymous
+     namespace.  */
+
+  if (dwarf2_attr (die, DW_AT_extension, cu) == NULL)
+    {
+      struct type *type;
+
+      type = read_type_die (die, cu);
+      new_symbol (die, type, cu);
+
+      namespace_name (die, &is_anonymous, cu);
+      if (is_anonymous)
+	{
+	  const char *previous_prefix = determine_prefix (die, cu);
+
+	  cp_add_using_directive (previous_prefix, TYPE_NAME (type), NULL,
+				  NULL, NULL, 0, &objfile->objfile_obstack);
+	}
+    }
+#endif
+
   while (child_die && child_die->tag)
     {
       process_die (child_die, cu);
       child_die = sibling_die (child_die);
     }
+
+  /* Leaving a new Fortran module.  */
+  if (cu->language == language_fortran)
+    {
+      f_module_leave();
+    }
+
+
 }
 
 /* Return the name of the namespace represented by DIE.  Set
