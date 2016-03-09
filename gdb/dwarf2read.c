@@ -19298,6 +19298,7 @@ dwarf2_const_value (const struct attribute *attr, struct symbol *sym,
 static struct type *
 die_type (struct die_info *die, struct dwarf2_cu *cu)
 {
+  struct type *type = NULL;  
   struct attribute *type_attr;
 
   type_attr = dwarf2_attr (die, DW_AT_type, cu);
@@ -19449,6 +19450,7 @@ lookup_die_type (struct die_info *die, const struct attribute *attr,
     {
       struct die_info *type_die = NULL;
       struct dwarf2_cu *type_cu = cu;
+      struct attribute *next_type;
 
       if (attr_form_is_ref (attr))
 	type_die = follow_die_ref (die, attr, &type_cu);
@@ -19458,6 +19460,31 @@ lookup_die_type (struct die_info *die, const struct attribute *attr,
 	 from an inter-CU reference and the type's CU got expanded before
 	 ours.  */
       this_type = read_type_die (type_die, type_cu);
+      /* APB: In commit 62c9cbae074a84503d2e08946e4004d98cf034a2 the
+	 following block of code was added, not sure if it is ever tested.  */
+      if (cu->producer && strncmp (cu->producer, "PGCC", 4) == 0)
+        {
+          next_type = dwarf2_attr (type_die, DW_AT_type, cu);
+          if (next_type) 
+            {
+              struct die_info *next_type_die;
+              next_type_die = follow_die_ref (type_die, next_type, &cu);
+              if (next_type_die && next_type_die == die)
+	        {
+		  char *message, *saved;
+
+		  message = xstrprintf (_("<recursive type in %s, CU 0x%x, DIE 0x%x>"),
+					 objfile->name,
+					 cu->header.offset.sect_off,
+					 die->offset.sect_off);
+		  saved = obstack_copy0 (&objfile->objfile_obstack,
+					  message, strlen (message));
+		  xfree (message);
+
+		  this_type = init_type (TYPE_CODE_ERROR, 0, 0, saved, objfile);
+	        }
+            }
+        }
     }
 
   /* If we still don't have a type use an error marker.  */
@@ -20460,10 +20487,10 @@ follow_die_ref (struct die_info *src_die, const struct attribute *attr,
 			    || cu->per_cu->is_dwz),
 			   ref_cu);
   if (!die)
-    error (_("Dwarf Error: Cannot find DIE at 0x%x referenced from DIE "
-	   "at 0x%x [in module %s]"),
-	   offset.sect_off, src_die->offset.sect_off,
-	   objfile_name (cu->objfile));
+    warning (_("Dwarf Error: Cannot find DIE at 0x%x referenced from DIE "
+	       "at 0x%x [in module %s]"),
+	     offset.sect_off, src_die->offset.sect_off,
+	     objfile_name (cu->objfile));
 
   return die;
 }
