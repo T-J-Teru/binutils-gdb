@@ -1439,64 +1439,6 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
       break;
     }
 
-      
-  if (TYPE_CODE (sym->type) == TYPE_CODE_ARRAY
-      && SYMBOL_LANGUAGE (sym) == language_fortran)
-    {
-      /* reverse the array - XLF has busted fortran */
-      
-      /* FIXME - this could bust G77 and Sun's Forte 
-	 - but I haven't yet seen the 'V' tag used by G77. */
-      
-      struct type *old_type = SYMBOL_TYPE (sym);
-      struct type *end_type = SYMBOL_TYPE (sym);
-
-      if (TYPE_CODE (old_type) == TYPE_CODE_ARRAY 
-	  && TYPE_CODE (TYPE_TARGET_TYPE (old_type)) == TYPE_CODE_ARRAY) 
-	{
-	  while (TYPE_CODE (end_type) == TYPE_CODE_ARRAY)
-	    {
-	      end_type = TYPE_TARGET_TYPE (end_type);
-	    }
-	  
-	  while (TYPE_CODE (old_type) == TYPE_CODE_ARRAY) 
-	    {
-	      CORE_ADDR (*expr_evaluate) (void*, struct value *, void*) = 0;
-	      
-	      int lower; 
-	      int upper;
-	      struct type *range_type;
-	      struct type *old_index_type;
-	      void *lower_bat = 0, *count_bat = 0, *upper_bat = 0;
-	      struct type* old_range_type;
-	      old_range_type = TYPE_FIELD_TYPE(old_type, 0);
-	      old_index_type = TYPE_INDEX_TYPE (old_type);
-	      
-	      lower = TYPE_ARRAY_LOWER_BOUND_VALUE (old_type); 
-	      upper = TYPE_ARRAY_UPPER_BOUND_VALUE (old_type); 
-	      if (TYPE_NFIELDS(old_range_type) >= 6)
-		{
-		  lower_bat = TYPE_LOW_BOUND_BATON(old_range_type); 
-		  upper_bat = TYPE_HIGH_BOUND_BATON(old_range_type); 
-		  count_bat = TYPE_COUNT_BOUND_BATON(old_range_type); 
-		  expr_evaluate = 
-		    (CORE_ADDR (*) (void*, struct value *, void*))  TYPE_BOUND_BATON_FUNCTION(old_range_type); 
-		}
-	      range_type = create_range_type_d ((struct type *) NULL, 
-						old_index_type,
-						lower, upper, lower_bat, upper_bat, count_bat, (LONGEST (*)(void*, CORE_ADDR, void*)) expr_evaluate);
-	      
-	      end_type = create_array_type (NULL, end_type, range_type);
-	      
-	    old_type = TYPE_TARGET_TYPE (old_type);
-	    }
-	}
-      
-      SYMBOL_TYPE (sym) = end_type;
-      
-      
-    }
-
   /* Some systems pass variables of certain types by reference instead
      of by value, i.e. they will pass the address of a structure (in a
      register or on the stack) instead of the structure itself.  */
