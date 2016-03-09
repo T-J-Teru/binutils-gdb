@@ -588,10 +588,8 @@ generic_val_print (struct type *type, const gdb_byte *valaddr,
 	  val = unpack_long (type, valaddr + embedded_offset);
 	  if (val == 0)
 	    fputs_filtered (decorations->false_name, stream);
-	  else if (val == 1)
-	    fputs_filtered (decorations->true_name, stream);
 	  else
-	    print_longest (stream, 'd', 0, val);
+	    fputs_filtered (decorations->true_name, stream);
 	}
       break;
 
