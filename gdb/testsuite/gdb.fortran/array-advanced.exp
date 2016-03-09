@@ -50,9 +50,9 @@ gdb_test "print b(10, 11)" ".* = 141"
 gdb_test "print c(1, 2, 3)" ".* = 292"
 gdb_test "print c(4, 5, 6)" ".* = 1111"
 
-gdb_test "print oned" ".* = <not allocated>"
-gdb_test "print twod" ".* = <not allocated>"
-gdb_test "print threed" ".* = <not allocated>"
+gdb_test "print oned" ".* = <not allocated>" "print oned (first time)"
+gdb_test "print twod" ".* = <not allocated>" "print twod (first time)"
+gdb_test "print threed" ".* = <not allocated>" "print threed (first time)"
 if ![runto [gdb_get_line_number "call testpoint2"] ] then {
     perror "couldn't run to breakpoint "
     continue
@@ -76,6 +76,6 @@ if ![runto [gdb_get_line_number "call testpoint4"] ] then {
     continue
 }
 
-gdb_test "print oned" ".* = <not allocated>"
-gdb_test "print twod" ".* = <not allocated>"
-gdb_test "print threed" ".* = <not allocated>"
+gdb_test "print oned" ".* = <not allocated>" "print oned (second time)"
+gdb_test "print twod" ".* = <not allocated>" "print twod (second time)"
+gdb_test "print threed" ".* = <not allocated>" "print threed (second time)"
