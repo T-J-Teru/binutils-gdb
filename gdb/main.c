@@ -1013,7 +1013,8 @@ captured_main (void *data)
 
   /* Read in the old history after all the command files have been
      read.  */
-  init_history ();
+  if (!inhibit_gdbinit)
+    init_history ();
 
   if (batch_flag)
     {
