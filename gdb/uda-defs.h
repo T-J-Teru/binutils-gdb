@@ -95,11 +95,17 @@ struct uda_callouts {
   int (*uda_read_shared_mem)(
       const uda_taddr_t addrfield,
       const uda_tword_t thread_num,
+      const uda_tword_t phase,
+      uda_tword_t block_size,
+      uda_tword_t element_size,
       const uda_tword_t length,
-      uda_binary_data_t *bytes);
+      uda_binary_data_t *data);
   int (*uda_write_shared_mem)(
       const uda_taddr_t addrfield,
       const uda_tword_t thread_num,
+      const uda_tword_t phase,
+      uda_tword_t block_size,
+      uda_tword_t element_size,
       const uda_tword_t length,
       uda_tword_t *bytes_written,
       const uda_binary_data_t *bytes);

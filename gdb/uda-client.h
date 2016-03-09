@@ -85,13 +85,19 @@ extern int uda_pts_to_addr  (const uda_debugger_pts_t *,
 			     const uda_tword_t elem_size,
 			     uda_taddr_t *addr);
 extern int uda_read_shared_mem (const uda_taddr_t addrfield,
-                                const uda_tword_t thread_num,
-                                const uda_tword_t length,
-			        uda_binary_data_t *bytes);
+				const uda_tword_t thread_num,
+				const uda_tword_t phase,
+				uda_tword_t block_size,
+				uda_tword_t element_size,
+				const uda_tword_t length,
+				uda_binary_data_t *data);
 extern int uda_write_shared_mem (const uda_taddr_t addrfield,
-                                 const uda_tword_t thread_num,
-		                 const uda_tword_t length,
-                                 uda_tword_t *bytes_written,
-		                 const uda_binary_data_t *bytes);
+				 const uda_tword_t thread_num,
+				 const uda_tword_t phase,
+				 uda_tword_t block_size,
+				 uda_tword_t element_size,
+				 const uda_tword_t length,
+				 uda_tword_t *bytes_written,
+				 const uda_binary_data_t *bytes);
 
 #endif /* !_UDA_CLIENT_H_ */

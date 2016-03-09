@@ -412,9 +412,12 @@ uda_iface_calc_pts_diff (const uda_debugger_pts_t * pts_oprnd_1,
 static
 int
 uda_iface_read_shared_mem (const uda_taddr_t addrfield,
-			    const uda_tword_t thread_num,
-			    const uda_tword_t length,
-			    uda_binary_data_t * data)
+                           const uda_tword_t thread_num,
+			   const uda_tword_t phase,
+                           uda_tword_t block_size,
+                           uda_tword_t element_size,
+			   const uda_tword_t length,
+			   uda_binary_data_t *data)
 {
   uda_thread_t *thread;
   int status;
@@ -452,17 +455,20 @@ uda_iface_pts_to_addr (const uda_debugger_pts_t * pts,
 static
 int
 uda_iface_write_shared_mem (const uda_taddr_t addrfield,
-		     const uda_tword_t thread_num,
-                     const uda_tword_t length,
-		     uda_tword_t * bytes_written,
-		     const uda_binary_data_t * data)
+                            const uda_tword_t thread_num,
+			    const uda_tword_t phase,
+                            uda_tword_t block_size,
+                            uda_tword_t element_size,
+			    const uda_tword_t length,
+			    uda_tword_t *bytes_written,
+			    const uda_binary_data_t *data)
 {
-  int status;
+  int status;  
   uda_thread_t *thread;
-  status = uda_job_get_thread (uda_job, thread_num, &thread);
-  if (status != uda_ok)
-    return status;
-  status = uda_write_upc_shared_mem (thread, addrfield, data->len,
+  if (thread_num >= uda_job->num_threads)
+    return uda_bad_assistant;  
+  thread = &uda_job->threads[thread_num];
+  status = uda_write_upc_shared_mem (thread, addrfield, length,
 				     bytes_written, data->bytes);
   return status;
 }

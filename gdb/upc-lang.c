@@ -408,7 +408,7 @@ upc_value_fetch_lazy (struct value *val)
 	      if (direct)
 		{
 		  value_index = (indefinite?1:num_threads) * (((LONGEST)elem_pts.addrfield - (LONGEST)pts.addrfield) / elem_size - elem_pts.phase + pts.phase) + block_size * (elem_pts.thread - pts.thread) + elem_pts.phase - pts.phase;
-		  upc_read_shared_mem (elem_pts.addrfield, elem_pts.thread,
+		  upc_read_shared_mem (elem_pts, block_size, elem_size,
 				       value_contents_all_raw (val) + value_index * elem_size,
 				       chunk_elems * elem_size);
 		  elem_pts.addrfield += chunk_elems * elem_size;
@@ -417,7 +417,7 @@ upc_value_fetch_lazy (struct value *val)
 		}
 	      else
 	        {
-		  upc_read_shared_mem (elem_pts.addrfield, elem_pts.thread,
+		  upc_read_shared_mem (elem_pts, block_size, elem_size,
 				       buf, chunk_elems * elem_size);
 		  for (buf_index = 0; buf_index < chunk_elems; )
 		    {
@@ -438,7 +438,7 @@ upc_value_fetch_lazy (struct value *val)
   else
     {
       pts.addrfield += value_offset (val);
-      upc_read_shared_mem (pts.addrfield, pts.thread,
+      upc_read_shared_mem (pts, block_size, upc_elemsizeof (type), 
 			   value_contents_all_raw (val), length);
     }
 }
@@ -515,14 +515,17 @@ extern const char *
 uda_db_error_string (int error_code);
 
 int
-upc_read_shared_mem (ULONGEST address, ULONGEST thread,
+upc_read_shared_mem (const gdb_upc_pts_t pts,
+                     ULONGEST block_size,
+                     ULONGEST element_size,
                      gdb_byte *data, int length)
 {
   int status;
   uda_binary_data_t rdata;
   if (!uda_calls.uda_read_shared_mem)
     error (_("UPC language support is not initialised"));  
-  status = (*uda_calls.uda_read_shared_mem) (address, thread, length, &rdata);
+  status = (*uda_calls.uda_read_shared_mem) (pts.addrfield, pts.thread, pts.phase,
+					     block_size, element_size, length, &rdata);
 
   if (status != uda_ok)
     {
