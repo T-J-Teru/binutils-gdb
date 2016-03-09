@@ -114,6 +114,7 @@ proc test_running_the_program {} {
 proc test_controlled_execution {} {
     global mi_gdb_prompt
     global hex
+    global address
 
     set line_callee4_head         [gdb_get_line_number "callee4 ("]
     set line_callee4_body         [expr $line_callee4_head + 2]
@@ -140,7 +141,7 @@ proc test_controlled_execution {} {
     #        we should look for the right thing here.
     # NOTE: The ``\\\\\"'' is for \".
     mi_step_to "callee1" \
-	"\{name=\"intarg\",value=\"2\"\},\{name=\"strarg\",value=\"$hex \\\\\"A string argument\.\\\\\"\"\},\{name=\"fltarg\",value=\"3.5\"\}" \
+	"\{name=\"intarg\",value=\"2\"\},\{name=\"strarg\",value=\"$address \\\\\"A string argument\.\\\\\"\"\},\{name=\"fltarg\",value=\"3.5\"\}" \
 	"basics.c" "$line_callee1_body" "step at main"
 
     # FIXME: A string argument is not printed right; should be fixed and

@@ -133,8 +133,8 @@ gdb_test_multiple "ptype foo_instance1" "ptype foo_instance1" {
 # Print variables and method calls.
 # This is a walk in the park.
 
-gdb_test "print foo_instance2" "\\$\[0-9\]+ = \{ifoo = 222, ccpfoo = $hex \"A\"\}"
-gdb_test "print foo_instance3" "\\$\[0-9\]+ = \{ifoo = 222, ccpfoo = $hex \"A\"\}"
+gdb_test "print foo_instance2" "\\$\[0-9\]+ = \{ifoo = 222, ccpfoo = $address \"A\"\}"
+gdb_test "print foo_instance3" "\\$\[0-9\]+ = \{ifoo = 222, ccpfoo = $address \"A\"\}"
 
 gdb_test "print foo_instance1.overloadargs(1)" "\\$\[0-9\]+ = 1" \
     "print call overloaded func 1 arg"

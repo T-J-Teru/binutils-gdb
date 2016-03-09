@@ -4176,12 +4176,12 @@ const struct symbol_computed_ops dwarf2_loclist_funcs = {
 };
 
 
-LONGEST
-dwarf2_evaluate_int (void* locbaton, struct value *obj, void* frame) {
+struct value *dwarf2_evaluate_int (struct type *type, void* locbaton, struct value *obj, void* frame)
+{
   struct dwarf2_loclist_baton* b =
     (struct dwarf2_loclist_baton*) locbaton;
 
-  CORE_ADDR result;
+  LONGEST result;
   struct value *retval;
   struct dwarf_expr_baton baton;
   struct dwarf_expr_context *ctx;
@@ -4189,6 +4189,9 @@ dwarf2_evaluate_int (void* locbaton, struct value *obj, void* frame) {
   CORE_ADDR push_obj;
   struct objfile *objfile = dwarf2_per_cu_objfile (b->per_cu);
   struct value *val;
+
+  if (type)
+    type = check_typedef (type);
 
   push_obj = value_address (obj);
 
@@ -4216,15 +4219,14 @@ dwarf2_evaluate_int (void* locbaton, struct value *obj, void* frame) {
   
   dwarf_expr_eval (ctx, b->data, b->size);
   val = dwarf_expr_fetch (ctx, 0);
-  if (VALUE_LVAL (val) == lval_memory)
-    result = value_address (val);
-  else
-    result = value_as_address (val);
+  /* dwarf_expr_eval will return an unsigned value. We must convert it to a
+     signed value (with sign extension) here if necessary. */
+  if (type && TYPE_CODE (type) != TYPE_CODE_VOID)
+    val = value_cast (type, val);
 
   do_cleanups (old_chain);
 
-  return (LONGEST) result;
-  
+  return val;
 }
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */

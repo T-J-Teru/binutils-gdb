@@ -966,6 +966,14 @@ int
 value_fetch_lazy (struct value *val)
 {
   gdb_assert (value_lazy (val));
+  if (value_optimized_out (val)
+      || value_not_allocated (val)
+      || value_not_associated (val))
+    {
+      /* Keep it optimized out.  */;
+      set_value_lazy (val, 0);
+      return 0;
+    }
   allocate_value_contents_limited (val);
   if (value_bitsize (val))
     {
@@ -1108,8 +1116,6 @@ value_fetch_lazy (struct value *val)
   else if (VALUE_LVAL (val) == lval_computed
 	   && value_computed_funcs (val)->read != NULL)
     value_computed_funcs (val)->read (val);
-  else if (value_optimized_out (val))
-    /* Keep it optimized out.  */;
   else
     internal_error (__FILE__, __LINE__, _("Unexpected lazy value type."));
 
@@ -1736,6 +1742,7 @@ value_addr (struct value *arg1)
       /* ... and also the relative position of the subobject in the full
 	 object.  */
       set_value_pointed_to_offset (arg2, value_embedded_offset (arg1));
+      break;
     case lval_upc_shared:
       arg2 = upc_value_from_pts (pt, VALUE_SHARED_ADDR (arg1));
       return arg2;
@@ -3524,7 +3531,7 @@ value_namespace_elt (const struct type *curtype,
   struct value *retval = value_maybe_namespace_elt (curtype, name,
 						    want_address, 
 						    noside);
-
+   printf("lookup symbol in namespace valops\n");
   if (retval == NULL)
     error (_("No symbol \"%s\" in namespace \"%s\"."), 
 	   name, TYPE_TAG_NAME (curtype));

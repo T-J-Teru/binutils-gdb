@@ -4954,14 +4954,12 @@ process_psymtab_comp_unit_reader (const struct die_reader_specs *reader,
 
   /* This must be done before calling dwarf2_build_include_psymtabs.  */
   attr = dwarf2_attr (comp_unit_die, DW_AT_comp_dir, cu);
-  if (attr != NULL)
+  if (attr != NULL && DW_STRING (attr))
     {
       char *s = strstr(DW_STRING (attr), ":");
       if (s != NULL) pst->dirname = xstrdup(s + 1); /* DWARF 2/3 suggest host:path (but not suggested for DWARF4)*/
       else pst->dirname = DW_STRING (attr);
     }
-  if (attr != NULL)
-    pst->dirname = DW_STRING (attr);
 
   baseaddr = ANOFFSET (objfile->section_offsets, SECT_OFF_TEXT (objfile));
 
@@ -7949,7 +7947,7 @@ find_file_and_directory (struct die_info *die, struct dwarf2_cu *cu,
     }
 
   attr = dwarf2_attr (die, DW_AT_comp_dir, cu);
-  if (attr != NULL)
+  if (attr != NULL && DW_STRING (attr))
     {
       char *s = strstr(DW_STRING (attr), ":");
       if (s != NULL) *comp_dir = xstrdup(s + 1); /* DWARF 2/3 suggest host:path (but not suggested for DWARF4)*/
@@ -9417,6 +9415,7 @@ inherit_abstract_dies (struct die_info *die, struct dwarf2_cu *cu)
   struct attribute *attr;
   struct dwarf2_cu *origin_cu;
   struct pending **origin_previous_list_in_scope;
+  struct die_info *parent_die;
 
   attr = dwarf2_attr (die, DW_AT_abstract_origin, cu);
   if (!attr)
@@ -9449,7 +9448,7 @@ inherit_abstract_dies (struct die_info *die, struct dwarf2_cu *cu)
         {
           complaint (&symfile_complaints,
                      _("DIE 0x%x is a child of its abstract origin 0x%x"),
-                     die->offset, origin_die->offset);
+                     die->offset.sect_off, origin_die->offset.sect_off);
           return;
         }
       parent_die = parent_die->parent;
@@ -12015,6 +12014,8 @@ read_array_type (struct die_info *die, struct dwarf2_cu *cu)
                     make_loclist_baton(cu, DW_BLOCK(attr));
 
                 attr_alloc = dwarf2_attr(die, DW_AT_allocated, cu);
+                if (!attr_alloc)
+                    attr_alloc = dwarf2_attr(die, DW_AT_associated, cu);
                 if (attr_alloc)
                   {
                     TYPE_INSTANCE_FLAGS (type) |= TYPE_INSTANCE_FLAG_ALLOCATABLE;
@@ -12643,14 +12644,39 @@ read_tag_qual_type (struct die_info *die, struct dwarf2_cu *cu, struct type_qual
   struct type *base_type;
   struct type *qual_type;
   struct type_quals type_quals;
-
+  
   base_type = die_type (die, cu);
 
   /* The die_type call above may have already set the type for this DIE.  */
   qual_type = get_die_type (die, cu);
   if (qual_type)
     return qual_type;
-  
+
+  /* In case the const qualifier is applied to an array type, the element type
+     is so qualified, not the array type (section 6.7.3 of C99).  */
+  if (TYPE_CODE (base_type) == TYPE_CODE_ARRAY
+      && new_quals.upc_layout == 0)
+    {
+      struct type *el_type, *inner_array;
+
+      base_type = copy_type (base_type);
+      inner_array = base_type;
+
+      while (TYPE_CODE (TYPE_TARGET_TYPE (inner_array)) == TYPE_CODE_ARRAY)
+	{
+	  TYPE_TARGET_TYPE (inner_array) =
+	    copy_type (TYPE_TARGET_TYPE (inner_array));
+	  inner_array = TYPE_TARGET_TYPE (inner_array);
+	}
+
+      el_type = TYPE_TARGET_TYPE (inner_array);
+      type_quals = merge_type_quals (TYPE_QUALS (el_type), new_quals);
+      TYPE_TARGET_TYPE (inner_array) =
+        make_qual_variant_type (type_quals, el_type, 0);
+
+      return set_die_type (die, base_type, cu);
+    }
+
   type_quals = merge_type_quals (TYPE_QUALS (base_type), new_quals);
   qual_type = make_qual_variant_type (type_quals, base_type, 0);
   return set_die_type (die, qual_type, cu);
@@ -13394,6 +13420,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   struct type *base_type, *orig_base_type;
   struct type *range_type;
   struct attribute *attr;
+  struct attribute *upper_bound_attr;
   struct dwarf2_loclist_baton *low_compute = 0;
   struct dwarf2_loclist_baton *high_compute = 0;
   struct dwarf2_loclist_baton *count_compute = 0;
@@ -13499,6 +13526,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 	  high = low - 1;
 	}
     }
+  upper_bound_attr = attr;
 
   /* PGI Fortran extensions */
   attr = dwarf2_attr (die, DW_AT_stride, cu);
@@ -13594,11 +13622,11 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   /* Mark arrays with dynamic length at least as an array of unspecified
      length.  GDB could check the boundary but before it gets implemented at
      least allow accessing the array elements.  */
-  if (attr && attr_form_is_block (attr))
+  if (upper_bound_attr && attr_form_is_block (upper_bound_attr))
     TYPE_HIGH_BOUND_UNDEFINED (range_type) = 1;
 
   /* Ada expects an empty array on no boundary attributes.  */
-  if (attr == NULL && cu->language != language_ada)
+  if (upper_bound_attr == NULL && cu->language != language_ada)
     TYPE_HIGH_BOUND_UNDEFINED (range_type) = 1;
 
   name = dwarf2_name (die, cu);
@@ -17469,7 +17497,6 @@ dwarf2_const_value (struct attribute *attr, struct symbol *sym,
 static struct type *
 die_type (struct die_info *die, struct dwarf2_cu *cu)
 {
-  struct type *type = NULL;  
   struct attribute *type_attr;
 
   type_attr = dwarf2_attr (die, DW_AT_type, cu);
@@ -17612,35 +17639,38 @@ lookup_die_type (struct die_info *die, struct attribute *attr,
       struct attribute *next_type;
 
       type_die = follow_die_ref_or_sig (die, attr, &type_cu);
-      /* If we found the type now, it's probably because the type came
-	 from an inter-CU reference and the type's CU got expanded before
-	 ours.  */
-      this_type = get_die_type (type_die, type_cu);
-      if (this_type == NULL)
-	this_type = read_type_die_1 (type_die, type_cu);
-      if (cu->producer && strncmp (cu->producer, "PGCC", 4) == 0)
-        {
-          next_type = dwarf2_attr (type_die, DW_AT_type, cu);
-          if (next_type) 
-            {
-              struct die_info *next_type_die;
-              next_type_die = follow_die_ref (type_die, next_type, &cu);
-              if (next_type_die && next_type_die == die)
-	        {
-		  char *message, *saved;
+      if (type_die) 
+	{
+	  /* If we found the type now, it's probably because the type came
+	    from an inter-CU reference and the type's CU got expanded before
+	    ours.  */
+	  this_type = get_die_type (type_die, type_cu);
+	  if (this_type == NULL)
+	    this_type = read_type_die_1 (type_die, type_cu);
+	  if (cu->producer && strncmp (cu->producer, "PGCC", 4) == 0)
+	    {
+	      next_type = dwarf2_attr (type_die, DW_AT_type, cu);
+	      if (next_type) 
+		{
+		  struct die_info *next_type_die;
+		  next_type_die = follow_die_ref (type_die, next_type, &cu);
+		  if (next_type_die && next_type_die == die)
+		    {
+		      char *message, *saved;
 
-		  message = xstrprintf (_("<recursive type in %s, CU 0x%x, DIE 0x%x>"),
-					 objfile->name,
-					 cu->header.offset.sect_off,
-					 die->offset.sect_off);
-		  saved = obstack_copy0 (&objfile->objfile_obstack,
-					  message, strlen (message));
-		  xfree (message);
+		      message = xstrprintf (_("<recursive type in %s, CU 0x%x, DIE 0x%x>"),
+					    objfile->name,
+					    cu->header.offset.sect_off,
+					    die->offset.sect_off);
+		      saved = obstack_copy0 (&objfile->objfile_obstack,
+					      message, strlen (message));
+		      xfree (message);
 
-		  this_type = init_type (TYPE_CODE_ERROR, 0, 0, saved, objfile);
-	        }
-            }
-        }
+		      this_type = init_type (TYPE_CODE_ERROR, 0, 0, saved, objfile);
+		    }
+		}
+	    }
+	}
     }
 
   /* If we still don't have a type use an error marker.  */

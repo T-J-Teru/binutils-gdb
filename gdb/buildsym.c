@@ -595,9 +595,10 @@ make_blockvector (struct objfile *objfile)
 }
 
 
-struct subfile *find_subfile (const char *name, const char *dirname)
+struct subfile *
+find_subfile (const char *name, const char *dirname)
 {
-  struct subfile dummy;
+  struct subfile dummy = {0};
   struct subfile *subfile;
   dummy.name = (char*) name;
   dummy.dirname = (char*) dirname;
@@ -623,8 +624,9 @@ start_subfile (const char *name, const char *dirname)
 
   /* See if this subfile is already known as a subfile of the current
      main source file.  */
-  struct subfile dummy;
+  struct subfile dummy = {0};
   dummy.name = (char *) name;
+  dummy.dirname = (char*) dirname;
 
   if ((subfile = htab_find (subfiles_map, &dummy)))
     {

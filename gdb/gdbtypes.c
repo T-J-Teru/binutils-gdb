@@ -831,19 +831,19 @@ create_range_type (struct type *result_type, struct type *index_type,
 
 struct type *
 create_range_type_d (struct type *result_type, struct type *index_type,
-		   int low_bound, int high_bound, void *dwarf_low, 
-		     void *dwarf_high, void *dwarf_count,
-		     LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
+		    LONGEST low_bound, LONGEST high_bound, void *dwarf_low, 
+		    void *dwarf_high, void *dwarf_count,
+		    LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
 {
   return create_range_type_d_pgi (result_type, index_type, low_bound, high_bound, 0, 0, 0, dwarf_low, dwarf_high, dwarf_count, 0, 0, 0, expr_evaluate);
 }
 
 struct type *
 create_range_type_d_pgi (struct type *result_type, struct type *index_type,
-		         int low_bound, int high_bound, int stride, int soffset, int lstride,
+		        LONGEST low_bound, LONGEST high_bound, LONGEST stride, LONGEST soffset, LONGEST lstride,
                          void *dwarf_low, void *dwarf_high, void *dwarf_count,
                          void *dwarf_stride, void *dwarf_soffset, void *dwarf_lstride,
-		         LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
+		        LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
 {
   if (result_type == NULL)
     result_type = alloc_type_copy (index_type);
@@ -1649,7 +1649,7 @@ check_typedef (struct type *type)
 	if ((type_quals.instance_flags & ALL_CLASSES) != 0)
 	  new_instance_flags &= ~ALL_CLASSES;
 
-	type_quals.instance_flags = new_instance_flags;
+	type_quals.instance_flags |= new_instance_flags;
       }
     }
 

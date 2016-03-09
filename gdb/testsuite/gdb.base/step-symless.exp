@@ -38,4 +38,8 @@ if ![runto_main] {
 
 gdb_breakpoint symful
 
+# 01810_16933-dwarf2-unwind-sniffer.patch breaks this test because we can't unwind the first instruction
+# of a function without symbol information. It is a price worth paying for being able to unwind when we
+# do have symbols and the compiler generates bad unwind info for the first instruction.
+setup_xfail "*-*-*"
 gdb_test "step" "Single stepping until exit.*no line number information.*\r\nBreakpoint \[^\r\n\]* in \\.?symful \\(\\)"

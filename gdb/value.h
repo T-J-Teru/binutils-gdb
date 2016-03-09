@@ -1008,4 +1008,9 @@ extern void value_copy_contents_all_raw (struct value *to, struct value *from);
 
 extern void value_contents_ensure_unlimited(struct value* val);
 
+extern void set_value_not_allocated (struct value *v, int not_allocated);
+extern void set_value_not_associated (struct value *v, int not_associated);
+extern int value_not_allocated (const struct value *v);
+extern int value_not_associated (const struct value *v);
+
 #endif /* !defined (VALUE_H) */

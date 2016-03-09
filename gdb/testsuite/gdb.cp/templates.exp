@@ -319,6 +319,9 @@ gdb_test_multiple "ptype/r Foo" "ptype Foo" {
 	# GCC 3.1, DWARF-2 output.
 	kfail "gdb/57" "ptype Foo"
     }
+    -re "type = class Foo<char volatile\\*> \\{\r\n\[ \t\]*public:\r\n\[ \t\]*int x;\r\n\[ \t\]*volatile char \\*t;\r\n\r\n\[ \t\]*volatile char \\* foo\\(int, volatile char \\*\\);\r\n\\}\r\n$gdb_prompt $" {
+	kfail "allinea" "ptype Foo"
+    }
     -re "No symbol \"Foo\" in current context.\r\n$gdb_prompt $" {
 	# GCC 2.95.3, stabs+ output.
 	pass "ptype Foo"
@@ -398,7 +401,7 @@ gdb_test_multiple "ptype/r Bar" "ptype Bar" {
     -re "type = <(class |)T, (class |)sz> (class |)Bar \\{\r\n\[ \t\]*public:\r\n\[ \t\]*int x;\r\n\[ \t\]*T t;\r\n\\}\r\n$gdb_prompt $" {
 	xfail "ptype Bar"
     }
-    -re "ptype Bar\r\ntype = class Bar<int, ?33> {\r\n\[ \t\]*public:\r\n\[ \t\]*int x;\r\n\[ \t\]*int t;\r\n\r\n\[ \t\]*int bar\\(int, int\\);\r\n}\r\n$gdb_prompt $" {
+    -re "type = class Bar<int, ?33> {\r\n\[ \t\]*public:\r\n\[ \t\]*int x;\r\n\[ \t\]*int t;\r\n\r\n\[ \t\]*int bar\\(int, int\\);\r\n}\r\n$gdb_prompt $" {
 	# GCC 3.1, DWARF-2 output.
 	kfail "gdb/57" "ptype Bar"
     }
@@ -449,6 +452,9 @@ gdb_test_multiple "ptype/r Baz" "ptype Baz" {
 	# GCC 3.x, DWARF-2 output, running into gdb/57 and gdb/1512.
 	kfail "gdb/57" "ptype Baz"
     }
+    -re "type = class Baz<int, ?(\\(char\\))?'\\\\001'> {\r\n\[ \t\]*public:\r\n\[ \t\]*int x;\r\n\[ \t\]*int t;\r\n\r\n\[ \t\]*~Baz\\(int\\);\r\n\[ \t\]*int baz\\(int, int\\);\r\n}\r\n$gdb_prompt $" {
+	kfail "allinea" "ptype Baz"
+    }
     -re "No symbol \"Baz\" in current context.\r\n$gdb_prompt $" {
 	# GCC 2.95.3, stabs+ output.
 	pass "ptype Baz"
@@ -494,6 +500,9 @@ gdb_test_multiple "ptype/r Qux" "ptype Qux" {
     -re "type = class Qux<char, ?&\\(string\\)> {\r\n\[ \t\]*public:\r\n\[ \t\]*int x;\r\n\[ \t\]*char t;\r\n\r\n\[ \t\]*char qux\\(int, char\\);\r\n}\r\n$gdb_prompt $" {
 	# GCC 3.x, DWARF-2 output; gdb/57 + gdb/1512.
 	kfail "gdb/57" "ptype Qux"
+    }
+    -re "type = class Qux<char, ?\\(char ?\\*\\)\\(& ?\\(?string\\)?\\)> \\{\r\n\[ \t\]*public:\r\n\[ \t\]*int x;\r\n\[ \t\]*char t;\r\n\r\n\[ \t\]*char qux\\(int, char\\);.*\r\n\\}\r\n$gdb_prompt $" {
+	kfail "allinea" "ptype Qux"
     }
     -re "No symbol \"Qux\" in current context.\r\n$gdb_prompt $" {
 	# GCC 2.95.3, stabs+ output.

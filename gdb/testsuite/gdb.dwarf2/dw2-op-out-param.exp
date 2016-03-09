@@ -46,7 +46,15 @@ gdb_test_no_output "set print frame-arguments all"
 
 # (1) int_param_single_reg_loc
 gdb_continue_to_breakpoint "Stop in breakpt for test int_param_single_reg_loc"
-gdb_test "bt" "#0  ($hex in )?breakpt \\(\\)\r\n#1  ($hex in )?int_param_single_reg_loc \\(operand0=<optimized out>, operand1=0xdeadbe00deadbe01, operand2=<optimized out>\\)\r\n#2  ($hex in )?main \\(\\)" "Backtrace for test int_param_single_reg_loc"
+set test "Backtrace for test int_param_single_reg_loc"
+gdb_test_multiple "bt" "$test" {
+    -re "#0  ($hex in )?breakpt \\(\\)\r\n#1  ($hex in )?int_param_single_reg_loc \\(operand0=<optimized out>, operand1=0xdeadbe00deadbe01, operand2=<optimized out>\\)\r\n#2  ($hex in )?main \\(\\)\r\n$gdb_prompt $" {
+	pass $test
+    }
+    -re "#0  ($hex in )?breakpt \\(\\)\r\n#1  ($hex in )?int_param_single_reg_loc \\(operand0=0xdeadbe02deadbe03, operand1=0xdeadbe00deadbe01, operand2=0xdeadbe06deadbe07\\)\r\n#2  ($hex in )?main \\(\\)\r\n$gdb_prompt $" {
+	kfail "allinea" $test
+    }
+}
 
 # (2) struct_param_single_reg_loc
 gdb_continue_to_breakpoint "Stop in breakpt for struct_param_single_reg_loc"
@@ -57,6 +65,9 @@ gdb_test_multiple "bt" "$test" {
     }
     -re "#0  ($hex in )?breakpt \\(\\)\r\n#1  ($hex in )?struct_param_single_reg_loc \\(operand0=<optimized out>, operand1=<optimized out>, operand2=<optimized out>\\)\r\n#2  ($hex in )?main \\(\\)\r\n$gdb_prompt $" {
 	kfail "symtab/14604" $test
+    }
+    -re "#0  ($hex in )?breakpt \\(\\)\r\n#1  ($hex in )?struct_param_single_reg_loc \\(operand0={a = 0xdeadbe00deadbe01, b = 0xdeadbe02deadbe03}, operand1={a = 0xdeadbe02deadbe03, b = 0xdeadbe04deadbe05}, operand2={a = 0xdeadbe06deadbe07, b = 0xdeadbe08deadbe09}\\)\r\n#2  ($hex in )?main \\(\\)\r\n$gdb_prompt $" {
+	kfail "allinea" $test"
     }
 }
 

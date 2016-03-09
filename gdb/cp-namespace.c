@@ -785,6 +785,7 @@ cp_lookup_nested_symbol (struct type *parent_type,
     case TYPE_CODE_STRUCT:
     case TYPE_CODE_NAMESPACE:
     case TYPE_CODE_UNION:
+    case TYPE_CODE_MODULE:
       {
 	/* NOTE: carlton/2003-11-10: We don't treat C++ class members
 	   of classes like, say, data or function members.  Instead,

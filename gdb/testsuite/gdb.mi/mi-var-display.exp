@@ -261,7 +261,7 @@ mi_gdb_test "-var-set-format weird.character natural" \
 	"set format variable weird.character"
 
 mi_gdb_test "-var-set-format weird.char_ptr natural" \
-	"\\^done,format=\"natural\",value=\"$hex \\\\\"hello\\\\\"\"" \
+	"\\^done,format=\"natural\",value=\"$address \\\\\"hello\\\\\"\"" \
 	"set format variable weird.char_ptr"
 
 mi_gdb_test "-var-set-format weird.long_int natural" \

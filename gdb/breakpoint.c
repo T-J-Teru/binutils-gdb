@@ -6719,7 +6719,7 @@ describe_other_breakpoints (struct gdbarch *gdbarch,
 	      printf_filtered (" (all threads)");
 	    else if (b->thread != -1)
 	      printf_filtered (" (thread %d)", b->thread);
-	    else if (b->infnum != -1)
+	    else if (b->infnum != 0)
 	      printf_filtered (" (inf %d)", b->infnum);
 	    printf_filtered ("%s%s ",
 			     ((b->enable_state == bp_disabled
@@ -14465,10 +14465,6 @@ addr_string_to_sals (struct breakpoint *b, char *addr_string, int *found)
 	  if (extra_string)
 	    b->extra_string = extra_string;
 	  b->condition_not_parsed = 0;
-	  inferior = find_inferior_id (b->infnum);
-	  if (!inferior)
-	    error (_("Inferior ID %d not known."), b->infnum);
-	  b->loc->pspace = inferior->pspace;
 	}
 
       if (b->type == bp_static_tracepoint && !strace_marker_p (b))

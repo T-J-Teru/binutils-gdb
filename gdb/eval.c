@@ -1502,6 +1502,7 @@ evaluate_subexp_standard (struct type *expect_type,
 	  function_name = NULL;
 	  if (TYPE_CODE (type) == TYPE_CODE_NAMESPACE)
 	    {
+	      printf("lookup symbol in namespace\n");
 	      function = cp_lookup_symbol_namespace (TYPE_TAG_NAME (type),
 						     name,
 						     get_selected_block (0),
@@ -2322,12 +2323,11 @@ evaluate_subexp_standard (struct type *expect_type,
 	struct type *range_type;
 	struct type *new_range_types[MAX_FORTRAN_DIMS];
 	LONGEST offset = 0;
-	LONGEST oldlowerbound, lowerbound, upperbound;	
+	LONGEST oldlowerbound, lowerbound, oldupperbound, upperbound;	
 	const gdb_byte *valaddr = NULL;
 
 	if (noside == EVAL_NORMAL
-	    && VALUE_LVAL (array) == lval_memory
-	    && !value_address (array))
+ 	    && value_not_allocated (array))
 	  error (_("cannot subscript an array that is not allocated"));
 
 	if (nargs > MAX_FORTRAN_DIMS)
@@ -2374,11 +2374,23 @@ evaluate_subexp_standard (struct type *expect_type,
 	for (i = nargs; i > 0; i--)
 	  {
 	    oldlowerbound = lowerbound = f77_get_lowerbound (type);
-	    upperbound = f77_get_upperbound (type);
+	    oldupperbound = upperbound = f77_get_upperbound (type);
 	    if (range_types[i - 1] != LOW_BOUND_DEFAULT && range_types[i - 1] != BOTH_BOUND_DEFAULT)
 	      lowerbound = low_bounds[i - 1];
 	    if (range_types[i - 1] != HIGH_BOUND_DEFAULT && range_types[i - 1] != BOTH_BOUND_DEFAULT)
 	      upperbound = high_bounds[i - 1];
+	    /* Note: for a single dimension array the index is allowed to be
+	       out of bounds in case we got the dimensions wrong.
+	       For multi-dimensional arrays it doesn't make sense to allow this
+	       since the offset will be wrong anyway.  */
+	    if (i != nargs
+	        && (lowerbound < oldlowerbound || 
+		    lowerbound > oldupperbound ||
+		    upperbound < oldlowerbound ||
+		    upperbound > oldupperbound))
+	      error (_("array subscript out of bounds"));
+	    if (lowerbound > upperbound)
+	      error (_("array slice has negative slice"));
 	    if (!is_subscript)
 	      {
 		element_type = TYPE_TARGET_TYPE (type);

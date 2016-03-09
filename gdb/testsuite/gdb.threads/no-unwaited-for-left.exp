@@ -38,7 +38,7 @@ gdb_test_no_output "set scheduler-locking on" \
 
 # Continue.  Thread 2 exits, and the main thread was already stopped.
 gdb_test "continue" \
-    "No unwaited-for children left." \
+    ".*\[Thread .* exited\].*" \
     "continue stops when thread 2 exits"
 
 gdb_test "info threads" \
@@ -59,7 +59,7 @@ gdb_test_no_output "set scheduler-locking on" \
     "enable scheduler-locking, for main thread"
 # The main thread exits, and thread 3 was already stopped.
 gdb_test "continue" \
-    "No unwaited-for children left." \
+    ".*\[Thread .* exited\].*" \
     "continue stops when the main thread exits"
 
 gdb_test "info threads" \

@@ -506,6 +506,8 @@ Start it from the beginning? ")))
 	{
 	  struct thread_info *tp;
 	  infnext = inf->next;
+	  if (!inf->pid)
+	    continue;
 	  tp = any_thread_of_process (inf->pid);
 	  if (!tp)
 	    error (_("Inferior has no threads."));

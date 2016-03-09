@@ -174,8 +174,8 @@ extern struct call_site_chain *call_site_find_chain (struct gdbarch *gdbarch,
 						     CORE_ADDR caller_pc,
 						     CORE_ADDR callee_pc);
 
-LONGEST dwarf2_evaluate_int (void* locbaton, struct value *,
-			       void *frame_info);
+struct value *dwarf2_evaluate_int (struct type *type, void *locbaton,
+				  struct value *obj, void *frame_info);
 
 
 

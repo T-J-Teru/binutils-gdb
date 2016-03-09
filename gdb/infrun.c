@@ -4833,17 +4833,6 @@ process_event_stop_test:
 	case BPSTAT_WHAT_STOP_NOISY:
 	  if (debug_infrun)
 	    fprintf_unfiltered (gdb_stdlog, "infrun: BPSTAT_WHAT_STOP_NOISY\n");
-	  stop_print_frame = 1;
-
-	  /* We are about to nuke the step_resume_breakpointt via the
-	     cleanup chain, so no need to worry about it here.  */
-
-	  stop_stepping (ecs);
-	  return;
-
-	case BPSTAT_WHAT_STOP_SILENT:
-	  if (debug_infrun)
-	    fprintf_unfiltered (gdb_stdlog, "infrun: BPSTAT_WHAT_STOP_SILENT\n");
           if (is_collective_breakpoints())
             {
               struct bpstats *bs = ecs->event_thread->control.stop_bpstat;
@@ -4878,6 +4867,17 @@ process_event_stop_test:
             }
           else
 	    stop_print_frame = 1;
+
+	  /* We are about to nuke the step_resume_breakpointt via the
+	     cleanup chain, so no need to worry about it here.  */
+
+	  stop_stepping (ecs);
+	  return;
+
+	case BPSTAT_WHAT_STOP_SILENT:
+	  if (debug_infrun)
+	    fprintf_unfiltered (gdb_stdlog, "infrun: BPSTAT_WHAT_STOP_SILENT\n");
+	  stop_print_frame = 0;
 
 	  /* We are about to nuke the step_resume_breakpoin via the
 	     cleanup chain, so no need to worry about it here.  */

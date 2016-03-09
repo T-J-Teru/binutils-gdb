@@ -96,3 +96,7 @@ extern const struct builtin_f_type *builtin_f_type (struct gdbarch *gdbarch);
 
 /* Transparently follow pointers and fixup the size and address of dynamic arrays.  */
 extern struct value *f_fixup_value (struct value *, struct frame_info *);
+
+extern int f_not_allocated (struct value *val);
+extern int f_not_associated (struct value *val);
+extern int f_not_associated_address (struct type *type, CORE_ADDR addr);

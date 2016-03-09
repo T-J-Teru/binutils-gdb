@@ -828,7 +828,6 @@ symbol_natural_name (const struct general_symbol_info *gsymbol)
     case language_java:
     case language_objc:
     case language_fortran:
-    case language_c:
     case language_upc:
       if (symbol_get_demangled_name (gsymbol) != NULL)
 	return symbol_get_demangled_name (gsymbol);

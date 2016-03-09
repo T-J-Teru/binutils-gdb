@@ -42,19 +42,19 @@ gdb_test "print foo(2,3,4)" \
     "print valid static array element"
 
 gdb_test "print foo(0,0,0)" \
-    "no such vector element" \
+    "array subscript out of bounds" \
     "print an invalid array index (0,0,0)"
 
 gdb_test "print foo(2,3,5)" \
-    "no such vector element" \
+    "array subscript out of bounds" \
     "print an invalid array index (2,3,5)"
 
 gdb_test "print foo(2,4,4)" \
-    "no such vector element" \
+    "array subscript out of bounds" \
     "print an invalid array index (2,4,4)"
 
 gdb_test "print foo(3,3,4)" \
-    "no such vector element" \
+    "array subscript out of bounds" \
     "print an invalid array index (3,3,4)"
 
 gdb_test "print foo" \

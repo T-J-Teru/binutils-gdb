@@ -78,7 +78,7 @@ int
 f77_get_lowerbound (struct type *type)
 {
   if (TYPE_ARRAY_LOWER_BOUND_IS_UNDEFINED (type))
-    error (_("Lower bound may not be '*' in F77"));
+    error (_("unknown bounds"));
 
   return TYPE_ARRAY_LOWER_BOUND_VALUE (type);
 }
@@ -252,17 +252,15 @@ f77_print_array (struct type *type, const gdb_byte *valaddr,
   int elts = 0;
   f77_array_dim tbl;
 
-  if (TYPE_LENGTH (type) == 0
-      && TYPE_TARGET_TYPE (type)
-      && value_address ((struct value *) val))
-    {
-      fprintf_unfiltered (stream, "<unknown bounds>");
-      return;
-    }
-  else if (VALUE_LVAL ((struct value *) val) == lval_memory
-      && value_address ((struct value *) val) == 0)
+  if (val && value_not_allocated (val))
     {
       fprintf_filtered (stream, "<not allocated>");
+      return;
+    }
+  else if (TYPE_LENGTH (type) == 0
+           && TYPE_TARGET_TYPE (type))
+    {
+      fprintf_unfiltered (stream, "<unknown bounds>");
       return;
     }
 
@@ -328,12 +326,12 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 
     case TYPE_CODE_ARRAY:
       elttype = check_typedef (TYPE_TARGET_TYPE (type));
-      if (TYPE_LENGTH (elttype) == 1
-	  && (TYPE_CODE (elttype) == TYPE_CODE_INT
+      if (((TYPE_LENGTH (elttype) == 1
+	  && TYPE_CODE (elttype) == TYPE_CODE_INT)
 	      || TYPE_CODE (elttype) == TYPE_CODE_CHAR)
-	  && options->format == 's')
+	  && (options->format == 0 || options->format == 's'))
 	{
-	  struct type *ch_type = builtin_type (gdbarch)->builtin_char;
+	  struct type *ch_type = TYPE_TARGET_TYPE (type);
 
 	  f77_get_dynamic_length_of_aggregate (type); /* probably unnecessary - setup_array_bounds / reset_lengths should have already done this.  */
 	  LA_PRINT_STRING (stream, ch_type,
@@ -361,13 +359,6 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 
 	  addr = unpack_pointer (type, valaddr + embedded_offset);
 
-	  if (addr < 65536)
-	    {
-	      /* Assume if the pointer is < 65536 it is probably not associated or associated with a bogus target.  */
-	      fprintf_unfiltered (stream, "<not associated>");
-	      break;
-	    }
-
 	  elttype = check_typedef (TYPE_TARGET_TYPE (type));
 
 	  if (TYPE_CODE (elttype) == TYPE_CODE_FUNC)
@@ -388,8 +379,8 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 
 	  /* For a pointer to char or unsigned char, also print the string
 	     pointed to, unless pointer is null.  */
-	  if (TYPE_LENGTH (elttype) == 1
-	      && (TYPE_CODE (elttype) == TYPE_CODE_INT
+	  if (((TYPE_LENGTH (elttype) == 1
+	      && TYPE_CODE (elttype) == TYPE_CODE_INT)
 		  || TYPE_CODE (elttype) == TYPE_CODE_CHAR)
 	      && (options->format == 0 || options->format == 's')
 	      && addr != 0)

@@ -54,6 +54,8 @@ extern char *safe_strerror (int);
    bfd_check_format_matches, and will be freed.  */
 
 extern const char *gdb_bfd_errmsg (bfd_error_type error_tag, char **matching);
+
+int isstartoftemplate (const char *s);
 
 /* Parsing utilites.  */
 
@@ -132,6 +134,8 @@ extern void substitute_path_component (char **stringp, const char *from,
 				       const char *to);
 
 char *ldirname (const char *filename);
+
+void simplify_path (char *pathl);
 
 /* GDB output, ui_file utilities.  */
 

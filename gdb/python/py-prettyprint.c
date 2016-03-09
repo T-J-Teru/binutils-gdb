@@ -871,6 +871,10 @@ apply_val_child (struct value *object,
   cleanups = ensure_python_env (gdbarch, language);
 
   /* Instantiate the printer.  */
+
+  /* The value is still on the value chain and we don't want it to be freed when
+     the last reference to the value object goes away. */
+  value_incref (object);
   val_obj = value_to_value_object (object);
   if (! val_obj)
     goto done;
@@ -884,7 +888,10 @@ apply_val_child (struct value *object,
 
   hint = gdbpy_get_display_hint (printer);
   make_cleanup (free_current_contents, &hint);
-  
+
+  /* The value is still on the value chain and we don't want it to be freed when
+     the last reference to the value object goes away. */
+  value_incref (index);
   index_obj = value_to_value_object (index);
   if (! index_obj)
     goto done;

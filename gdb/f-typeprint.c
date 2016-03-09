@@ -193,22 +193,29 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
 	f_type_print_varspec_suffix (target_type, stream, 0, 0, 0,
 				     arrayprint_recurse_level);
 
-      lower_bound = f77_get_lowerbound (type);
-      upper_bound = f77_get_upperbound (type);
-      if (lower_bound != 1 && upper_bound >= lower_bound)	/* Not the default.  */
-	fprintf_filtered (stream, "%d:", lower_bound);
-
-      /* Make sure that, if we have an assumed size array, we
-         print out a warning and print the upperbound as '*'.  */
-
-      if (TYPE_ARRAY_UPPER_BOUND_IS_UNDEFINED (type))
-	fprintf_filtered (stream, "*");
+      if (TYPE_ARRAY_LOWER_BOUND_IS_UNDEFINED (type))
+        {
+	  fprintf_filtered (stream, "*");
+	}
       else
 	{
-	  if (lower_bound > upper_bound)
-             fprintf_filtered (stream, "*");
-           else
-             fprintf_filtered (stream, "%d", upper_bound);
+	  lower_bound = f77_get_lowerbound (type);
+	  upper_bound = f77_get_upperbound (type);
+	  if (lower_bound != 1 && upper_bound >= lower_bound)	/* Not the default.  */
+	    fprintf_filtered (stream, "%d:", lower_bound);
+
+	  /* Make sure that, if we have an assumed size array, we
+	    print out a warning and print the upperbound as '*'.  */
+
+	  if (TYPE_ARRAY_UPPER_BOUND_IS_UNDEFINED (type))
+	    fprintf_filtered (stream, "*");
+	  else
+	    {
+	      if (lower_bound > upper_bound)
+		fprintf_filtered (stream, "*");
+	      else
+		fprintf_filtered (stream, "%d", upper_bound);
+	    }
 	}
 
       if (TYPE_CODE (target_type) != TYPE_CODE_ARRAY)

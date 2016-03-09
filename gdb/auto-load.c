@@ -779,22 +779,30 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
 	  if (input != NULL)
 	    break;
 	}
-    }
 
-  if (!input && gdb_datadir)
-    {
-      const char *basename = lbasename (objfile->name);
-      /* Also try the same file in a subdirectory of gdb's data
-	 directory.  */
-      debugfile = xmalloc (strlen (gdb_datadir) + strlen (basename)
-			   + strlen (language->suffix) + strlen ("/auto-load/") + 1);
-      strcpy (debugfile, gdb_datadir);
-      strcat (debugfile, "/auto-load/");
-      strcat (debugfile, basename);
-      strcat (debugfile, language->suffix);
+      if (!input)
+	{
+	  /* Now try just the basename */
+	  for (ix = 0; VEC_iterate (char_ptr, vec, ix, dir); ++ix)
+	    {
+	      debugfile = xmalloc (strlen (dir) + 1 + strlen (filename) + 1);
+	      strcpy (debugfile, dir);
 
-      make_cleanup (xfree, debugfile);
-      input = fopen (debugfile, "r");
+	      /* FILENAME is relative so we need a "/" here.  */
+	      strcat (debugfile, "/");
+	      strcat (debugfile, lbasename (filename));
+
+	      make_cleanup (xfree, debugfile);
+	      input = fopen (debugfile, "r");
+	      if (debug_auto_load)
+		fprintf_unfiltered (gdb_stdlog, _("auto-load: Attempted file "
+						  "\"%s\" %s.\n"),
+				    debugfile,
+				    input ? _("exists") : _("does not exist"));
+	      if (input != NULL)
+		break;
+	    }
+	}
     }
 
   if (input)
@@ -829,21 +837,25 @@ auto_load_objfile_script (struct objfile *objfile,
 
   if (!auto_load_objfile_script_1 (objfile, realname, language))
     {
-      /* For Windows/DOS .exe executables, strip the .exe suffix, so that
-	 FOO-gdb.gdb could be used for FOO.exe, and try again.  */
-
-      size_t len = strlen (realname);
-      const size_t lexe = sizeof (".exe") - 1;
-
-      if (len > lexe && strcasecmp (realname + len - lexe, ".exe") == 0)
+      /* Try again with the original name.  */
+      if (!auto_load_objfile_script_1 (objfile, objfile->name, language))
 	{
-	  len -= lexe;
-	  realname[len] = '\0';
-	  if (debug_auto_load)
-	    fprintf_unfiltered (gdb_stdlog, _("auto-load: Stripped .exe suffix, "
-					      "retrying with \"%s\".\n"),
-				realname);
-	  auto_load_objfile_script_1 (objfile, realname, language);
+	  /* For Windows/DOS .exe executables, strip the .exe suffix, so that
+	    FOO-gdb.gdb could be used for FOO.exe, and try again.  */
+
+	  size_t len = strlen (realname);
+	  const size_t lexe = sizeof (".exe") - 1;
+
+	  if (len > lexe && strcasecmp (realname + len - lexe, ".exe") == 0)
+	    {
+	      len -= lexe;
+	      realname[len] = '\0';
+	      if (debug_auto_load)
+		fprintf_unfiltered (gdb_stdlog, _("auto-load: Stripped .exe suffix, "
+						  "retrying with \"%s\".\n"),
+				    realname);
+	      auto_load_objfile_script_1 (objfile, realname, language);
+	    }
 	}
     }
 

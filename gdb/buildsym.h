@@ -231,6 +231,8 @@ extern void record_block_range (struct block *,
 
 extern void really_free_pendings (void *dummy);
 
+extern struct subfile *find_subfile (const char *name, const char *dirname);
+
 extern void start_subfile (const char *name, const char *dirname);
 
 extern void patch_subfile_names (struct subfile *subfile, char *name);

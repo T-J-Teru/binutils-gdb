@@ -619,6 +619,9 @@ proc test_print_mvi_classes { } {
 	    # gcc HEAD 2004-01-21 -gstabs+
 	    pass "$name (FIXME v3 vtbl ptr)"
 	}
+	-re "$vhn = \{<vB> = \{<vA> = \{va = 19, vx = 20\}, $re_vbptr_3_vB = ${hex}( <vtable for vD.*>)?, vb = 21, vx = 22\}, <vC> = \{$re_vbptr_3_vC = ${hex}( <vtable for vD.*>)?, vc = 23, vx = 24\}, $re_vbptr_3_vD = ${hex}( <vtable for vD.*>)?, vd = 25, vx = 26\}$nl$gdb_prompt $" {
+	    pass "$name"
+	}
 	-re "$vhn = \{<vB> = \{<vA> = \{va = 19, vx = 20\}, $re_vbptr_3_vB = $hex, vb = 21, vx = 22\}, <vC> = \{$re_vbptr_3_vC = $hex <VTT for vD>, vc = 23, vx = 24\}, $re_vbptr_3_vD = $hex, vd = 25, vx = 26\}$nl$gdb_prompt $" {
 	    # gcc 3.3.2 -gstabs+
 	    pass "$name"

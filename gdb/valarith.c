@@ -150,16 +150,8 @@ First and second arguments of '-' are not both UPC pointer-to-shared types."));
 	      if (upc_blocksizeof (tt1) != upc_blocksizeof (tt2))
 		error (_("\
 First and second arguments of '-' do not have the same block size."));
-	      retval = upc_pts_diff (arg1, arg2);
+	      return value_as_long (upc_pts_diff (arg1, arg2));
 	    }
-	  else
-	    {
-	      LONGEST sz = TYPE_LENGTH (tt1);
-	      retval = value_from_longest
-		(builtin_type (gdbarch)->builtin_int,	/* FIXME -- should be ptrdiff_t */
-		 (value_as_long (arg1) - value_as_long (arg2)) / sz);
-	    }
-	  return value_as_long (retval);
 	}
       else
 	error (_("First argument of `-' is a pointer and "

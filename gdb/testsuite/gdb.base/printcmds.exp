@@ -491,19 +491,19 @@ proc test_print_strings {} {
     # printing; this was a bug in older gdb's.
     gdb_test_no_output "set print characters 0"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with characters set to 0"
+	" = (.unsigned char .. )?\(<\[^>\]+> \)?\"teststring contents\"" "p teststring with characters set to 0"
     gdb_test_no_output "set print characters 1"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"t\"\\.\\.\\." "p teststring with characters set to 1"
+	" = (.unsigned char .. )?\(<\[^>\]+> \)?\"t\"\\.\\.\\." "p teststring with characters set to 1"
     gdb_test_no_output "set print characters 5"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"tests\"\\.\\.\\." "p teststring with characters set to 5"
+	" = (.unsigned char .. )?\(<\[^>\]+> \)?\"tests\"\\.\\.\\." "p teststring with characters set to 5"
     gdb_test_no_output "set print characters 19"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with characters set to 19"
+	" = (.unsigned char .. )?\(<\[^>\]+> \)?\"teststring contents\"" "p teststring with characters set to 19"
     gdb_test_no_output "set print characters 20"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with characters set to 20"
+	" = (.unsigned char .. )?\(<\[^>\]+> \)?\"teststring contents\"" "p teststring with characters set to 20"
 
     gdb_test_no_output "set print characters 8"
 
@@ -795,6 +795,10 @@ proc gdb_test_escape_braces { args } {
 }
 
 proc test_repeat_bytes {} {
+    # If print characters is 50 then our modified GDB will only fetch 50 bytes
+    # and the repeat counts below will be wrong.
+    gdb_test_no_output "set print characters 100"
+
     set start(E) {}
     set start(S) {a}
     set start(L) {abaabbaaabbb}

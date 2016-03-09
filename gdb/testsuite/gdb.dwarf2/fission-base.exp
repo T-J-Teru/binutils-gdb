@@ -42,7 +42,7 @@ if ![runto_main] {
 gdb_test "ptype main" "type = int \\(\\)"
 gdb_test "ptype func" "type = int \\(int\\)"
 
-gdb_test "frame" "#0 *main \\(\\) at $testfile\\.c:$decimal.*" \
+gdb_test "frame" "#0 *main \\(\\) at gdb.dwarf2/$testfile\\.c:$decimal.*" \
     "frame in main"
 
 gdb_test "break func" "Breakpoint.*at.* file .*$testfile\\.c, line .*"
@@ -50,5 +50,5 @@ gdb_test "break func" "Breakpoint.*at.* file .*$testfile\\.c, line .*"
 gdb_test "continue" "Breakpoint.* func \\(arg=-1\\).*" \
     "continue to func"
 
-gdb_test "frame" "#0 *func \\(arg=-1\\) at $testfile\\.c:$decimal.*" \
+gdb_test "frame" "#0 *func \\(arg=-1\\) at gdb.dwarf2/$testfile\\.c:$decimal.*" \
     "frame in func"
