@@ -844,7 +844,7 @@ handle_sigint (int sig)
      it may be quite a while before we get back to the event loop.  So
      set quit_flag to 1 here.  Then if QUIT is called before we get to
      the event loop, we will unwind as expected.  */
-
+#if 0
   set_quit_flag ();
 
   /* If immediate_quit is set, we go ahead and process the SIGINT right
@@ -856,6 +856,7 @@ handle_sigint (int sig)
      finish first, which is unacceptable.  If immediate quit is not set,
      we process SIGINT the next time through the loop, which is fine.  */
   gdb_call_async_signal_handler (sigint_token, immediate_quit);
+#endif
 }
 
 /* Handle GDB exit upon receiving SIGTERM if target_can_async_p ().  */
