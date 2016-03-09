@@ -77,12 +77,20 @@ int upcstartgate = 1;
  */
 int upcmode = 0;
 
+/* UPC standalone mode
+    = 0, multi-thread/multi-process support
+    = 1, single process support
+*/
+int upcsingle = 0;
+
 /* Commands with a prefix of `thread'.  */
 struct cmd_list_element *upc_thread_cmd_list = NULL;
 
 /* external functions */
 extern void prune_threads ();
 extern void upc_lang_init (char *cmd, int from_tty);
+
+static void upc_thread_attach (struct thread_info *t);
 
 /* Print a debug trace if debug_upc_thread is set (its value is adjusted
    by the user using "set debug upc-thread ...").  */
@@ -117,7 +125,26 @@ upc_thread_alive (struct thread_info *tp)
 int
 upc_thread_count ()
 {
-  return upc_thread_cnt;
+  struct symbol *threads_sym;
+  struct value *threads_val;
+  
+  if (upc_threads != 0)
+    return upc_threads;
+    
+  /* UPC program? */
+  threads_sym = lookup_symbol ("THREADS", 0, VAR_DOMAIN, NULL);
+  if (threads_sym)
+    {
+      threads_val = read_var_value (threads_sym, NULL);
+      if (threads_val)
+	upc_threads = value_as_long (threads_val);
+    }
+  else
+    {
+      error (_("upc_lang_init: Can't find THREADS variable. Is this a UPC program?"));
+    }
+
+  return upc_threads;
 }
 
 /* Return TRUE if this is a valid upc thread */
@@ -201,7 +228,7 @@ show_thread_id (int num)
 }
 
 /* Read symbol from the current thread */
-static int
+int
 upc_read_thread_sym (char *sym_name)
 {
   struct symbol *mythread_sym;
@@ -240,6 +267,9 @@ upc_enable_thread_debug (void)
 	  debug ("upc_enable_thread_debug: No THREADS");
 	  return;
 	}
+
+      if (upcsingle)
+	return;
 
       push_target (&upc_thread_ops);
       upc_thread_active = 1;
@@ -494,7 +524,7 @@ upc_thread_set (int upc_thr_num)
       if (upc_thr_num == UPC_THR_NUM (tp))
 	ttp = tp;
     }
-  if (upc_thr_num == UPC_THR_NUM (ctp))
+  if (!ctp || upc_thr_num == UPC_THR_NUM (ctp))
     return upc_thr_num;
   /* Use remote interface if exists */
   if (current_target.to_thread_switch)
@@ -529,7 +559,7 @@ upc_thread_restore (int upc_thr_num)
       if (upc_thr_num == UPC_THR_NUM (tp))
 	ttp = tp;
     }
-  if (upc_thr_num == UPC_THR_NUM (ctp))
+  if (!ctp || upc_thr_num == UPC_THR_NUM (ctp))
     return;
   /* Use remote interface if exists */
   if (current_target.to_thread_switch)
@@ -732,6 +762,13 @@ set_upcmode (char *args, int from_tty, struct cmd_list_element *c)
 
 extern void _initialize_upc_thread (void);
 
+static void
+show_upcsingle (struct ui_file *file, int from_tty,
+		    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("UPC single process mode is %s.\n"), value);
+}
+
 void
 _initialize_upc_thread ()
 {
@@ -758,6 +795,11 @@ Show UPC startup sync mode."), NULL, NULL, NULL, &setlist, &showlist);
   add_setshow_boolean_cmd ("upcmode", class_support, &upcmode, _("\
 Set UPC mode thread comamnds."), _("\
 Show UPC mode thread commands."), NULL, set_upcmode, show_upcmode, &setlist, &showlist);
+  
+  /* turn on/off standalone process mode */
+  add_setshow_boolean_cmd ("upcsingle", class_support, &upcsingle, _("\
+Set UPC single process mode."), _("\
+Show UPC single process mode."), NULL, NULL, show_upcsingle, &setlist, &showlist);  
 
   add_setshow_boolean_cmd ("upc-threads", class_maintenance,
 			   &debug_upc_thread,

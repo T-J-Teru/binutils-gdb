@@ -221,7 +221,7 @@ lookup_type_member (const struct type *parent_type, const char *field_name,
   n_fields = TYPE_NFIELDS (ptype);
   for (i = 0; i < n_fields; ++i)
     {
-      char *t_field_name = TYPE_FIELD_NAME (ptype, i);
+      const char *t_field_name = TYPE_FIELD_NAME (ptype, i);
       if (t_field_name && (strcmp (t_field_name, field_name) == 0))
         break;
     }
@@ -263,6 +263,15 @@ uda_iface_set_num_threads (const uda_tword_t num_threads)
     }
   uda_job->current_thread = &uda_job->threads[0];
   uda_initialize_job (uda_job);
+  return uda_ok;
+}
+
+static int
+uda_iface_set_thread_num (const uda_tword_t thread_num)
+{
+  if (thread_num >= uda_job->num_threads)
+    return uda_bad_thread_index;
+  uda_job->current_thread = &uda_job->threads[thread_num];
   return uda_ok;
 }
 
@@ -805,6 +814,8 @@ uda_read_store (uda_thread_t * thread,
   int old_thread_num;
   if (!(thread && thread->mark == UDA_THREAD_MARK))
     return uda_bad_assistant;
+  if (upcsingle && thread->id != uda_job->current_thread->id)
+    return uda_no_information;
   old_thread_num = upc_thread_set (thread->id);
   status = target_read_memory (addr, bytes, length);
   upc_thread_restore (old_thread_num);
@@ -822,6 +833,8 @@ uda_write_store (uda_thread_t * thread,
   int old_thread_num;
   if (!(thread && thread->mark == UDA_THREAD_MARK))
     return uda_bad_assistant;
+  if (upcsingle && thread->id != uda_job->current_thread->id)
+    return uda_no_information;
   old_thread_num = upc_thread_set (thread->id);
   status = target_write_memory (addr, bytes, length);
   upc_thread_restore (old_thread_num);
@@ -902,6 +915,7 @@ init_uda_plugin (uda_callouts_p calls, char *dl_path)
 
   /* setup callouts for UPC language */
   calls->uda_set_num_threads = &uda_iface_set_num_threads;
+  calls->uda_set_thread_num = &uda_iface_set_thread_num;
   calls->uda_set_type_sizes_and_byte_order = &uda_iface_set_type_sizes_and_byte_order;
   calls->uda_symbol_to_pts = &uda_iface_symbol_to_pts;
   calls->uda_length_of_pts = &uda_iface_length_of_pts;

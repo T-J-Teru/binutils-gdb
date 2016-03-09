@@ -31,10 +31,11 @@
 
 extern int upc_thread_set (int num);
 extern void upc_thread_restore (int num);
-extern int upc_thread_count (void);
+extern int upc_thread_count (void );
 
 extern int upc_exit_code;
 extern int upc_pthread_active;
+extern int upcsingle;
 extern struct thread_info *upc_thread0;
 extern int is_upc_thread(struct thread_info *);
 extern int upc_thread_num (struct thread_info *);
@@ -43,5 +44,6 @@ extern int valid_upc_thread_id (int);
 extern int valid_input_thread_id (int);
 extern int show_thread_id (int);
 extern void upc_thread_kill_cleanup (void);
+extern int upc_read_thread_sym (char *sym_name);
 
 #endif
