@@ -2312,14 +2312,16 @@ lookup_objfile_from_block (const struct block *block)
   block = block_global_block (block);
   /* Look through all blockvectors.  */
   ALL_COMPUNITS (obj, cust)
-    if (block == BLOCKVECTOR_BLOCK (COMPUNIT_BLOCKVECTOR (cust),
-				    GLOBAL_BLOCK))
+    if (COMPUNIT_BLOCKVECTOR (cust) != NULL
+	&& block == BLOCKVECTOR_BLOCK (COMPUNIT_BLOCKVECTOR (cust),
+				       GLOBAL_BLOCK))
       {
 	if (obj->separate_debug_objfile_backlink)
 	  obj = obj->separate_debug_objfile_backlink;
 
 	return obj;
       }
+  }
 
   return NULL;
 }
