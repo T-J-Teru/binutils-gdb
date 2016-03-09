@@ -594,6 +594,9 @@ lookup_namespace_scope (const char *name,
   namespace = alloca (scope_len + 1);
   strncpy (namespace, scope, scope_len);
   namespace[scope_len] = '\0';
+  /* #18135: Ignore constructors in implicit search for members / methods.  */
+  if (strcmp (namespace, name) == 0)
+    return NULL;  
   return cp_lookup_symbol_in_namespace (namespace, name,
 					block, domain, 1);
 }
