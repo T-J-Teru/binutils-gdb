@@ -12764,13 +12764,21 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
 
  	  baton->per_cu = cu->per_cu;
  	  baton->base_address = cu->base_address;
-	  baton->size = size + 1;
+
+      // Fix a bug in the Intel compiler (up to version 16)
+      // where the string length is not correctly taken
+	  if(cu->producer && strstr(cu->producer, "Intel"))
+	  	baton->size = size + 1;
+	  else
+		baton->size = size;
 
  	  baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
 				       baton->size);
 	  
  	  memcpy ((gdb_byte *) baton->data, DW_BLOCK(attr)->data, size);
-	  ((gdb_byte *)baton->data)[size] = DW_OP_deref;
+
+	  if(cu->producer && strstr(cu->producer, "Intel"))
+	    ((gdb_byte *)baton->data)[size] = DW_OP_deref;
 	  
  
  	  len_compute = baton;
