@@ -1028,6 +1028,8 @@ watch_main_source_file_lossage (void)
 	    subfiles = mainsub_alias->next;
 	  else
 	    prev_mainsub_alias->next = mainsub_alias->next;
+	  /* #41883 (ALL-284): Do not leave xfree'd subfiles in map. */
+	  htab_remove_elt(subfiles_map, mainsub_alias);
 	  xfree (mainsub_alias);
 	}
     }
@@ -1315,6 +1317,10 @@ end_symtab_from_static_block (struct block *static_block,
               subfile->symtab = NULL;
             }
         }
+
+      /* #41883 (ALL-284): Do not leave xfree'd subfiles in map. */
+      htab_remove_elt(subfiles_map, subfile);
+
       if (subfile->name != NULL)
 	{
 	  xfree ((void *) subfile->name);
