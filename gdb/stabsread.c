@@ -4028,56 +4028,23 @@ read_array_type (char **pp, struct type *type,
     create_static_range_type ((struct type *) NULL, index_type, lower, upper);
 #endif
     create_range_type_d ((struct type *) NULL, index_type, lower, upper, lower_baton, upper_baton, NULL, (LONGEST (*)(void*, CORE_ADDR, void*)) &stabs_evaluate_bound);
-  type = create_array_type (type, element_type, range_type);
   /* XLF emits arrays with minor dimension first, but GDB expects major dimension first.  */
   if (current_subfile->language == language_fortran
       && TYPE_CODE (element_type) == TYPE_CODE_ARRAY)
     {
       LONGEST low_bound, high_bound;
-      struct type* next_type;
-      struct type* original_type = type;      
-      while (TYPE_CODE (element_type) == TYPE_CODE_ARRAY)
-        element_type = TYPE_TARGET_TYPE (element_type);
-      next_type = type;
-      do
-        {
-          gdb_assert(next_type != NULL);
-          type = next_type;
-          next_type = TYPE_TARGET_TYPE (type);
-          if (TYPE_CODE (next_type) == TYPE_CODE_ARRAY)
-            {
-              /* Clone the original type in case there is more than one reference to the subarray type (unlikely).  */
-              type = copy_type (type);
-            }
-          else
-           {
-              /* From copy_type().  */
-              TYPE_INSTANCE_FLAGS (original_type) = TYPE_INSTANCE_FLAGS (type);
-              TYPE_LENGTH (original_type) = TYPE_LENGTH (type);
-              memcpy (TYPE_MAIN_TYPE (original_type), TYPE_MAIN_TYPE (type),
-                sizeof (struct main_type));
-              /* Replace the original type with the most major dimension.  */
-              type = original_type;
-            }
-          TYPE_TARGET_TYPE (type) = element_type;
-          range_type = TYPE_INDEX_TYPE (type);
-          /* From create_array_type().  */
-          if (get_discrete_bounds (range_type, &low_bound, &high_bound) < 0)
-            low_bound = high_bound = 0;
-          CHECK_TYPEDEF (element_type);
-          /* Be careful when setting the array length.  Ada arrays can be
-             empty arrays with the high_bound being smaller than the low_bound.
-             In such cases, the array length should be zero.  */
-          if (high_bound < low_bound)
-            TYPE_LENGTH (type) = 0;
-          else
-            TYPE_LENGTH (type) =
-               TYPE_LENGTH (element_type) * (high_bound - low_bound + 1);
-          element_type = type;
-        }
-      while (TYPE_CODE (next_type) == TYPE_CODE_ARRAY);
+      struct type* last_type;
+      struct type* first_type = element_type;
+      while (TYPE_CODE (element_type) == TYPE_CODE_ARRAY) {
+          last_type = element_type;
+          element_type = TYPE_TARGET_TYPE (element_type);
+      }
+      TYPE_TARGET_TYPE( last_type ) = create_array_type(NULL, element_type, range_type);
+      return type = create_array_type( type, TYPE_TARGET_TYPE ( first_type) , TYPE_INDEX_TYPE (first_type));
     }
-  
+  else
+      type = create_array_type (type, element_type, range_type);
+
 
   return type;
 }
