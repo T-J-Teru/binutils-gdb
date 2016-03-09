@@ -216,6 +216,9 @@ extern int frame_id_p (struct frame_id l);
    TAILCALL_FRAME.  */
 extern int frame_id_artificial_p (struct frame_id l);
 
+CORE_ADDR 
+frame_code_addr (struct frame_id l);
+
 /* Returns non-zero when L and R identify the same frame, or, if
    either L or R have a zero .func, then the same frame base.  */
 extern int frame_id_eq (struct frame_id l, struct frame_id r);
