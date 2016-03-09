@@ -424,7 +424,21 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
     case TYPE_CODE_MODULE:
       fprintfi_filtered (level, stream, "module %s", TYPE_TAG_NAME (type));
       break;
-
+    case TYPE_CODE_FLT:
+        /* don't do default as name is often null */
+      if (TYPE_NAME (type) != NULL)
+          fprintfi_filtered (level, stream, "%s", TYPE_NAME (type));
+      else {
+          switch (TYPE_LENGTH (type)) {
+          case 4:
+              fprintfi_filtered (level, stream, "REAL*4");
+              break;
+          case 8:
+              fprintfi_filtered (level, stream, "REAL*8");
+              break;
+          }
+      }
+      break;
     default_case:
     default:
       /* Handle types not explicitly handled by the other cases,
