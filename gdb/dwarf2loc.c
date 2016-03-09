@@ -2214,6 +2214,14 @@ dwarf2_evaluate_loc_desc_full (struct type *type, struct frame_info *frame,
   if (byte_offset < 0)
     invalid_synthetic_pointer ();
 
+  if (TYPE_NFIELDS (type) == 2 && 
+      TYPE_CODE (type) == TYPE_CODE_ARRAY) {
+      /*
+        later in this function allocate_value is called.
+        which is bad if we haven't established array size yet.
+      */
+      TYPE_LENGTH (type) = sizeof(long long);
+  }
   if (size == 0)
     return allocate_optimized_out_value (type);
 
