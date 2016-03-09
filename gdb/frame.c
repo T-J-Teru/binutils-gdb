@@ -1854,14 +1854,14 @@ frame_debug_got_null_frame (struct frame_info *this_frame,
 /* Is this (non-sentinel) frame in the "main"() function?  */
 
 static int
-inside_func (struct frame_info *this_frame, const char *name)
+inside_func (struct frame_info *this_frame, const char *name, struct objfile *objfile)
 {
   struct minimal_symbol *msymbol;
   CORE_ADDR maddr;
 
   if (name == NULL)
     return 0;
-  msymbol = lookup_minimal_symbol (name, NULL, symfile_objfile);
+  msymbol = lookup_minimal_symbol (name, NULL, objfile);
   if (msymbol == NULL)
     return 0;
   /* Make certain that the code, and not descriptor, address is
@@ -1875,13 +1875,16 @@ inside_func (struct frame_info *this_frame, const char *name)
 static int
 inside_main_func (struct frame_info *this_frame)
 {
-  if (symfile_objfile == 0)
-    return 0;
-  return inside_func(this_frame, main_name ()) ||
-         inside_func(this_frame, "MAIN__") ||
-         inside_func(this_frame, "_main_") ||
-         inside_func(this_frame, "start__") ||
-         inside_func(this_frame, "main");
+  int ret = 0;
+  if (symfile_objfile != NULL)
+    {
+      ret = inside_func(this_frame, main_name (), symfile_objfile) ||
+            inside_func(this_frame, "MAIN__", symfile_objfile) ||
+            inside_func(this_frame, "_main_", symfile_objfile) ||
+            inside_func(this_frame, "start__", symfile_objfile) ||
+            inside_func(this_frame, "main", symfile_objfile);
+    }
+  return ret || inside_func(this_frame, "__libc_start_main", NULL);
 }
 
 /* Test whether THIS_FRAME is inside the process entry point function.  */
