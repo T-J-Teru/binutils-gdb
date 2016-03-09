@@ -99,6 +99,8 @@ contained_in (const struct block *a, const struct block *b)
 struct symbol *
 block_linkage_function (const struct block *bl)
 {
+  if (!bl) return NULL;
+
   while ((BLOCK_FUNCTION (bl) == NULL || block_inlined_p (bl))
 	 && BLOCK_SUPERBLOCK (bl) != NULL)
     bl = BLOCK_SUPERBLOCK (bl);
