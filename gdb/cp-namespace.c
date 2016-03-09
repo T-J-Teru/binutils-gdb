@@ -300,7 +300,8 @@ cp_lookup_bare_symbol (const struct language_defn *langdef,
       struct type *type;
 
       lang_this = lookup_language_this (language_def (language_cplus), block);
-      if (lang_this == NULL)
+      if (lang_this == NULL || SYMBOL_TYPE (this) == NULL
+	  || TYPE_TARGET_TYPE (SYMBOL_TYPE (this)) == NULL)
 	return NULL;
 
       type = check_typedef (TYPE_TARGET_TYPE (SYMBOL_TYPE (lang_this)));
