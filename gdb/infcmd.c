@@ -686,6 +686,13 @@ start_command (char *args, int from_tty)
 static int
 proceed_thread_callback (struct thread_info *thread, void *arg)
 {
+  if (arg)
+    {
+      int pid = *(int *)arg;
+      if (ptid_get_pid (thread->ptid) != pid)
+	return 0;
+    }
+
   /* If stopped on collective BP do not run - we want to wait for
      all threads to arrive on collective BP */
   if (is_collective_breakpoints() && thread->collective_bp_num)
@@ -747,12 +754,13 @@ ensure_not_running (void)
 }
 
 void
-continue_1 (int all_threads)
+continue_1 (enum focus_kind focus)
 {
+  int pid;  
   ERROR_NO_INFERIOR;
   ensure_not_tfind_mode ();
 
-  if (non_stop && all_threads)
+  if (non_stop && focus != FOCUS_CURRENT_THREAD)
     {
       /* Don't error out if the current thread is running, because
 	 there may be other stopped threads.  */
@@ -761,7 +769,15 @@ continue_1 (int all_threads)
       /* Backup current thread and selected frame.  */
       old_chain = make_cleanup_restore_current_thread ();
 
-      iterate_over_threads (proceed_thread_callback, NULL);
+      if (focus == FOCUS_CURRENT_INFERIOR)
+	{
+	  pid = ptid_get_pid (inferior_ptid);
+	  iterate_over_threads (proceed_thread_callback, &pid);
+	}
+       else
+	{
+	  iterate_over_threads (proceed_thread_callback, NULL);
+        }
 
       if (sync_execution)
 	{
@@ -801,6 +817,7 @@ continue_command (char *args, int from_tty)
   int async_exec;
   int all_threads = 0;
   struct cleanup *args_chain;
+  enum focus_kind focus = FOCUS_CURRENT_THREAD;
 
   ERROR_NO_INFERIOR;
 
@@ -816,18 +833,26 @@ continue_command (char *args, int from_tty)
     {
       if (startswith (args, "-a"))
 	{
-	  all_threads = 1;
+	  focus = FOCUS_ALL_THREADS;
 	  args += sizeof ("-a") - 1;
 	  if (*args == '\0')
 	    args = NULL;
 	}
+      else if (strncmp (args, "-i", sizeof ("-i") - 1) == 0)
+	{
+	  focus = FOCUS_CURRENT_INFERIOR;
+	  args += sizeof ("-i") - 1;
+	  if (*args == '\0')
+	    args = NULL;
+	}
     }
-  if (upcmode && is_collective_breakpoints()) all_threads = 1;
+  if (upcmode && is_collective_breakpoints()) focus = FOCUS_ALL_THREADS;
 
-  if (!non_stop && all_threads)
-    error (_("`-a' is meaningless in all-stop mode."));
+  if (!non_stop && focus != FOCUS_CURRENT_THREAD)
+    error (_("`%s' is meaningless in all-stop mode."),
+           (focus == FOCUS_ALL_THREADS) ? "-a" : "-i");
 
-  if (args != NULL && all_threads)
+  if (args != NULL && focus != FOCUS_CURRENT_THREAD)
     error (_("Can't resume all threads and specify "
 	     "proceed count simultaneously."));
 
@@ -879,7 +904,7 @@ continue_command (char *args, int from_tty)
   if (from_tty)
     printf_filtered (_("Continuing.\n"));
 
-  continue_1 (all_threads);
+  continue_1 (focus);
 }
 
 /* Record the starting point of a "step" or "next" command.  */
@@ -2916,13 +2941,15 @@ disconnect_command (char *args, int from_tty)
     deprecated_detach_hook ();
 }
 
-void 
-interrupt_target_1 (int all_threads)
+void
+interrupt_target_1 (enum focus_kind focus)
 {
   ptid_t ptid;
 
-  if (all_threads)
+  if (focus == FOCUS_ALL_THREADS)
     ptid = minus_one_ptid;
+  else if (focus == FOCUS_CURRENT_INFERIOR)
+    ptid = pid_to_ptid (ptid_get_pid (inferior_ptid));
   else
     ptid = inferior_ptid;
   target_stop (ptid);
@@ -2941,26 +2968,32 @@ interrupt_target_1 (int all_threads)
    Stop the execution of the target while running in async mode, in
    the backgound.  In all-stop, stop the whole process.  In non-stop
    mode, stop the current thread only by default, or stop all threads
-   if the `-a' switch is used.  */
-
+   if the `-a' switch is used, or stop all threads in the current
+   inferior if the `-i' switch is used.  */
+ 
+/* interrupt [-a] [-i]  */
 static void
 interrupt_command (char *args, int from_tty)
 {
   if (target_can_async_p ())
     {
-      int all_threads = 0;
+      enum focus_kind focus;
 
       dont_repeat ();		/* Not for the faint of heart.  */
 
       if (args != NULL
-	  && startswith (args, "-a"))
-	all_threads = 1;
-      if (upcmode && is_collective_breakpoints()) all_threads = 1;
+	  && strncmp (args, "-a", sizeof ("-a") - 1) == 0)
+	focus = FOCUS_ALL_THREADS;
+      if (args != NULL
+	  && strncmp (args, "-i", sizeof ("-i") - 1) == 0)
+	focus = FOCUS_CURRENT_INFERIOR; 
+      if (upcmode && is_collective_breakpoints()) focus = FOCUS_ALL_THREADS;
 
-      if (!non_stop && all_threads)
-	error (_("-a is meaningless in all-stop mode."));
+      if (!non_stop && focus != FOCUS_CURRENT_THREAD)
+	error (_("%s is meaningless in all-stop mode."),
+	       (focus == FOCUS_ALL_THREADS) ? "-a" : "-i");
 
-      interrupt_target_1 (all_threads);
+      interrupt_target_1 (focus);
     }
 }
 
