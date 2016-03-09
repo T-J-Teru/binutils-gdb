@@ -449,8 +449,7 @@ uda_client_connect (const char *service_name)
   /* Create a UNIX domain socket. */
   if ((connect_fd = socket (AF_UNIX, SOCK_STREAM, 0)) < 0)
     {
-      perror ("socket");
-      abort ();
+      perror_with_name ("socket");
     }
   /* Connect to named socket.  */
   saun.sun_family = AF_UNIX;
@@ -458,20 +457,17 @@ uda_client_connect (const char *service_name)
   len = sizeof (saun.sun_family) + strlen (saun.sun_path);
   if (connect (connect_fd, (struct sockaddr *) &saun, len) < 0)
     {
-      perror ("connect");
-      abort ();
+      perror_with_name ("connect");
     }
   c_in = fdopen (connect_fd, "r");
   if (!c_in)
     {
-      perror ("fdopen of c_in failed");
-      abort ();
+      perror_with_name ("fdopen of c_in failed");
     }
   c_out = fdopen (connect_fd, "w");
   if (!c_out)
     {
-      perror ("fdopen of c_out failed");
-      abort ();
+      perror_with_name ("fdopen of c_out failed");
     }
   setlinebuf (c_out);
   uda_rmt_init (c_in, c_out, uda_client_cmd_exec);
