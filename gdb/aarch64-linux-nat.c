@@ -322,7 +322,7 @@ aarch64_linux_set_debug_regs (const struct aarch64_debug_reg_state *state,
       regs.dbg_regs[i].addr = addr[i];
       regs.dbg_regs[i].ctrl = ctrl[i];
     }
-
+  
   if (ptrace (PTRACE_SETREGSET, tid,
 	      watchpoint ? NT_ARM_HW_WATCH : NT_ARM_HW_BREAK,
 	      (void *) &iov))
