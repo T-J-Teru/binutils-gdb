@@ -567,6 +567,7 @@ extern PyObject *gdbpy_to_string_cst;
 extern PyObject *gdbpy_display_hint_cst;
 extern PyObject *gdbpy_enabled_cst;
 extern PyObject *gdbpy_value_cst;
+extern PyObject *gdbpy_child_cst;
 
 /* Exception types.  */
 extern PyObject *gdbpy_gdb_error;

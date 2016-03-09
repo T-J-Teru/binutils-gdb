@@ -2235,6 +2235,14 @@ evaluate_subexp_standard (struct type *expect_type,
       arg2 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
       if (noside == EVAL_SKIP)
 	goto nosideret;
+      arg1 = coerce_ref (arg1);
+      arg2 = coerce_ref (arg2);
+      {
+	struct value *ret = apply_val_child (arg1, arg2,
+					     exp->language_defn);
+	if (ret)
+	  return ret;
+      }
       if (binop_user_defined_p (op, arg1, arg2))
 	return value_x_binop (arg1, arg2, op, OP_NULL, noside);
       else
