@@ -1672,7 +1672,8 @@ val_print_array_elements (struct type *type,
       reps = 1;
       /* Only check for reps if repeat_count_threshold is not set to
 	 UINT_MAX (unlimited).  */
-      if (options->repeat_count_threshold < UINT_MAX)
+      if (options->repeat_count_threshold < UINT_MAX
+	  && len > options->repeat_count_threshold)
 	{
 	  while (rep1 < len
 		 && value_available_contents_eq (val,
