@@ -1307,6 +1307,12 @@ quit_target (void *arg)
   return 0;
 }
 
+static void
+emergency_exit(int signo)
+{
+    exit(1);
+}
+
 /* Quit without asking for confirmation.  */
 
 void
@@ -1328,6 +1334,11 @@ quit_force (char *args, int from_tty)
 
   qt.args = args;
   qt.from_tty = from_tty;
+
+  /* ALL-1028: quit_target may deadlock if the process heald a needed lock when
+     the signal arrived. */
+  signal (SIGALRM, emergency_exit);
+  alarm (2);
 
   /* We want to handle any quit errors and exit regardless.  */
   catch_errors (quit_target, &qt,
