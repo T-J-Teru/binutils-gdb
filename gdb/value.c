@@ -1980,21 +1980,8 @@ value_of_internalvar (struct gdbarch *gdbarch, struct internalvar *var)
      on this value go back to affect the original internal variable.
 
      Do not do this for INTERNALVAR_MAKE_VALUE variables, as those have
-     no underlying modifyable state in the internal variable.
-
-     Likewise, if the variable's value is a computed lvalue, we want
-     references to it to produce another computed lvalue, where
-     references and assignments actually operate through the
-     computed value's functions.
-
-     This means that internal variables with computed values
-     behave a little differently from other internal variables:
-     assignments to them don't just replace the previous value
-     altogether.  At the moment, this seems like the behavior we
-     want.  */
-
-  if (var->kind != INTERNALVAR_MAKE_VALUE
-      && val->lval != lval_computed)
+     no underlying modifyable state in the internal variable. */
+  if (var->kind != INTERNALVAR_MAKE_VALUE)
     {
       VALUE_LVAL (val) = lval_internalvar;
       VALUE_INTERNALVAR (val) = var;
