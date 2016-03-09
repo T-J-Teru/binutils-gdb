@@ -522,6 +522,10 @@ print_children (PyObject *printer, const char *hint,
 	pretty = options->prettyprint_structs;
     }
 
+  if (pretty == Val_pretty_default)
+    pretty = ((is_array ? options->prettyprint_arrays : options->prettyprint_structs)
+	       ? Val_prettyprint : Val_no_prettyprint);
+  
   /* Manufacture a dummy Python frame to work around Python 2.4 bug,
      where it insists on having a non-NULL tstate->frame when
      a generator is called.  */
