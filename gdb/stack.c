@@ -414,11 +414,12 @@ read_frame_arg (struct symbol *sym, struct frame_info *frame,
 
 		      /* If the reference addresses match but dereferenced
 			 content does not match print them.  */
-		      if (val != val_deref
-			  && value_available_contents_eq (val_deref, 0,
-							  entryval_deref, 0,
-						      TYPE_LENGTH (type_deref)))
-			val_equal = 1;
+			  if (value_optimized_out (entryval_deref) ||
+       	             ((val != val_deref) &&
+			      value_available_contents_eq (val_deref, 0,
+				                           entryval_deref, 0,
+       				                   TYPE_LENGTH (type_deref))))
+				val_equal = 1;
 		    }
 
 		  /* Value was not a reference; and its content matches.  */
