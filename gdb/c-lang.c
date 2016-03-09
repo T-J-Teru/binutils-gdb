@@ -182,7 +182,7 @@ c_printchar (int c, struct type *type, struct ui_file *stream)
 /* Print the character string STRING, printing at most LENGTH
    characters.  LENGTH is -1 if the string is nul terminated.  Each
    character is WIDTH bytes long.  Printing stops early if the number
-   hits print_max; repeat counts are printed as appropriate.  Print
+   hits print_smax; repeat counts are printed as appropriate.  Print
    ellipses at the end if we had to stop before printing LENGTH
    characters, or if FORCE_ELLIPSES.  */
 
