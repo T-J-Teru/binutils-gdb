@@ -597,7 +597,7 @@ struct breakpoint_ops
 				  struct linespec_result *,
 				  struct linespec_sals *, char *,
 				  char *,
-				  enum bptype, enum bpdisp, int, int,
+				  enum bptype, enum bpdisp, int, int, int,
 				  int, const struct breakpoint_ops *,
 				  int, int, int, unsigned);
 
@@ -748,6 +748,9 @@ struct breakpoint
     /* Ada task number for task-specific breakpoint, 
        or 0 if don't care.  */
     int task;
+
+    /* Inferior number for inferior-specific breakpoint, or 0 if don't care.  */
+    int infnum;
 
     /* Count of the number of times this breakpoint was taken, dumped
        with the info, but not used for anything else.  Useful for

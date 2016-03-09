@@ -1118,6 +1118,7 @@ struct symtab_and_line
 
   CORE_ADDR pc;
   CORE_ADDR end;
+  struct program_space *explicit_pspace;  
   int explicit_pc;
   int explicit_line;
 

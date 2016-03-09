@@ -1334,6 +1334,24 @@ yylex (void)
   
   if (namelen == 2 && tokstart[0] == 'i' && tokstart[1] == 'f')
     return 0;
+
+  /* For the same reason (breakpoint conditions), "thread N"
+     terminates the expression.  "thread" could be an identifier, but
+     an identifier is never followed by a number without intervening
+     punctuation.  "task" is similar.  Handle abbreviations of these,
+     similarly to breakpoint.c:find_condition_and_thread.  */
+  if (namelen >= 1
+      && (strncmp (tokstart, "thread", namelen) == 0
+	  || strncmp (tokstart, "task", namelen) == 0
+	  || strncmp (tokstart, "inf", namelen) == 0)
+      && (tokstart[namelen] == ' ' || tokstart[namelen] == '\t'))
+    {
+      char *p = tokstart + namelen + 1;
+      while (*p == ' ' || *p == '\t')
+	p++;
+      if (*p >= '0' && *p <= '9')
+	return 0;
+    }
   
   lexptr += namelen;
   
