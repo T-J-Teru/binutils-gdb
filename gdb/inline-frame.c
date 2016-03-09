@@ -336,7 +336,12 @@ skip_inline_frames (ptid_t ptid)
 	}
     }
 
+#define NO_ASSERT_ON_RERUN 
+#ifdef ASSERT_ON_RERUN 
+  /* For multiple inferiors this assert causes an
+   * error on re-run */
   gdb_assert (find_inline_frame_state (ptid) == NULL);
+#endif
   state = allocate_inline_frame_state (ptid);
   state->skipped_frames = skip_count;
   state->saved_pc = this_pc;

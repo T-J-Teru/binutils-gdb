@@ -766,6 +766,13 @@ struct breakpoint
        can sometimes be NULL for enabled GDBs as not all breakpoint
        types are tracked by the Python scripting API.  */
     struct breakpoint_object *py_bp_object;
+
+    /* Report breakpoint after this number of threads reach 
+       a collective breakpoint */
+    int max_threads_hit;
+
+    /* Number of threads that reached collective breakpoint */
+    int threads_hit;
   };
 
 /* An instance of this type is used to represent a watchpoint.  It
@@ -1561,5 +1568,11 @@ extern struct gdbarch *get_sal_arch (struct symtab_and_line sal);
 extern void handle_solib_event (void);
 
 extern void breakpoint_free_objfile (struct objfile *objfile);
+
+/* Check if collective breakpoint on or off. */
+extern int is_collective_breakpoints (void);
+
+/* Check if collective stepping on or off. */
+extern int is_collective_stepping (void);
 
 #endif /* !defined (BREAKPOINT_H) */

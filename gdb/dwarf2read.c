@@ -1733,6 +1733,10 @@ static void process_cu_includes (void);
 
 static void check_producer (struct dwarf2_cu *cu);
 
+static struct type *read_upc_shared_qual_type (struct die_info *, struct dwarf2_cu *);
+
+static struct type *read_tag_qual_type (struct die_info *, struct dwarf2_cu *, struct type_quals);
+
 #if WORDS_BIGENDIAN
 
 /* Convert VALUE between big- and little-endian.  */
@@ -9470,7 +9474,6 @@ read_func_scope (struct die_info *die, struct dwarf2_cu *cu)
 		 die->offset.sect_off);
       return;
     }
-
   /* Ignore functions with missing or invalid low and high pc attributes.  */
   if (!dwarf2_get_pc_bounds (die, &lowpc, &highpc, cu, NULL))
     {
@@ -12335,58 +12338,43 @@ read_tag_reference_type (struct die_info *die, struct dwarf2_cu *cu)
 }
 
 static struct type *
-read_tag_const_type (struct die_info *die, struct dwarf2_cu *cu)
+read_upc_shared_qual_type (struct die_info *die, struct dwarf2_cu *cu)
 {
-  struct type *base_type, *cv_type;
+  struct type_quals type_quals = null_type_quals;
+  struct attribute *attr;
+  
+  TYPE_QUAL_FLAGS (type_quals) = TYPE_INSTANCE_FLAG_UPC_SHARED;
 
-  base_type = die_type (die, cu);
-
-  /* The die_type call above may have already set the type for this DIE.  */
-  cv_type = get_die_type (die, cu);
-  if (cv_type)
-    return cv_type;
-
-  /* In case the const qualifier is applied to an array type, the element type
-     is so qualified, not the array type (section 6.7.3 of C99).  */
-  if (TYPE_CODE (base_type) == TYPE_CODE_ARRAY)
+  /* The DWARF2 encoding is as follows:
+     "shared int x;"  DW_AT_count: 1
+     "shared [] int *p;" <no DW_AT_count attribute>
+     "shared [10] int x[50];" DW_AT_count: 10  */
+  attr = dwarf2_attr (die, DW_AT_count, cu);
+  if (attr)
     {
-      struct type *el_type, *inner_array;
-
-      base_type = copy_type (base_type);
-      inner_array = base_type;
-
-      while (TYPE_CODE (TYPE_TARGET_TYPE (inner_array)) == TYPE_CODE_ARRAY)
-	{
-	  TYPE_TARGET_TYPE (inner_array) =
-	    copy_type (TYPE_TARGET_TYPE (inner_array));
-	  inner_array = TYPE_TARGET_TYPE (inner_array);
-	}
-
-      el_type = TYPE_TARGET_TYPE (inner_array);
-      TYPE_TARGET_TYPE (inner_array) =
-	make_cv_type (1, TYPE_VOLATILE (el_type), el_type, NULL);
-
-      return set_die_type (die, base_type, cu);
+      int upc_layout = dwarf2_get_attr_constant_value (attr, 1);
+      TYPE_QUAL_UPC_LAYOUT (type_quals) = upc_layout;
     }
-
-  cv_type = make_cv_type (1, TYPE_VOLATILE (base_type), base_type, 0);
-  return set_die_type (die, cv_type, cu);
+  return read_tag_qual_type (die, cu, type_quals);
 }
-
+  
 static struct type *
-read_tag_volatile_type (struct die_info *die, struct dwarf2_cu *cu)
+read_tag_qual_type (struct die_info *die, struct dwarf2_cu *cu, struct type_quals new_quals)
 {
-  struct type *base_type, *cv_type;
+  struct type *base_type;
+  struct type *qual_type;
+  struct type_quals type_quals;
 
   base_type = die_type (die, cu);
 
   /* The die_type call above may have already set the type for this DIE.  */
-  cv_type = get_die_type (die, cu);
-  if (cv_type)
-    return cv_type;
-
-  cv_type = make_cv_type (TYPE_CONST (base_type), 1, base_type, 0);
-  return set_die_type (die, cv_type, cu);
+  qual_type = get_die_type (die, cu);
+  if (qual_type)
+    return qual_type;
+  
+  type_quals = merge_type_quals (TYPE_QUALS (base_type), new_quals);
+  qual_type = make_qual_variant_type (type_quals, base_type, 0);
+  return set_die_type (die, qual_type, cu);
 }
 
 /* Handle DW_TAG_restrict_type.  */
@@ -12598,8 +12586,11 @@ read_subroutine_type (struct die_info *die, struct dwarf2_cu *cu)
 		    is_this = 1;
 
 		  if (is_this)
-		    arg_type = make_cv_type (1, TYPE_VOLATILE (arg_type),
-					     arg_type, 0);
+		    {
+		      struct type_quals type_quals = TYPE_QUALS (arg_type);
+		      type_quals.instance_flags |= TYPE_INSTANCE_FLAG_CONST;
+		      arg_type = make_qual_variant_type (type_quals, arg_type, NULL);
+		    }
 		}
 
 	      TYPE_FIELD_TYPE (ftype, iparams) = arg_type;
@@ -12746,6 +12737,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   struct type *range_type;
   struct attribute *attr;
   LONGEST low, high;
+  int is_upc_threads_scaled = 0;
   int low_default_is_valid;
   const char *name;
   LONGEST negative_mask;
@@ -12904,6 +12896,16 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   attr = dwarf2_attr (die, DW_AT_byte_size, cu);
   if (attr)
     TYPE_LENGTH (range_type) = DW_UNSND (attr);
+
+  /* Check for UPC's "thread scaled" attribute.  When present,
+     and non-zero, this attribute indicates that the array
+     bound represented by this subrange type is scaled by
+     the number of UPC threads (ie, the language THREADS
+     value). */
+  is_upc_threads_scaled = dwarf2_flag_true_p (die,
+                                 DW_AT_upc_threads_scaled, cu);
+  if (is_upc_threads_scaled)
+    TYPE_INSTANCE_FLAGS (range_type) |= TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR;
 
   set_die_type (die, range_type, cu);
 
@@ -14796,6 +14798,10 @@ set_cu_language (unsigned int lang, struct dwarf2_cu *cu)
     case DW_LANG_D:
       cu->language = language_d;
       break;
+    case DW_LANG_UPC:
+    case DW_LANG_Upc:
+      cu->language = language_upc;
+      break;      
     case DW_LANG_Fortran77:
     case DW_LANG_Fortran90:
     case DW_LANG_Fortran95:
@@ -16523,6 +16529,7 @@ lookup_die_type (struct die_info *die, struct attribute *attr,
 static struct type *
 read_type_die (struct die_info *die, struct dwarf2_cu *cu)
 {
+  struct type_quals type_quals = null_type_quals;
   struct type *this_type;
 
   this_type = get_die_type (die, cu);
@@ -16538,6 +16545,7 @@ read_type_die (struct die_info *die, struct dwarf2_cu *cu)
 static struct type *
 read_type_die_1 (struct die_info *die, struct dwarf2_cu *cu)
 {
+  struct type_quals type_quals = null_type_quals;
   struct type *this_type = NULL;
 
   switch (die->tag)
@@ -16572,10 +16580,12 @@ read_type_die_1 (struct die_info *die, struct dwarf2_cu *cu)
       this_type = read_tag_reference_type (die, cu);
       break;
     case DW_TAG_const_type:
-      this_type = read_tag_const_type (die, cu);
+      TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_CONST;
+      this_type = read_tag_qual_type (die, cu, type_quals);
       break;
     case DW_TAG_volatile_type:
-      this_type = read_tag_volatile_type (die, cu);
+      TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_VOLATILE;
+      this_type = read_tag_qual_type (die, cu, type_quals);
       break;
     case DW_TAG_restrict_type:
       this_type = read_tag_restrict_type (die, cu);
@@ -16591,6 +16601,17 @@ read_type_die_1 (struct die_info *die, struct dwarf2_cu *cu)
       break;
     case DW_TAG_base_type:
       this_type = read_base_type (die, cu);
+      break;
+    case DW_TAG_upc_shared_type:
+      this_type = read_upc_shared_qual_type (die, cu);
+      break;
+    case DW_TAG_upc_strict_type:
+      TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_UPC_STRICT;
+      this_type = read_tag_qual_type (die, cu, type_quals);
+      break;
+    case DW_TAG_upc_relaxed_type:
+      TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_UPC_RELAXED;
+      this_type = read_tag_qual_type (die, cu, type_quals);
       break;
     case DW_TAG_unspecified_type:
       this_type = read_unspecified_type (die, cu);

@@ -26,6 +26,7 @@
 #include "valprint.h"
 #include "language.h"
 #include "c-lang.h"
+#include "upc-lang.h"
 #include "cp-abi.h"
 #include "target.h"
 
@@ -247,6 +248,12 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
       break;
 
     case TYPE_CODE_PTR:
+      elttype = check_typedef (TYPE_TARGET_TYPE (type));
+      if (upc_shared_type_p (elttype))
+        {
+	  upc_print_pts (stream, options->format, elttype, valaddr);
+	  break;
+	}
       if (options->format && options->format != 's')
 	{
 	  val_print_scalar_formatted (type, valaddr, embedded_offset,

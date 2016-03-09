@@ -44,7 +44,7 @@ struct value;
    put into the value history or exposed to Python are taken off this
    list.  */
 
-struct value *value_next (struct value *);
+extern struct value *value_next (struct value *);
 
 /* Type of the value.  */
 
@@ -361,6 +361,12 @@ extern CORE_ADDR value_raw_address (struct value *);
 
 /* Set the address of a value.  */
 extern void set_value_address (struct value *, CORE_ADDR);
+
+/* If lval == lval_memory, this is the address in the inferior.  If
+   lval == lval_register, this is the byte offset into the registers
+   structure.  */
+extern gdb_upc_pts_t *deprecated_value_upc_shared_addr_hack (struct value *);
+#define VALUE_SHARED_ADDR(val) (*deprecated_value_upc_shared_addr_hack (val))
 
 /* Pointer to internal variable.  */
 extern struct internalvar **deprecated_value_internalvar_hack (struct value *);

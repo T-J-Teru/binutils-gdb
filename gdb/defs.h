@@ -127,6 +127,16 @@ typedef bfd_vma CORE_ADDR;
 
 #endif /* No BFD64 */
 
+/* Unpacked UPC pointer-to-shared value.  */
+
+typedef struct
+{
+  ULONGEST addrfield;
+  ULONGEST thread;
+  ULONGEST phase;
+  ULONGEST opaque;
+} gdb_upc_pts_t;
+
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -206,6 +216,7 @@ enum language
     language_d,			/* D */
     language_go,		/* Go */
     language_objc,		/* Objective-C */
+    language_upc,		/* UPC */
     language_java,		/* Java */
     language_fortran,		/* Fortran */
     language_m2,		/* Modula-2 */
@@ -388,6 +399,8 @@ enum lval_type
     not_lval,
     /* In memory.  */
     lval_memory,
+    /* In UPC shared memory.  */
+    lval_upc_shared,
     /* In a register.  Registers are relative to a frame.  */
     lval_register,
     /* In a gdb internal variable.  */

@@ -542,6 +542,13 @@ elf_symtab_read (struct objfile *objfile, int type,
 		  ms_type = mst_unknown;
 		}
 	    }
+          else if (strstr(sym->section->name, "upc_shared"))
+              /* upc_shared section might be unloadable if link
+                 script is used for linking. Make sure we have all
+                 shared symbols included for debugging */
+            {
+              ms_type = mst_unknown;
+            }
 	  else
 	    {
 	      /* FIXME:  Solaris2 shared libraries include lots of

@@ -237,6 +237,7 @@ static void check_parameter_typelist (VEC (type_ptr) *);
 /* Special type cases, put in to allow the parser to distinguish different
    legal basetypes.  */
 %token SIGNED_KEYWORD LONG SHORT INT_KEYWORD CONST_KEYWORD VOLATILE_KEYWORD DOUBLE_KEYWORD
+%token SHARED_KEYWORD RELAXED_KEYWORD STRICT_KEYWORD
 
 %token <sval> VARIABLE
 
@@ -543,7 +544,7 @@ arglist	:	arglist ',' exp   %prec ABOVE_COMMA
 			{ arglist_len++; }
 	;
 
-exp     :       exp '(' parameter_typelist ')' const_or_volatile
+exp     :       exp '(' parameter_typelist ')' type_qualifier
 			{ int i;
 			  VEC (type_ptr) *type_list = $3;
 			  struct type *type_elt;
@@ -1050,29 +1051,29 @@ space_identifier : '@' NAME
 		{ insert_type_address_space (copy_name ($2.stoken)); }
 	;
 
-const_or_volatile: const_or_volatile_noopt
+type_qualifier: type_qualifier_noopt
 	|
 	;
 
-cv_with_space_id : const_or_volatile space_identifier const_or_volatile
+cv_with_space_id : type_qualifier space_identifier type_qualifier
 	;
 
-const_or_volatile_or_space_identifier_noopt: cv_with_space_id
-	| const_or_volatile_noopt 
+type_qualifier_or_space_identifier_noopt: cv_with_space_id
+	| type_qualifier_noopt 
 	;
 
-const_or_volatile_or_space_identifier: 
-		const_or_volatile_or_space_identifier_noopt
+type_qualifier_or_space_identifier: 
+		type_qualifier_or_space_identifier_noopt
 	|
 	;
 
 ptr_operator:
 		ptr_operator '*'
 			{ insert_type (tp_pointer); }
-		const_or_volatile_or_space_identifier
+		type_qualifier_or_space_identifier
 	|	'*' 
 			{ insert_type (tp_pointer); }
-		const_or_volatile_or_space_identifier
+		type_qualifier_or_space_identifier
 	|	'&'
 			{ insert_type (tp_reference); }
 	|	'&' ptr_operator
@@ -1344,9 +1345,9 @@ typebase  /* Implements (approximately): (type-qualifier)* type-specifier */
 			{ $$ = lookup_template_type(copy_name($2), $4,
 						    expression_context_block);
 			}
-	| const_or_volatile_or_space_identifier_noopt typebase 
+	| type_qualifier_or_space_identifier_noopt typebase 
 			{ $$ = follow_types ($2); }
-	| typebase const_or_volatile_or_space_identifier_noopt 
+	| typebase type_qualifier_or_space_identifier_noopt 
 			{ $$ = follow_types ($1); }
 	;
 
@@ -1401,6 +1402,36 @@ nonempty_typelist
 		  $$ = $1;
 		}
 	;
+shared_and_relaxed:	SHARED_KEYWORD RELAXED_KEYWORD
+			{ push_type (tp_shared);
+			  push_type (tp_relaxed); 
+			}
+	|		RELAXED_KEYWORD SHARED_KEYWORD
+			{ push_type (tp_shared);
+			  push_type (tp_relaxed); 
+			}
+	;
+shared_and_strict:	SHARED_KEYWORD STRICT_KEYWORD
+			{ push_type (tp_shared);
+			  push_type (tp_strict); 
+			}
+	|		STRICT_KEYWORD SHARED_KEYWORD
+			{ push_type (tp_shared);
+			  push_type (tp_strict); 
+			}
+	;
+shared_and_strict_or_relaxed:
+			SHARED_KEYWORD
+			{ push_type (tp_shared); }
+	|		shared_and_strict
+	|		shared_and_relaxed
+	;
+
+type_qualifier_noopt:  	const_and_or_volatile 
+	|		shared_and_strict_or_relaxed
+	|		const_and_or_volatile shared_and_strict_or_relaxed
+	|		shared_and_strict_or_relaxed const_and_or_volatile
+	;
 
 ptype	:	typebase
 	|	ptype abs_decl
@@ -1418,11 +1449,11 @@ conversion_declarator:  /* Nothing.  */
 	| ptr_operator conversion_declarator
 	;
 
-const_and_volatile: 	CONST_KEYWORD VOLATILE_KEYWORD
+const_and_or_volatile: 	CONST_KEYWORD VOLATILE_KEYWORD
+			{ insert_type (tp_const);
+			  insert_type (tp_volatile); 
+			}
 	| 		VOLATILE_KEYWORD CONST_KEYWORD
-	;
-
-const_or_volatile_noopt:  	const_and_volatile 
 			{ insert_type (tp_const);
 			  insert_type (tp_volatile); 
 			}

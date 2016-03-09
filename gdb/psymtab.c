@@ -68,8 +68,8 @@ static struct partial_symbol *find_pc_sect_psymbol (struct objfile *,
 static void fixup_psymbol_section (struct partial_symbol *psym,
 				   struct objfile *objfile);
 
-static struct symtab *psymtab_to_symtab (struct objfile *objfile,
-					 struct partial_symtab *pst);
+struct symtab *psymtab_to_symtab (struct objfile *objfile,
+				 struct partial_symtab *pst);
 
 /* Ensure that the partial symbols for OBJFILE have been loaded.  This
    function always returns its argument, as a convenience.  */
@@ -751,7 +751,7 @@ lookup_partial_symbol (struct objfile *objfile,
 /* Get the symbol table that corresponds to a partial_symtab.
    This is fast after the first time you do it.  */
 
-static struct symtab *
+struct symtab *
 psymtab_to_symtab (struct objfile *objfile, struct partial_symtab *pst)
 {
   /* If it is a shared psymtab, find an unshared psymtab that includes

@@ -523,6 +523,7 @@ struct target_ops
     void (*to_program_signals) (int, unsigned char *);
 
     int (*to_thread_alive) (struct target_ops *, ptid_t ptid);
+    void (*to_thread_switch) (ptid_t ptid);
     void (*to_find_new_threads) (struct target_ops *);
     char *(*to_pid_to_str) (struct target_ops *, ptid_t);
     char *(*to_extra_thread_info) (struct thread_info *);

@@ -32,6 +32,7 @@
 #include "cli/cli-script.h"
 #include "target.h"
 #include "gdbthread.h"
+#include "upc-thread.h"
 #include "annotate.h"
 #include "symfile.h"
 #include "top.h"
@@ -3429,9 +3430,18 @@ handle_inferior_event (struct execution_control_state *ecs)
 	  current_inferior ()->has_exit_code = 1;
 	  current_inferior ()->exit_code = (LONGEST) ecs->ws.value.integer;
 
-	  print_exited_reason (ecs->ws.value.integer);
+	  if (!upcmode)
+	    print_exited_reason (ecs->ws.value.integer);
+	  else
+	    {
+	      if (!upc_exit_code)
+	        upc_exit_code = ecs->ws.value.integer;
+	    }
 	}
-      else
+      /* Print message only if exit code was not already defined */
+      /*     (most likely upc_global_exit() was called and other */
+      /*     threads were killed by the monitor thread */
+      else if (!upc_exit_code)
 	print_signal_exited_reason (ecs->ws.value.sig);
 
       gdb_flush (gdb_stdout);
@@ -4572,7 +4582,40 @@ process_event_stop_test:
 	case BPSTAT_WHAT_STOP_SILENT:
 	  if (debug_infrun)
 	    fprintf_unfiltered (gdb_stdlog, "infrun: BPSTAT_WHAT_STOP_SILENT\n");
-	  stop_print_frame = 0;
+          if (is_collective_breakpoints())
+            {
+              struct bpstats *bs = ecs->event_thread->control.stop_bpstat;
+              const struct bp_location *bl = bs->bp_location_at;
+              struct breakpoint *b = bl ? bl->owner : NULL;
+              if (b && (b->thread == -1))
+                {
+                  stop_print_frame = 0;
+                  /* Check all threads for collective bp missmatch */
+                  if (thread_check_collective_bp (b->number))
+                    {
+                      /* Collective BPs missmatch - at least one other thread is 
+                         waiting on some other collective breakpoint */
+	              printf_unfiltered ("WARNING: Collective breakpoint missmatch: thread %d\n", upc_thread_num(ecs->event_thread));
+                      stop_print_frame = 1;
+                    }
+                  /* Label thread as on collective wait */
+                  b->threads_hit++;
+                  ecs->event_thread->collective_bp_num = b->number;
+                  /* Make sure collective stepping is canceled for this thread */
+                  ecs->event_thread->collective_step = 0;
+                  /* Is this the last thread to reach the BP */
+                  if (b->threads_hit >= b->max_threads_hit)
+                    {
+                      stop_print_frame = 1;
+                      b->threads_hit = 0;
+                      thread_clear_collective_bp (CLEAR_ALL_COLLECTIVE_BPS);
+                    }
+                }
+              else
+	        stop_print_frame = 1;
+            }
+          else
+	    stop_print_frame = 1;
 
 	  /* We are about to nuke the step_resume_breakpoin via the
 	     cleanup chain, so no need to worry about it here.  */
@@ -5126,6 +5169,55 @@ process_event_stop_test:
       ecs->event_thread->control.stop_step = 1;
       print_end_stepping_range_reason ();
       stop_stepping (ecs);
+      /* If UPC collective mode, determine if we need to be silent. */
+      if (is_collective_stepping ())
+	{
+	  ecs->event_thread->collective_step = 0;
+	  if (!thread_check_collective_step ())
+	    stop_print_frame = 0;
+	  /* Did we hit a collective breakpoint? */
+	  /*   If yes thread will not step any more, make sure
+	     BP is announced */
+	  if (is_collective_breakpoints ())
+	    {
+	      /* See if there is a breakpoint at the current PC.  */
+	      struct bpstats *bs =
+		bpstat_stop_status (get_regcache_aspace
+				    (get_current_regcache ()), stop_pc,
+				    ecs->ptid, &ecs->ws);
+	      if (bs)
+		{
+		  const struct bp_location *bl = bs->bp_location_at;
+		  struct breakpoint *b = bl ? bl->owner : NULL;
+		  if (b && (b->thread == -1))
+		    {
+		      stop_print_frame = 0;
+		      /* Check all threads for collective bp missmatch */
+		      if (thread_check_collective_bp (b->number))
+			{
+			  /* Collective BPs missmatch - at least one other thread is 
+			     waiting on some other collective breakpoint */
+			  printf_unfiltered
+			    ("WARNING: Collective breakpoint missmatch: thread %d\n",
+			     upc_thread_num (ecs->event_thread));
+			  stop_print_frame = 1;
+			}
+		      /* Label thread as on collective wait */
+		      b->threads_hit++;
+		      ecs->event_thread->collective_bp_num = b->number;
+		      /* Make sure collective stepping is canceled for this thread */
+		      ecs->event_thread->collective_step = 0;
+		      /* Is this the last thread to reach the BP */
+		      if (b->threads_hit >= b->max_threads_hit)
+			{
+			  stop_print_frame = 1;
+			  b->threads_hit = 0;
+                          thread_clear_collective_bp (CLEAR_ALL_COLLECTIVE_BPS);
+			}
+		    }
+		}
+	    }
+	}
       return;
     }
 

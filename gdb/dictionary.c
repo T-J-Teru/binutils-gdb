@@ -950,3 +950,83 @@ add_symbol_linear_expandable (struct dictionary *dict,
 
   DICT_LINEAR_SYM (dict, nsyms - 1) = sym;
 }
+
+/* dict_convert_dictionary
+ * Added by HP January 2008 to support the needs of UPC symbol table merging.
+ * Converts a dictionary from non-expandable to expandable.
+ * Input: pointer to existing dictionary
+ * Returns: pointer to the same or equivalent dictionary that is expandable.
+ */
+struct dictionary *dict_convert_dictionary(struct dictionary *old_dict) {
+  struct dictionary *new_dict = old_dict;
+  struct dict_iterator iter;
+  enum dict_type dtype;
+
+  dtype = **((enum dict_type **)old_dict);
+  switch (dtype) {
+  case DICT_HASHED_EXPANDABLE:
+  case DICT_LINEAR_EXPANDABLE:
+    /* Already expandable, nothing left to do */
+    break;
+
+  case DICT_HASHED: {
+    int i;
+    int nbuckets = DICT_HASHED_NBUCKETS(old_dict);
+    struct symbol **old_buckets, **new_buckets;
+
+    /* Create a new empty dictionary */
+    new_dict = dict_create_hashed_expandable();
+    old_buckets = DICT_HASHED_BUCKETS(old_dict);
+    new_buckets = xcalloc(nbuckets, sizeof(struct symbol *));
+
+    DICT_HASHED_NBUCKETS(new_dict) = nbuckets;
+    DICT_HASHED_BUCKETS(new_dict) = new_buckets;
+
+    /* Copy all the buckets from the old dictionary to the new
+     * dictionary.  This process is identical to that for expanding
+     * an expandable dictionary, except in this case the original
+     * dictionary was not expandable.
+     */
+    for (i = 0; i < nbuckets; i++) {
+      struct symbol *sym, *next_sym;
+
+      sym = old_buckets[i];
+      if (sym != NULL) {
+	for (next_sym = sym->hash_next;
+	     next_sym != NULL;
+	     next_sym = sym->hash_next) {
+	  insert_symbol_hashed (new_dict, sym);
+	  sym = next_sym;
+	}
+	insert_symbol_hashed(new_dict, sym);
+      }
+    }
+    dict_free(old_dict);
+    break;   
+  }
+
+  case DICT_LINEAR: {
+    /* Not verified!  Added for completeness.  This routine was
+     * only originally needed for hashed dictionaries.
+     */
+    int i;
+    int nsyms = DICT_LINEAR_NSYMS(old_dict);
+
+    /* Create a new expandable dictionary */
+    new_dict = dict_create_linear_expandable();
+
+    /* Copy all the symbols from the old dictionary to the new one */
+    for (i = 0; i < nsyms; i++) {
+      add_symbol_linear_expandable(new_dict,
+				   DICT_LINEAR_SYM(old_dict, i));
+    }
+    dict_free(old_dict);
+    break;
+  }
+
+  default:
+    printf_filtered("Unknown kind of dictionary %d\n", dtype);
+    break;
+  }
+  return new_dict;
+}

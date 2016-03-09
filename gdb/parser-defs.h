@@ -122,6 +122,9 @@ enum type_pieces
     tp_function_with_arguments,
     tp_const, 
     tp_volatile, 
+    tp_shared, 
+    tp_strict, 
+    tp_relaxed, 
     tp_space_identifier,
     tp_type_stack
   };

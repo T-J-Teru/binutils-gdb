@@ -1848,10 +1848,21 @@ evaluate_subexp_standard (struct type *expect_type,
       if (noside == EVAL_SKIP)
 	goto nosideret;
       if (noside == EVAL_AVOID_SIDE_EFFECTS)
-	return value_zero (lookup_struct_elt_type (value_type (arg1),
-						   &exp->elts[pc + 2].string,
-						   0),
-			   lval_memory);
+        {
+	  struct type *arg1_type = value_type (arg1);
+          struct type_quals arg_quals = TYPE_QUALS (arg1_type);
+          struct type *type = lookup_struct_elt_type (arg1_type,
+	                                   &exp->elts[pc + 2].string, 0);
+	  struct type_quals field_quals = TYPE_QUALS (type);
+	  /* If the containing type is qualified, then propagate
+	     the qualifiers to the selected field value.  */
+	  if (!TYPE_QUALS_EQ (field_quals, arg_quals))
+	    {
+	      field_quals = merge_type_quals (field_quals, arg_quals);
+	      type = make_qual_variant_type (field_quals, type, NULL);
+	    }
+	  return value_zero (type, lval_memory);
+        }
       else
 	{
 	  struct value *temp = arg1;
@@ -1909,10 +1920,21 @@ evaluate_subexp_standard (struct type *expect_type,
       }
 
       if (noside == EVAL_AVOID_SIDE_EFFECTS)
-	return value_zero (lookup_struct_elt_type (value_type (arg1),
-						   &exp->elts[pc + 2].string,
-						   0),
-			   lval_memory);
+        {
+	  struct type *arg1_type = value_type (arg1);
+          struct type_quals arg_quals = TYPE_QUALS (arg1_type);
+          struct type *type = lookup_struct_elt_type (arg1_type,
+	                                   &exp->elts[pc + 2].string, 0);
+	  struct type_quals field_quals = TYPE_QUALS (type);
+	  /* If the containing type is qualified, then propagate
+	     the qualifiers to the selected field value.  */
+	  if (!TYPE_QUALS_EQ (field_quals, arg_quals))
+	    {
+	      field_quals = merge_type_quals(field_quals, arg_quals);
+	      type = make_qual_variant_type (field_quals, type, NULL);
+	    }
+	  return value_zero (type, lval_memory);
+        }
       else
 	{
 	  struct value *temp = arg1;

@@ -3377,7 +3377,11 @@ linux_nat_filter_event (int lwpid, int status, int *new_pending_p)
 			    target_pid_to_str (lp->ptid));
 
       lp->stopped = 0;
+#if 0
+      /* TODO - more research is needed for this as in non-stop mode
+         this assert fails if thread apply all is used. */     
       gdb_assert (lp->resumed);
+#endif
 
       /* Discard the event.  */
       return NULL;

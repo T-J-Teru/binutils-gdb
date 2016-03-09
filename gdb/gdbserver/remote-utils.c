@@ -397,6 +397,11 @@ remote_open (char *name)
 
       /* Register the event loop handler.  */
       add_file_handler (listen_desc, handle_accept_event, NULL);
+
+#ifdef GUM_ENABLE_NOACK
+      /* For GUM we disable NOACK gdbserver feature */
+      transport_is_reliable = 1;
+#endif
     }
 }
 

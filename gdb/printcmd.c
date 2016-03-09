@@ -1351,7 +1351,6 @@ address_info (char *exp, int from_tty)
 	  {
 	    section = SYMBOL_OBJ_SECTION (msym);
 	    load_addr = SYMBOL_VALUE_ADDRESS (msym);
-
 	    if (section
 		&& (section->the_bfd_section->flags & SEC_THREAD_LOCAL) != 0)
 	      printf_filtered (_("a thread-local variable at offset %s "

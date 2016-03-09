@@ -143,7 +143,10 @@ static void remote_interrupt_twice (int signo);
 
 static void interrupt_query (void);
 
+static void remote_switch_thread (struct ptid ptid);
+
 static void set_general_thread (struct ptid ptid);
+
 static void set_continue_thread (struct ptid ptid);
 
 static void get_offsets (void);
@@ -1827,6 +1830,15 @@ remote_thread_alive (struct target_ops *ops, ptid_t ptid)
   putpkt (rs->buf);
   getpkt (&rs->buf, &rs->buf_size, 0);
   return (rs->buf[0] == 'O' && rs->buf[1] == 'K');
+}
+
+/* UPC-GUM - Temporary switch thread on the target so memory 
+   read goes to the right processor. */
+
+static void
+remote_switch_thread (ptid_t ptid)
+{
+  set_thread (ptid, 1);
 }
 
 /* About these extended threadlist and threadinfo packets.  They are
@@ -11360,6 +11372,7 @@ Specify the serial device it is connected to\n\
   remote_ops.to_pass_signals = remote_pass_signals;
   remote_ops.to_program_signals = remote_program_signals;
   remote_ops.to_thread_alive = remote_thread_alive;
+  remote_ops.to_thread_switch = remote_switch_thread;
   remote_ops.to_find_new_threads = remote_threads_info;
   remote_ops.to_pid_to_str = remote_pid_to_str;
   remote_ops.to_extra_thread_info = remote_threads_extra_info;
