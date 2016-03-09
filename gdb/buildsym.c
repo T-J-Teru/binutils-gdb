@@ -215,16 +215,37 @@ htab_alloc_ptr(size_t t1, size_t t2)
   return xcalloc(t1, t2);
 }
 
+static char *subfile_fullname (const struct subfile *subfile)
+{
+  if (!IS_ABSOLUTE_PATH (subfile->name) && subfile->dirname != NULL)
+    return concat (subfile->dirname, SLASH_STRING, subfile->name, (char *)NULL);
+  else
+    return xstrdup (subfile->name);
+}
+
 static int
 htab_eq_subfile(const void* s, const void* t)
 {
-  return !strcmp(((const struct subfile*) s)->name, ((const struct subfile*) t)->name);
+  char *fullname1 = subfile_fullname ((const struct subfile *) s);
+  char *fullname2 = subfile_fullname ((const struct subfile *) t);
+  int ret;
+  simplify_path (fullname1);
+  simplify_path (fullname2);
+  ret = !strcmp (fullname1, fullname2);
+  xfree (fullname1);
+  xfree (fullname2);
+  return ret;
 }
 
 static hashval_t
 htab_hash_subfile(const void *p)
 {
-  return htab_hash_string(((const struct subfile*) p)->name);
+  char *fullname = subfile_fullname ((const struct subfile *) p);
+  hashval_t ret;
+  simplify_path (fullname);
+  ret = htab_hash_string (fullname);
+  xfree (fullname);
+  return ret;
 }
 
 /* Initial sizes of data structures.  These are realloc'd larger if
