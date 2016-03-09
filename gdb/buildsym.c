@@ -165,15 +165,6 @@ static int pending_addrmap_interesting;
 
 static struct obstack pending_block_obstack;
 
-/* List of blocks already made (lexical contexts already closed).
-   This is used at the end to make the blockvector.  */
-
-struct pending_block
-  {
-    struct pending_block *next;
-    struct block *block;
-  };
-
 /* Pointer to the head of a linked list of symbol blocks which have
    already been finalized (lexical contexts already closed) and which
    are just waiting to be built into a blockvector when finalizing the
@@ -650,7 +641,7 @@ make_blockvector (void)
 }
 
 
-struct subfile *find_subfile (const char *fullname)
+struct subfile *find_subfile (const char *name, const char *dirname)
 {
   struct subfile *subfile;
   char *abs_name;
