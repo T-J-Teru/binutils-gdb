@@ -2748,6 +2748,24 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal)
      correctly when the inferior is stopped.  */
   tp->prev_pc = regcache_read_pc (get_current_regcache ());
 
+  /* Fill in with reasonable starting values.  */
+  init_thread_stepping_state (tp);
+
+  /* Reset to normal state.  */
+  init_infwait_state ();
+
+  /* APB: While merging 34e1b76675ee339ca3bd19f8bf615b77e9091e12 the
+     following line was added, not sure if this is still the right place
+     for this code though.  */
+  abort ();
+
+  /* Set SIGINT handler to note_signal so SIGINT signals from this point
+     on are not lost.  If the target wants to pass SIGINT to the inferior
+     directly it should call set_sigint_trap.
+     Note: remote.c does its own SIGINT handling but relies on sigint_pending
+     being updated by note_signal.  */
+  set_sigint_pending_trap ();
+
   /* Resume inferior.  */
   resume (tp->suspend.stop_signal);
 
@@ -2760,6 +2778,8 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal)
       wait_for_inferior ();
       normal_stop ();
     }
+
+  reset_sigint_pending ();
 }
 
 
