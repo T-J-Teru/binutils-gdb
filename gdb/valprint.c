@@ -793,7 +793,10 @@ val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 
   if (!scalar_type_p (type) && recurse >= options->max_depth)
     {
-      fputs_filtered ("{...}", stream);
+	  if (language->la_language == language_fortran)
+		fputs_filtered ("(...)", stream);
+	  else
+		fputs_filtered ("{...}", stream);
       return;
     }
 
