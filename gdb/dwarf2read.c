@@ -14095,7 +14095,7 @@ read_partial_die (const struct die_reader_specs *reader,
     }
 
   if (has_program_calling_convention)
-    set_main_name (part_die->name);
+    set_main_name (part_die->linkage_name ? part_die->linkage_name : part_die->name);
 
   if (high_pc_relative)
     part_die->highpc += part_die->lowpc;
@@ -16213,7 +16213,8 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
             case DW_CC_program:
               /* Set this subroutine as the "main" subroutine
                  for the program. */
-              set_main_name (name);
+              attr2 = dwarf2_attr (die, DW_AT_MIPS_linkage_name, cu);
+              set_main_name (attr2 ? DW_STRING (attr2) : name);
               break;
             case DW_CC_normal:
             case DW_CC_nocall:
