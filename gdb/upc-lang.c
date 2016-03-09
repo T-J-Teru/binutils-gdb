@@ -38,6 +38,7 @@
 #include "uda-types-client.h"
 #include "uda-client.h"
 #include "uda-defs.h"
+#include "upc-thread.h"
 
 #define UDA_SERVICE "/tmp/uda_service"
 
@@ -425,29 +426,26 @@ upc_lang_init (char *cmd, int from_tty)
   int is_big_endian = gdbarch_byte_order (arch) == BFD_ENDIAN_BIG;
   uda_tword_t num_threads = 0;
   ptid_t  current_ptid = inferior_ptid;
-  struct symbol *threads_sym;
-  struct value *threads_val;
-  int status;
+  int status, mythread = -1;
   char *uda_service;
   char *uda_path;
 
-  /* UPC program? */
-  threads_sym = lookup_symbol ("THREADS", 0, VAR_DOMAIN, NULL);
-  if (threads_sym)
-    {
-      threads_val = read_var_value (threads_sym, NULL);
-      if (threads_val)
-	num_threads = value_as_long (threads_val);
-    }
-  else
-    {
-      error (_("upc_lang_init: Can't find THREADS variable. Is this a UPC program?"));
-      return;
-    }
+  num_threads = upc_thread_count ();
+    
   /* UPC program initialized? */
   if (num_threads <= 0)
     error (_("upc_lang_init: Can't find value of THREADS. Is UPC program initialized?"));
 
+  if (upcsingle)
+    {
+      mythread = upc_read_thread_sym ("MYTHREAD");
+      if (mythread == -1)
+	{
+	  error (_("upc_lang_init: Can't find MYTHREAD variable. Is this a UPC program?"));
+	  return;	  
+	}
+    }
+  
   /* Select UDA plugin you wish to use. By default try to
    * connect to UDA server. */
 
@@ -485,6 +483,12 @@ upc_lang_init (char *cmd, int from_tty)
   status = (*uda_calls.uda_set_num_threads) (num_threads);
   if (status != uda_ok)
     error (_("upc_lang_init: uda_set_num_threads() failed."));
+  if (upcsingle)
+    {
+      status = (*uda_calls.uda_set_thread_num) (mythread);
+      if (status != uda_ok)
+	error (_("upc_lang_init: uda_set_thread_num() failed."));
+    }
   if (from_tty)
     printf_filtered("upc_lang_init: done.\n");
   upc_lang_initialized = 1;
