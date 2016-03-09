@@ -104,7 +104,11 @@ enum
   uda_relocation_failed,
   uda_target_sizes_already_set,
   uda_first_assistant_code = 1000,
-  uda_first_debugger_code = 2000
+  uda_first_debugger_code = 2000,
+  uda_incompatible_version = 3000,
+  uda_init_already_done = 3001,
+  uda_thread_busy = 3002,
+  uda_need_init_first = 3003
 };
 
 #define uda_error_belongs_to_assistant(code) \
