@@ -123,6 +123,8 @@ struct language_arch_info
   const char *bool_type_symbol;
   /* Otherwise, this is the default boolean builtin type.  */
   struct type *bool_type_default;
+  /* Cached boolean type.  */
+  struct type *bool_type;  
 };
 
 /* A pointer to a function expected to return nonzero if
