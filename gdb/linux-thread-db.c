@@ -1736,6 +1736,8 @@ thread_db_find_new_threads (struct target_ops *ops)
 		       update_thread_core, NULL);
 }
 
+extern int print_task_groups;
+
 static char *
 thread_db_pid_to_str (struct target_ops *ops, ptid_t ptid)
 {
@@ -1748,8 +1750,12 @@ thread_db_pid_to_str (struct target_ops *ops, ptid_t ptid)
       thread_t tid;
 
       tid = thread_info->private->tid;
-      snprintf (buf, sizeof (buf), "Thread 0x%lx (LWP %ld)",
-		tid, GET_LWP (ptid));
+      if (print_task_groups)
+	snprintf (buf, sizeof (buf), "Thread 0x%lx (LWP %d.%ld)",
+		  tid, ptid_get_pid (ptid), GET_LWP (ptid));
+      else
+	snprintf (buf, sizeof (buf), "Thread 0x%lx (LWP %ld)",
+		  tid, GET_LWP (ptid));
 
       return buf;
     }

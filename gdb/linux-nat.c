@@ -218,6 +218,17 @@ show_debug_linux_nat (struct ui_file *file, int from_tty,
 		    value);
 }
 
+int print_task_groups = 0;
+
+static void
+show_print_task_groups (struct ui_file *file, int from_tty,
+		       struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("\
+Printing of Linux LWP task groups in thread identifiers %s.\n"),
+		    value);
+}
+
 struct simple_pid_list
 {
   int pid;
@@ -4298,7 +4309,11 @@ linux_nat_pid_to_str (struct target_ops *ops, ptid_t ptid)
       && (GET_PID (ptid) != GET_LWP (ptid)
 	  || num_lwps (GET_PID (ptid)) > 1))
     {
-      snprintf (buf, sizeof (buf), "LWP %ld", GET_LWP (ptid));
+      if (print_task_groups)
+	snprintf (buf, sizeof (buf), "LWP %d.%ld", ptid_get_pid (ptid),
+		  GET_LWP (ptid));
+      else
+	snprintf (buf, sizeof (buf), "LWP %ld", GET_LWP (ptid));
       return buf;
     }
 
@@ -5294,6 +5309,14 @@ Enables printf debugging output."),
   sigdelset (&suspend_mask, SIGINT);
  
   sigemptyset (&blocked_mask);
+
+  add_setshow_boolean_cmd ("lin-lwp-task-groups", no_class,
+         &print_task_groups, _("\
+Set printing of Linux LWP task groups."), _("\
+Show printing of Linux LWP task groups."), NULL,
+         NULL,
+         show_print_task_groups,
+         &setprintlist, &showprintlist);
 }
 
 
