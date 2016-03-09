@@ -18096,7 +18096,28 @@ dwarf2_name (struct die_info *die, struct dwarf2_cu *cu)
       && die->tag != DW_TAG_interface_type
       && die->tag != DW_TAG_structure_type
       && die->tag != DW_TAG_union_type)
-    return NULL;
+    {
+      /* Compiler support for some features such as OpenMP generates unnamed artificial
+       * subprograms. If GDB does not have an internal name for them, their local variables
+       * etc. will be invisible to GDB.
+       */
+      if ((die->tag == DW_TAG_subprogram) && dwarf2_attr (die, DW_AT_artificial, cu))
+      {
+          /* Look up the name used by the linker for the artificial subprogram to use
+           * internally.
+           */
+          CORE_ADDR lowpc, highpc;
+          if (dwarf2_get_pc_bounds (die, &lowpc, &highpc, cu, NULL))
+          {
+              struct minimal_symbol* minsym = lookup_minimal_symbol_by_pc (lowpc);
+              if (minsym)
+              {
+                  return SYMBOL_LINKAGE_NAME(minsym);
+              }
+          }
+      }
+      return NULL;
+    }
 
   switch (die->tag)
     {
