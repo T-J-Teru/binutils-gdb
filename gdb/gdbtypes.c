@@ -39,6 +39,7 @@
 #include "hashtab.h"
 #include "exceptions.h"
 #include "upc-thread.h"
+#include "exceptions.h"
 
 /* Initialize BADNESS constants.  */
 
@@ -403,14 +404,15 @@ make_reference_type (struct type *type, struct type **typeptr)
   TYPE_REFERENCE_TYPE (type) = ntype;
 
   if (upc_shared_type_p (type))
-    {
+    {      
+      unsigned len = 0;
       if (!currently_reading_symtab)
-        TYPE_LENGTH (ntype) = upc_pts_len (type);
-      else
-        /* FIXME! the default size calculation below, will
-           not work for all targets, or PTS formats.  */
-        TYPE_LENGTH (ntype) = 2 * gdbarch_ptr_bit (get_type_arch(type))
-	                            / TARGET_CHAR_BIT;
+	{
+	  volatile struct gdb_exception e;
+	  TRY_CATCH (e, RETURN_MASK_ALL)
+	    len = upc_pts_len (type);
+	}
+      TYPE_LENGTH (ntype) = len;
     }
   else
     {
@@ -1716,6 +1718,19 @@ check_typedef (struct type *type)
 	  else
 	    type = SYMBOL_TYPE (sym);
         }
+    }
+    
+  if (TYPE_CODE (type) == TYPE_CODE_PTR
+      && TYPE_LENGTH (type) == 0
+      && !currently_reading_symtab)
+    {
+      struct type *elttype = check_typedef (TYPE_TARGET_TYPE (type));
+      if (upc_shared_type_p (elttype))
+	{
+	  volatile struct gdb_exception e;
+	  TRY_CATCH (e, RETURN_MASK_ALL)
+	    TYPE_LENGTH (type) = upc_pts_len (elttype);
+	}
     }
 
   if (TYPE_TARGET_STUB (type))

@@ -257,7 +257,7 @@ upc_value_from_pts (struct type *ptrtype, gdb_upc_pts_t pts)
   struct type *tt = check_typedef (TYPE_TARGET_TYPE (ptrtype));
   const ULONGEST block_size = upc_blocksizeof (tt);
   const ULONGEST elem_size = upc_elemsizeof (tt);
-  const ULONGEST ptrtype_len = TYPE_LENGTH (ptrtype);
+  const ULONGEST ptrtype_len = TYPE_LENGTH (check_typedef (ptrtype));
   uda_tword_t packed_pts_len;
   uda_target_pts_t packed_pts;
   struct value *val;
@@ -457,6 +457,8 @@ upc_pts_len (struct type *target_type)
   const ULONGEST block_size = upc_blocksizeof (tt);
   uda_tword_t pts_len;
   CHECK_TYPEDEF (tt);
+  if (!uda_calls.uda_length_of_pts)
+    error (_("UPC language support is not initialised"));
   status = (*uda_calls.uda_length_of_pts) (block_size, &pts_len);
   if (status != uda_ok)
     error (_("upc_pts_len: uda_length_of_pts error"));
