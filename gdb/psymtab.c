@@ -166,6 +166,7 @@ psym_map_symtabs_matching_filename (struct objfile *objfile,
 {
   struct partial_symtab *pst;
   const char *name_basename = lbasename (name);
+  int found = 0;
 
   ALL_OBJFILE_PSYMTABS_REQUIRED (objfile, pst)
   {
@@ -182,7 +183,7 @@ psym_map_symtabs_matching_filename (struct objfile *objfile,
       {
 	if (partial_map_expand_apply (objfile, name, real_path,
 				      pst, callback, data))
-	  return 1;
+	  found = 1;
 	continue;
       }
 
@@ -196,7 +197,7 @@ psym_map_symtabs_matching_filename (struct objfile *objfile,
       {
 	if (partial_map_expand_apply (objfile, name, real_path,
 				      pst, callback, data))
-	  return 1;
+	  found = 1;
 	continue;
       }
 
@@ -210,13 +211,13 @@ psym_map_symtabs_matching_filename (struct objfile *objfile,
 	  {
 	    if (partial_map_expand_apply (objfile, name, real_path,
 					  pst, callback, data))
-	      return 1;
+	      found = 1;
 	    continue;
 	  }
       }
   }
 
-  return 0;
+  return found;
 }
 
 /* Find which partial symtab contains PC and SECTION starting at psymtab PST.
