@@ -117,7 +117,7 @@ static void create_sals_from_address_default (char **,
 static void create_breakpoints_sal_default (struct gdbarch *,
 					    struct linespec_result *,
 					    char *, char *, enum bptype,
-					    enum bpdisp, int, int,
+					    enum bpdisp, int, int, int,
 					    int,
 					    const struct breakpoint_ops *,
 					    int, int, int, unsigned);
@@ -3094,6 +3094,10 @@ update_inserted_breakpoint_locations (void)
       if (!is_breakpoint (bl->owner))
 	continue;
 
+      if (bl->owner->infnum
+	  && !valid_gdb_inferior_id (bl->owner->infnum))
+	continue;
+
       /* We only want to update locations that are already inserted
 	 and need updating.  This is to avoid unwanted insertion during
 	 deletion of breakpoints.  */
@@ -4418,6 +4422,74 @@ hardware_watchpoint_inserted_in_range (struct address_space *aspace,
     }
   return 0;
 }
+
+/* breakpoint_thread_match (PC, PTID) returns true if the breakpoint at
+   PC is valid for process/thread PTID.  */
+
+int
+breakpoint_thread_match (struct address_space *aspace, CORE_ADDR pc,
+			 ptid_t ptid)
+{
+  struct bp_location *bl, **blp_tmp;
+  /* The thread and task IDs associated to PTID, computed lazily.  */
+  int thread = -1;
+  int task = 0;
+  int infnum = 0;
+  
+  ALL_BP_LOCATIONS (bl, blp_tmp)
+    {
+      if (bl->loc_type != bp_loc_software_breakpoint
+	  && bl->loc_type != bp_loc_hardware_breakpoint)
+	continue;
+
+      /* ALL_BP_LOCATIONS bp_location has bl->OWNER always non-NULL.  */
+      if (!breakpoint_enabled (bl->owner)
+	  && bl->owner->enable_state != bp_permanent)
+	continue;
+
+      if (!breakpoint_location_address_match (bl, aspace, pc))
+	continue;
+
+      if (bl->owner->thread != -1)
+	{
+	  /* This is a thread-specific breakpoint.  Check that ptid
+	     matches that thread.  If thread hasn't been computed yet,
+	     it is now time to do so.  */
+	  if (thread == -1)
+	    thread = pid_to_thread_id (ptid);
+	  if (bl->owner->thread != thread)
+	    continue;
+	}
+
+      if (bl->owner->task != 0)
+        {
+	  /* This is a task-specific breakpoint.  Check that ptid
+	     matches that task.  If task hasn't been computed yet,
+	     it is now time to do so.  */
+	  if (task == 0)
+	    task = ada_get_task_number (ptid);
+	  if (bl->owner->task != task)
+	    continue;
+        }
+
+      if (bl->owner->infnum != 0)
+        {
+	  if (infnum == 0)
+	    infnum = pid_to_gdb_inferior_id (ptid_get_pid (ptid));
+	  if (bl->owner->infnum != infnum)
+	    continue;
+        }
+
+      if (overlay_debugging 
+	  && section_is_overlay (bl->section)
+	  && !section_is_mapped (bl->section))
+	continue;	    /* unmapped overlay -- can't be a match */
+
+      return 1;
+    }
+
+  return 0;
+}
 
 
 /* bpstat stuff.  External routines' interfaces are documented
@@ -5398,6 +5470,7 @@ bpstat_check_watchpoint (bpstat bs)
 static void
 bpstat_check_breakpoint_conditions (bpstat bs, ptid_t ptid)
 {
+  int infnum = pid_to_gdb_inferior_id (ptid_get_pid (ptid));
   const struct bp_location *bl;
   struct breakpoint *b;
   int value_is_zero = 0;
@@ -5513,10 +5586,21 @@ bpstat_check_breakpoint_conditions (bpstat bs, ptid_t ptid)
       value_free_to_mark (mark);
     }
 
+  /* APB: While merging 489b0d8b8523f398bf8e93ffa472f960cf3b51b0 the second
+     else block here appeared.  I don't know if this is still correct or
+     not.  */
+  abort ();
+
   if (cond && value_is_zero)
     {
       bs->stop = 0;
     }
+#if 0
+  else if (b->infnum && b->infnum != infnum)
+    {
+      bs->stop = 0;
+    }
+#endif
   else if (b->ignore_count > 0)
     {
       b->ignore_count--;
@@ -6466,6 +6550,12 @@ print_one_breakpoint_location (struct breakpoint *b,
 	  ui_out_text (uiout, " task ");
 	  ui_out_field_int (uiout, "task", b->task);
 	}
+      else if (b->infnum != 0)
+	{
+	  /* FIXME should make an annotation for this */
+	  ui_out_text (uiout, "\tstop only in inferior ");
+	  ui_out_field_int (uiout, "infnum", b->infnum);
+	}
     }
 
   ui_out_text (uiout, "\n");
@@ -7007,6 +7097,8 @@ describe_other_breakpoints (struct gdbarch *gdbarch,
 	      printf_filtered (" (all threads)");
 	    else if (b->thread != -1)
 	      printf_filtered (" (thread %d)", b->thread);
+	    else if (b->infnum != -1)
+	      printf_filtered (" (inf %d)", b->infnum);
 	    printf_filtered ("%s%s ",
 			     ((b->enable_state == bp_disabled
 			       || b->enable_state == bp_call_disabled)
@@ -9182,7 +9274,7 @@ init_breakpoint_sal (struct breakpoint *b, struct gdbarch *gdbarch,
 		     char *filter, char *cond_string,
 		     char *extra_string,
 		     enum bptype type, enum bpdisp disposition,
-		     int thread, int task, int ignore_count,
+		     int thread, int task, int infnum, int ignore_count,
 		     const struct breakpoint_ops *ops, int from_tty,
 		     int enabled, int internal, unsigned flags,
 		     int display_canonical)
@@ -9225,6 +9317,7 @@ init_breakpoint_sal (struct breakpoint *b, struct gdbarch *gdbarch,
 	  init_raw_breakpoint (b, gdbarch, sal, type, ops);
 	  b->thread = thread;
 	  b->task = task;
+	  b->infnum = infnum;
 
 	  b->cond_string = cond_string;
 	  b->extra_string = extra_string;
@@ -9322,7 +9415,7 @@ create_breakpoint_sal (struct gdbarch *gdbarch,
 		       char *filter, char *cond_string,
 		       char *extra_string,
 		       enum bptype type, enum bpdisp disposition,
-		       int thread, int task, int ignore_count,
+		       int thread, int task, int infnum, int ignore_count,
 		       const struct breakpoint_ops *ops, int from_tty,
 		       int enabled, int internal, unsigned flags,
 		       int display_canonical)
@@ -9346,7 +9439,7 @@ create_breakpoint_sal (struct gdbarch *gdbarch,
 		       sals, addr_string,
 		       filter, cond_string, extra_string,
 		       type, disposition,
-		       thread, task, ignore_count,
+		       thread, task, infnum, ignore_count,
 		       ops, from_tty,
 		       enabled, internal, flags,
 		       display_canonical);
@@ -9375,7 +9468,7 @@ create_breakpoints_sal (struct gdbarch *gdbarch,
 			struct linespec_result *canonical,
 			char *cond_string, char *extra_string,
 			enum bptype type, enum bpdisp disposition,
-			int thread, int task, int ignore_count,
+			int thread, int task, int infnum, int ignore_count,
 			const struct breakpoint_ops *ops, int from_tty,
 			int enabled, int internal, unsigned flags)
 {
@@ -9401,7 +9494,7 @@ create_breakpoints_sal (struct gdbarch *gdbarch,
 			     filter_string,
 			     cond_string, extra_string,
 			     type, disposition,
-			     thread, task, ignore_count, ops,
+			     thread, task, infnum, ignore_count, ops,
 			     from_tty, enabled, internal, flags,
 			     canonical->special_display);
       discard_cleanups (inner);
@@ -9557,11 +9650,12 @@ invalid_thread_id_error (int id)
 static void
 find_condition_and_thread (const char *tok, CORE_ADDR pc,
 			   char **cond_string, int *thread, int *task,
-			   char **rest)
+			   int *infnum, char **rest)
 {
   *cond_string = NULL;
   *thread = -1;
   *task = 0;
+  *infnum = 0;
   *rest = NULL;
 
   while (tok && *tok)
@@ -9620,6 +9714,17 @@ find_condition_and_thread (const char *tok, CORE_ADDR pc,
 	  if (!valid_task_id (*task))
 	    error (_("Unknown task %d."), *task);
 	  tok = tmptok;
+	}
+      else if (toklen >= 1 && strncmp (tok, "inf", toklen) == 0)
+	{
+	  char *tmptok;
+
+	  tok = end_tok + 1;
+	  *infnum = strtol (tok, &tmptok, 0);
+	  if (tok == tmptok)
+	    error (_("Junk after inf keyword."));
+	  if (!valid_gdb_inferior_id (*infnum))
+	    error (_("Unknown inferior %d."), *infnum);
 	}
       else if (rest)
 	{
@@ -9708,7 +9813,9 @@ create_breakpoint (struct gdbarch *gdbarch,
   struct cleanup *bkpt_chain = NULL;
   int pending = 0;
   int task = 0;
+  int infnum = 0;
   int prev_bkpt_count = breakpoint_count;
+  struct program_space *pspace = current_program_space; 
 
   gdb_assert (ops != NULL);
 
@@ -9812,7 +9919,7 @@ create_breakpoint (struct gdbarch *gdbarch,
 	     re-parse it in context of each sal.  */
 
 	  find_condition_and_thread (arg, lsal->sals.sals[0].pc, &cond_string,
-				     &thread, &task, &rest);
+				     &thread, &task, &infnum, &rest);
 	  if (cond_string)
 	    make_cleanup (xfree, cond_string);
 	  if (rest)
@@ -9842,7 +9949,7 @@ create_breakpoint (struct gdbarch *gdbarch,
       ops->create_breakpoints_sal (gdbarch, &canonical,
 				   cond_string, extra_string, type_wanted,
 				   tempflag ? disp_del : disp_donttouch,
-				   thread, task, ignore_count, ops,
+				   thread, task, infnum, ignore_count, ops,
 				   from_tty, enabled, internal, flags);
     }
   else
@@ -12839,7 +12946,8 @@ base_breakpoint_create_breakpoints_sal (struct gdbarch *gdbarch,
 					enum bptype type_wanted,
 					enum bpdisp disposition,
 					int thread,
-					int task, int ignore_count,
+					int task,
+					int infnum, int ignore_count,
 					const struct breakpoint_ops *o,
 					int from_tty, int enabled,
 					int internal, unsigned flags)
@@ -13075,7 +13183,8 @@ bkpt_create_breakpoints_sal (struct gdbarch *gdbarch,
 			     enum bptype type_wanted,
 			     enum bpdisp disposition,
 			     int thread,
-			     int task, int ignore_count,
+			     int task,
+			     int infnum, int ignore_count,
 			     const struct breakpoint_ops *ops,
 			     int from_tty, int enabled,
 			     int internal, unsigned flags)
@@ -13084,6 +13193,7 @@ bkpt_create_breakpoints_sal (struct gdbarch *gdbarch,
 				  cond_string, extra_string,
 				  type_wanted,
 				  disposition, thread, task,
+				  infnum,
 				  ignore_count, ops, from_tty,
 				  enabled, internal, flags);
 }
@@ -13418,7 +13528,9 @@ tracepoint_create_breakpoints_sal (struct gdbarch *gdbarch,
 				   enum bptype type_wanted,
 				   enum bpdisp disposition,
 				   int thread,
-				   int task, int ignore_count,
+				   int task,
+				   int infnum,
+				   int ignore_count,
 				   const struct breakpoint_ops *ops,
 				   int from_tty, int enabled,
 				   int internal, unsigned flags)
@@ -13427,6 +13539,7 @@ tracepoint_create_breakpoints_sal (struct gdbarch *gdbarch,
 				  cond_string, extra_string,
 				  type_wanted,
 				  disposition, thread, task,
+				  infnum,
 				  ignore_count, ops, from_tty,
 				  enabled, internal, flags);
 }
@@ -13569,7 +13682,8 @@ strace_marker_create_breakpoints_sal (struct gdbarch *gdbarch,
 				      enum bptype type_wanted,
 				      enum bpdisp disposition,
 				      int thread,
-				      int task, int ignore_count,
+				      int task,
+				      int infnum, int ignore_count,
 				      const struct breakpoint_ops *ops,
 				      int from_tty, int enabled,
 				      int internal, unsigned flags)
@@ -13603,7 +13717,7 @@ strace_marker_create_breakpoints_sal (struct gdbarch *gdbarch,
 			   addr_string, NULL,
 			   cond_string, extra_string,
 			   type_wanted, disposition,
-			   thread, task, ignore_count, ops,
+			   thread, task, infnum, ignore_count, ops,
 			   from_tty, enabled, internal, flags,
 			   canonical->special_display);
       /* Given that its possible to have multiple markers with
@@ -14216,24 +14330,31 @@ addr_string_to_sals (struct breakpoint *b, char *addr_string, int *found)
   if (exception.reason == 0 || exception.error != NOT_FOUND_ERROR)
     {
       int i;
+      int set_breakpoint_pspace = 0;
 
       for (i = 0; i < sals.nelts; ++i)
 	resolve_sal_pc (&sals.sals[i]);
       if (b->condition_not_parsed && s && s[0])
 	{
 	  char *cond_string, *extra_string;
-	  int thread, task;
+	  int thread, task, infnum;
+	  struct inferior *inferior;
 
 	  find_condition_and_thread (s, sals.sals[0].pc,
-				     &cond_string, &thread, &task,
+				     &cond_string, &thread, &task, &infnum,
 				     &extra_string);
 	  if (cond_string)
 	    b->cond_string = cond_string;
 	  b->thread = thread;
 	  b->task = task;
+	  b->infnum = infnum;
 	  if (extra_string)
 	    b->extra_string = extra_string;
 	  b->condition_not_parsed = 0;
+	  inferior = find_inferior_id (b->infnum);
+	  if (!inferior)
+	    error (_("Inferior ID %d not known."), b->infnum);
+	  b->loc->pspace = inferior->pspace;
 	}
 
       if (b->type == bp_static_tracepoint && !strace_marker_p (b))
@@ -14303,7 +14424,8 @@ create_breakpoints_sal_default (struct gdbarch *gdbarch,
 				enum bptype type_wanted,
 				enum bpdisp disposition,
 				int thread,
-				int task, int ignore_count,
+				int task,
+				int infnum, int ignore_count,
 				const struct breakpoint_ops *ops,
 				int from_tty, int enabled,
 				int internal, unsigned flags)
@@ -14311,7 +14433,7 @@ create_breakpoints_sal_default (struct gdbarch *gdbarch,
   create_breakpoints_sal (gdbarch, canonical, cond_string,
 			  extra_string,
 			  type_wanted, disposition,
-			  thread, task, ignore_count, ops, from_tty,
+			  thread, task, infnum, ignore_count, ops, from_tty,
 			  enabled, internal, flags);
 }
 
@@ -15437,6 +15559,9 @@ print_recreate_thread (struct breakpoint *b, struct ui_file *fp)
   if (b->task != 0)
     fprintf_unfiltered (fp, " task %d", b->task);
 
+  if (b->infnum != 0)
+     fprintf_unfiltered (fp, " inf %d", b->infnum);
+ 
   fprintf_unfiltered (fp, "\n");
 }
 

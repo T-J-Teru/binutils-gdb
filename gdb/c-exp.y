@@ -2848,7 +2848,8 @@ lex_one_token (struct parser_state *par_state, int *is_quoted_name)
      similarly to breakpoint.c:find_condition_and_thread.  */
   if (namelen >= 1
       && (strncmp (tokstart, "thread", namelen) == 0
-	  || strncmp (tokstart, "task", namelen) == 0)
+	  || strncmp (tokstart, "task", namelen) == 0
+	  || strncmp (tokstart, "inf", namelen) == 0)
       && (tokstart[namelen] == ' ' || tokstart[namelen] == '\t')
       && ! scanning_macro_expansion ())
     {
