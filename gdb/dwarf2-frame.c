@@ -292,6 +292,9 @@ read_reg (void *baton, int reg)
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   int regnum;
   gdb_byte *buf;
+  struct type *type;
+  CORE_ADDR ret;
+  unsigned int old_sign;
 
   regnum = gdbarch_dwarf2_reg_to_regnum (gdbarch, reg);
 
@@ -303,7 +306,13 @@ read_reg (void *baton, int reg)
      under the covers, and this makes more sense for non-pointer
      registers.  Maybe read_reg and the associated interfaces should
      deal with "struct value" instead of CORE_ADDR.  */
-  return unpack_long (register_type (gdbarch, regnum), buf);
+  /* Force register type to be unsigned. */
+  type = register_type (gdbarch, regnum);
+  old_sign = TYPE_UNSIGNED (type);
+  TYPE_UNSIGNED (type) = 1;
+  ret = unpack_long (type, buf);
+  TYPE_UNSIGNED (type) = old_sign;
+  return ret;
 }
 
 static void
