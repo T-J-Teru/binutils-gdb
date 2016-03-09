@@ -1831,6 +1831,15 @@ skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc, CORE_ADDR lim_pc,
 
 	  /* Another way to set up the frame pointer.  */
 	}
+      else if (op == 0x603d0000	/* oril r29, r1, 0x0 */)
+	{			
+	  fdata->frameless = 0;
+	  framep = 1;
+	  fdata->alloca_reg = (tdep->ppc_gp0_regnum + 29);
+	  continue;
+
+	  /* Another way to set up the frame pointer.  */
+	}
       else if (op == 0x603e0000	/* oril r30, r1, 0x0 */)
 	{			
 	  fdata->frameless = 0;
