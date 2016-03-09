@@ -43,6 +43,8 @@
 #include "demangle.h"
 #include "symfile.h"
 #include "cp-support.h"
+#include "objfiles.h"
+#include "observer.h"
 
 extern void _initialize_language (void);
 
@@ -935,6 +937,26 @@ struct language_gdbarch
   struct language_arch_info arch_info[nr_languages];
 };
 
+static void
+language_gdbarch_new_objfile (struct objfile *objfile)
+{
+  struct gdbarch *gdbarch;
+  struct language_gdbarch *ld;
+  int i;
+
+  if (!objfile)
+    return;
+  gdbarch = get_objfile_arch (objfile);
+  if (!gdbarch)
+    return;
+  ld = gdbarch_data (gdbarch,
+		     language_gdbarch_data);
+  if (!ld)
+    return;
+  for (i = 0; i < nr_languages; i++)
+    ld->arch_info[i].bool_type = NULL;
+}
+
 static void *
 language_gdbarch_post_init (struct gdbarch *gdbarch)
 {
@@ -969,6 +991,9 @@ language_bool_type (const struct language_defn *la,
   struct language_gdbarch *ld = gdbarch_data (gdbarch,
 					      language_gdbarch_data);
 
+  if (ld->arch_info[la->la_language].bool_type)
+    return ld->arch_info[la->la_language].bool_type;
+
   if (ld->arch_info[la->la_language].bool_type_symbol)
     {
       struct symbol *sym;
@@ -980,11 +1005,15 @@ language_bool_type (const struct language_defn *la,
 	  struct type *type = SYMBOL_TYPE (sym);
 
 	  if (type && TYPE_CODE (type) == TYPE_CODE_BOOL)
-	    return type;
+	    {
+	      ld->arch_info[la->la_language].bool_type = type;
+	      return ld->arch_info[la->la_language].bool_type;
+	    }
 	}
     }
 
-  return ld->arch_info[la->la_language].bool_type_default;
+  ld->arch_info[la->la_language].bool_type = ld->arch_info[la->la_language].bool_type_default;
+  return ld->arch_info[la->la_language].bool_type;
 }
 
 /* Helper function for primitive type lookup.  */
@@ -1134,6 +1163,8 @@ _initialize_language (void)
 
   language_gdbarch_data
     = gdbarch_data_register_post_init (language_gdbarch_post_init);
+    
+  observer_attach_new_objfile (language_gdbarch_new_objfile);    
 
   /* GDB commands for language specific stuff.  */
 
