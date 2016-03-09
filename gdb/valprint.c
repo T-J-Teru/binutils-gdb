@@ -101,6 +101,7 @@ static void set_output_radix_1 (int, unsigned);
 void _initialize_valprint (void);
 
 #define PRINT_MAX_DEFAULT 200	/* Start print_max off at this value.  */
+#define PRINT_MAX_DEPTH_DEFAULT 20	/* Start print_max_depth off at this value. */
 
 struct value_print_options user_print_options =
 {
@@ -123,7 +124,8 @@ struct value_print_options user_print_options =
   1,				/* pascal_static_field_print */
   0,				/* raw */
   0,				/* summary */
-  1				/* symbol_print */
+  1,				/* symbol_print */
+  PRINT_MAX_DEPTH_DEFAULT	/* max_depth */
 };
 
 /* Initialize *OPTS to be a copy of the user print options.  */
@@ -786,6 +788,12 @@ val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
   if (options->summary && !scalar_type_p (type))
     {
       fprintf_filtered (stream, "...");
+      return;
+    }
+
+  if (!scalar_type_p (type) && recurse >= options->max_depth)
+    {
+      fputs_filtered ("{...}", stream);
       return;
     }
 
@@ -2572,6 +2580,13 @@ val_print_string (struct type *elttype, const char *encoding,
 
   return (bytes_read / width);
 }
+
+static void
+show_print_max_depth (struct ui_file *file, int from_tty,
+		      struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Maximum print depth is %s.\n"), value);
+}
 
 
 /* The 'set input-radix' command writes to this auxiliary variable.
@@ -2851,4 +2866,10 @@ Use 'show input-radix' or 'show output-radix' to independently show each."),
 Set printing of array indexes."), _("\
 Show printing of array indexes"), NULL, NULL, show_print_array_indexes,
                            &setprintlist, &showprintlist);
+  
+  add_setshow_uinteger_cmd ("max-depth", class_support,
+                            &user_print_options.max_depth, _("\
+Set maximum print depth."), _("\
+Show maximum print depth"), NULL, NULL, show_print_max_depth,
+                            &setprintlist, &showprintlist);  
 }
