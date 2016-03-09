@@ -1439,64 +1439,6 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
       break;
     }
 
-      
-  if (TYPE_CODE (sym->type) == TYPE_CODE_ARRAY
-      && SYMBOL_LANGUAGE (sym) == language_fortran)
-    {
-      /* reverse the array - XLF has busted fortran */
-      
-      /* FIXME - this could bust G77 and Sun's Forte 
-	 - but I haven't yet seen the 'V' tag used by G77. */
-      
-      struct type *old_type = SYMBOL_TYPE (sym);
-      struct type *end_type = SYMBOL_TYPE (sym);
-
-      if (TYPE_CODE (old_type) == TYPE_CODE_ARRAY 
-	  && TYPE_CODE (TYPE_TARGET_TYPE (old_type)) == TYPE_CODE_ARRAY) 
-	{
-	  while (TYPE_CODE (end_type) == TYPE_CODE_ARRAY)
-	    {
-	      end_type = TYPE_TARGET_TYPE (end_type);
-	    }
-	  
-	  while (TYPE_CODE (old_type) == TYPE_CODE_ARRAY) 
-	    {
-	      CORE_ADDR (*expr_evaluate) (void*, struct value *, void*) = 0;
-	      
-	      int lower; 
-	      int upper;
-	      struct type *range_type;
-	      struct type *old_index_type;
-	      void *lower_bat = 0, *count_bat = 0, *upper_bat = 0;
-	      struct type* old_range_type;
-	      old_range_type = TYPE_FIELD_TYPE(old_type, 0);
-	      old_index_type = TYPE_INDEX_TYPE (old_type);
-	      
-	      lower = TYPE_ARRAY_LOWER_BOUND_VALUE (old_type); 
-	      upper = TYPE_ARRAY_UPPER_BOUND_VALUE (old_type); 
-	      if (TYPE_NFIELDS(old_range_type) >= 6)
-		{
-		  lower_bat = TYPE_LOW_BOUND_BATON(old_range_type); 
-		  upper_bat = TYPE_HIGH_BOUND_BATON(old_range_type); 
-		  count_bat = TYPE_COUNT_BOUND_BATON(old_range_type); 
-		  expr_evaluate = 
-		    (CORE_ADDR (*) (void*, struct value *, void*))  TYPE_BOUND_BATON_FUNCTION(old_range_type); 
-		}
-	      range_type = create_range_type_d ((struct type *) NULL, 
-						old_index_type,
-						lower, upper, lower_bat, upper_bat, count_bat, (LONGEST (*)(void*, CORE_ADDR, void*)) expr_evaluate);
-	      
-	      end_type = create_array_type (NULL, end_type, range_type);
-	      
-	    old_type = TYPE_TARGET_TYPE (old_type);
-	    }
-	}
-      
-      SYMBOL_TYPE (sym) = end_type;
-      
-      
-    }
-
   /* Some systems pass variables of certain types by reference instead
      of by value, i.e. they will pass the address of a structure (in a
      register or on the stack) instead of the structure itself.  */
@@ -4084,6 +4026,55 @@ read_array_type (char **pp, struct type *type,
 #endif
     create_range_type_d ((struct type *) NULL, index_type, lower, upper, lower_baton, upper_baton, NULL, (LONGEST (*)(void*, CORE_ADDR, void*)) &stabs_evaluate_bound);
   type = create_array_type (type, element_type, range_type);
+  /* XLF emits arrays with minor dimension first, but GDB expects major dimension first.  */
+  if (current_subfile->language == language_fortran
+      && TYPE_CODE (element_type) == TYPE_CODE_ARRAY)
+    {
+      LONGEST low_bound, high_bound;
+      struct type* next_type;
+      struct type* original_type = type;      
+      while (TYPE_CODE (element_type) == TYPE_CODE_ARRAY)
+        element_type = TYPE_TARGET_TYPE (element_type);
+      next_type = type;
+      do
+        {
+          gdb_assert(next_type != NULL);
+          type = next_type;
+          next_type = TYPE_TARGET_TYPE (type);
+          if (TYPE_CODE (next_type) == TYPE_CODE_ARRAY)
+            {
+              /* Clone the original type in case there is more than one reference to the subarray type (unlikely).  */
+              type = copy_type (type);
+            }
+          else
+           {
+              /* From copy_type().  */
+              TYPE_INSTANCE_FLAGS (original_type) = TYPE_INSTANCE_FLAGS (type);
+              TYPE_LENGTH (original_type) = TYPE_LENGTH (type);
+              memcpy (TYPE_MAIN_TYPE (original_type), TYPE_MAIN_TYPE (type),
+                sizeof (struct main_type));
+              /* Replace the original type with the most major dimension.  */
+              type = original_type;
+            }
+          TYPE_TARGET_TYPE (type) = element_type;
+          range_type = TYPE_INDEX_TYPE (type);
+          /* From create_array_type().  */
+          if (get_discrete_bounds (range_type, &low_bound, &high_bound) < 0)
+            low_bound = high_bound = 0;
+          CHECK_TYPEDEF (element_type);
+          /* Be careful when setting the array length.  Ada arrays can be
+             empty arrays with the high_bound being smaller than the low_bound.
+             In such cases, the array length should be zero.  */
+          if (high_bound < low_bound)
+            TYPE_LENGTH (type) = 0;
+          else
+            TYPE_LENGTH (type) =
+               TYPE_LENGTH (element_type) * (high_bound - low_bound + 1);
+          element_type = type;
+        }
+      while (TYPE_CODE (next_type) == TYPE_CODE_ARRAY);
+    }
+  
 
   return type;
 }
