@@ -141,7 +141,7 @@ upc_pts_index_add (struct type *ptrtype, struct value *ptrval,
   const LONGEST index = value_as_long (indexval);
   const ULONGEST ptrtype_len = TYPE_LENGTH (ptrtype);
   const uda_target_pts_t *ptrval_raw = (const uda_target_pts_t *)
-                                       value_contents_all (ptrval);
+                                       value_contents (ptrval);
   uda_tword_t packed_pts_len;
   uda_target_pts_t packed_pts;
   uda_debugger_pts_t pts, sum;
@@ -181,9 +181,9 @@ upc_pts_diff (struct value *arg1, struct value *arg2)
   const ULONGEST block_size  = upc_blocksizeof (tt1);
   const ULONGEST ptrtype_len = TYPE_LENGTH (type1);
   const uda_target_pts_t *arg1_pts = (const uda_target_pts_t *)
-                                     value_contents_all (arg1);
+                                     value_contents (arg1);
   const uda_target_pts_t *arg2_pts = (const uda_target_pts_t *)
-                                     value_contents_all (arg2);
+                                     value_contents (arg2);
   uda_tword_t packed_pts_len;
   uda_target_pts_t packed_pts;
   uda_debugger_pts_t pts1, pts2;
@@ -276,7 +276,7 @@ upc_value_as_pts (struct value *val)
   uda_target_pts_t *pts_raw;
   if (!uda_calls.uda_unpack_pts)
     error (_("UPC language support is not initialised"));    
-  pts_raw = (uda_target_pts_t *) value_contents_all (val);
+  pts_raw = (uda_target_pts_t *) value_contents (val);
   status = (*uda_calls.uda_unpack_pts) (pts_len, pts_raw, block_size, &pts);
   if (status != uda_ok)
     error (_("upc_value_as_pts: uda_unpack_pts error"));
