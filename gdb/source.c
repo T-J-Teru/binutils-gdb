@@ -1331,7 +1331,7 @@ identify_source_line (struct symtab *s, int line, int mid_statement,
   if (fullname == 0)
     return 0;
   
-  if (line <= s->nlines && s->line_charpos != 0)
+  if (line > 0 && line <= s->nlines && s->line_charpos != 0)
     charpos = s->line_charpos[line - 1];
   annotate_source (s->fullname, line, s->line_charpos[line - 1],
 		   mid_statement, get_objfile_arch (SYMTAB_OBJFILE (s)), pc);
