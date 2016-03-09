@@ -39,6 +39,7 @@
 #include "user-regs.h"
 #include "tracepoint.h"
 #include <errno.h>
+#include <ctype.h>
 #include "gdb_string.h"
 #include "gdb_assert.h"
 #include "cp-support.h"
@@ -2414,11 +2415,39 @@ value_struct_elt (struct value **argp, struct value **args,
 
   if (!args)
     {
+      int i;
+      char *nname;
+      int len;
+
+      len = strlen(name);
+      
+      if (current_language
+	  && current_language->la_case_sensitivity == case_sensitive_off) 
+	{
+	  int i;
+	  nname = xmalloc(len + 1);
+	  for (i = 0; i < len + 1; i++) 
+	    {
+	      nname[i] = tolower(name[i]);
+	    }
+	}
+      else 
+	{
+	  nname = xmalloc(len + 1);
+	  memcpy(nname, name, len + 1);
+	}
+      
+    
       /* if there are no arguments ...do this...  */
 
       /* Try as a field first, because if we succeed, there is less
          work to be done.  */
-      v = search_struct_field (name, *argp, 0, t, 0);
+
+
+      v = search_struct_field (nname, *argp, 0, t, 0);
+
+      xfree(nname);
+
       if (v)
 	return v;
 
