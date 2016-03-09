@@ -14772,6 +14772,23 @@ read_subroutine_type (struct die_info *die, struct dwarf2_cu *cu)
   else
     TYPE_CALLING_CONVENTION (ftype) = DW_CC_normal;
 
+   /* Check for the calling convention. A DW_CC_program indicates that
+      the subroutine is the the "main" of the program. This needs
+      to be set for languages that don't have a predefined name
+      for the starting subroutines, such as FORTRAN. */
+  switch (TYPE_CALLING_CONVENTION (ftype))
+    {
+      case DW_CC_program:
+	/* Set this subroutine as the "main" subroutine
+	   for the program. */
+	set_main_name (TYPE_NAME (ftype));
+	break;
+      case DW_CC_normal:
+      case DW_CC_nocall:
+	default:
+	break;
+    }
+
   /* Record whether the function returns normally to its caller or not
      if the DWARF producer set that information.  */
   attr = dwarf2_attr (die, DW_AT_noreturn, cu);
@@ -16163,6 +16180,7 @@ read_partial_die (const struct die_reader_specs *reader,
   int has_low_pc_attr = 0;
   int has_high_pc_attr = 0;
   int high_pc_relative = 0;
+  int has_program_calling_convention = 0;
 
   memset (part_die, 0, sizeof (struct partial_die_info));
 
@@ -16300,7 +16318,7 @@ read_partial_die (const struct die_reader_specs *reader,
 	     practice.  */
 	  if (DW_UNSND (&attr) == DW_CC_program
 	      && cu->language == language_fortran)
-	    set_objfile_main_name (objfile, part_die->name, language_fortran);
+	    has_program_calling_convention = 1;
 	  break;
 	case DW_AT_inline:
 	  if (DW_UNSND (&attr) == DW_INL_inlined
@@ -16321,6 +16339,9 @@ read_partial_die (const struct die_reader_specs *reader,
 	  break;
 	}
     }
+
+  if (has_program_calling_convention)
+    set_objfile_main_name (objfile, part_die->name, language_fortran);
 
   if (high_pc_relative)
     part_die->highpc += part_die->lowpc;
@@ -18725,6 +18746,30 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	SYMBOL_TYPE (sym) = type;
       else
 	SYMBOL_TYPE (sym) = die_type (die, cu);
+
+
+      /* Check for the calling convention. A DW_CC_program indicates that
+         the subroutine is the the "main" of the program. This needs
+         to be set for languages that don't have a predefined name
+         for the starting subroutines, such as FORTRAN. */
+      attr = dwarf2_attr (die, DW_AT_calling_convention, cu);
+      if (attr && (DW_UNSND (attr) != 0))
+        {
+          switch (DW_UNSND (attr))
+            {
+            case DW_CC_program:
+              /* Set this subroutine as the "main" subroutine
+                 for the program. */
+              set_main_name (name);
+              break;
+            case DW_CC_normal:
+            case DW_CC_nocall:
+            default:
+              break;
+            }
+        }
+
+
       attr = dwarf2_attr (die,
 			  inlined_func ? DW_AT_call_line : DW_AT_decl_line,
 			  cu);
