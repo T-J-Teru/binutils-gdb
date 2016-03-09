@@ -381,12 +381,17 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 	    {
 	      /* In effect, a pop of the printed-statics stack.  */
 
-	      void *free_to_ptr =
-		obstack_next_free (&dont_print_statmem_obstack) -
-		(obstack_final_size - statmem_obstack_initial_size);
+	      /* #42713: There is one object: An obstack is a stack of objects. You use obstack_begin
+	       * to start the object, obstack_grow to add data to it, obstack_finish to finalize
+	       * the object, then do your next object with obstack_begin, and so on ...
+	       * But this code in cp-valprint.c just creates one object with obstack_begin, adds
+	       * to it with obstack_grow and then tries to 'free' it with obstack_free. But
+	       * that's wrong, obstack_free is not the opposite of obstack_grow
+	       * (obstack_free works on finished objects).
+	       * The inverse to obstack_grow is obstack_blank with a negative size. */
 
-	      obstack_free (&dont_print_statmem_obstack,
-			    free_to_ptr);
+	      obstack_blank (&dont_print_statmem_obstack,
+		(statmem_obstack_initial_size - obstack_final_size));
 	    }
 
 	  if (last_set_recurse != recurse)
@@ -396,13 +401,9 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 	      
 	      if (obstack_final_size > stat_array_obstack_initial_size)
 		{
-		  void *free_to_ptr =
-		    obstack_next_free (&dont_print_stat_array_obstack)
-		    - (obstack_final_size
-		       - stat_array_obstack_initial_size);
-
-		  obstack_free (&dont_print_stat_array_obstack,
-				free_to_ptr);
+		  /* #42713: See pop code above for dont_print_statmem_obstack. */
+		  obstack_blank (&dont_print_stat_array_obstack,
+				stat_array_obstack_initial_size - obstack_final_size);
 		}
 	      last_set_recurse = -1;
 	    }
