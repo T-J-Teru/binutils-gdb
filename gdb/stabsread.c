@@ -3774,6 +3774,8 @@ stabs_evaluate_allocated_safely (void *baton, struct value *val, void* frame)
 
       if (rank > MAX_FORTRAN_DIMS)
 	error("Max fortran dimensions exceeded - rank of %d given", rank);
+      if (rank <= 0)
+        error("Negative fortran index - rank of %d given", rank);
 
   relative_virtual_origin =  (long long) value_as_address ( value_at (objfile_type (b->objfile)->builtin_core_addr, obj + offset) ); 
   offset += objfile_type (b->objfile)->builtin_core_addr->length;
