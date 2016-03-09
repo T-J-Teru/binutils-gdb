@@ -61,7 +61,7 @@
 
 #define KERNEL_START 0xc000000000000000ULL
 
-static size_t ktab_size = 0;
+static LONGEST ktab_size = 0;
 struct ia64_table_entry
   {
     uint64_t start_offset;
@@ -2650,7 +2650,7 @@ ia64_access_mem (unw_addr_space_t as,
 		 unw_word_t addr, unw_word_t *val,
 		 int write, void *arg)
 {
-  if (addr - KERNEL_START < ktab_size)
+  if (ktab_size >= 0 && (addr - KERNEL_START < ktab_size))
     {
       unw_word_t *laddr = (unw_word_t*) ((char *) ktab
                           + (addr - KERNEL_START));
