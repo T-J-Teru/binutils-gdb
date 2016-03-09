@@ -1456,7 +1456,6 @@ value_coerce_array (struct value *arg1)
   struct type *type = check_typedef (value_type (arg1));
   struct type *tt   = check_typedef (TYPE_TARGET_TYPE (type));
   struct type *pt   = lookup_pointer_type (tt);
-  enum lval_type lval = VALUE_LVAL (arg1);
   struct value *retval;
 
   /* If the user tries to do something requiring a pointer with an
@@ -1464,7 +1463,7 @@ value_coerce_array (struct value *arg1)
      be a good time to do so.  */
   arg1 = value_coerce_to_target (arg1);
 
-  switch (lval)
+  switch (VALUE_LVAL (arg1))
     {
     case lval_memory:
       retval = value_from_pointer (lookup_pointer_type (TYPE_TARGET_TYPE (type)),
@@ -1504,7 +1503,6 @@ value_addr (struct value *arg1)
   struct value *arg2;
   struct type *type = check_typedef (value_type (arg1));
   struct type *pt   = lookup_pointer_type (type);
-  enum lval_type lval = VALUE_LVAL (arg1);  
 
   if (TYPE_CODE (type) == TYPE_CODE_REF)
     {
@@ -1523,7 +1521,7 @@ value_addr (struct value *arg1)
      then this would be a good time to force it to memory.  */
   arg1 = value_coerce_to_target (arg1);
 
-  switch (lval)
+  switch (VALUE_LVAL (arg1))
     {
     case lval_memory:
       /* Get target memory address.  */
