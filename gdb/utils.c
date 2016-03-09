@@ -2718,6 +2718,14 @@ show_debug_timestamp (struct ui_file *file, int from_tty,
   fprintf_filtered (file, _("Timestamping debugging messages is %s.\n"),
 		    value);
 }
+
+static void
+sleep_command (char *arg, int from_tty)
+{
+  int n = atoi(arg);
+  if (n)
+    sleep (n);
+}
 
 
 void
@@ -2769,6 +2777,10 @@ When set, debugging messages will be marked with seconds and microseconds."),
 			   NULL,
 			   show_debug_timestamp,
 			   &setdebuglist, &showdebuglist);
+
+  add_cmd ("sleep", class_support, sleep_command,
+	   _("Sleep for the given number of seconds."),
+	   &cmdlist);
 }
 
 const char *
