@@ -2839,8 +2839,8 @@ value_as_address (struct value *val)
 				       value_contents (val));
 
     old_print_max = user_print_options.print_max;
-    user_print_options.print_max = 16;
-  r = unpack_long (value_type (val), value_contents (val));
+    user_print_options.print_max = min (old_print_max, 16);
+    r = unpack_long (value_type (val), value_contents (val));
     user_print_options.print_max = old_print_max;
   return r;
 #endif
