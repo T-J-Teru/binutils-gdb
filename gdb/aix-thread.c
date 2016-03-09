@@ -664,6 +664,27 @@ get_signaled_thread (void)
   return 0;
 }
 
+static int
+get_kernel_thread_info (pthdb_tid_t tid, struct thrdsinfo64 *thrinfp)
+{
+  int result = 0;
+  pthdb_tid_t ktid = 0;
+
+  while (1)
+    {
+      if (getthrds (PIDGET(inferior_ptid), thrinfp,
+                    sizeof (struct thrdsinfo64), &ktid, 1) != 1)
+        break;
+
+      /* Is this the thread we want?  */
+      if (thrinfp->ti_tid == tid)
+        return 1;
+  }
+
+  /* Didn't find the thread.  */
+  return 0;
+}
+ 
 /* Synchronize GDB's thread list with libpthdebug's.
 
    There are some benefits of doing this every time the inferior stops:
@@ -1218,6 +1239,7 @@ fetch_regs_kernel_thread (struct regcache *regcache, int regno,
   double fprs[ppc_num_fprs];
   struct ptxsprs sprs64;
   struct ptsprs sprs32;
+  struct thrdsinfo64 thrinf;
   int i;
 
   if (debug_aix_thread)
@@ -1234,13 +1256,42 @@ fetch_regs_kernel_thread (struct regcache *regcache, int regno,
 	{
 	  if (!ptrace64aix (PTT_READ_GPRS, tid, 
 			    (unsigned long) gprs64, 0, NULL))
-	    memset (gprs64, 0, sizeof (gprs64));
+            {
+	      memset (gprs64, 0, sizeof (gprs64));
+
+              /* From AIX documentation:
+                 When a pthread with kernel thread is in kernel mode code it is
+                 impossible to get the full user mode context because the kernel
+                 does not save it off in one place. The getthrds() function can
+                 be used to get part of this information. It always saves the
+                 user mode stack and the application can discover this by
+                 checking thrdsinfo64.ti_scount. If this is non-zero the user
+                 mode stack is available in thrdsinfo64.ti_ustk. From user
+                 mode stack it is possible to determine the iar and the call
+                 back frames but not the other register values. The thrdsinfo64
+                 structure is defined in procinfo.h file.  */
+
+              if (get_kernel_thread_info (tid, &thrinf))
+                {
+                  if (thrinf.ti_scount)
+                    gprs64[1 /* r1 */] = (uint64_t) thrinf.ti_ustk;
+                }
+            }
+
 	  supply_gprs64 (regcache, gprs64);
 	}
       else
 	{
 	  if (!ptrace32 (PTT_READ_GPRS, tid, gprs32, 0, NULL))
-	    memset (gprs32, 0, sizeof (gprs32));
+            {
+	      memset (gprs32, 0, sizeof (gprs32));
+
+              if (get_kernel_thread_info (tid, &thrinf))
+                {
+                  if (thrinf.ti_scount)
+                    gprs32[1 /* r1 */] = (uint32_t) (thrinf.ti_ustk & 0xffffffff);
+                }
+            }
 	  for (i = 0; i < ppc_num_gprs; i++)
 	    supply_reg32 (regcache, tdep->ppc_gp0_regnum + i, gprs32[i]);
 	}
