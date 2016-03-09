@@ -417,7 +417,8 @@ finish_block_internal (struct symbol *symbol, struct pending **listhead,
 	     Skip blocks which correspond to a function; they're not
 	     physically nested inside this other blocks, only
 	     lexically nested.  */
-	  if (BLOCK_FUNCTION (pblock->block) == NULL
+	  if ((BLOCK_FUNCTION (pblock->block) == NULL
+	       || (!symbol && !old_blocks))
 	      && (BLOCK_START (pblock->block) < BLOCK_START (block)
 		  || BLOCK_END (pblock->block) > BLOCK_END (block)))
 	    {
