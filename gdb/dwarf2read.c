@@ -1431,7 +1431,7 @@ static void dwarf2_start_subfile (char *, const char *, const char *);
 static void dwarf2_start_symtab (struct dwarf2_cu *,
 				 const char *, const char *, CORE_ADDR);
 
-static struct subfile *dwarf2_find_subfile (char *, char *, char *);
+static struct subfile *dwarf2_find_subfile (const char *, const char *, const char *);
 
 static struct symbol *new_symbol (struct die_info *, struct type *,
 				  struct dwarf2_cu *);
@@ -13283,7 +13283,7 @@ create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_
 {
   struct dwarf2_loclist_baton *baton = 0;
 
-  if (attr->form == DW_FORM_block1) 
+  if (attr_form_is_block(attr))
     {
       baton = obstack_alloc (&cu->objfile->objfile_obstack,
 			     sizeof (struct dwarf2_loclist_baton));
@@ -16481,7 +16481,7 @@ dwarf2_start_symtab (struct dwarf2_cu *cu,
 }
 
 static struct subfile *
-dwarf2_find_subfile (char *filename, char *dirname, char *comp_dir)
+dwarf2_find_subfile (const char *filename, const char *dirname, const char *comp_dir)
 {
   char *fullname;
   struct subfile *ret;
@@ -16499,7 +16499,7 @@ dwarf2_find_subfile (char *filename, char *dirname, char *comp_dir)
   if (!IS_ABSOLUTE_PATH (filename) && dirname != NULL)
     fullname = concat (dirname, SLASH_STRING, filename, (char *)NULL);
   else
-    fullname = filename;
+    fullname = (char *) filename;
 
   ret = find_subfile (fullname, comp_dir);
 

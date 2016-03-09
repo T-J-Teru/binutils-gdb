@@ -224,6 +224,7 @@ value_subscript (struct value *array, LONGEST index)
       if (TYPE_CODE (tarray) == TYPE_CODE_ARRAY
 	  && upc_shared_type_p (tarray))
 	return upc_value_subscript (array, index);
+      array = value_coerce_array (array);
     }
 
   if (c_style)
