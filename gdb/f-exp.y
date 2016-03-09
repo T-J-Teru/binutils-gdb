@@ -205,8 +205,9 @@ static int parse_number (char *, int, int, YYSTYPE *);
 %token INT_KEYWORD INT_S2_KEYWORD INT_S8_KEYWORD LOGICAL_S1_KEYWORD LOGICAL_S2_KEYWORD
 %token LOGICAL_S8_KEYWORD
 %token LOGICAL_KEYWORD REAL_KEYWORD REAL_S8_KEYWORD REAL_S16_KEYWORD 
-%token COMPLEX_S8_KEYWORD COMPLEX_S16_KEYWORD COMPLEX_S32_KEYWORD 
+%token COMPLEX_KEYWORD COMPLEX_S8_KEYWORD COMPLEX_S16_KEYWORD COMPLEX_S32_KEYWORD 
 %token BOOL_AND BOOL_OR BOOL_NOT BIN_MOD
+%token SINGLE DOUBLE PRECISION
 %token <lval> CHARACTER 
 
 %token <voidval> VARIABLE
@@ -587,7 +588,7 @@ ptype	:	typebase
 array_mod:	'(' range ')'
 	;
 
-range:		subrange2 ',' subrange2
+range:		subrange2 ',' range
 	|	subrange2
 	;
 
@@ -727,18 +728,28 @@ typebase
 			  else if ($3.val == 32)
 				$$ = parse_f_type->builtin_complex_s32; }
 	|	COMPLEX_S8_KEYWORD KIND '=' INT ')'	%prec SIZE
-			{ if ($4.val == 8)
+			{ if ($4.val == 4)
 				$$ = parse_f_type->builtin_complex_s8;
-			  else if ($4.val == 16)
+			  else if ($4.val == 8)
 				$$ = parse_f_type->builtin_complex_s16;
-			  else if ($4.val == 32)
+			  else if ($4.val == 16)
 				$$ = parse_f_type->builtin_complex_s32; }
 	|	COMPLEX_S8_KEYWORD	 %prec BELOW_SIZE
+			{ $$ = parse_f_type->builtin_complex_s8;}
+	|	COMPLEX_KEYWORD
 			{ $$ = parse_f_type->builtin_complex_s8;}
 	|	COMPLEX_S16_KEYWORD 
 			{ $$ = parse_f_type->builtin_complex_s16;}
 	|	COMPLEX_S32_KEYWORD 
 			{ $$ = parse_f_type->builtin_complex_s32; }
+	|	SINGLE PRECISION
+			{ $$ = parse_f_type->builtin_real;}
+	|	DOUBLE PRECISION
+			{ $$ = parse_f_type->builtin_real_s8;}
+	|	SINGLE COMPLEX_KEYWORD
+			{ $$ = parse_f_type->builtin_complex_s8;}
+	|	DOUBLE COMPLEX_KEYWORD
+			{ $$ = parse_f_type->builtin_complex_s16;}
 	;
 
 name	:	NAME
@@ -972,11 +983,14 @@ static const struct token f77_keywords[] =
   { "integer_8", INT_S8_KEYWORD, BINOP_END },
   { "logical", LOGICAL_KEYWORD, BINOP_END },
   { "real_16", REAL_S16_KEYWORD, BINOP_END },
-  { "complex", COMPLEX_S8_KEYWORD, BINOP_END },
+  { "complex", COMPLEX_KEYWORD, BINOP_END },
   { "sizeof", SIZEOF, BINOP_END },
   { "real_8", REAL_S8_KEYWORD, BINOP_END },
   { "real", REAL_KEYWORD, BINOP_END },
   { "pointer", POINTER, BINOP_END },
+  { "single", SINGLE, BINOP_END },
+  { "double", DOUBLE, BINOP_END },
+  { "precision", PRECISION, BINOP_END },
   { NULL, 0, 0 }
 }; 
 
