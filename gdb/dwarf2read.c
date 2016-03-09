@@ -13295,15 +13295,91 @@ create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_
 		    baton->size = size;
 		    baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
 						 baton->size);
+			memcpy((gdb_byte *) baton->data, DW_BLOCK(attr)->data, size);
 		  }
 		else
 		{
-		  baton->size = size + 1; 
-		  baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
-					       baton->size);
-		  ((gdb_byte *) baton->data)[size] = DW_OP_deref; 
+		  /* 11-7-13 andrewg@cray.com: Contributed by Cray Inc. */
+		  /* OpenACC fix - If there is a DW_AT_address_class in the ref_die, 
+		     assume that it is referring to an address class on the device. 
+		     This should then use DW_OP_xderef instead of DW_OP_deref. */
+		  int addr_class = 0;
+		  struct attribute *addr_attr = dwarf2_attr(ref_die, 
+		                 DW_AT_address_class, cu);
+		  if (addr_attr)
+		    addr_class = dwarf2_get_attr_constant_value (addr_attr, 0);
+		  if (addr_class)
+		    {
+		      baton->size = size + 2; 
+		      baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
+			    		       baton->size);
+			  switch (addr_class)
+			    {
+			    case 1:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit1;
+			      break;
+			    case 2:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit2;
+			      break;
+			    case 3:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit3;
+			      break;
+			    case 4:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit4;
+			      break;
+			    case 5:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit5;
+			      break;
+			    case 6:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit6;
+			      break;
+			    case 7:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit7;
+			      break;
+			    case 8:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit8;
+			      break;
+			    case 9:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit9;
+			      break;
+			    case 10:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit10;
+			      break;
+			    case 11:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit11;
+			      break;
+			    case 12:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit12;
+			      break;
+			    case 13:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit13;
+			      break;
+			    case 14:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit14;
+			      break;
+			    case 15:
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit15;
+			      break;
+			    default:
+			      // XXX: How high should we go? How to handle error?
+			      complaint (&symfile_complaints, 
+			                  _("Unsupported DW_AT_address_class"));
+			      ((gdb_byte *) baton->data)[0] = DW_OP_lit6;
+			      break;
+			    }
+		      ((gdb_byte *) baton->data)[size+1] = DW_OP_xderef;
+		      memcpy(&((gdb_byte *)baton->data)[1], DW_BLOCK(attr)->data, size);
+		    }
+		  else
+		    {
+		      baton->size = size + 1; 
+		      baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
+			    		       baton->size);
+		      ((gdb_byte *) baton->data)[size] = DW_OP_deref;
+		      memcpy((gdb_byte *)baton->data, DW_BLOCK(attr)->data, size);
+		    }
 		}
-		memcpy((gdb_byte *) baton->data, DW_BLOCK(attr)->data, size);
+		
 	      }
 	  }
       }
