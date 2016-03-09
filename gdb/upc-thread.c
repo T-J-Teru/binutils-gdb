@@ -264,6 +264,13 @@ upc_enable_thread_debug (void)
 	  return;
 	}
 
+      msym = lookup_minimal_symbol ("MYTHREAD", NULL, NULL);
+      if (msym == NULL)
+	{
+	  debug ("upc_enable_thread_debug: No MYTHREAD");
+	  return;
+	}
+
       push_target (&upc_thread_ops);
       upc_thread_active = 1;
 
