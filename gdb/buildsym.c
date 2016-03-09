@@ -42,6 +42,7 @@
 #include "cp-support.h"
 #include "dictionary.h"
 #include "addrmap.h"
+#include "hashtab.h"
 
 /* Ask buildsym.h to define the vars it normally declares `extern'.  */
 #define	EXTERN
@@ -109,6 +110,32 @@ static void record_pending_block (struct objfile *objfile,
 				  struct block *block,
 				  struct pending_block *opblock);
 
+
+static htab_t subfiles_map;
+
+static void
+htab_free_ptr(PTR p)
+{
+  free(p);
+}
+
+static PTR
+htab_alloc_ptr(size_t t1, size_t t2)
+{
+  return xcalloc(t1, t2);
+}
+
+static int
+htab_eq_subfile(const void* s, const void* t)
+{
+  return !strcmp(((const struct subfile*) s)->name, ((const struct subfile*) t)->name);
+}
+
+static hashval_t
+htab_hash_subfile(const void *p)
+{
+  return htab_hash_string(((const struct subfile*) p)->name);
+}
 
 /* Initial sizes of data structures.  These are realloc'd larger if
    needed, and realloc'd down to the size actually used, when
@@ -399,9 +426,9 @@ finish_block_internal (struct symbol *symbol, struct pending **listhead,
 			     paddress (gdbarch, BLOCK_END (block)));
 		}
 	      if (BLOCK_START (pblock->block) < BLOCK_START (block))
-		BLOCK_START (pblock->block) = BLOCK_START (block);
+		BLOCK_START (block) = BLOCK_START (pblock->block);
 	      if (BLOCK_END (pblock->block) > BLOCK_END (block))
-		BLOCK_END (pblock->block) = BLOCK_END (block);
+		BLOCK_END (block) = BLOCK_END (pblock->block);
 	    }
 	  BLOCK_SUPERBLOCK (pblock->block) = block;
 	}
@@ -554,6 +581,21 @@ make_blockvector (struct objfile *objfile)
   return (blockvector);
 }
 
+
+struct subfile *find_subfile (const char *fullname)
+{
+  struct subfile dummy;
+  struct subfile *subfile;
+  dummy.name = (char*) fullname;
+
+  if ((subfile = htab_find (subfiles_map, &dummy)))
+    {
+      current_subfile = subfile;
+      return subfile;
+    }
+  return NULL;
+}
+
 /* Start recording information about source code that came from an
    included (or otherwise merged-in) source file with a different
    name.  NAME is the name of the file (cannot be NULL), DIRNAME is
@@ -567,30 +609,13 @@ start_subfile (const char *name, const char *dirname)
 
   /* See if this subfile is already known as a subfile of the current
      main source file.  */
+  struct subfile dummy;
+  dummy.name = (char *) name;
 
-  for (subfile = subfiles; subfile; subfile = subfile->next)
+  if ((subfile = htab_find (subfiles_map, &dummy)))
     {
-      char *subfile_name;
-
-      /* If NAME is an absolute path, and this subfile is not, then
-	 attempt to create an absolute path to compare.  */
-      if (IS_ABSOLUTE_PATH (name)
-	  && !IS_ABSOLUTE_PATH (subfile->name)
-	  && subfile->dirname != NULL)
-	subfile_name = concat (subfile->dirname, SLASH_STRING,
-			       subfile->name, (char *) NULL);
-      else
-	subfile_name = subfile->name;
-
-      if (FILENAME_CMP (subfile_name, name) == 0)
-	{
-	  current_subfile = subfile;
-	  if (subfile_name != subfile->name)
-	    xfree (subfile_name);
-	  return;
-	}
-      if (subfile_name != subfile->name)
-	xfree (subfile_name);
+      current_subfile = subfile;
+      return;
     }
 
   /* This subfile is not known.  Add an entry for it.  Make an entry
@@ -659,6 +684,11 @@ start_subfile (const char *name, const char *dirname)
     {
       subfile->language = subfile->next->language;
     }
+
+     { 
+         PTR *slot = htab_find_slot (subfiles_map, subfile, INSERT);
+         *slot = subfile;
+     }
 }
 
 /* For stabs readers, the first N_SO symbol is assumed to be the
@@ -825,6 +855,7 @@ compare_line_numbers (const void *ln1p, const void *ln2p)
   return ln1->line - ln2->line;
 }
 
+
 /* Start a new symtab for a new source file.  Called, for example,
    when a stabs symbol of type N_SO is seen, or when a DWARF
    TAG_compile_unit DIE is seen.  It indicates the start of data for
@@ -869,9 +900,11 @@ restart_symtab (CORE_ADDR start_addr)
 
   /* We shouldn't have any address map at this point.  */
   gdb_assert (! pending_addrmap);
-
+  
   /* Initialize the list of sub source files with one entry for this
      file (the top-level source file).  */
+  subfiles_map = htab_create_alloc(100, htab_hash_subfile, htab_eq_subfile, 
+				   NULL, htab_alloc_ptr, htab_free_ptr);
   subfiles = NULL;
   current_subfile = NULL;
 }
