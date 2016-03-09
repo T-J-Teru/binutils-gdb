@@ -88,21 +88,12 @@ static int pending_addrmap_interesting;
 
 static struct obstack pending_block_obstack;
 
-/* List of blocks already made (lexical contexts already closed).
-   This is used at the end to make the blockvector.  */
-
-struct pending_block
-  {
-    struct pending_block *next;
-    struct block *block;
-  };
-
 /* Pointer to the head of a linked list of symbol blocks which have
    already been finalized (lexical contexts already closed) and which
    are just waiting to be built into a blockvector when finalizing the
    associated symtab.  */
 
-static struct pending_block *pending_blocks;
+struct pending_block *pending_blocks;
 
 static int compare_line_numbers (const void *ln1p, const void *ln2p);
 
@@ -603,11 +594,12 @@ make_blockvector (struct objfile *objfile)
 }
 
 
-struct subfile *find_subfile (const char *fullname)
+struct subfile *find_subfile (const char *name, const char *dirname)
 {
   struct subfile dummy;
   struct subfile *subfile;
-  dummy.name = (char*) fullname;
+  dummy.name = (char*) name;
+  dummy.dirname = (char*) dirname;
 
   if ((subfile = htab_find (subfiles_map, &dummy)))
     {

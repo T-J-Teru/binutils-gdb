@@ -485,7 +485,9 @@ symbol_set_language (struct general_symbol_info *gsymbol,
       || gsymbol->language == language_go
       || gsymbol->language == language_java
       || gsymbol->language == language_objc
-      || gsymbol->language == language_fortran)
+      || gsymbol->language == language_fortran
+      || gsymbol->language == language_c
+      || gsymbol->language == language_upc)
     {
       symbol_set_demangled_name (gsymbol, NULL, NULL);
     }
@@ -618,7 +620,19 @@ symbol_find_demangled_name (struct general_symbol_info *gsymbol,
 	  return demangled;
 	}
     }
-
+  if ((gsymbol->language == language_c
+      || gsymbol->language == language_upc
+      || gsymbol->language == language_auto)
+      && (strncmp (mangled, "__BLN__N", 8) == 0
+	  || strncmp (mangled, "__SLN__N", 8) == 0))
+    {
+      demangled = upc_demangle (mangled, 0);
+      if (demangled != NULL)
+	{
+	  gsymbol->language = language_upc;
+	  return demangled;
+	}
+    }
   /* We could support `gsymbol->language == language_fortran' here to provide
      module namespaces also for inferiors with only minimal symbol table (ELF
      symbols).  Just the mangling standard is not standardized across compilers
@@ -814,6 +828,8 @@ symbol_natural_name (const struct general_symbol_info *gsymbol)
     case language_java:
     case language_objc:
     case language_fortran:
+    case language_c:
+    case language_upc:
       if (symbol_get_demangled_name (gsymbol) != NULL)
 	return symbol_get_demangled_name (gsymbol);
       break;
@@ -845,6 +861,8 @@ symbol_demangled_name (const struct general_symbol_info *gsymbol)
     case language_java:
     case language_objc:
     case language_fortran:
+    case language_c:
+    case language_upc:
       dem_name = symbol_get_demangled_name (gsymbol);
       break;
     case language_ada:
@@ -1140,7 +1158,19 @@ demangle_for_lookup (const char *name, enum language lang,
 
   /* If we are using C++, D, Go, or Java, demangle the name before doing a
      lookup, so we can always binary search.  */
-  if (lang == language_cplus)
+  if ((lang == language_c
+       || lang == language_upc)
+      && (strncmp (name, "__BLN__N", 8) == 0
+	  || strncmp (name, "__SLN__N", 8) == 0))
+   {
+      demangled_name = upc_demangle (name, 0);
+      if (demangled_name)
+	{
+	  modified_name = demangled_name;
+	  make_cleanup (xfree, demangled_name);
+	}
+    }
+  else if (lang == language_cplus)
     {
       demangled_name = cplus_demangle (name, DMGL_ANSI | DMGL_PARAMS);
       if (demangled_name)
@@ -1187,7 +1217,7 @@ demangle_for_lookup (const char *name, enum language lang,
 	  modified_name = demangled_name;
 	  make_cleanup (xfree, demangled_name);
 	}
-    }
+    }   
 
   if (current_language->la_case_sensitivity == case_sensitive_off)
     {

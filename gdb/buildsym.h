@@ -36,7 +36,15 @@ struct addrmap;
    this technique.  */
 
 struct block;
-struct pending_block;
+
+/* List of blocks already made (lexical contexts already closed).
+   This is used at the end to make the blockvector.  */
+
+struct pending_block
+  {
+    struct pending_block *next;
+    struct block *block;
+  };
 
 #ifndef EXTERN
 #define	EXTERN extern
@@ -170,6 +178,8 @@ EXTERN int context_stack_size;
    nothing says specifically).  */
 
 EXTERN int within_function;
+
+EXTERN struct pending_block *pending_blocks;
 
 
 
