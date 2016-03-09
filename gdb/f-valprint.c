@@ -152,7 +152,7 @@ f77_create_arrayprint_offset_tbl (f77_array_dim* tbl, struct type *type, struct 
       F77_DIM_SIZE (tbl, ndimen) = upper - lower + 1;
       F77_DIM_LOWER_BOUND (tbl, ndimen) = lower;
 
-      if (F77_DIM_SIZE (tbl, ndimen) == 0) /* deal with assumed size array - print single element */
+      if (F77_DIM_SIZE (tbl, ndimen) <= 0) /* deal with assumed size array - print single element */
           F77_DIM_SIZE (tbl, ndimen) = 1;
       
       tmp_type = TYPE_TARGET_TYPE (tmp_type);

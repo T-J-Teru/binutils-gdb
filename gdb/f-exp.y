@@ -317,6 +317,10 @@ arglist	:	arglist ',' exp   %prec ABOVE_COMMA
 			{ arglist_len++; }
 	;
 
+arglist	:	arglist ',' subrange   %prec ABOVE_COMMA
+			{ arglist_len++; }
+	;
+
 /* There are four sorts of subrange types in F90.  */
 
 subrange:	exp ':' exp	%prec ABOVE_COMMA
@@ -325,19 +329,19 @@ subrange:	exp ':' exp	%prec ABOVE_COMMA
 			  write_exp_elt_opcode (OP_F90_RANGE); }
 	;
 
-subrange:	exp ':'	%prec ABOVE_COMMA
+subrange:	exp colon_star	%prec ABOVE_COMMA
 			{ write_exp_elt_opcode (OP_F90_RANGE);
 			  write_exp_elt_longcst (HIGH_BOUND_DEFAULT);
 			  write_exp_elt_opcode (OP_F90_RANGE); }
 	;
 
-subrange:	':' exp	%prec ABOVE_COMMA
+subrange:	star_colon exp	%prec ABOVE_COMMA
 			{ write_exp_elt_opcode (OP_F90_RANGE);
 			  write_exp_elt_longcst (LOW_BOUND_DEFAULT);
 			  write_exp_elt_opcode (OP_F90_RANGE); }
 	;
 
-subrange:	':'	%prec ABOVE_COMMA
+subrange:	star_colon_star	%prec ABOVE_COMMA
 			{ write_exp_elt_opcode (OP_F90_RANGE);
 			  write_exp_elt_longcst (BOTH_BOUND_DEFAULT);
 			  write_exp_elt_opcode (OP_F90_RANGE); }
@@ -601,13 +605,13 @@ subrange2:	signed_int colon_star
 			  push_type (tp_array); }
 	;
 
-subrange2:	':' signed_int
+subrange2:	star_colon signed_int
 			{ push_type_int (1);
 			  push_type_int ($2);
 			  push_type (tp_array); }
 	;
 
-subrange2:	colon_star
+subrange2:	star_colon_star
 			{ push_type_int (1);
 			  push_type_int (0);
 			  push_type (tp_array); }
@@ -619,14 +623,19 @@ subrange2:	signed_int
 			  push_type (tp_array); }
 	;
 
-subrange2:	'*'
-			{ push_type_int (1);
-			  push_type_int (0);
-			  push_type (tp_array); }
+star_colon:	':'
+	|	'*' ':'
 	;
 
 colon_star:	':'
 	|	':' '*'
+	;
+
+star_colon_star:	':'
+	|		'*'
+	|		':' '*'
+	|		'*' '|'
+	|		'*' ':' '*'
 	;
 
 signed_int:	INT
