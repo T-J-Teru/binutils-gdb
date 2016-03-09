@@ -28,6 +28,7 @@
 #include "language.h"
 #include "annotate.h"
 #include "valprint.h"
+#include "c-lang.h" /* #42713: for c_textual_element_type() */
 #include "floatformat.h"
 #include "doublest.h"
 #include "exceptions.h"
@@ -302,6 +303,39 @@ scalar_type_p (struct type *type)
       return 0;
     default:
       return 1;
+    }
+}
+
+/* #42713: A helper function for val_print.  When printing with limited depth
+   we want to print string and scalar arguments, but not aggregate arguments.
+   This function distinguishes between the two. */
+
+int
+scalar_or_string_type (struct type *type)
+{
+  /* resolve real type */
+  struct type * array_target_type = TYPE_TARGET_TYPE (type);
+  CHECK_TYPEDEF (type);
+  while (TYPE_CODE (type) == TYPE_CODE_REF)
+    {
+      type = TYPE_TARGET_TYPE (type);
+      CHECK_TYPEDEF (type);
+    }
+
+  switch (TYPE_CODE (type))
+    {
+    case TYPE_CODE_ARRAY:
+      /* see if target type looks like a string, see c_val_print */
+      array_target_type = TYPE_TARGET_TYPE (type);
+      return TYPE_LENGTH (type) > 0
+	  && TYPE_LENGTH (array_target_type) > 0
+	  && c_textual_element_type(array_target_type, 0);
+    case TYPE_CODE_STRING:
+      /* string for sure */
+      return 1;
+    default:
+      /* else, check for scalar */
+      return scalar_type_p(type);
     }
 }
 
@@ -789,7 +823,7 @@ val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
       return;
     }
 
-  if (!scalar_type_p (type) && recurse >= options->max_depth)
+  if (!scalar_or_string_type (type) && recurse >= options->max_depth)
     {
 	  if (language->la_language == language_fortran)
 		fputs_filtered ("(...)", stream);
