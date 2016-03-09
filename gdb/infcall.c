@@ -1282,6 +1282,7 @@ When the function is done executing, GDB will silently stop."),
     do_cleanups (context_saver_cleanup);
 
     gdb_assert (retval);
+    set_value_from_infcall (retval, 1);
     return retval;
   }
 }

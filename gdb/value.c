@@ -184,6 +184,9 @@ struct value
      (If so don't limit it to print_max elements when printing.)  */
   unsigned int repeated : 1;
 
+  /* Did this value come from a function call?  */
+  unsigned int from_infcall : 1;
+
   /* If zero, contents of this value are in the contents field.  If
      nonzero, contents are in inferior.  If the lval field is lval_memory,
      the contents are in inferior memory at location.address plus offset.
@@ -986,6 +989,7 @@ allocate_value_lazy (struct type *type)
   val->modifiable = 1;
   val->initialized = 1;  /* Default to initialized.  */
   val->repeated = 0;
+  val->from_infcall = 0;
 
   /* Values start out on the all_values chain.  */
   val->reference_count = 1;
@@ -4081,6 +4085,19 @@ int
 value_repeated (const struct value *value)
 {
   return value->repeated;
+}
+
+void
+set_value_from_infcall (struct value *value,
+			int from_infcall)
+{
+  value->from_infcall = from_infcall;
+}
+
+int
+value_from_infcall (const struct value *value)
+{
+  return value->from_infcall;
 }
 
 void
