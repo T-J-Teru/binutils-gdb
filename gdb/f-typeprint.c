@@ -323,10 +323,18 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
 
   if ((show <= 0) && f_has_valid_type_name( type ))
     {
+      int need_type = (TYPE_CODE (type) == TYPE_CODE_STRUCT
+		       || TYPE_CODE (type) == TYPE_CODE_UNION) &&
+		      (strlen (TYPE_NAME (type)) < 5
+		       || strncasecmp (TYPE_NAME (type), "type(", 5) != 0);
+      if (need_type)
+	fputs_filtered ("TYPE(", stream);
       demangled_name = (char *) f_munge_type_name (TYPE_NAME (type));
       fputs_filtered (demangled_name, stream);
       if (demangled_name != TYPE_NAME (type))
         xfree (demangled_name);
+      if (need_type)
+	fputs_filtered (")", stream);
       return;
     }
 
@@ -345,17 +353,10 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
       break;
 
     case TYPE_CODE_PTR:
-        if (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_ARRAY)
-            {
-                f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
-                fprintf_filtered (stream, ", POINTER");
-                break;
-            }
-        else
-            {
-                f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
-                break;
-            }
+      f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
+      fprintf_filtered (stream, ", POINTER");
+      break;
+
     case TYPE_CODE_REF:
       fprintf_filtered (stream, "REF TO -> ( ");
       f_type_print_base (TYPE_TARGET_TYPE (type), stream, 0, level);
@@ -404,24 +405,39 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
 
     case TYPE_CODE_STRUCT:
     case TYPE_CODE_UNION:
+      if (show < 0 || (show == 0 && TYPE_TAG_NAME (type)))
+	{
+	  fprintf_filtered (stream, "TYPE(%s)", TYPE_TAG_NAME (type));
+	  break;
+	}
       if (TYPE_CODE (type) == TYPE_CODE_UNION)
-	fprintfi_filtered (level, stream, "Type, C_Union :: ");
+	fprintfi_filtered (level, stream, "UNION ");
       else
-	fprintfi_filtered (level, stream, "Type ");
-      fputs_filtered (TYPE_TAG_NAME (type), stream);
+	fprintfi_filtered (level, stream, "TYPE ");
+      if (!TYPE_TAG_NAME (type))
+	fputs_filtered ("<unnamed>", stream);
+      else
+	fputs_filtered (TYPE_TAG_NAME (type), stream);
       fputs_filtered ("\n", stream);
       for (index = 0; index < TYPE_NFIELDS (type); index++)
 	{
-	  f_type_print_base (TYPE_FIELD_TYPE (type, index), stream, show,
+	  print_spaces_filtered (level + 4, stream);
+	  f_type_print_base (TYPE_FIELD_TYPE (type, index), stream, show - 1,
 			     level + 4);
 	  fputs_filtered (" :: ", stream);
 	  fputs_filtered (TYPE_FIELD_NAME (type, index), stream);
 	  f_type_print_varspec_suffix (TYPE_FIELD_TYPE (type, index),
 				       stream, 0, 0, 0, 0);
 	  fputs_filtered ("\n", stream);
-	} 
-      fprintfi_filtered (level, stream, "End Type ");
-      fputs_filtered (TYPE_TAG_NAME (type), stream);
+	}
+      if (TYPE_CODE (type) == TYPE_CODE_UNION)
+	fprintfi_filtered (level, stream, "END UNION ");
+      else
+	fprintfi_filtered (level, stream, "END TYPE ");
+      if (!TYPE_TAG_NAME (type))
+	fputs_filtered ("<unnamed>", stream);
+      else      
+	fputs_filtered (TYPE_TAG_NAME (type), stream);
       break;
 
     case TYPE_CODE_MODULE:
