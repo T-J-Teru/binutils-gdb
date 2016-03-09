@@ -63,6 +63,14 @@
 #include "terminal.h"
 #include "solist.h"
 
+
+/******************** Fast track debugging code **************************
+added by kdavis@cray.com*/
+extern int enable_fast_track_debugging;
+
+void jump_to_debug_function(CORE_ADDR addr, struct regcache *regcache);
+/****************** END - Fast track debugging code **********************/
+
 /* Prototypes for local functions */
 
 static void signals_info (char *, int);
@@ -129,6 +137,8 @@ int sync_execution = 0;
    in.  */
 
 static ptid_t previous_inferior_ptid;
+
+extern int debug_fast_track_debugging;
 
 /* If set (default for legacy reasons), when following a fork, GDB
    will detach from one of the fork branches, child or parent.
@@ -818,6 +828,81 @@ follow_fork (void)
 
   return should_resume;
 }
+
+/****************************** Fast track debugging code ********************************************************
+added & edited by kdavis@cray.com
+authored by mlink@cray.com:
+
+This function is responsible for stepping into a debug function while stepping.
+*/
+void
+jump_to_debug_function(CORE_ADDR addr, struct regcache *regcache)
+{
+	const char *original_function = NULL; //TEST!! - Added const to be inline with find_pc_partial_function funciton declaration
+	CORE_ADDR orignal_func_addr;
+
+	if (find_pc_partial_function(addr, &original_function, &orignal_func_addr, NULL)) {
+		if (addr == orignal_func_addr) {
+			struct symtab *s;
+			struct symtab_and_line sal;
+			struct symtabs_and_lines expanded;
+			int i;
+			
+			s = find_pc_symtab (addr);
+	  
+			if (s && s->language != language_asm) {
+			  struct gdb_exception e;
+
+			  /* Stop stepping when inserting breakpoints
+			     has failed.  */
+			  TRY_CATCH (e, RETURN_MASK_ERROR)
+			  {
+			    orignal_func_addr = gdbarch_skip_prologue(get_regcache_arch (regcache), orignal_func_addr);
+			  }
+			}
+			
+			sal = find_pc_line(orignal_func_addr, 0);
+			sal.pc = 0;
+			expanded = expand_line_sal(sal);
+			
+//			printf("%s:%d: %s 0x%x 0x%x %d 0x%x %d %d %p\n", __FUNCTION__, __LINE__, original_function, orignal_func_addr, read_pc(), 
+//          expanded.nelts, sal.pc, sal.line, sal.explicit_line, sal.symtab);
+			
+			for (i = 0; i < expanded.nelts; ++i) {
+				CORE_ADDR func_addr, func_end;
+				const char *this_function;   
+				CORE_ADDR pc = expanded.sals[i].pc;
+				
+				if (find_pc_partial_function(pc, &this_function, &func_addr, &func_end)) {
+//					printf("%s: function=%s\n", __FUNCTION__, this_function);
+					
+					if (strstr(this_function, "dbg$")) {
+						char* this_function_copy;
+						
+						asprintf(&this_function_copy, "%s", this_function);
+						this_function_copy += 4;
+						
+						if (strcmp(this_function_copy, original_function) == 0) {
+							regcache_write_pc(regcache, pc);
+	//						stop_pc = pc;
+							i = expanded.nelts;
+							
+							if (debug_fast_track_debugging) {
+								printf_unfiltered("[Gfast] Stepping into debug function %s [%p]\n", this_function, (void*)pc);
+							}
+						}
+						
+						this_function_copy -= 4;
+						free(this_function_copy);
+					}
+				}
+			}
+		}
+	}
+}
+/********************************** End - fast track debugging code ***************************************************/
+
+
 
 static void
 follow_inferior_reset_breakpoints (void)
@@ -3999,6 +4084,8 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
   enum stop_kind stop_soon;
   struct thread_info *thread_info;  
 
+  
+
   if (ecs->ws.kind == TARGET_WAITKIND_IGNORE)
     {
       /* We had an event in the inferior, but we are not interested in
@@ -4386,6 +4473,7 @@ Cannot fill $_exitsignal with the correct signal number.\n"));
 
       stop_pc = regcache_read_pc (get_thread_regcache (ecs->ptid));
 
+
       ecs->event_thread->control.stop_bpstat
 	= bpstat_stop_status (get_regcache_aspace (get_current_regcache ()),
 			      stop_pc, ecs->ptid, &ecs->ws);
@@ -4580,6 +4668,14 @@ handle_signal_stop (struct execution_control_state *ecs)
     ecs->event_thread->suspend.stop_signal = GDB_SIGNAL_0;
 
   stop_pc = regcache_read_pc (get_thread_regcache (ecs->ptid));
+
+  /******************* Fast track debuggie ************************
+    added by kdavis@cray.com*/    
+    if (enable_fast_track_debugging)
+       jump_to_debug_function(stop_pc, get_thread_regcache (ecs->ptid));
+    /********************** End - Fast track debugging code ********************************************************************/
+
+
 
   if (debug_infrun)
     {
@@ -4833,6 +4929,19 @@ handle_signal_stop (struct execution_control_state *ecs)
 #endif
       return;
     }
+
+
+  /* APB: While merging 3daecfce66b49770a13611fb5724e2b8e65dafe5 the
+     following block appeared, I'm not sure what to make of it.  */
+  abort ();
+#if 0
+  find_pc_partial_function (stop_pc, &ecs->stop_func_name, //added by kdavis@cray.com
+			    &ecs->stop_func_start, &ecs->stop_func_end);
+
+   ecs->stop_func_start
+    += gdbarch_deprecated_function_start_offset (gdbarch);//added by
+							  //kdavis@cray.com
+#endif
 
   ecs->event_thread->stepping_over_breakpoint = 0;
   ecs->event_thread->stepping_over_watchpoint = 0;
@@ -5174,6 +5283,18 @@ process_event_stop_test (struct execution_control_state *ecs)
 
   frame = get_current_frame ();
   gdbarch = get_frame_arch (frame);
+
+  /****************************** Fast Track debugging code ********************************************************
+      added and edited by kdavis@cray.com
+      mlink@cray.com:
+
+	  Check if we need to jump to a fast-track function, this should work for any breakpoint situation including stepping.
+  */
+  if (check_for_debug_jump_breakpoint(get_thread_regcache (ecs->ptid), ecs->event_thread->control.stop_bpstat)) {
+    stop_pc = regcache_read_pc (get_thread_regcache (ecs->ptid));
+    ecs->event_thread->control.stop_bpstat = bpstat_stop_status (get_regcache_aspace (get_current_regcache ()), stop_pc, ecs->ptid, &ecs->ws);
+  }
+  /****************************** END - Fast Track debugging code ***************************************************/
 
   what = bpstat_what (ecs->event_thread->control.stop_bpstat);
 
