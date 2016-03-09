@@ -43,7 +43,13 @@
 #include "doublest.h"
 #include "cp-abi.h"
 #include "cp-support.h"
+#include "frame.h"
+#include "value.h"
 #include <ctype.h>
+
+#include <exceptions.h>
+
+#include "dwarf2loc.h"          /* dl added this for the baton stuff */
 
 /* Ask stabsread.h to define the vars it normally declares `extern'.  */
 #define	EXTERN
@@ -155,6 +161,13 @@ static char *find_name_end (char *name);
 static int process_reference (char **string);
 
 void stabsread_clear_cache (void);
+
+static struct type *
+read_allocatable_array (struct type* type, char **pp, struct objfile *objfile, int allocatable, long offset); 
+
+
+static CORE_ADDR		/* return actual address of object */
+stabs_evaluate_allocated (void *baton, struct value *val, void* frame);
 
 static const char vptr_name[] = "_vptr$";
 static const char vb_name[] = "_vb$";
@@ -1418,6 +1431,64 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
       break;
     }
 
+      
+  if (TYPE_CODE (sym->type) == TYPE_CODE_ARRAY
+      && SYMBOL_LANGUAGE (sym) == language_fortran)
+    {
+      /* reverse the array - XLF has busted fortran */
+      
+      /* FIXME - this could bust G77 and Sun's Forte 
+	 - but I haven't yet seen the 'V' tag used by G77. */
+      
+      struct type *old_type = SYMBOL_TYPE (sym);
+      struct type *end_type = SYMBOL_TYPE (sym);
+
+      if (TYPE_CODE (old_type) == TYPE_CODE_ARRAY 
+	  && TYPE_CODE (TYPE_TARGET_TYPE (old_type)) == TYPE_CODE_ARRAY) 
+	{
+	  while (TYPE_CODE (end_type) == TYPE_CODE_ARRAY)
+	    {
+	      end_type = TYPE_TARGET_TYPE (end_type);
+	    }
+	  
+	  while (TYPE_CODE (old_type) == TYPE_CODE_ARRAY) 
+	    {
+	      CORE_ADDR (*expr_evaluate) (void*, struct value *, void*) = 0;
+	      
+	      int lower; 
+	      int upper;
+	      struct type *range_type;
+	      struct type *old_index_type;
+	      void *lower_bat = 0, *count_bat = 0, *upper_bat = 0;
+	      struct type* old_range_type;
+	      old_range_type = TYPE_FIELD_TYPE(old_type, 0);
+	      old_index_type = TYPE_INDEX_TYPE (old_type);
+	      
+	      lower = TYPE_ARRAY_LOWER_BOUND_VALUE (old_type); 
+	      upper = TYPE_ARRAY_UPPER_BOUND_VALUE (old_type); 
+	      if (TYPE_NFIELDS(old_range_type) >= 6)
+		{
+		  lower_bat = TYPE_LOW_BOUND_BATON(old_range_type); 
+		  upper_bat = TYPE_HIGH_BOUND_BATON(old_range_type); 
+		  count_bat = TYPE_COUNT_BOUND_BATON(old_range_type); 
+		  expr_evaluate = 
+		    (CORE_ADDR (*) (void*, struct value *, void*))  TYPE_BOUND_BATON_FUNCTION(old_range_type); 
+		}
+	      range_type = create_range_type_d ((struct type *) NULL, 
+						old_index_type,
+						lower, upper, lower_bat, upper_bat, count_bat, (LONGEST (*)(void*, CORE_ADDR, void*)) expr_evaluate);
+	      
+	      end_type = create_array_type (NULL, end_type, range_type);
+	      
+	    old_type = TYPE_TARGET_TYPE (old_type);
+	    }
+	}
+      
+      SYMBOL_TYPE (sym) = end_type;
+      
+      
+    }
+
   /* Some systems pass variables of certain types by reference instead
      of by value, i.e. they will pass the address of a structure (in a
      register or on the stack) instead of the structure itself.  */
@@ -1494,6 +1565,33 @@ error_type (char **pp, struct objfile *objfile)
 }
 
 
+
+
+static struct type *
+read_xlf_char_type(char** pp, struct type* rettype, struct objfile *objfile)
+{
+  /* expected pp is "-2;1" for single character, "-2;39" for char(39) */
+  struct type *chartype;
+
+  struct type *range_type;
+  long bound;
+  int bits;
+  if ((*pp)[0] != '-' || (*pp)[1] != '2' || (*pp)[2] != ';')
+    complaint (&symfile_complaints, _("Unexpected stabs code %s"), *pp);
+  
+  /* data is of expected format */
+  
+  *pp +=3; 
+  bound = read_huge_number(pp, 0, &bits, 0);
+  chartype = objfile_type (objfile)->builtin_char;
+  range_type = create_range_type((struct type *) NULL, objfile_type (objfile)->builtin_int, 1, bound);
+  rettype = create_array_type ( rettype, chartype, range_type);
+  TYPE_CODE (rettype) = TYPE_CODE_STRING;
+  return rettype;
+
+  
+}
+
 /* Read type information or a type definition; return the type.  Even
    though this routine accepts either type information or a type
    definition, the distinction is relevant--some parts of stabsread.c
@@ -1508,6 +1606,8 @@ read_type (char **pp, struct objfile *objfile)
   int typenums[2];
   char type_descriptor;
   struct type_quals type_quals;
+  int nbits; /* used for read_huge_number; do we need it? */
+  long offset = 0; /* stores the result of read_huge_number, used for assumed-shape arrays */   
 
   /* Size in bits of type if specified by a type attribute, or -1 if
      there is no size attribute.  */
@@ -1802,8 +1902,8 @@ again:
           = make_function_type (return_type,
 				dbx_lookup_type (typenums, objfile));
         struct type_list {
-          struct type *type;
-          struct type_list *next;
+          struct type *type; 
+         struct type_list *next;
         } *arg_types = 0;
         int num_args = 0;
 
@@ -1869,7 +1969,20 @@ again:
       type = make_qual_variant_type (type_quals, type,
 			   dbx_lookup_type (typenums, objfile));
       break;
-
+    
+    case 'O':       /* XLF assumed shape array */
+      /* a numeric offset will follow - we should read it and add it to the stack to get the offset of the array descriptor */
+      offset = read_huge_number (pp, ',', &nbits, 0); /* we should use this value as an offset later */
+      type = dbx_alloc_type (typenums, objfile);
+      type = read_allocatable_array (type, pp, objfile, 0, offset);
+      break;
+    
+    case 'A':		/* XLF allocatable array */
+      offset = objfile_type (objfile)->builtin_core_addr->length; /* array descriptor is found one pointer after the address of the array itself */
+      type = dbx_alloc_type (typenums, objfile);
+      type = read_allocatable_array (type, pp, objfile, 1, offset);
+      break;
+    
     case '@':
       if (isdigit (**pp) || **pp == '(' || **pp == '-')
 	{			/* Member (class & variable) type */
@@ -1890,6 +2003,7 @@ again:
       else
 	/* type attribute */
 	{
+	  struct type *target_type;
 	  char *attr = *pp;
 
 	  /* Skip to the semicolon.  */
@@ -1917,6 +2031,29 @@ again:
 	      /* FIXME: check to see if following type is array?  */
 	      is_vector = 1;
 	      break;
+
+	    case 'F':		/* pointer - Fortran XLF */
+              type = dbx_alloc_type (typenums, objfile);
+              replace_type(type, lookup_pointer_type(read_type(pp, objfile)));
+	      if ((**pp) == 0) return type;
+	      break;
+	    case 'i':		/* in */
+	    case 'o':		/* out */
+	    case 'u':		/* in/out */
+	    case 'A':		/* allocatable */
+	    case 'l': 		/* optional */
+	    case 'v': 		/* private */
+	      //	    case 'V': 		/* private */
+	    case 'b': 		/* public */
+	    case 'P': 		/* sequence */
+	    case 't':           /* XLF f90 TARGET type modifier */
+	    case 'R':
+	      type = dbx_alloc_type (typenums, objfile);
+	      target_type = read_type (pp, objfile);
+	      replace_type(type, target_type);
+	      if ((**pp) == 0) return type;
+	      break;
+
 
 	    default:
 	      /* Ignore unrecognized type attributes, so future compilers
@@ -2033,7 +2170,12 @@ again:
       if (typenums[0] != -1)
 	*dbx_lookup_type (typenums, objfile) = type;
       break;
-
+      
+    case 'M':
+      /* XLF character type */
+      type = dbx_alloc_type (typenums, objfile);
+      type = read_xlf_char_type(pp, type, objfile);
+      break;
     default:
       --*pp;			/* Go back to the symbol in error.  */
       /* Particularly important if it was \0!  */
@@ -2065,7 +2207,7 @@ rs6000_builtin_type (int typenum, struct objfile *objfile)
 					       rs6000_builtin_type_data);
 
   /* We recognize types numbered from -NUMBER_RECOGNIZED to -1.  */
-#define NUMBER_RECOGNIZED 34
+#define NUMBER_RECOGNIZED 36
   struct type *rettype = NULL;
 
   if (typenum >= 0 || typenum < -NUMBER_RECOGNIZED)
@@ -2225,6 +2367,12 @@ rs6000_builtin_type (int typenum, struct objfile *objfile)
       break;
     case 34:
       rettype = init_type (TYPE_CODE_INT, 8, 0, "integer*8", objfile);
+      break;
+    case 35:
+      rettype = init_type (TYPE_CODE_INT, 8, 0, "unsigned long", objfile);
+      break;
+    case 36:
+      rettype = init_type (TYPE_CODE_INT, 8, 0, "unsigned long", objfile);
       break;
     }
   negative_types[-typenum] = rettype;
@@ -3570,6 +3718,231 @@ read_struct_type (char **pp, struct type *type, enum type_code type_code,
   return (type);
 }
 
+struct stabs_baton
+{
+  char bound_type;
+  CORE_ADDR value;
+  struct objfile *objfile;
+};
+
+struct stabs_alloc_baton 
+{
+  struct type *element_type;
+  int allocatable;
+  struct objfile *objfile;
+  long descriptor_offset;
+};
+static void
+stabs_create_generic_allocated_baton (struct type* type, struct stabs_alloc_baton* baton, struct type* range_type)
+{
+  struct array_location_batons* generic_baton;
+  generic_baton = (struct array_location_batons *) 
+     TYPE_ALLOC (type, sizeof (struct array_location_batons));
+  memset (generic_baton, 0, sizeof (struct array_location_batons));
+
+  generic_baton->baton_evaluation_function = (void*) stabs_evaluate_allocated;
+  generic_baton->intel_location_baton = (struct dwarf2_loclist_baton *) baton;
+  generic_baton->pgi_lbase_baton = NULL;
+  generic_baton->pgi_elem_skip_baton = NULL;
+ 
+  TYPE_NFIELDS (type) = 2;
+  TYPE_FIELDS (type) =
+      (struct field *) TYPE_ALLOC (type, 2 * sizeof (struct field));
+  memset (TYPE_FIELDS (type), 0, 2 * sizeof (struct field));
+
+  TYPE_FIELD_TYPE (type, 0) = (struct type*) range_type;
+  TYPE_FIELD_TYPE (type, 1) = (struct type*) generic_baton;
+
+
+}
+
+static CORE_ADDR		/* return actual address of object */
+stabs_evaluate_allocated_safely (void *baton, struct value *val, void* frame)
+{
+  struct stabs_alloc_baton *b;
+  struct type *target_type;
+  struct type *type;
+  struct type *range_type = 0;
+  int i;
+  int is64bit = 0;
+  int offset = 0;
+  int args_offset = 0;
+  int descriptor_type, descriptor_flags, data_type, version;
+  int rank; 
+  long long element_length;
+  long long relative_virtual_origin; /* no, I don't know what one is */
+  CORE_ADDR obj;
+  CORE_ADDR args;
+  CORE_ADDR array_addr;
+
+  b = (struct stabs_alloc_baton *) baton;
+  obj = value_address (val);
+  is64bit = objfile_type (b->objfile)->builtin_core_addr->length == 8;
+
+  if (b->allocatable)
+  {
+    /* in allocatable arrays, obj represents the address of the array */
+    array_addr = value_as_address (value_at (objfile_type (b->objfile)->builtin_core_addr, obj));
+    /* the offset of the descriptor is relative to the obj pointer, generally 4 or 8 bytes */
+    offset += b->descriptor_offset;
+  }
+  else
+  {
+    array_addr = obj; /* obj represents the address of the array, not the descriptor */
+    args = get_frame_args_address((struct frame_info *) frame); /* but the rest of this func treats it as the address of the array descriptor, so here we start getting at that */
+    obj = value_as_address (value_at (objfile_type (b->objfile)->builtin_core_addr, args+b->descriptor_offset)); /* args+offset now contains the address of the array descriptor - dereference it to get it */
+  }
+
+  descriptor_type = (int) value_as_long ( value_at (objfile_type (b->objfile)->builtin_char, obj + offset++) ); 
+  data_type = (int) value_as_long ( value_at (objfile_type (b->objfile)->builtin_char, obj + offset++) ); 
+  descriptor_flags = (int) value_as_long ( value_at (objfile_type (b->objfile)->builtin_char, obj + offset++) ); 
+  version = (int) value_as_long ( value_at (objfile_type (b->objfile)->builtin_char, obj + offset++) ); 
+
+  if (is64bit)			/* these two spec'd to have different rank/element order - 
+				   presumable for better byte alignment */
+    {
+      rank =  (int) value_as_long ( value_at (objfile_type (b->objfile)->builtin_int, obj + offset) ); 
+      offset += 4;
+      element_length =  (long long) value_as_address ( value_at (objfile_type (b->objfile)->builtin_core_addr, obj + offset) ); 
+      offset += 8;
+    }
+  else
+    {
+      element_length =  (long) value_as_long ( value_at (objfile_type (b->objfile)->builtin_int, obj + offset) ); 
+      offset += 4;
+      rank =  (int) value_as_long ( value_at (objfile_type (b->objfile)->builtin_int, obj + offset) ); 
+      offset += 4;
+    }
+
+      if (rank > MAX_FORTRAN_DIMS)
+	error("Max fortran dimensions exceeded - rank of %d given", rank);
+
+  relative_virtual_origin =  (long long) value_as_address ( value_at (objfile_type (b->objfile)->builtin_core_addr, obj + offset) ); 
+  offset += objfile_type (b->objfile)->builtin_core_addr->length;
+
+  /* and now for the array dimensions */
+
+  /* let's assume this is fortran, no other language cares */
+
+  if (!((0x80 | 0x40) & descriptor_flags)) /* 0x80 indicates allocated for @A attribute types, 0x40 indicates assosciated for @F attribute types */ 
+    {
+      /* not allocated presently */
+      return 0;
+    }
+
+  target_type = b->element_type;  
+
+  for (i = rank ; i-- > 0; )
+    {
+      long lower;
+      long upper;
+      lower = value_as_long ( value_at (objfile_type (b->objfile)->builtin_long, obj + offset + i * 3 * (is64bit ? 8 : 4) ));
+      upper = value_as_long ( value_at (objfile_type (b->objfile)->builtin_long, obj + offset + (i * 3 + 1) * (is64bit ? 8 : 4)))
+	+ lower - 1;
+
+      range_type = create_range_type (NULL, objfile_type (b->objfile)->builtin_long, lower, upper);
+
+      target_type = create_array_type(NULL, target_type, range_type);
+    }
+  
+  type = value_type (val);
+
+  if (TYPE_CODE (type) == TYPE_CODE_PTR) 
+    {
+      replace_type (TYPE_TARGET_TYPE (type), target_type);
+    }
+  else 
+    {
+      replace_type (type, target_type);
+      stabs_create_generic_allocated_baton (type, baton, range_type);
+    
+    }
+
+  return array_addr;
+}
+
+static CORE_ADDR		/* return actual address of object */
+stabs_evaluate_allocated (void *baton, struct value *val, void* frame)
+{
+  volatile struct gdb_exception exception;
+  CORE_ADDR array_addr = 0;  
+
+  TRY_CATCH (exception, -1)
+    {
+      array_addr = stabs_evaluate_allocated_safely (baton, val, frame);
+    }
+  exception_print (gdb_stderr, exception); 
+  if (exception.reason != 0)
+    return 0;
+  else return array_addr;
+}
+
+static struct type *
+read_allocatable_array (struct type* type, char **pp, struct objfile *objfile, int allocatable, long offset)
+{
+  struct type *range_type;
+  struct stabs_alloc_baton *baton;
+
+  baton = (struct stabs_alloc_baton *) obstack_alloc (&objfile->objfile_obstack,
+				      sizeof (struct stabs_alloc_baton));
+
+
+  /* plan to construct baton containing type */
+  baton->element_type = read_type(pp, objfile);
+  baton->allocatable = allocatable;
+  baton->descriptor_offset = offset;
+  baton->objfile = objfile; 
+  range_type = create_range_type(NULL, objfile_type (objfile)->builtin_int, 0, 1);
+  type = create_array_type(type, baton->element_type, range_type);
+
+  stabs_create_generic_allocated_baton (type, baton, range_type);
+
+
+  return type;
+}
+
+
+static LONGEST
+stabs_evaluate_bound (void *baton, struct value *pobj, void *frame)
+{
+  /*
+   IBM's XLF compiler does following for adjustable arrays:
+   Adigits = passed by reference on stack
+   Sdigits = passed by value in static storage
+   Tdigits = passed by value on the stack
+   adigits = passed by reference in a register
+   tdigits = passed by value in a register
+  */
+  struct value *val;
+  struct stabs_baton *b;
+  CORE_ADDR obj;
+  CORE_ADDR addr;
+  b = (struct stabs_baton *) baton;
+  obj = value_address (pobj);
+
+  switch (b->bound_type)
+    {
+    case 'T':
+      addr = get_frame_locals_address((struct frame_info *) frame);
+      addr += b->value;
+      val = value_at (objfile_type (b->objfile)->builtin_core_addr, addr); 
+      return value_as_long(val);
+      break;
+    case 'A':
+      addr = get_frame_locals_address((struct frame_info *) frame);
+      addr += b->value;
+      val = value_at (objfile_type (b->objfile)->builtin_core_addr, addr);
+      val = value_at (objfile_type (b->objfile)->builtin_int, value_as_address (val));
+      return value_as_long(val);
+      break;
+    case 'S':
+    case 'a':
+    case 't':
+      return 0;
+    }
+  return 0;
+}
+
 /* Read a definition of an array type,
    and create and return a suitable type object.
    Also creates a range type which represents the bounds of that
@@ -3580,16 +3953,30 @@ read_array_type (char **pp, struct type *type,
 		 struct objfile *objfile)
 {
   struct type *index_type, *element_type, *range_type;
-  int lower, upper;
+  int lower = 0, upper = 0;
   int adjustable = 0;
   int nbits;
 
+  struct stabs_baton *lower_baton = NULL;
+  struct stabs_baton *upper_baton = NULL;
   /* Format of an array type:
      "ar<index type>;lower;upper;<array_contents_type>".
      OS9000: "arlower,upper;<array_contents_type>".
 
      Fortran adjustable arrays use Adigits or Tdigits for lower or upper;
-     for these, produce a type like float[][].  */
+     for these, produce a type like float[][].  
+
+     IBM's XLF compiler does following for adjustable arrays:
+     Adigits = passed by reference on stack
+     Sdigits = passed by value in static storage
+     Tdigits = passed by value on the stack
+     adigits = passed by reference in a register
+     tdigits = passed by value in a register
+
+     If bound is 'J' then value is unbounded.
+
+
+  */
 
     {
       index_type = read_type (pp, objfile);
@@ -3598,36 +3985,89 @@ read_array_type (char **pp, struct type *type,
 	return error_type (pp, objfile);
       ++*pp;
     }
+    if ((**pp < '0' || **pp > '9') && **pp != '-')
+      {
+	char t = **pp;
+	switch (**pp)
+	  {
+	  case 'T':
+	  case 'A':
+	  case 'S':
+	  case 'a':
+	  case 't':
+	    (*pp)++;
+	    lower_baton =
+	      (struct stabs_baton *) obstack_alloc (&objfile->objfile_obstack,
+						    sizeof (struct stabs_baton));
+	    lower_baton->value = read_huge_number (pp, ';', &nbits, 0);
+	    lower_baton->bound_type = t;
+	    lower_baton->objfile = objfile;
+	    adjustable = 1;
+	    lower = 0;
+	    break;
+	  default:
+	    complaint (&symfile_complaints,
+		       _("Array bound type %c not handled yet"), **pp);
+	    break;
+	  }
+      }
+    else
+      lower = read_huge_number (pp, ';', &nbits, 0);
+    
+    if (nbits != 0)
+      return error_type (pp, objfile);
 
-  if (!(**pp >= '0' && **pp <= '9') && **pp != '-')
-    {
-      (*pp)++;
-      adjustable = 1;
-    }
-  lower = read_huge_number (pp, ';', &nbits, 0);
 
-  if (nbits != 0)
-    return error_type (pp, objfile);
+    if ((**pp < '0' || **pp > '9') && **pp != '-')
+      {
+	char t = **pp;
+	switch (**pp)
+	  {
+	  case 'T':
+	  case 'A':
+	  case 'S':
+	  case 'a':
+	  case 't':
+	    
+	    upper_baton =
+	      (struct stabs_baton *) obstack_alloc (&objfile->objfile_obstack,
+						    sizeof (struct stabs_baton));
+	    (*pp)++;
+	    upper_baton->objfile = objfile ; upper_baton->bound_type = t;
+	    upper_baton->value = read_huge_number (pp, ';', &nbits, 0);
+	    adjustable = 1;
+	    break;
+	  case 'J':
+	    upper = -1;
+	    adjustable = 1;
+	    break;
+	  default:
+	    complaint (&symfile_complaints,
+		       _("Array bound type %c not handled yet"), **pp);
+	  }
+      }
+    else
+      {
+	upper = read_huge_number (pp, ';', &nbits, 0);
+	if (nbits != 0)
+	  return error_type (pp, objfile);
+      }
+    element_type = read_type (pp, objfile);
 
-  if (!(**pp >= '0' && **pp <= '9') && **pp != '-')
-    {
-      (*pp)++;
-      adjustable = 1;
-    }
-  upper = read_huge_number (pp, ';', &nbits, 0);
-  if (nbits != 0)
-    return error_type (pp, objfile);
+/*   if (adjustable)		 */
+/*     { */
+/*       lower = 0; */
+/*       upper = -1; */
+/*     } */
 
-  element_type = read_type (pp, objfile);
-
-  if (adjustable)
-    {
-      lower = 0;
-      upper = -1;
-    }
+  /* APB-TODO: Merge conflict in 33fe302.  Note sure what to do.  */
+  abort ();
 
   range_type =
+#if 0
     create_static_range_type ((struct type *) NULL, index_type, lower, upper);
+#endif
+    create_range_type_d ((struct type *) NULL, index_type, lower, upper, lower_baton, upper_baton, NULL, (LONGEST (*)(void*, CORE_ADDR, void*)) &stabs_evaluate_bound);
   type = create_array_type (type, element_type, range_type);
 
   return type;
