@@ -44,8 +44,18 @@
 #include "auto-load.h"
 #include "cli/cli-utils.h"
 
+#include "symtab.h"
 #include <signal.h>
 #include <ctype.h>
+
+/* MPC_BEGIN */
+
+#include "ui-out.h"
+static int tdb_debug = 1 ;
+static td_err_e (*td_set_tdb_verbosity_p) (int n) ;
+static int (*td_get_tdb_verbosity_p) (void) ;
+
+/* MPC END */
 
 /* GNU/Linux libthread_db support.
 
@@ -196,6 +206,16 @@ struct thread_db_info
   td_err_e (*td_thr_tls_get_addr_p) (const td_thrhandle_t *th,
 				     psaddr_t map_address,
 				     size_t offset, psaddr_t *address);
+/* MPC BEGIN */
+	td_err_e (*td_thr_getfpregs_p)(const td_thrhandle_t *th_p,
+				      prfpregset_t *fpregset);
+	td_err_e (*td_thr_setfpregs_p)(const td_thrhandle_t *th_p,
+				      const prfpregset_t *fpregset);
+	td_err_e (*td_thr_getgregs_p)(const td_thrhandle_t *th_p,
+				     prgregset_t regset);
+	td_err_e (*td_thr_setgregs_p)(const td_thrhandle_t *th_p,
+				     const prgregset_t regset);
+/* MPC END */
 };
 
 /* List of known processes using thread_db, and the required
@@ -459,9 +479,11 @@ thread_from_lwp (ptid_t ptid)
   /* Access an lwp we know is stopped.  */
   info->proc_handle.ptid = ptid;
   err = info->td_ta_map_lwp2thr_p (info->thread_agent, GET_LWP (ptid), &th);
-  if (err != TD_OK)
-    error (_("Cannot find user-level thread for LWP %ld: %s"),
-	   GET_LWP (ptid), thread_db_err_str (err));
+	if (tdb_debug && err == TD_NOTHR)
+		return;	/* Thread must have terminated.  */
+	else if (err != TD_OK)
+		error (_("Cannot find user-level thread for LWP %ld: %s"),
+			   GET_LWP (ptid), thread_db_err_str (err));
 
   /* Long-winded way of fetching the thread info.  */
   io.thread_db_info = info;
@@ -734,19 +756,24 @@ try_thread_db_load_1 (struct thread_db_info *info)
 
   info->td_init_p = verbose_dlsym (info->handle, "td_init");
   if (info->td_init_p == NULL)
-    return 0;
+  {
+		printf_unfiltered (_("Unable to load td_init\n"));
+		return 0;
+  }
 
   err = info->td_init_p ();
   if (err != TD_OK)
     {
-      warning (_("Cannot initialize libthread_db: %s"),
-	       thread_db_err_str (err));
+      warning (_("Cannot initialize libthread_db: %s"), thread_db_err_str (err));
       return 0;
     }
 
   info->td_ta_new_p = verbose_dlsym (info->handle, "td_ta_new");
   if (info->td_ta_new_p == NULL)
-    return 0;
+  {
+	  printf_unfiltered (_("Unable to load td_ta_new\n"));
+	  return 0;
+  }
 
   /* Initialize the structure that identifies the child process.  */
   info->proc_handle.ptid = inferior_ptid;
@@ -756,8 +783,7 @@ try_thread_db_load_1 (struct thread_db_info *info)
   if (err != TD_OK)
     {
       if (libthread_db_debug)
-	printf_unfiltered (_("td_ta_new failed: %s\n"),
-			   thread_db_err_str (err));
+		printf_unfiltered (_("td_ta_new failed: %s\n"), thread_db_err_str (err));
       else
         switch (err)
           {
@@ -777,24 +803,38 @@ try_thread_db_load_1 (struct thread_db_info *info)
 
   info->td_ta_map_id2thr_p = verbose_dlsym (info->handle, "td_ta_map_id2thr");
   if (info->td_ta_map_id2thr_p == NULL)
-    return 0;
+  {
+		printf_unfiltered (_("Unable to load td_ta_map_id2thr\n"));
+		return 0;
+  }
 
-  info->td_ta_map_lwp2thr_p = verbose_dlsym (info->handle,
-					     "td_ta_map_lwp2thr");
+  info->td_ta_map_lwp2thr_p = verbose_dlsym (info->handle, "td_ta_map_lwp2thr");
   if (info->td_ta_map_lwp2thr_p == NULL)
-    return 0;
+  {
+		printf_unfiltered (_("Unable to load td_ta_map_lwp2thr\n"));
+		return 0;
+  }
 
   info->td_ta_thr_iter_p = verbose_dlsym (info->handle, "td_ta_thr_iter");
   if (info->td_ta_thr_iter_p == NULL)
-    return 0;
+  {
+		printf_unfiltered (_("Unable to load td_ta_thr_iter\n"));
+		return 0;
+  }
 
   info->td_thr_validate_p = verbose_dlsym (info->handle, "td_thr_validate");
   if (info->td_thr_validate_p == NULL)
-    return 0;
+  {
+ 	printf_unfiltered (_("Unable to load td_thr_validate\n"));
+	return 0;
+  }
 
   info->td_thr_get_info_p = verbose_dlsym (info->handle, "td_thr_get_info");
   if (info->td_thr_get_info_p == NULL)
-    return 0;
+  {
+		printf_unfiltered (_("Unable to load td_thr_get_info\n"));
+		return 0;
+  }
 
   /* These are not essential.  */
   info->td_ta_event_addr_p = dlsym (info->handle, "td_ta_event_addr");
@@ -860,18 +900,55 @@ try_thread_db_load (const char *library)
 {
   void *handle;
   struct thread_db_info *info;
+  /* MPC BEGIN */
+  char *dlopen_path, *env ;
+  /* MPC END */
 
   if (libthread_db_debug)
-    printf_unfiltered (_("Trying host libthread_db library: %s.\n"),
-                       library);
-  handle = dlopen (library, RTLD_NOW);
+    printf_unfiltered (_("Trying host libthread_db library: %s.\n"), library);
+    
+   /* MPC BEGIN */
+  dlopen_path = LIBTHREAD_DB_SO;
+  if ((env = getenv("GDB_LIBTHREAD_DB")) != NULL) 
+  {
+    if (env != NULL) 
+    {
+      dlopen_path = env;
+    } 
+  } 
+  else 
+  {
+    tdb_debug = 0 ;
+  }
+  handle = dlopen (dlopen_path, RTLD_NOW);
+  /* MPC END */
+ 
   if (handle == NULL)
     {
-      if (libthread_db_debug)
-	printf_unfiltered (_("dlopen failed: %s.\n"), dlerror ());
-      return 0;
+	  /* MPC BEGIN */
+      tdb_debug = 0 ;
+      if (dlopen_path == env) {
+		warning("dlopen : %s", dlerror());
+		warning ("Cannot initialize TDB libthread_db: impossible to open %s", dlopen_path);
+		fprintf_filtered (gdb_stderr, "Switching back to system's libthread_db\n");
+		dlopen_path = LIBTHREAD_DB_SO ;
+		handle = dlopen (dlopen_path, RTLD_NOW);
+		if (handle == NULL)
+		{
+			fprintf_filtered (gdb_stderr, "\n\ndlopen failed on '%s' - %s\n", dlopen_path, dlerror ());
+			fprintf_filtered (gdb_stderr, "GDB will not be able to debug pthreads.\n\n");
+			return 0;
+		}
+      }
+      else
+      {
+		fprintf_filtered (gdb_stderr, "\n\ndlopen failed on '%s' - %s\n", dlopen_path, dlerror ());
+		fprintf_filtered (gdb_stderr, "GDB will not be able to debug pthreads.\n\n");
+		return 0;
+	  }
     }
 
+/* MPC END */
   if (libthread_db_debug && strchr (library, '/') == NULL)
     {
       void *td_init;
@@ -882,8 +959,7 @@ try_thread_db_load (const char *library)
           const char *const libpath = dladdr_to_soname (td_init);
 
           if (libpath != NULL)
-            printf_unfiltered (_("Host %s resolved to: %s.\n"),
-                               library, libpath);
+            printf_unfiltered (_("Host %s resolved to: %s.\n"), library, libpath);
         }
     }
 
@@ -894,7 +970,42 @@ try_thread_db_load (const char *library)
     info->filename = gdb_realpath (library);
 
   if (try_thread_db_load_1 (info))
-    return 1;
+  {
+	  if(tdb_debug)
+	  {
+			info->td_thr_getgregs_p = verbose_dlsym (handle, "td_thr_getgregs");
+			if(info->td_thr_getgregs_p == NULL)
+			{
+				printf_unfiltered (_("Unable to load td_thr_getgregs\n"));
+				return 0;
+			}
+				
+			info->td_thr_setgregs_p = verbose_dlsym (handle, "td_thr_setgregs");
+			if(info->td_thr_setgregs_p == NULL)
+			{
+				printf_unfiltered (_("Unable to load td_thr_setgregs\n"));
+				return 0;
+			}
+				
+			info->td_thr_getfpregs_p = verbose_dlsym (handle, "td_thr_getfpregs");
+			if(info->td_thr_getfpregs_p == NULL)
+			{
+				printf_unfiltered (_("Unable to load td_thr_getfpregs\n"));
+				return 0;
+			}
+				
+			info->td_thr_setfpregs_p = verbose_dlsym (handle, "td_thr_setfpregs");
+			if(info->td_thr_setfpregs_p == NULL)
+			{
+				printf_unfiltered (_("Unable to load td_thr_setfpregs\n"));
+				return 0;
+			}
+				
+			td_set_tdb_verbosity_p = dlsym(handle, "td_set_tdb_verbosity");
+			td_get_tdb_verbosity_p = dlsym(handle, "td_get_tdb_verbosity");
+		}
+		return 1;
+   }
 
   /* This library "refused" to work on current inferior.  */
   delete_thread_db_info (GET_PID (inferior_ptid));
@@ -1617,7 +1728,10 @@ find_new_threads_callback (const td_thrhandle_t *th_p, void *data)
 	return 0;
     }
 
-  ptid = ptid_build (info->pid, ti.ti_lid, 0);
+  if (tdb_debug)
+    ptid = ptid_build (info->pid, ti.ti_lid, ti.ti_tid);
+  else
+    ptid = ptid_build (info->pid, ti.ti_lid, 0);
   tp = find_thread_ptid (ptid);
   if (tp == NULL || tp->private == NULL)
     {
@@ -1876,6 +1990,266 @@ thread_db_get_thread_local_address (struct target_ops *ops,
 	         _("TLS not supported on this target"));
 }
 
+/* MPC BEGIN */
+
+static void info_tdbthreads (char *args, int from_tty);
+static int info_cb (const td_thrhandle_t *th, void *arg);
+int tdb_remove_dead_threads (struct thread_info *thread, void *data);
+static void tdb_thread_fetch_registers (struct target_ops *ops, struct regcache *regcache, int regnum);
+static void tdb_thread_prepare_to_store (struct regcache *regcache);
+static void tdb_thread_store_registers (struct target_ops *ops, struct regcache *regcache, int regnum);
+
+
+static int info_cb (const td_thrhandle_t *th, void *arg)
+{
+  td_err_e ret;
+  td_thrinfo_t ti;
+  struct callback_data *cb_data = (struct callback_data *)arg;
+  struct thread_db_info *info = cb_data->info;
+   if (info == NULL)
+  {
+	  printf_filtered("No threads launched\n");
+	  return 0;
+  }
+  if( info->td_thr_get_info_p != NULL)
+	ret = info->td_thr_get_info_p (th, &ti);
+  else
+	printf_filtered ("td_thr_get_info error\n");
+	ret = TD_OK;
+  if (ret == TD_OK)
+  {
+     printf_filtered ("  %d\t%s\tThread %p\t(LWP %d)", cb_data->new_threads, ti.ti_type == TD_THR_SYSTEM ? "system " : "user ", (void *) ti.ti_tid, ti.ti_lid);
+     
+    switch (ti.ti_state)
+    {
+      default:
+      case TD_THR_UNKNOWN:
+        printf_filtered ("<unknown state>");
+        break;
+      case TD_THR_STOPPED:
+        printf_filtered ("(stopped)");
+        break;
+      case TD_THR_RUN:
+        printf_filtered ("(run)    ");
+        break;
+      case TD_THR_ACTIVE:
+        printf_filtered ("(active) ");
+        break;
+      case TD_THR_ZOMBIE:
+        printf_filtered ("(zombie) ");
+        break;
+      case TD_THR_SLEEP:
+        printf_filtered ("(asleep) ");
+        break;
+      case TD_THR_STOPPED_ASLEEP:
+        printf_filtered ("(stopped asleep)");
+        break;
+    }
+
+    printf_filtered ("\tid: %p - ", th->th_unique);
+    
+
+    if (ti.ti_startfunc != 0)
+    {
+      struct minimal_symbol *msym;
+      msym = lookup_minimal_symbol_by_pc ((CORE_ADDR) ti.ti_startfunc);
+      if (msym)
+        printf_filtered ("startfunc: %s\n", DEPRECATED_SYMBOL_NAME (msym));
+      else
+        printf_filtered ("startfunc: 0x%s\n", hex_string ((CORE_ADDR)ti.ti_startfunc));
+    }
+
+   
+    if (ti.ti_state == TD_THR_SLEEP)
+    {
+      struct minimal_symbol *msym;
+      msym = lookup_minimal_symbol_by_pc (ti.ti_pc);
+      if (msym)
+        printf_filtered ("Sleep func: %s\n", DEPRECATED_SYMBOL_NAME (msym));
+      else
+        printf_filtered ("Sleep func: 0x%s (Impossible to lookup the name)\n", hex_string ((CORE_ADDR)ti.ti_startfunc));
+    }
+
+  
+    if (ti.ti_state != TD_THR_SLEEP && ti.ti_startfunc == 0)
+      printf_filtered ("\n");
+  }
+  else
+    warning ("info tdb-thread: failed to get info for thread.");
+
+  (cb_data->new_threads)++ ;
+  return 0;
+}
+
+
+
+
+static void info_tdbthreads (char *args, int from_tty)
+{
+	struct thread_db_info *info = NULL;
+	struct callback_data data;
+	info = get_thread_db_info (GET_PID (inferior_ptid));
+	data.info = info;
+	data.new_threads = 1;
+	if (info == NULL)
+	{
+		printf_filtered("No threads launched\n");
+	}
+	else
+	{
+		printf_filtered ("  Id\tType\tTarget id\t\tFrame\n");
+		info->td_ta_thr_iter_p (info->thread_agent, info_cb, &data, TD_THR_ANY_STATE, TD_THR_LOWEST_PRIORITY, TD_SIGNO_MASK, TD_THR_ANY_USER_FLAGS);
+	}
+}
+
+
+int tdb_remove_dead_threads (struct thread_info *thread, void *data) 
+{
+  ptid_t *target = (ptid_t *) data ;
+  
+  if (ptid_equal (thread->ptid, *target)) {
+    thread->ptid = pid_to_ptid (-1);	
+    return 1 ;
+  }
+
+  return 0 ;
+}
+
+static void tdb_thread_fetch_registers (struct target_ops *ops, struct regcache *regcache, int regnum)
+{
+  thread_t thread;
+  td_thrhandle_t thandle;
+  td_err_e val;
+  prgregset_t gregset;
+  prfpregset_t fpregset;
+  gdb_gregset_t *gregset_p = &gregset;
+  gdb_fpregset_t *fpregset_p = &fpregset;
+  struct target_ops *target_beneath;
+  struct thread_db_info *info;
+  info = get_thread_db_info (GET_PID (inferior_ptid));
+  target_beneath = find_target_beneath (ops);
+  if (!(ptid_get_tid(inferior_ptid) != 0))
+    {
+      target_beneath->to_fetch_registers (target_beneath, regcache, regnum);
+      return;
+    }
+
+  
+  thread = ptid_get_tid (inferior_ptid);
+  if (thread == 0)
+    error ("tdb_thread_fetch_registers: thread == 0");
+
+  val = info->td_ta_map_id2thr_p (info->thread_agent, thread, &thandle);
+  if (val != TD_OK && val != TD_NOTHR)
+    error ("tdb_thread_fetch_registers: td_ta_map_id2thr: %s",
+	   thread_db_err_str (val));
+
+  if (val == TD_NOTHR) {
+    bzero(gregset_p, sizeof(gdb_gregset_t)) ;
+    bzero(fpregset_p, sizeof(gdb_fpregset_t)) ;
+
+    iterate_over_threads(tdb_remove_dead_threads, &inferior_ptid) ;
+  } else {
+    
+
+    val = info->td_thr_getgregs_p (&thandle, gregset);
+    if (val != TD_OK && val != TD_PARTIALREG)
+      error ("tdb_thread_fetch_registers: td_thr_getgregs %s",
+	     thread_db_err_str (val));
+    
+   
+    
+    val = info->td_thr_getfpregs_p (&thandle, &fpregset);
+    if (val != TD_OK && val != TD_NOFPREGS)
+      error ("tdb_thread_fetch_registers: td_thr_getfpregs %s",
+	     thread_db_err_str (val));
+    
+  }
+ 
+
+#if 1
+  if (*(void **)regcache == NULL) {
+    fprintf_filtered (gdb_stderr, "\n");
+    fprintf_filtered (gdb_stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    fprintf_filtered (gdb_stderr, "!!!!!!  HERE IS THE   !!!!!!\n");
+    fprintf_filtered (gdb_stderr, "!!!!!!!!  PROBLEM     !!!!!!\n");
+    fprintf_filtered (gdb_stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n");
+    error ("Expected TDB error (regcache), please try again");
+  }
+#endif
+  supply_gregset (regcache, (const gdb_gregset_t *) gregset_p);
+  supply_fpregset (regcache, (const gdb_fpregset_t *) fpregset_p);
+}
+
+static void tdb_thread_store_registers(struct target_ops *ops, struct regcache *regcache, int regnum)
+{
+  thread_t thread;
+  td_thrhandle_t thandle;
+  td_err_e val;
+  prgregset_t gregset;
+  prfpregset_t fpregset;
+  struct target_ops *target_beneath;
+  struct thread_db_info *info;
+  info = get_thread_db_info (GET_PID (inferior_ptid));
+  target_beneath = find_target_beneath (ops);
+  if (!(ptid_get_tid(inferior_ptid) != 0))
+    {
+     
+      target_beneath->to_store_registers (target_beneath, regcache, regnum);
+      return;
+    }
+
+  
+  thread = ptid_get_tid (inferior_ptid);
+
+  val = info->td_ta_map_id2thr_p (info->thread_agent, thread, &thandle);
+  if (val != TD_OK)
+    error ("tdb_thread_store_registers: td_ta_map_id2thr %s",
+	   thread_db_err_str (val));
+
+  if (regnum != -1)
+    {
+    
+      char old_value[MAX_REGISTER_SIZE];
+
+     
+      regcache_raw_collect (regcache, regnum, old_value);
+
+      val = info->td_thr_getgregs_p (&thandle, gregset);
+      if (val != TD_OK)
+	error ("tdb_thread_store_registers: td_thr_getgregs %s",
+	       thread_db_err_str (val));
+      val = info->td_thr_getfpregs_p (&thandle, &fpregset);
+      if (val != TD_OK)
+	error ("tdb_thread_store_registers: td_thr_getfpregs %s",
+	       thread_db_err_str (val));
+
+     
+      regcache_raw_supply (regcache, regnum, old_value);
+
+    }
+
+  fill_gregset (regcache, (gdb_gregset_t *) &gregset, regnum);
+  fill_fpregset (regcache, (gdb_fpregset_t *) &fpregset, regnum);
+
+  val = info->td_thr_setgregs_p (&thandle, gregset);
+  if (val != TD_OK)
+    error ("tdb_thread_store_registers: td_thr_setgregs %s",
+      thread_db_err_str (val));
+  val = info->td_thr_setfpregs_p (&thandle, &fpregset);
+  if (val != TD_OK)
+    error ("tdb_thread_store_registers: td_thr_setfpregs %s",
+      thread_db_err_str (val));
+
+}
+
+static void tdb_thread_prepare_to_store(struct regcache *regcache)
+{
+	
+}
+
+/* MPC END */
+
 /* Callback routine used to find a thread based on the TID part of
    its PTID.  */
 
@@ -2088,7 +2462,34 @@ init_thread_db_ops (void)
   thread_db_ops.to_extra_thread_info = thread_db_extra_thread_info;
   thread_db_ops.to_get_ada_task_ptid = thread_db_get_ada_task_ptid;
   thread_db_ops.to_magic = OPS_MAGIC;
+  /* MPC BEGIN */
+  if (tdb_debug) {
+    thread_db_ops.to_fetch_registers 	= 	tdb_thread_fetch_registers;
+    thread_db_ops.to_store_registers 	= 	tdb_thread_store_registers;
+    thread_db_ops.to_prepare_to_store 	= 	tdb_thread_prepare_to_store;
+  }
+  /* MPC END */
 }
+
+/* MPC BEGIN */
+static int tdb_verbosity_level = 0 ;
+
+static void set_tdb_verbosity (char *args, int from_tty, struct cmd_list_element *c)
+{
+  if (td_set_tdb_verbosity_p != NULL) {
+    td_set_tdb_verbosity_p (tdb_verbosity_level) ;
+  } else {
+    warning ("td_set_tdb_verbosity not implemented in libthread_db");
+  }
+}
+
+
+static void
+show_tdb_verbosity (struct ui_file *file, int from_tty, struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, "Level of verbosity : %s.\n", value);
+}
+/* MPC END */
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */
 extern initialize_file_ftype _initialize_thread_db;
@@ -2149,7 +2550,27 @@ Usage: info auto-load libthread-db"),
 
   /* Add ourselves to objfile event chain.  */
   observer_attach_new_objfile (thread_db_new_objfile);
+  /* MPC BEGIN */
+  if(tdb_debug) 
+  {
+		add_cmd ("tdb-threads", class_info, info_tdbthreads,
+		 "Show info on TDB user threads.", &infolist);
+	
+	add_setshow_uinteger_cmd("tdb-verbose", class_maintenance,
+				 &tdb_verbosity_level,
+				 "Set the level if verbosity  TDB libthread_db",
+				 "Show the level of verbosity of TDB libthread_db",
+				 NULL,
+				 set_tdb_verbosity, show_tdb_verbosity,
+				 &setlist, &showlist);
 
+			if (td_set_tdb_verbosity_p != NULL) {
+			  tdb_verbosity_level = (td_get_tdb_verbosity_p != NULL ?
+						 td_get_tdb_verbosity_p () : 0 ) ;
+			  td_set_tdb_verbosity_p (tdb_verbosity_level) ;
+			}
+      }
+      /* MPC END */
   /* Add ourselves to inferior_created event chain.
      This is needed to handle debugging statically linked programs where
      the new_objfile observer won't get called for libpthread.  */

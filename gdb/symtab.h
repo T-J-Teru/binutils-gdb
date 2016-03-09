@@ -184,6 +184,7 @@ extern CORE_ADDR symbol_overlayed_address (CORE_ADDR, struct obj_section *);
    functions, unless the callers are changed to pass in the ginfo
    field only, instead of the SYMBOL parameter.  */
 
+#define DEPRECATED_SYMBOL_NAME(symbol)	(symbol)->ginfo.name
 #define SYMBOL_VALUE(symbol)		(symbol)->ginfo.value.ivalue
 #define SYMBOL_VALUE_ADDRESS(symbol)	(symbol)->ginfo.value.address
 #define SYMBOL_VALUE_BYTES(symbol)	(symbol)->ginfo.value.bytes
