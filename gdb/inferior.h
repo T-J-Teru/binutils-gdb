@@ -235,6 +235,13 @@ void set_step_info (struct frame_info *frame, struct symtab_and_line sal);
 
 /* From infcmd.c */
 
+enum focus_kind
+  {
+    FOCUS_CURRENT_THREAD,
+    FOCUS_CURRENT_INFERIOR,
+    FOCUS_ALL_THREADS
+  };
+
 extern void post_create_inferior (struct target_ops *, int);
 
 extern void attach_command (char *, int);
@@ -247,9 +254,9 @@ extern void set_inferior_args_vector (int, char **);
 
 extern void registers_info (char *, int);
 
-extern void continue_1 (int all_threads);
+extern void continue_1 (enum focus_kind focus);
 
-extern void interrupt_target_1 (int all_threads);
+extern void interrupt_target_1 (enum focus_kind focus);
 
 extern void delete_longjmp_breakpoint_cleanup (void *arg);
 
