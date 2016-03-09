@@ -631,6 +631,10 @@ find_subfile (const char *name, const char *dirname)
 {
   struct subfile dummy = {0};
   struct subfile *subfile;
+
+  if (!subfiles_map)
+    return NULL;
+
   dummy.name = (char*) name;
   dummy.dirname = (char*) dirname;
 
@@ -653,16 +657,26 @@ start_subfile (const char *name, const char *dirname)
 {
   struct subfile *subfile;
 
-  /* See if this subfile is already known as a subfile of the current
-     main source file.  */
-  struct subfile dummy = {0};
-  dummy.name = (char *) name;
-  dummy.dirname = (char*) dirname;
-
-  if ((subfile = htab_find (subfiles_map, &dummy)))
+  if (!subfiles_map)
     {
-      current_subfile = subfile;
-      return;
+      /* Initialize the list of sub source files with one entry for this
+         file (the top-level source file).  */
+      subfiles_map = htab_create_alloc(100, htab_hash_subfile, htab_eq_subfile,
+                                       NULL, htab_alloc_ptr, htab_free_ptr);
+    }
+  else
+    {
+      /* See if this subfile is already known as a subfile of the current
+         main source file.  */
+      struct subfile dummy = {0};
+      dummy.name = (char *) name;
+      dummy.dirname = (char*) dirname;
+
+      if ((subfile = htab_find (subfiles_map, &dummy)))
+        {
+          current_subfile = subfile;
+          return;
+        }
     }
 
   /* This subfile is not known.  Add an entry for it.  Make an entry
@@ -947,11 +961,9 @@ restart_symtab (CORE_ADDR start_addr)
 
   /* We shouldn't have any address map at this point.  */
   gdb_assert (! pending_addrmap);
-  
-  /* Initialize the list of sub source files with one entry for this
-     file (the top-level source file).  */
-  subfiles_map = htab_create_alloc(100, htab_hash_subfile, htab_eq_subfile, 
-				   NULL, htab_alloc_ptr, htab_free_ptr);
+
+  if (subfiles_map)
+    htab_empty (subfiles_map);
   subfiles = NULL;
   current_subfile = NULL;
 }
