@@ -546,6 +546,8 @@ print_frame_args (struct symbol *func, struct frame_info *frame,
   struct ui_file *stb;
   /* True if we should print arguments, false otherwise.  */
   int print_args = strcmp (print_frame_arguments, "none");
+  int summary = !strcmp (print_frame_arguments, "scalars");
+  struct type *type;
 
   stb = mem_fileopen ();
   old_chain = make_cleanup_ui_file_delete (stb);
@@ -672,7 +674,14 @@ print_frame_args (struct symbol *func, struct frame_info *frame,
 	    ui_out_text (uiout, ", ");
 	  ui_out_wrap_hint (uiout, "    ");
 
-	  if (!print_args)
+	  type = SYMBOL_TYPE (sym);
+	  if (!print_args
+	      || (summary && (TYPE_CODE (type) == TYPE_CODE_ARRAY
+			      || (TYPE_CODE (type) == TYPE_CODE_PTR
+				  && ((language_mode == language_mode_auto
+					&& SYMBOL_LANGUAGE (sym) == language_fortran) ||
+				      (language_mode != language_mode_auto
+					&& current_language->la_language == language_fortran))))))
 	    {
 	      memset (&arg, 0, sizeof (arg));
 	      arg.sym = sym;
