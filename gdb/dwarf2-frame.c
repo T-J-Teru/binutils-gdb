@@ -1128,7 +1128,7 @@ dwarf2_frame_cache (struct frame_info *this_frame, void **this_cache)
     }
   CATCH (ex, RETURN_MASK_ERROR)
     {
-      if (ex.error == NOT_AVAILABLE_ERROR)
+      if ((ex.error == NOT_AVAILABLE_ERROR) || (ex.error == OPTIMIZED_OUT_ERROR)) 
 	{
 	  cache->unavailable_retaddr = 1;
 	  do_cleanups (old_chain);
