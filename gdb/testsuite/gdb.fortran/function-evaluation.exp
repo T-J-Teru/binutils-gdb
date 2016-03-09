@@ -1,0 +1,27 @@
+if $tracelevel then {
+	strace $tracelevel
+}
+
+if { [skip_fortran_tests] } { return -1 }
+
+set testfile "function-evaluation"
+set srcfile ${testfile}.f90
+set binfile ${objdir}/${subdir}/${testfile}
+
+if {[gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" \
+	 executable {debug f90}] != ""} {
+    return -1
+}
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+if ![runto [gdb_get_line_number "breakpoint1"] ] then {
+    perror "couldn't run to breakpoint "
+    continue
+}
+
+gdb_test "print factorial(4)" "24"
+gdb_test "print factorial(5)" "120"
