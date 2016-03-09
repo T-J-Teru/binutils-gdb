@@ -947,7 +947,7 @@ record_minimal_symbol (const char *name, CORE_ADDR address,
    nested.  At any given time, a symbol can only be in one static block.
    This is the base address of current static block, zero if non exists.  */
 
-static int static_block_base = 0;
+static CORE_ADDR static_block_base = 0;
 
 /* Section number for the current static block.  */
 
