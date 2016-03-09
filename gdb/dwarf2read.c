@@ -533,6 +533,8 @@ struct dwarf2_cu
      whether the DW_AT_ranges attribute came from the skeleton or DWO.  */
   ULONGEST ranges_base;
 
+  const char *comp_dir;
+
   /* Mark used when releasing cached dies.  */
   unsigned int mark : 1;
 
@@ -556,6 +558,8 @@ struct dwarf2_cu
      this information, but later versions do.  */
 
   unsigned int processing_has_namespace_info : 1;
+
+  unsigned int decoded_lines : 1;
 };
 
 /* Persistent data held for a compilation unit, even when not
@@ -9270,6 +9274,8 @@ read_file_scope (struct die_info *die, struct dwarf2_cu *cu)
 
   find_file_and_directory (die, cu, &name, &comp_dir);
 
+  cu->comp_dir = comp_dir;
+
   prepare_one_comp_unit (cu, die, cu->language);
 
   /* The XLCL doesn't generate DW_LANG_OpenCL because this attribute is not
@@ -9302,8 +9308,9 @@ read_file_scope (struct die_info *die, struct dwarf2_cu *cu)
 
   /* Process the actual line numbers after processing the dies so
      check_cu_function works properly.  */
-  if (cu->line_header)
+  if (cu->line_header && !cu->decoded_lines)
     {
+      cu->decoded_lines = 1;
       dwarf_decode_lines (cu->line_header, comp_dir, cu, NULL, 1);
     } 
 
@@ -19058,9 +19065,153 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
   name = dwarf2_name (die, cu);
   if (name)
     {
+      int bupc_start_line = 0, bupc_end_line = 0;
+      struct context_stack *bupc_context = NULL;
+      CORE_ADDR bupc_lowpc = 0, bupc_highpc = 0;
+      CORE_ADDR bupc_baseaddr = 0;
       const char *linkagename;
       int suppress_add = 0;
 
+      /* Berkeley mangled local variable.  */
+      /* e.g. int __BLN__N1_i_L2168_L2169; */
+      if (strncmp (name, "__BLN__N", 8) == 0 ||
+	  strncmp (name, "__SLN__N", 8) == 0)
+        {
+	  const char *unmangled_name;
+	  char *endptr;
+	  struct linetable *l;
+	  int name_len;
+	  int i, len, file_index;
+	  CORE_ADDR last_pc;
+	  struct file_entry *fe;
+	  struct subfile *old_subfile, *subfile;
+	  name_len = strtol(name + 8, &endptr, 10);
+	  if (*endptr != '_')
+	    goto malformed;
+	  endptr++;
+	  unmangled_name = endptr;
+	  endptr += name_len;
+	  if (*endptr != '_')
+	    goto malformed;
+	  endptr++;
+	  while (*endptr == 'N')
+	    {
+	      endptr++;
+	      len = strtol(endptr, &endptr, 10);
+	      if (*endptr != '_')
+		goto malformed;
+	      endptr++;
+	      endptr += len;
+	      if (*endptr != '_')
+		goto malformed;
+	      endptr++;
+	    }
+	  /* Sometimes there is a duplicate underscore after the name.  */
+	  if (*endptr == '_')
+	    endptr++;
+	  if (*endptr != 'L')
+	    goto malformed;
+	  endptr++;
+	  bupc_start_line = strtol(endptr, &endptr, 10);
+	  if (*endptr != '_')
+	    goto malformed;
+	  endptr++;
+	  if (*endptr != 'L')
+	    goto malformed;
+	  endptr++;
+	  if (*endptr == 'L')
+	    endptr++;
+	  else if (*endptr != '\0')
+	    bupc_end_line = strtol(endptr, &endptr, 10);
+	  if (*endptr != '\0' && *endptr != '_')
+	    goto malformed;
+#if 0 /* moved to upc_demangle in upc-lang.c */
+	  if (*endptr == '_')
+	    {
+	      endptr++;
+	      unmangled_name = xstrprintf ("%s%s", unmangled_name, endptr);
+              name = obsavestring (unmangled_name, name_len, &objfile->objfile_obstack);
+	      free ((void *) unmangled_name);
+	    }
+	  else
+	    {
+	      name = obsavestring (unmangled_name, name_len, &objfile->objfile_obstack);
+	    }
+#endif
+	  if (bupc_end_line == 0)
+	    {
+	      /* File scope variables already have the right scope.  */
+	      goto wellformed;	      
+	    }
+
+	  bupc_baseaddr = ANOFFSET (objfile->section_offsets, SECT_OFF_TEXT (objfile));
+	 
+	  if (!cu->decoded_lines)
+	    {
+	      /* dwarf_decode_lines changes current_subfile but we don't want that.  */
+	      old_subfile = current_subfile;
+	      cu->decoded_lines = 1;
+	      dwarf_decode_lines (cu->line_header, cu->comp_dir, cu, NULL, 1);
+	      current_subfile = old_subfile;
+	    }
+
+	  attr = dwarf2_attr (die,
+			      inlined_func ? DW_AT_call_file : DW_AT_decl_file,
+			      cu);
+	  if (!attr)
+	    {
+	      complaint (&symfile_complaints, _("Can't find scope for local variable `%s': can't find file where it was declared (missing DW_AT_decl_file attribute)"), name);
+	      goto wellformed;
+	    }
+	  file_index = DW_UNSND (attr);
+
+	  if (cu->line_header == NULL
+	      || file_index > cu->line_header->num_file_names)
+	    {
+	      complaint (&symfile_complaints, _("file index out of range"));
+	      goto wellformed;
+	    }
+	  fe = &cu->line_header->file_names[file_index - 1];
+	  old_subfile = current_subfile;
+	  subfile = find_subfile (fe->name, cu->comp_dir);
+	  current_subfile = old_subfile;
+	  if (!subfile)
+	    {
+	      complaint (&symfile_complaints, _("Can't find scope for local variable `%s': can't find subfile `%s'."), name, fe->name);
+	      goto wellformed;
+	    }
+	  l = subfile->line_vector;
+	  if (!l)
+	    {
+	      complaint (&symfile_complaints, _("Can't find scope for local variable `%s': no line number table for subfile `%s'."), name, fe->name);
+	      goto wellformed;
+	    }
+	  len = l->nitems;
+	  for (i = 0; i < len; i++)
+	    {
+	      struct linetable_entry *item = &(l->item[i]);
+
+	      if (item->line >= bupc_start_line && bupc_lowpc == 0)
+		bupc_lowpc = item->pc;
+	      if (item->line > bupc_end_line && (bupc_highpc == 0 || item->pc < bupc_highpc))
+		bupc_highpc = item->pc;
+	    }
+
+	  if (bupc_lowpc == 0 || bupc_highpc == 0)
+	    {
+	      complaint (&symfile_complaints, _("Can't find scope for local variable `%s': no PC for lines %d to %d."), name, bupc_start_line, bupc_end_line);
+	      goto wellformed;
+	    }
+	  bupc_lowpc += baseaddr;
+	  bupc_highpc += baseaddr;
+
+	  bupc_context = push_context (0, bupc_lowpc);
+
+	  goto wellformed;
+malformed:
+	  complaint (&symfile_complaints, _("Malformed mangled local variable name `%s'"), name);
+        }
+wellformed:
       if (space)
 	sym = space;
       else
@@ -19113,12 +19264,19 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
         }
 
 
-      attr = dwarf2_attr (die,
-			  inlined_func ? DW_AT_call_line : DW_AT_decl_line,
-			  cu);
-      if (attr)
+      if (bupc_start_line != 0)
 	{
-	  SYMBOL_LINE (sym) = DW_UNSND (attr);
+	  SYMBOL_LINE (sym) = bupc_start_line;
+	}
+      else
+        {
+	  attr = dwarf2_attr (die,
+			      inlined_func ? DW_AT_call_line : DW_AT_decl_line,
+			      cu);
+	  if (attr)
+	    {
+	      SYMBOL_LINE (sym) = DW_UNSND (attr);
+	    }
 	}
 
       attr = dwarf2_attr (die,
@@ -19495,6 +19653,41 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
       if (!cu->processing_has_namespace_info
 	  && cu->language == language_cplus)
 	cp_scan_for_anonymous_namespaces (sym, objfile);
+
+      if (bupc_context)
+	{
+	  bupc_context = pop_context ();
+
+	  if (local_symbols != NULL || using_directives != NULL)
+	    {
+	      /* Find the correct parent for this block.  */
+	      struct pending_block *pblock;
+	      struct block *block;
+	      /* Find the innermost block that contains the new block's PC range.  */
+	      for (pblock = pending_blocks; 
+		   pblock && pblock != context_stack->old_blocks;
+		   pblock = pblock->next)
+		{
+		  if (BLOCK_START (pblock->block) <= bupc_context->start_addr
+		      && BLOCK_END (pblock->block) >= bupc_highpc)
+		    {
+		      /* Innermost blocks are first in the pending_blocks list.  */
+		      break;
+		    }
+		}
+
+	      block
+		= finish_block (0, &local_symbols, bupc_context->old_blocks, bupc_context->start_addr,
+				bupc_highpc, objfile);
+	      if (pblock != context_stack->old_blocks)
+	        {
+		  /* The new block will be a child of pblock->block.  */
+		  BLOCK_SUPERBLOCK (block) = pblock->block;
+		}
+	    }
+	  local_symbols = bupc_context->locals;
+	  using_directives = bupc_context->using_directives;
+	}
     }
   return (sym);
 }

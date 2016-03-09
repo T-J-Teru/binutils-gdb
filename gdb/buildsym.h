@@ -37,7 +37,15 @@ struct compunit_symtab;
    this technique.  */
 
 struct block;
-struct pending_block;
+
+/* List of blocks already made (lexical contexts already closed).
+   This is used at the end to make the blockvector.  */
+
+struct pending_block
+  {
+    struct pending_block *next;
+    struct block *block;
+  };
 
 #ifndef EXTERN
 #define	EXTERN extern
@@ -176,6 +184,16 @@ EXTERN int within_function;
 /* The type of the record_line function.  */
 typedef void (record_line_ftype) (struct subfile *subfile, int line,
 				  CORE_ADDR pc);
+
+EXTERN struct pending_block *pending_blocks;
+
+
+
+struct subfile_stack
+  {
+    struct subfile_stack *next;
+    char *name;
+  };
 
 
 

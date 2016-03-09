@@ -747,6 +747,66 @@ upc_lang_init (char *cmd, int from_tty)
 
 extern void _initialize_upc_language (void);
 
+char *upc_demangle (const char *mangled, int options)
+{
+  const char *unmangled_name;
+  char *endptr;
+  int name_len, len;
+  if (strncmp (mangled, "__BLN__N", 8) != 0
+      && strncmp (mangled, "__SLN__N", 8) != 0)
+    return NULL;
+  name_len = strtol(mangled + 8, &endptr, 10);
+  if (*endptr != '_')
+    return NULL;
+  endptr++;
+  unmangled_name = endptr;
+  endptr += name_len;
+  if (*endptr != '_')
+    return NULL;
+  endptr++;
+  while (*endptr == 'N')
+  {
+    endptr++;
+    len = strtol(endptr, &endptr, 10);
+    if (*endptr != '_')
+      return NULL;
+    endptr++;
+    endptr += len;
+    if (*endptr != '_')
+      return NULL;
+    endptr++;
+  }
+  /* Sometimes there is a duplicate underscore after the name.  */
+  if (*endptr == '_')
+    endptr++;
+  if (*endptr != 'L')
+    return NULL;
+  endptr++;
+  (void) strtol(endptr, &endptr, 10);
+  if (*endptr != '_')
+    return NULL;
+  endptr++;
+  if (*endptr != 'L')
+    return NULL;
+  endptr++;
+  if (*endptr == 'L')
+    endptr++;
+  else if (*endptr != '\0')
+    (void) strtol(endptr, &endptr, 10);
+  if (*endptr != '\0' && *endptr != '_')
+    return NULL;
+  
+  if (*endptr == '_')
+  {
+    endptr++;
+    return xstrprintf ("%s%s", unmangled_name, endptr);
+  }
+  else
+  {
+    return strndup (unmangled_name, name_len);
+  }
+}
+
 void
 _initialize_upc_language (void)
 {
