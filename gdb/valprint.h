@@ -95,6 +95,9 @@ struct value_print_options
   /* If nonzero, when printing a pointer, print the symbol to which it
      points, if any.  */
   int symbol_print;
+
+  /* Maximum print depth.  */
+  int max_depth;
 };
 
 /* The global print options set by the user.  In general this should
