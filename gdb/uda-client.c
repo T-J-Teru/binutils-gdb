@@ -47,6 +47,7 @@
 static const struct type **type_tbl;
 static size_t type_tbl_alloc_size;
 static size_t type_tbl_size;
+static int mythread;
 
 typedef struct minimal_symbol *sym_p;
 
@@ -169,6 +170,8 @@ read_local_bytes (const uda_tword_t thread_num,
   CORE_ADDR local_addr = (CORE_ADDR) addr;
   int status;
   uda_tword_t old_thread_num;
+  if (upcsingle && thread_num != mythread)
+    return uda_no_information;
   old_thread_num = upc_thread_set (thread_num);
   status = target_read_memory (local_addr, data, length);
   upc_thread_restore (old_thread_num);
@@ -190,6 +193,8 @@ write_local_bytes (const uda_tword_t thread_num,
   CORE_ADDR local_addr = (CORE_ADDR) addr;
   int status;
   uda_tword_t old_thread_num;
+  if (upcsingle && thread_num != mythread)
+    return uda_no_information;  
   old_thread_num = upc_thread_set (thread_num);
   status = target_write_memory (local_addr, data, length);
   upc_thread_restore (old_thread_num);
@@ -290,6 +295,16 @@ uda_set_num_threads (const uda_tword_t num_threads)
 {
   int status;
   uda_rmt_send_cmd ("Qupc.threads:%ux", num_threads);
+  status = uda_rmt_recv_status ();
+  return status;
+}
+
+int
+uda_set_thread_num (const uda_tword_t thread_num)
+{
+  int status;
+  mythread = thread_num;
+  uda_rmt_send_cmd ("Qupc.thread:%ux", thread_num);
   status = uda_rmt_recv_status ();
   return status;
 }
@@ -477,6 +492,7 @@ void
 init_uda_client(uda_callouts_p callouts)
 {
   callouts->uda_set_num_threads = &uda_set_num_threads;
+  callouts->uda_set_thread_num = &uda_set_thread_num;  
   callouts->uda_set_type_sizes_and_byte_order = &uda_set_type_sizes_and_byte_order;
   callouts->uda_symbol_to_pts = &uda_symbol_to_pts;
   callouts->uda_length_of_pts = &uda_length_of_pts;

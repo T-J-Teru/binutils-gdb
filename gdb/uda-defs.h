@@ -46,6 +46,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 struct uda_callouts {
   int (*uda_set_num_threads)(
       const uda_tword_t);
+  int (*uda_set_thread_num)(
+      const uda_tword_t);      
   int (*uda_set_type_sizes_and_byte_order)(
       const uda_target_type_sizes_t,
       const uda_tword_t byte_order);
