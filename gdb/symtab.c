@@ -1177,6 +1177,19 @@ demangle_for_lookup (const char *name, enum language lang,
 	}
     }
 
+  if (current_language->la_case_sensitivity == case_sensitive_off)
+    {
+      char *copy;
+      int len, i;
+
+      len = strlen (name);
+      copy = (char *) alloca (len + 1);
+      for (i= 0; i < len; i++)
+        copy[i] = tolower (name[i]);
+      copy[len] = 0;
+      modified_name = copy;
+    }
+
   *result_name = modified_name;
   return cleanup;
 }
