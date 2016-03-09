@@ -1442,6 +1442,9 @@ do_captured_thread_select (struct ui_out *uiout, void *tidstr)
   if (upcmode && !is_upc_thread(tp))
     error (_("Thread ID %d is not UPC thread."), input_num);
 
+  if (current_inferior())
+    current_inferior()->last_thread = inferior_ptid;
+  
   switch_to_thread (tp->ptid);
 
   annotate_thread_changed ();

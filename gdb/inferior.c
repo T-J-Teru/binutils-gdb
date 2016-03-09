@@ -699,6 +699,9 @@ inferior_command (char *args, int from_tty)
   if (inf == NULL)
     error (_("Inferior ID %d not known."), num);
 
+  if (current_inferior_)
+    current_inferior_->last_thread = inferior_ptid;
+  
   printf_filtered (_("[Switching to inferior %d [%s] (%s)]\n"),
 		   inf->num,
 		   inferior_pid_to_str (inf->pid),
@@ -710,9 +713,12 @@ inferior_command (char *args, int from_tty)
     {
       if (inf->pid != ptid_get_pid (inferior_ptid))
 	{
-	  struct thread_info *tp;
+	  struct thread_info *tp = NULL;
 
-	  tp = any_thread_of_process (inf->pid);
+	  if (!ptid_equal (inf->last_thread, null_ptid))
+	    tp = find_thread_ptid (inf->last_thread);
+	  if (!tp)
+	    tp = any_thread_of_process (inf->pid); 
 	  if (!tp)
 	    error (_("Inferior has no threads."));
 

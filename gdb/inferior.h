@@ -518,6 +518,9 @@ struct inferior
      this gdbarch.  */
   struct gdbarch *gdbarch;
 
+  /* The last thread of this inferior that was current.  */
+  ptid_t last_thread;
+  
   /* Per inferior data-pointers required by other GDB modules.  */
   REGISTRY_FIELDS;
 };
