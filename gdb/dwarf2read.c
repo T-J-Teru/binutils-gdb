@@ -11405,7 +11405,8 @@ process_structure_scope (struct die_info *die, struct dwarf2_cu *cu)
       while (child_die && child_die->tag)
 	{
 	  if (child_die->tag == DW_TAG_member
-	      || child_die->tag == DW_TAG_variable)
+	      || 
+	      (cu->language == language_cplus && child_die->tag == DW_TAG_variable))
 	    {
 	      /* NOTE: carlton/2002-11-05: A C++ static data member
 		 should be a DW_TAG_member that is a declaration, but
