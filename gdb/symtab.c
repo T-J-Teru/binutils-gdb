@@ -3122,6 +3122,7 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
      we will use a line one less than this,
      with a range from the start of that file to the first line's pc.  */
   struct linetable_entry *alt = NULL;
+  struct symtab *alt_symtab = 0;
 
   /* Info on best line seen in this file.  */
 
@@ -3264,7 +3265,10 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
       /* Is this file's first line closer than the first lines of other files?
          If so, record this file, and its first line, as best alternate.  */
       if (item->pc > pc && (!alt || item->pc < alt->pc))
-	alt = item;
+	{
+	  alt = item;
+	  alt_symtab = s;
+	}
 
       for (i = 0; i < len; i++, item++)
 	{
@@ -3306,11 +3310,23 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
 
   if (!best_symtab)
     {
-      /* If we didn't find any line number info, just return zeros.
-	 We used to return alt->line - 1 here, but that could be
-	 anywhere; if we don't have line number info for this PC,
-	 don't make some up.  */
-      val.pc = pc;
+      if (!alt_symtab)
+	{			/* If we didn't find any line # info, just
+				   return zeros.  */
+	  val.pc = pc;
+	}
+      else
+	{
+	  val.symtab = alt_symtab;
+	  val.line = alt->line - 1;
+
+	  /* Don't return line 0, that means that we didn't find the line.  */
+	  if (val.line == 0)
+	    ++val.line;
+
+	  val.pc = BLOCK_END (BLOCKVECTOR_BLOCK (bv, GLOBAL_BLOCK));
+	  val.end = alt->pc;
+	}
     }
   else if (best->line == 0)
     {
