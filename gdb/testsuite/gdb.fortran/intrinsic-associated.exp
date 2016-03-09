@@ -1,0 +1,92 @@
+# Copyright 2015 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile ".f90"
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} \
+    {debug f90 quiet}] } {
+    return -1
+}
+
+if ![runto MAIN__] then {
+    perror "couldn't run to breakpoint MAIN__"
+    continue
+}
+
+gdb_breakpoint [gdb_get_line_number "value associated"]
+gdb_continue_to_breakpoint "value associated"
+
+gdb_test "print associated (value)" " = \\.TRUE\\." \
+  "print value associated status"
+
+gdb_test "print l" " = \\.TRUE\\." \
+  "print value desassociated status"
+
+gdb_breakpoint [gdb_get_line_number "value desassociated"]
+gdb_continue_to_breakpoint "value deassociated"
+
+gdb_test "print associated (value)" " = \\.FALSE\\." \
+  "print value desassociated status"
+
+gdb_test "print l" " = \\.FALSE\\." \
+  "print value associated status"
+
+gdb_breakpoint [gdb_get_line_number "pvla-vla associated"]
+gdb_continue_to_breakpoint "pvla-vla associated"
+
+gdb_test "print associated (pvla, vla)" " = \\.TRUE\\." \
+  "print pvla-vla associated"
+
+gdb_test "print associated (pvla, value)" " = \\.FALSE\\." \
+  "print pvla-value desacosiate sanity check"
+
+gdb_test "print l" " = \\.TRUE\\." \
+  "print pvla-vla associated compiler"
+
+gdb_breakpoint [gdb_get_line_number "pvla-vla desassociated"]
+gdb_continue_to_breakpoint "pvla-vla associated"
+
+gdb_test "print associated (pvla, vla)" " = \\.FALSE\\." \
+  "print pvla-vla deassociated"
+
+gdb_test "print l" " = \\.FALSE\\." \
+  "print pvla-vla deassociated compiler"
+
+gdb_breakpoint [gdb_get_line_number "associated pvla2-pvla"]
+gdb_continue_to_breakpoint "pvla-vla associated"
+
+gdb_test "print associated (pvla2, pvla)" " = \\.TRUE\\." \
+  "print associated pvla2-pvla"
+
+gdb_test "print l" " = \\.TRUE\\." \
+  "print associated pvla2-pvla compiler"
+
+gdb_breakpoint [gdb_get_line_number "desassociated pvla2-pvla"]
+gdb_continue_to_breakpoint "desassociated pvla2-pvla"
+
+gdb_test "print associated (pvla2, pvla)" " = \\.FALSE\\." \
+  "print desassociated pvla2-pvla"
+
+gdb_test "print l" " = \\.FALSE\\." \
+  "print desassociated pvla2-pvla compiler"
+
+gdb_breakpoint [gdb_get_line_number "associated pvla-array"]
+gdb_continue_to_breakpoint "associated pvla-array "
+
+gdb_test "print associated (pvla, array)" " = \\.TRUE\\." \
+  "print associated pvla-array"
+
+gdb_test "print l" " = \\.TRUE\\." \
+  "print associated pvla-array compiler"
