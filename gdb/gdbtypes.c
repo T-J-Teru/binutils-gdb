@@ -2392,6 +2392,10 @@ check_typedef (struct type *type)
 	  else
 	    type = newtype;
 	}
+      else
+	{
+	  complaint (&symfile_complaints, _("unable to resolve opaque type `%s'"), name);
+	}
     }
   /* Otherwise, rely on the stub flag being set for opaque/stubbed
      types.  */
@@ -2420,6 +2424,10 @@ check_typedef (struct type *type)
 	  else
 	    type = SYMBOL_TYPE (sym);
         }
+      else
+        {
+	  complaint (&symfile_complaints, _("unable to resolve stub type `%s'"), name);
+	}
     }
     
   if (TYPE_CODE (type) == TYPE_CODE_PTR
