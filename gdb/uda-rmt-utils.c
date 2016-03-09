@@ -240,7 +240,7 @@ uda_rmt_vformat_msg (char *buf, const char *fmt, va_list ap_arg)
 	      /* Encoded binary data */
 	      uda_string_t encoded_bytes;
 	      gdb_byte *bytes;
-	      n_bytes = va_arg (ap, int);
+	      n_bytes = va_arg (ap, size_t);
 	      ++fp;
 	      bytes = va_arg (ap, gdb_byte *);
 	      uda_encode_binary_data (encoded_bytes, bytes, n_bytes);

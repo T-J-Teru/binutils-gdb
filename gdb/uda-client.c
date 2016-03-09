@@ -490,7 +490,7 @@ uda_write_shared_mem (const uda_taddr_t addrfield,
   int status;
   uda_rmt_send_cmd ("Qupc.write.shared:%lux,%lux,%lux,%lux,%lux,%*b",
                     addrfield, thread, phase,
-		    block_size, element_size, (size_t) length, bytes);
+		    block_size, element_size, (size_t) bytes->len, bytes->bytes);
   *bytes_written = 0;
   status = uda_rmt_recv_reply ("%lux", bytes_written);
   return status;

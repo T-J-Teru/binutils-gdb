@@ -998,10 +998,6 @@ value_assign (struct value *toval, struct value *fromval)
   struct value *val;
   struct frame_id old_frame;
 
-  /* Assignments to/from UPC shared memory, currently unimplemented.  */
-  gdb_assert (VALUE_LVAL(toval) != lval_upc_shared);
-  gdb_assert (VALUE_LVAL(fromval) != lval_upc_shared);
-
   if (!deprecated_value_modifiable (toval))
     error (_("Left operand of assignment is not a modifiable lvalue."));
 
@@ -1027,6 +1023,10 @@ value_assign (struct value *toval, struct value *fromval)
 
   switch (VALUE_LVAL (toval))
     {
+    case lval_upc_shared:
+      upc_value_assign (toval, fromval);
+      break;
+
     case lval_internalvar:
       set_internalvar (VALUE_INTERNALVAR (toval), fromval);
       return value_of_internalvar (get_type_arch (type),

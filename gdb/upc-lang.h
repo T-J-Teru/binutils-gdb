@@ -31,6 +31,7 @@ extern gdb_upc_pts_t upc_shared_var_address (struct symbol *var);
 extern struct value *upc_value_from_pts (struct type *, gdb_upc_pts_t);
 extern gdb_upc_pts_t upc_value_as_pts (struct value *);
 struct value *upc_value_at_lazy (struct type *, gdb_upc_pts_t);
+extern void upc_value_assign (struct value *toval, struct value *fromval);
 extern void upc_value_fetch_lazy (struct value *);
 extern void upc_print_pts (struct ui_file *stream, int format,
                            struct type *, const gdb_byte *valaddr);
@@ -41,6 +42,12 @@ extern int upc_read_shared_mem (const gdb_upc_pts_t pts,
                                 ULONGEST block_size,
                                 ULONGEST element_size,
                                 gdb_byte *data, int length);
+extern int upc_write_shared_mem (const gdb_upc_pts_t pts,
+                                 ULONGEST block_size,
+                                 ULONGEST element_size,
+                                 const gdb_byte *data,
+                                 int length,
+                                 int *bytes_written);
 extern int upc_thread_count ();
 extern struct value *upc_read_var_value (struct symbol *var, struct frame_info *frame);
 extern void upc_lang_init (char *cmd, int from_tty);
