@@ -738,7 +738,31 @@ typebase
 	|	INT_S2_KEYWORD 
 			{ $$ = parse_f_type (pstate)->builtin_integer_s2; }
 	|	CHARACTER 
-			{ $$ = parse_f_type (pstate)->builtin_character; }
+	                { $$ = parse_f_type (pstate)->builtin_character; }
+	|	CHARACTER '*' INT	%prec SIZE
+			{ if ($3.val == 1) $$ = parse_f_type->builtin_character; }
+	|       CHARACTER KIND '=' INT ')'      %prec SIZE
+			{ if ($4.val == 1) $$ = parse_f_type->builtin_character; }
+	|	LOGICAL_KEYWORD	%prec BELOW_SIZE
+			{ $$ = parse_f_type->builtin_logical;} 
+	|	LOGICAL_KEYWORD '*' INT	%prec SIZE
+			{ if ($3.val == 1)
+				$$ = parse_f_type->builtin_logical_s1;
+			  else if ($3.val == 2)
+				$$ = parse_f_type->builtin_logical_s2;
+			  else if ($3.val == 4)
+				$$ = parse_f_type->builtin_logical;
+			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_logical_s8; }
+	|	LOGICAL_KEYWORD KIND '=' INT ')'	%prec SIZE
+			{ if ($4.val == 1)
+				$$ = parse_f_type->builtin_logical_s1;
+			  else if ($4.val == 2)
+				$$ = parse_f_type->builtin_logical_s2;
+			  else if ($4.val == 4)
+				$$ = parse_f_type->builtin_logical;
+			  else if ($4.val == 8)
+				$$ = parse_f_type->builtin_logical_s8; }
 	|	LOGICAL_S8_KEYWORD
 			{ $$ = parse_f_type (pstate)->builtin_logical_s8; }
 	|	LOGICAL_KEYWORD 
