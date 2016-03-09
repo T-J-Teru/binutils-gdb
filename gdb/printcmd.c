@@ -1385,6 +1385,32 @@ address_info (char *exp, int from_tty)
   printf_filtered (".\n");
 }
 
+static void
+data_address_info (char *exp, int from_tty)
+{
+  struct expression *expr = NULL;
+  struct format_data fmt;
+  struct cleanup *old_chain = NULL;
+  struct value *val;
+
+  if (exp)
+    {
+      expr = parse_expression (exp);
+      old_chain = make_cleanup (free_current_contents, &expr);
+      val = evaluate_type (expr);
+    }
+  else
+    val = access_value_history (0);
+
+  if (VALUE_LVAL (val) != lval_memory)
+    error(_("Value not in memory."));
+  fputs_filtered (paddress ((expr) ? expr->gdbarch : get_type_arch (value_type (val)), value_address (val)), gdb_stdout);
+  printf_filtered ("\n");
+
+  if (exp)
+    do_cleanups (old_chain);
+}
+
 
 static void
 x_command (char *exp, int from_tty)
@@ -2548,6 +2574,9 @@ _initialize_printcmd (void)
 
   add_info ("address", address_info,
 	    _("Describe where symbol SYM is stored."));
+
+  add_info ("data-address", data_address_info,
+	    _("Describe where the data for expression EXPR is stored."));
 
   add_info ("symbol", sym_info, _("\
 Describe what symbol is at location ADDR.\n\
