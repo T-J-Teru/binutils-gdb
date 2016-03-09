@@ -811,7 +811,8 @@ val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
     }
   CATCH (except, RETURN_MASK_ERROR)
     {
-      fprintf_filtered (stream, _("<error reading variable>"));
+      fprintf_filtered (stream, _("<error reading variable: %s>"),
+			except.message);
     }
   END_CATCH
 }
@@ -852,6 +853,18 @@ value_check_printable (struct value *val, struct ui_file *stream,
     {
       fprintf_filtered (stream, _("<internal function %s>"),
 			value_internal_function_name (val));
+      return 0;
+    }
+
+  if (value_not_allocated (val))
+    {
+      fprintf_filtered (stream, _("<not allocated>"));
+      return 0;
+    }
+
+  if (value_not_associated (val))
+    {
+      fprintf_filtered (stream, _("<not associated>"));
       return 0;
     }
 

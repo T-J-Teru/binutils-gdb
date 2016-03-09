@@ -41,7 +41,7 @@ if [is_remote target] {
     setup_kfail "gdb/14618" "*-*-*"
 }
 gdb_test "continue" \
-    "No unwaited-for children left." \
+    ".*\[Thread .* exited\].*" \
     "continue stops when thread 2 exits"
 
 gdb_test "info threads" \
@@ -65,7 +65,7 @@ if [is_remote target] {
     setup_kfail "gdb/14618" "*-*-*"
 }
 gdb_test "continue" \
-    "No unwaited-for children left." \
+    ".*\[Thread .* exited\].*" \
     "continue stops when the main thread exits"
 
 gdb_test "info threads" \

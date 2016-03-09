@@ -110,9 +110,6 @@ f_printstr (struct ui_file *stream, struct type *type, const gdb_byte *string,
 {
   const char *type_encoding = f_get_encoding (type);
 
-  if (TYPE_LENGTH (type) == 4)
-    fputs_filtered ("4_", stream);
-
   if (!encoding || !*encoding)
     encoding = type_encoding;
 
@@ -136,6 +133,14 @@ reset_lengths(struct type* type)
     TYPE_LENGTH (TYPE_TARGET_TYPE(type)) * (high_bound - low_bound + 1);
 }
 
+static int
+invalid_bound (LONGEST r)
+{
+  /* Heuristically detect invalid bounds to prevent excessively sized array
+     bounds from exhausting memory.  */
+  return r > 1000L * 1000L* 1000L || r < -100000L;
+}
+
 static void 
 setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *frame)
 {
@@ -159,67 +164,119 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 	    {
 	      if (frame) {
 		/* one of DL's hacked types */
-		int high_bound;
-		int low_bound;
+		LONGEST high_bound;
+		LONGEST low_bound;
+		struct type *target_type = TYPE_TARGET_TYPE (range_type);
 		
 		if (TYPE_LOW_BOUND_BATON(range_type)) 
 		  {
 		    void *baton;
-		    long r;
+		    LONGEST r;
+		    struct value *rval;
+
 		    /* recalculate */
-		    CORE_ADDR(*f)(void*, struct value *, void*);
-		    f = (CORE_ADDR(*)(void*, struct value *, void*))
+		    struct value *(*f)(struct type *, void*, struct value *, void*);
+		    f = (struct value *(*)(struct type *, void*, struct value *, void*))
 		      TYPE_BOUND_BATON_FUNCTION(range_type);
-		    
+
 		    baton = TYPE_LOW_BOUND_BATON(range_type);
-		    
-		    r = (int) f(baton, objptr, frame);
-		    
- 		    if (r > 1000L * 1000L* 1000L || r < -100000L) r = 1; /* FIXME */ 
-		    TYPE_LOW_BOUND(range_type) = (int) r;
-		    TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
+
+		    rval = f(target_type, baton, objptr, frame);
+		    if (rval)
+		        r = value_as_long (rval);
+
+ 		    if (!rval || invalid_bound (r))
+		      {
+			TYPE_LOW_BOUND(range_type) = 1;
+			TYPE_LOW_BOUND_UNDEFINED (range_type) = 1;
+		      }
+		    else
+		      {
+			TYPE_LOW_BOUND(range_type) = r;
+			TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
+		      }
 		  }
 		if (TYPE_HIGH_BOUND_BATON(range_type)) 
 		  {
 		    /* recalculate */
 		    void *baton;
-		    long r;
-		    CORE_ADDR(*f)(void*, struct value *, void*);
-		    f = (CORE_ADDR(*)(void*, struct value *, void*))
+		    LONGEST r;
+		    struct value *rval;
+		    struct value *(*f)(struct type *, void*, struct value *, void*);
+		    f = (struct value *(*)(struct type *, void*, struct value *, void*))
 		      TYPE_BOUND_BATON_FUNCTION(range_type);
-		    
+
 		    baton = TYPE_HIGH_BOUND_BATON(range_type);
-		    
-		    r = (int) f(baton, objptr, frame);
- 		    if (r > 1000L * 1000L* 1000L || r < -100000L) r = 1; /* FIXME */ 
-		    TYPE_HIGH_BOUND(range_type) = (int) r;
-		    TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
+
+		    rval = f(target_type, baton, objptr, frame);
+		    if (rval)
+		      r = value_as_long (rval);
+
+ 		    if (!rval || invalid_bound (r))
+		      {
+			TYPE_HIGH_BOUND(range_type) = 1;
+			TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+		      }
+		    else
+		      {
+			TYPE_HIGH_BOUND(range_type) = r;
+			TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
+		      }
 		  }
 		if (TYPE_COUNT_BOUND_BATON(range_type)) 
 		  { 
 		    /* the DW_AT_count field */
 		    void *baton;
-		    CORE_ADDR r;
+		    LONGEST r;
+		    struct value *rval;
 		    /* recalculate */
-		    CORE_ADDR(*f)(void*, struct value *, void*);
-		    f = (CORE_ADDR(*)(void*, struct value *, void*))
+		    struct value *(*f)(struct type *, void*, struct value *, void*);
+		    f = (struct value *(*)(struct type *, void*, struct value *, void*))
 		      TYPE_BOUND_BATON_FUNCTION(range_type);
-		    
+
 		    baton = TYPE_COUNT_BOUND_BATON(range_type);
-		    
-		    r = (int) f(baton, objptr, frame);
-		    
- 		    if (r > 1000L * 1000L* 1000L) r = 1; /* FIXME */ 
-		    /* note.. upper bound is inclusive */
-		    TYPE_HIGH_BOUND(range_type) = ((int) r) + TYPE_LOW_BOUND(range_type) - 1;
+
+		    rval = f(target_type, baton, objptr, frame);
+		    if (rval)
+		      r = value_as_long (rval);
+
+ 		    if (!rval || invalid_bound (r))
+		      {
+			TYPE_HIGH_BOUND(range_type) = 1;
+			TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+		      }
+		    else
+		      {
+			/* note.. upper bound is inclusive */
+			TYPE_HIGH_BOUND(range_type) = r + TYPE_LOW_BOUND(range_type) - 1;
+			if (!TYPE_LOW_BOUND_UNDEFINED(range_type))
+			  TYPE_HIGH_BOUND_UNDEFINED(range_type) = 0;
+		      }
 		  }
-		if (TYPE_LOW_BOUND(range_type) > 
-		    TYPE_HIGH_BOUND(range_type)) 
+		/* Check the bounds are sane. */
+		if (TYPE_LOW_BOUND(range_type) > TYPE_HIGH_BOUND(range_type))
 		  {
-		    TYPE_LOW_BOUND(range_type) = 
-		      TYPE_HIGH_BOUND(range_type) + 1;
-		    TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
-		    TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
+		    if (!TYPE_LOW_BOUND_UNDEFINED(range_type)
+			&& !TYPE_HIGH_BOUND_UNDEFINED(range_type))
+		      {
+			TYPE_HIGH_BOUND(range_type) = 
+			  TYPE_LOW_BOUND(range_type) + 1;
+			TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+		      }
+		    else
+		      {
+			if (TYPE_LOW_BOUND_UNDEFINED(range_type)
+			    && !TYPE_HIGH_BOUND_UNDEFINED(range_type))
+			  {
+			    TYPE_LOW_BOUND(range_type) =
+			      TYPE_HIGH_BOUND(range_type) - 1;
+			  }
+			else
+			  {
+			    TYPE_HIGH_BOUND(range_type) = 
+			      TYPE_LOW_BOUND(range_type) + 1;
+			  }
+		      }
 		  }
 	      }
 	    }
@@ -233,6 +290,18 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
     {
       reset_lengths(tmp_type);
     }
+}
+
+static int
+is_associated_address (CORE_ADDR addr)
+{
+  return addr != 0;
+}
+
+static int
+is_allocated_address (CORE_ADDR addr)
+{
+  return addr != 0;
 }
 
 static CORE_ADDR
@@ -253,14 +322,19 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
       void *baton_evaluation_function;
 
       int alloced = -1;
+      struct value *rval;
 
-      CORE_ADDR (*f) (void *, struct value *, void *);
-      f = (CORE_ADDR (*)(void *, struct value *, void *))
+      struct value *(*f) (struct type *, void *, struct value *, void *);
+      f = (struct value *(*)(struct type *, void *, struct value *, void *))
 	baton_holder->baton_evaluation_function;
 
       if (baton_holder->allocated_baton)
-	{
-	  alloced = (int) f (baton_holder->allocated_baton, objptr, frame);
+        {
+	  rval = f (NULL, baton_holder->allocated_baton, objptr, frame);
+	  if (rval)
+	    alloced = value_as_long (rval);
+	  else
+	    alloced = 0;
          }
 
       if (!alloced)
@@ -270,7 +344,11 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
       if (r && baton_holder->intel_location_baton)
         {
-	  r = f (baton_holder->intel_location_baton, objptr, frame);
+	  rval = f (NULL, baton_holder->intel_location_baton, objptr, frame);
+	  if (rval)
+	    r = value_as_long (rval);
+	  else
+	    r = (CORE_ADDR) 0;
 	}
 
 
@@ -282,8 +360,10 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
 	  if (baton_holder->pgi_elem_skip_baton)
 	    {
-	      elem_skip = (int) f (baton_holder->pgi_elem_skip_baton,
-				   objptr, frame);
+	      rval = f (NULL, baton_holder->pgi_elem_skip_baton,
+		        objptr, frame);
+	      if (rval)
+		elem_skip = value_as_long (rval);
 	    }
 	  if (elem_skip == 0)
 	    return (CORE_ADDR) 0;	/* seen with PGI for non-allocated arrays */
@@ -302,7 +382,9 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
 	   */
 
-	  lbase = ((int) f (baton_holder->pgi_lbase_baton, objptr, frame));
+	  rval = f (NULL, baton_holder->pgi_lbase_baton, objptr, frame);
+	  if (rval)
+	    lbase = value_as_long (rval);
 
 	  r = r + (lbase - 1) * elem_skip;
 
@@ -329,10 +411,11 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			  int stride = 1;
 			  int soffset = 0;
 			  int lstride = 0;
-                         int low = 1;
+			  int low = 1;
 
 			  void *baton;
-			  CORE_ADDR (*f) (void *, struct value *, void *);
+			  struct value *(*f) (struct type *, void *, struct value *, void *);
+			  struct type *target_type = TYPE_TARGET_TYPE (range_type);
 			  f = TYPE_BOUND_BATON_FUNCTION (range_type);
  
 
@@ -341,7 +424,9 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			    {
 			      baton = 
 				TYPE_LOW_BOUND_BATON (range_type);
-			      low = f (baton, objptr, frame);
+			      rval = f (target_type, baton, objptr, frame);
+			      if (rval)
+				low = value_as_long (rval);
 			    }
 			  stride = TYPE_STRIDE_VALUE(range_type);
 			  if (TYPE_STRIDE_BATON(range_type))
@@ -349,7 +434,9 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			      baton =
 				(void *)
 				TYPE_STRIDE_BATON(range_type);
-			      stride = f (baton, objptr, frame);
+			      rval = f (target_type, baton, objptr, frame);
+			      if (rval)
+				stride = value_as_long (rval);
 			    }
 			  soffset = TYPE_SOFFSET_VALUE (range_type);
 			  if (TYPE_SOFFSET_BATON (range_type))
@@ -357,7 +444,9 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			      baton =
 				(void *)
 				TYPE_SOFFSET_BATON (range_type);
-			      soffset = f (baton, objptr, frame);
+			      rval = f (target_type, baton, objptr, frame);
+			      if (rval)
+				soffset = value_as_long (rval);
 			    }
 			  lstride = TYPE_LSTRIDE_VALUE (range_type);
 			  if (TYPE_LSTRIDE_BATON (range_type))
@@ -365,7 +454,9 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			      baton =
 				(void *)
 				TYPE_LSTRIDE_BATON (range_type);
-			      lstride = f (baton, objptr, frame);
+			      rval = f (target_type, baton, objptr, frame);
+			      if (rval)
+				lstride = value_as_long (rval);
 			    }
 
 			  r += (low * stride + soffset) * lstride * elem_skip;
@@ -401,9 +492,9 @@ f_fixup_value (struct value *v, struct frame_info *frame)
 	  address = unpack_pointer (type, value_contents (v));
 
 	  /* If address is invalid then leave the pointer intact.  */
-	  if (address < 65536)
+	  if (!is_associated_address (address))
 	    break;
-	  type = TYPE_TARGET_TYPE (type);      
+	  type = TYPE_TARGET_TYPE (type);
 	  v = value_at_lazy (type, address);
 	}
     }
@@ -427,6 +518,17 @@ f_fixup_value (struct value *v, struct frame_info *frame)
 	      set_value_offset (v, 0);
 	    }
 	}
+    }
+
+  if (current_language->la_language == language_fortran)
+    {
+      if (TYPE_CODE (value_type (v)) != TYPE_CODE_PTR
+          && VALUE_LVAL (v) == lval_memory
+          && !is_allocated_address (value_address (v)))
+        set_value_not_allocated (v, 1);
+      if (TYPE_CODE (value_type (v)) == TYPE_CODE_PTR
+          && !is_associated_address (value_as_address (v)))
+        set_value_not_associated (v, 1);
     }
 
   return v;

@@ -29,7 +29,14 @@ clean_restart $executable
 
 gdb_test_no_output "set breakpoint pending off"
 
-gdb_test "break 'z:file.c':func" {Breakpoint [0-9]+ at .*}
+gdb_test_multiple "break 'z:file.c':func" "break 'z:file.c':func" {
+  -re "Breakpoint \[0-9\]+ at .*" {
+    pass "break 'z:file.c':func"
+  }
+  -re "Cannot access memory at address .*" {
+    pass "break 'z:file.c':func"
+  }
+}
 
 set dos [expr [istarget "*-*-cygwin*"] || [istarget "i?86-*-mingw*"] \
 	      || [istarget "*-*-msdosdjgpp*"] || [istarget "*-*-go32*"] ]

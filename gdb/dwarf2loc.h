@@ -284,6 +284,7 @@ extern struct call_site_chain *call_site_find_chain (struct gdbarch *gdbarch,
 						     CORE_ADDR caller_pc,
 						     CORE_ADDR callee_pc);
 
+
 /* A helper function to convert a DWARF register to an arch register.
    ARCH is the architecture.
    DWARF_REG is the register.
@@ -292,8 +293,8 @@ extern struct call_site_chain *call_site_find_chain (struct gdbarch *gdbarch,
 
 extern int dwarf2_reg_to_regnum_or_error (struct gdbarch *arch, int dwarf_reg);
 
-LONGEST dwarf2_evaluate_int (void* locbaton, struct value *,
-			       void *frame_info);
+struct value *dwarf2_evaluate_int (struct type *type, void *locbaton,
+				  struct value *obj, void *frame_info);
 
 struct array_location_batons
 {
