@@ -3880,6 +3880,43 @@ cast_into_complex (struct type *type, struct value *val)
     error (_("cannot cast non-number to complex"));
 }
 
+struct value *
+value_real (struct value *val)
+{
+  struct type *val_real_type = TYPE_TARGET_TYPE (value_type (val));
+
+  if (TYPE_CODE (value_type (val)) == TYPE_CODE_COMPLEX)
+    {
+      struct value *re_val = allocate_value(val_real_type);
+
+      memcpy (value_contents_raw (re_val),
+	      value_contents (val), TYPE_LENGTH (val_real_type));
+
+      return re_val;
+    }
+  else
+    error (_("value is not a complex number"));
+}
+
+struct value *
+value_imag (struct value *val)
+{
+  struct type *val_real_type = TYPE_TARGET_TYPE (value_type (val));
+
+  if (TYPE_CODE (value_type (val)) == TYPE_CODE_COMPLEX)
+    {
+      struct value *im_val = allocate_value(val_real_type);
+
+      memcpy (value_contents_raw (im_val),
+	      value_contents (val) + TYPE_LENGTH (val_real_type),
+	      TYPE_LENGTH (val_real_type));
+
+      return im_val;
+    }
+  else
+    error (_("value is not a complex number"));
+}
+
 void
 _initialize_valops (void)
 {

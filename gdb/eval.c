@@ -45,6 +45,7 @@
 #include "gdb_assert.h"
 
 #include <ctype.h>
+#include <math.h>
 
 /* This is defined in valops.c */
 extern int overload_resolution;
@@ -2884,6 +2885,145 @@ evaluate_subexp_standard (struct type *expect_type,
 	}
       else
         error (_("Attempt to use a type as an expression"));
+
+    case UNOP_ISNAN:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (builtin_type (exp->gdbarch)->builtin_int, isnan (value_as_double (arg1)));
+      
+    case UNOP_IEEE_IS_NAN:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (language_bool_type (exp->language_defn, exp->gdbarch), isnan (value_as_double (arg1)) != 0);
+      
+    case UNOP_ISINF:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (builtin_type (exp->gdbarch)->builtin_int, isinf (value_as_double (arg1)));
+      
+    case UNOP_IEEE_IS_INF:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (language_bool_type (exp->language_defn, exp->gdbarch), isinf (value_as_double (arg1)) != 0);
+      
+    case UNOP_ISFINITE:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (builtin_type (exp->gdbarch)->builtin_int, isfinite (value_as_double (arg1)));
+      
+    case UNOP_IEEE_IS_FINITE:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (language_bool_type (exp->language_defn, exp->gdbarch), isfinite (value_as_double (arg1)) != 0);
+      
+    case UNOP_ISNORMAL:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (builtin_type (exp->gdbarch)->builtin_int, isnormal (value_as_double (arg1)));
+      
+    case UNOP_IEEE_IS_NORMAL:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_from_longest (language_bool_type (exp->language_defn, exp->gdbarch), isnormal (value_as_double (arg1)) != 0);
+      
+    case UNOP_CREAL:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_real (arg1);
+      
+    case UNOP_CIMAG:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_imag (arg1);
+      
+    case UNOP_FABS:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      type = value_type (arg1);
+      if (TYPE_CODE (type) != TYPE_CODE_FLT)
+        type = builtin_type (exp->gdbarch)->builtin_double;
+      return value_from_double (type, fabs (value_as_double (arg1)));
+      
+    case UNOP_CEIL:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      type = value_type (arg1);
+      if (TYPE_CODE (type) != TYPE_CODE_FLT)
+        type = builtin_type (exp->gdbarch)->builtin_double;      
+      return value_from_double (type, ceil (value_as_double (arg1)));
+      
+    case UNOP_FLOOR:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      type = value_type (arg1);
+      if (TYPE_CODE (type) != TYPE_CODE_FLT)
+        type = builtin_type (exp->gdbarch)->builtin_double;      
+      return value_from_double (type, floor (value_as_double (arg1)));
+      
+    case BINOP_FMOD:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      arg2 = evaluate_subexp (value_type (arg1), exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      type = value_type (arg1);
+      if (TYPE_CODE (type) != TYPE_CODE_FLT
+          && TYPE_CODE (value_type (arg2)) == TYPE_CODE_FLT)
+        type = value_type (arg2);
+      if (TYPE_CODE (type) != TYPE_CODE_FLT)
+        return value_from_longest (value_type (arg1), fmod (value_as_long (arg1), value_as_long (arg2)));
+      else
+        return value_from_double (type, fmod (value_as_double (arg1), value_as_double (arg2)));
+
+    case BINOP_MODULO:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      arg2 = evaluate_subexp (value_type (arg1), exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      {
+        /* MODULO(A, P) = A - FLOOR (A / P) * P */
+        type = value_type (arg1);
+        if (TYPE_CODE (type) != TYPE_CODE_FLT
+            && TYPE_CODE (value_type (arg2)) == TYPE_CODE_FLT)
+          type = value_type (arg2);
+        if (TYPE_CODE (type) != TYPE_CODE_FLT)
+          {
+            LONGEST a = value_as_long (arg1);
+            LONGEST p = value_as_long (arg2);
+            LONGEST result = a - (a / p) * p;
+            if (result != 0 && (a < 0) != (p < 0))
+              result += p;
+            return value_from_longest (value_type (arg1), result);
+          }
+        else
+          {
+            double a = value_as_double (arg1);
+            double p = value_as_double (arg2);
+            double result = fmod (a, p);
+            if (result != 0 && (a < 0.0) != (p < 0.0))
+              result += p;
+            return value_from_double (type, result);
+          }
+      }
+
+    case BINOP_CMPLX:
+      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
+      arg2 = evaluate_subexp (value_type (arg1), exp, pos, noside);
+      if (noside == EVAL_SKIP)
+        goto nosideret;
+      return value_literal_complex (arg1, arg2, builtin_f_type(exp->gdbarch)->builtin_complex_s16);
 
     default:
       /* Removing this case and compiling with gcc -Wall reveals that
