@@ -152,6 +152,7 @@ extern int yquery (const char *, ...) ATTRIBUTE_PRINTF (1, 2);
 extern void begin_line (void);
 
 extern void wrap_here (char *);
+extern void fwrap_here (char *, struct ui_file *);
 
 extern void reinitialize_more_filter (void);
 

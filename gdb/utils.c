@@ -1965,6 +1965,12 @@ reinitialize_more_filter (void)
 void
 wrap_here (char *indent)
 {
+  fwrap_here(indent, gdb_stdout);
+}
+
+void
+fwrap_here (char *indent, struct ui_file *file)
+{
   /* This should have been allocated, but be paranoid anyway.  */
   if (!wrap_buffer)
     internal_error (__FILE__, __LINE__,
@@ -1973,7 +1979,7 @@ wrap_here (char *indent)
   if (wrap_buffer[0])
     {
       *wrap_pointer = '\0';
-      fputs_unfiltered (wrap_buffer, gdb_stdout);
+      fputs_unfiltered (wrap_buffer, file);
     }
   wrap_pointer = wrap_buffer;
   wrap_buffer[0] = '\0';
@@ -1983,9 +1989,9 @@ wrap_here (char *indent)
     }
   else if (chars_printed >= chars_per_line)
     {
-      puts_filtered ("\n");
+      fputs_filtered ("\n", file);
       if (indent != NULL)
-	puts_filtered (indent);
+		fputs_filtered (indent, file);
       wrap_column = 0;
     }
   else
