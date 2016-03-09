@@ -15334,12 +15334,20 @@ read_indirect_string_at_offset (bfd *abfd, LONGEST str_offset)
 {
   dwarf2_read_section (dwarf2_per_objfile->objfile, &dwarf2_per_objfile->str);
   if (dwarf2_per_objfile->str.buffer == NULL)
-    error (_("DW_FORM_strp used without .debug_str section [in module %s]"),
-	   bfd_get_filename (abfd));
+    {
+      complaint (&symfile_complaints,
+		 _("DW_FORM_strp used without .debug_str section [in module %s]"),
+		 bfd_get_filename (abfd));
+      return NULL;
+    }
   if (str_offset >= dwarf2_per_objfile->str.size)
-    error (_("DW_FORM_strp pointing outside of "
-	     ".debug_str section [in module %s]"),
-	   bfd_get_filename (abfd));
+    {
+      complaint (&symfile_complaints,
+		 _("DW_FORM_strp pointing outside of "
+		   ".debug_str section [in module %s]"),
+		 bfd_get_filename (abfd));
+      return NULL;
+    }
   gdb_assert (HOST_CHAR_BIT == 8);
   if (dwarf2_per_objfile->str.buffer[str_offset] == '\0')
     return NULL;
@@ -15357,13 +15365,21 @@ read_indirect_string_from_dwz (struct dwz_file *dwz, LONGEST str_offset)
   dwarf2_read_section (dwarf2_per_objfile->objfile, &dwz->str);
 
   if (dwz->str.buffer == NULL)
-    error (_("DW_FORM_GNU_strp_alt used without .debug_str "
-	     "section [in module %s]"),
-	   bfd_get_filename (dwz->dwz_bfd));
+    {
+      complaint (&symfile_complaints, 
+		 _("DW_FORM_GNU_strp_alt used without .debug_str "
+		   "section [in module %s]"),
+		 bfd_get_filename (dwz->dwz_bfd));
+      return NULL;
+    }
   if (str_offset >= dwz->str.size)
-    error (_("DW_FORM_GNU_strp_alt pointing outside of "
-	     ".debug_str section [in module %s]"),
-	   bfd_get_filename (dwz->dwz_bfd));
+    {
+      complaint (&symfile_complaints,
+		 _("DW_FORM_GNU_strp_alt pointing outside of "
+		   ".debug_str section [in module %s]"),
+		 bfd_get_filename (dwz->dwz_bfd));
+      return NULL;
+    }
   gdb_assert (HOST_CHAR_BIT == 8);
   if (dwz->str.buffer[str_offset] == '\0')
     return NULL;
