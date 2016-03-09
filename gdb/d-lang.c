@@ -141,8 +141,6 @@ d_demangle (const char *symbol, int options)
     return NULL;
   else if (strcmp (symbol, "_Dmain") == 0)
     return xstrdup ("D main");
-
-  obstack_init (&tempbuf);
   
   if (symbol[0] == '_' && symbol[1] == 'D')
     {
@@ -163,10 +161,10 @@ d_demangle (const char *symbol, int options)
     symbol += 13;
   else
     {
-      obstack_free (&tempbuf, NULL);
       return NULL;
     }
-  
+
+  obstack_init (&tempbuf);
   if (!extract_identifiers (symbol, &tempbuf))
     {
       obstack_free (&tempbuf, NULL);
