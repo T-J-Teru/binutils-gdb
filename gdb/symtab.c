@@ -4918,8 +4918,9 @@ skip_prologue_using_sal (struct gdbarch *gdbarch, CORE_ADDR func_addr)
 
 	  /* Skip any earlier lines, and any end-of-sequence marker
 	     from a previous function.  */
-	  while (linetable->item[idx].pc != prologue_sal.pc
-		 || linetable->item[idx].line == 0)
+	  while (idx < linetable->nitems && 
+                 (linetable->item[idx].pc != prologue_sal.pc
+                  || linetable->item[idx].line == 0))
 	    idx++;
 
 	  if (idx+1 < linetable->nitems
