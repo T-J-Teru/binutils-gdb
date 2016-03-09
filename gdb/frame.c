@@ -44,7 +44,7 @@
 #include "inline-frame.h"
 #include "tracepoint.h"
 
-static struct frame_info *get_prev_frame_1 (struct frame_info *this_frame);
+struct frame_info *get_prev_frame_1 (struct frame_info *this_frame);
 static struct frame_info *get_prev_frame_raw (struct frame_info *this_frame);
 
 /* We keep a cache of stack frames, each of which is a "struct
@@ -321,7 +321,7 @@ skip_artificial_frames (struct frame_info *frame)
 {
   while (get_frame_type (frame) == INLINE_FRAME
 	 || get_frame_type (frame) == TAILCALL_FRAME)
-    frame = get_prev_frame (frame);
+    frame = get_prev_frame_1 (frame);
 
   return frame;
 }
@@ -1613,7 +1613,7 @@ frame_register_unwind_location (struct frame_info *this_frame, int regnum,
    Unlike get_prev_frame, this function always tries to unwind the
    frame.  */
 
-static struct frame_info *
+struct frame_info *
 get_prev_frame_1 (struct frame_info *this_frame)
 {
   struct frame_id this_id;

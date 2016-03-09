@@ -145,6 +145,9 @@ clear_inline_frame_state (ptid_t ptid)
       }
 }
 
+extern struct frame_info *
+get_prev_frame_1 (struct frame_info *this_frame);
+
 static void
 inline_frame_this_id (struct frame_info *this_frame,
 		      void **this_cache,
@@ -158,7 +161,7 @@ inline_frame_this_id (struct frame_info *this_frame,
      Because we are inlined into some function, there must be previous
      frames, so this is safe - as long as we're careful not to
      create any cycles.  */
-  *this_id = get_frame_id (get_prev_frame (this_frame));
+  *this_id = get_frame_id (get_prev_frame_1 (this_frame));
 
   /* We need a valid frame ID, so we need to be based on a valid
      frame.  FSF submission NOTE: this would be a good assertion to
