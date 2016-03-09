@@ -2312,6 +2312,13 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal, int step)
   /* Reset to normal state.  */
   init_infwait_state ();
 
+  /* Set SIGINT handler to note_signal so SIGINT signals from this point
+     on are not lost.  If the target wants to pass SIGINT to the inferior
+     directly it should call set_sigint_trap.
+     Note: remote.c does its own SIGINT handling but relies on sigint_pending
+     being updated by note_signal.  */
+  set_sigint_pending_trap ();
+  
   /* Resume inferior.  */
   resume (force_step || step || bpstat_should_step (),
 	  tp->suspend.stop_signal);
@@ -2325,6 +2332,8 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal, int step)
       wait_for_inferior ();
       normal_stop ();
     }
+
+  reset_sigint_pending ();
 }
 
 

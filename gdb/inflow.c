@@ -102,6 +102,10 @@ inferior_process_group (void)
 static void (*sigint_ours) ();
 static void (*sigquit_ours) ();
 
+/* Nonzero if we got a SIGINT since the last run of the inferior. */
+
+int sigint_pending;
+
 /* The name of the tty (from the `tty' command) that we're giving to
    the inferior when starting it up.  This is only (and should only
    be) used as a transient global by new_tty_prefork,
@@ -759,18 +763,28 @@ new_tty_postfork (void)
 }
 
 
+int sent_sigint;
+
 /* Call set_sigint_trap when you need to pass a signal on to an attached
    process when handling SIGINT.  */
 
 static void
 pass_signal (int signo)
 {
+  sent_sigint = 1;
+  signal(signo, pass_signal);
 #ifndef _WIN32
   kill (PIDGET (inferior_ptid), SIGINT);
 #endif
 }
 
-static void (*osig) ();
+static void
+note_signal (int signo)
+{
+  sigint_pending = 1;
+}
+
+static void (*osig) () = NULL;
 static int osig_set;
 
 void
@@ -781,22 +795,51 @@ set_sigint_trap (void)
 
   if (inf->attach_flag || tinfo->run_terminal)
     {
-      osig = (void (*)()) signal (SIGINT, pass_signal);
-      osig_set = 1;
+      void (*old)(int);
+      sent_sigint = 0;
+      if (sigint_pending)
+        {
+	  sigint_pending = 0;
+	  pass_signal (SIGINT);
+	}
+      old = (void (*)()) signal (SIGINT, pass_signal);
+      if (old != note_signal)
+	{
+	  osig = old;
+	  osig_set = 1;
+	}
     }
-  else
-    osig_set = 0;
 }
 
 void
 clear_sigint_trap (void)
 {
+  signal (SIGINT, note_signal);
+}
+
+void
+set_sigint_pending_trap (void)
+{
+  void (*old)(int);
+  old = (void (*)()) signal (SIGINT, note_signal);
+  if (old != note_signal)
+    {
+      osig = old;
+      osig_set = 1;
+  }
+}
+
+void
+reset_sigint_pending (void)
+{
+  sigint_pending = 0;
   if (osig_set)
     {
       signal (SIGINT, osig);
       osig_set = 0;
     }
 }
+
 
 
 /* Create a new session if the inferior will run in a different tty.

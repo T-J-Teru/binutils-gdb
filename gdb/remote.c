@@ -70,6 +70,8 @@
 #include "agent.h"
 #include "btrace.h"
 
+extern int sigint_pending;	/* from inflow.c */
+
 /* Temp hacks for tracepoint encoding migration.  */
 static char *target_buf;
 static long target_buf_size;
@@ -5874,9 +5876,9 @@ remote_wait_as (ptid_t ptid, struct target_waitstatus *status, int options)
 	  ofunc = signal (SIGINT, remote_interrupt);
 	  /* If the user hit C-c before this packet, or between packets,
 	     pretend that it was hit right here.  */
-	  if (check_quit_flag ())
+	  if (sigint_pending)
 	    {
-	      clear_quit_flag ();
+	      sigint_pending = 0;
 	      remote_interrupt (SIGINT);
 	    }
 	}

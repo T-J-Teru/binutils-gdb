@@ -84,6 +84,10 @@ extern void set_sigint_trap (void);
 
 extern void clear_sigint_trap (void);
 
+extern void set_sigint_pending_trap (void);
+
+extern void reset_sigint_pending (void);
+
 /* Set/get file name for default use for standard in/out in the inferior.  */
 
 extern void set_inferior_io_terminal (const char *terminal_name);
