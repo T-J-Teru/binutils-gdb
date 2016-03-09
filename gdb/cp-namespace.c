@@ -670,7 +670,13 @@ lookup_symbol_file (const char *name,
 	    }
 
 	  type = check_typedef (TYPE_TARGET_TYPE (SYMBOL_TYPE (this)));
-	  klass = xstrdup (TYPE_NAME (type));
+          if (type == NULL || TYPE_NAME (type) == NULL)
+            {
+              do_cleanups (cleanup);
+              return NULL;
+            }
+
+          klass = xstrdup (TYPE_NAME (type));
 	  nested = xstrdup (name);
 	}
       else
