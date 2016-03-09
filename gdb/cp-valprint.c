@@ -38,6 +38,7 @@
 #include "exceptions.h"
 #include "typeprint.h"
 
+
 /* Controls printing of vtbl's.  */
 static void
 show_vtblprint (struct ui_file *file, int from_tty,
@@ -641,39 +642,50 @@ cp_print_static_field (struct type *type,
 		       int recurse,
 		       const struct value_print_options *options)
 {
+  static int structure_depth = 0; /* Don't unroll structs/classes too deep - 
+									 recursively defined classes could get in an
+									 infinite loop. */
+  
+  static const int MAX_STRUCTURE_DEPTH = 10;  /* That should be deep enough! */
+  
   struct value_print_options opts;
   
   if (TYPE_CODE (type) == TYPE_CODE_STRUCT)
     {
-      CORE_ADDR *first_dont_print;
-      CORE_ADDR addr;
-      int i;
+	  if (++structure_depth <= MAX_STRUCTURE_DEPTH)
+		{
+		  CORE_ADDR *first_dont_print;
+		  CORE_ADDR addr;
+		  int i;
 
-      first_dont_print
-	= (CORE_ADDR *) obstack_base (&dont_print_statmem_obstack);
-      i = obstack_object_size (&dont_print_statmem_obstack)
-	/ sizeof (CORE_ADDR);
+		  first_dont_print
+			= (CORE_ADDR *) obstack_base (&dont_print_statmem_obstack);
+		  i = obstack_object_size (&dont_print_statmem_obstack)
+			/ sizeof (CORE_ADDR);
+		  
+		  while (--i >= 0)
+			{
+			  if (value_address (val) == first_dont_print[i])
+				{
+				  fputs_filtered ("<same as static member of an already"
+								  " seen type>",
+								  stream);
+				  --structure_depth;
+				  return;
+				}
+			}
 
-      while (--i >= 0)
-	{
-	  if (value_address (val) == first_dont_print[i])
-	    {
-	      fputs_filtered ("<same as static member of an already"
-			      " seen type>",
-			      stream);
-	      return;
-	    }
-	}
-
-      addr = value_address (val);
-      obstack_grow (&dont_print_statmem_obstack, (char *) &addr,
-		    sizeof (CORE_ADDR));
-      CHECK_TYPEDEF (type);
-      cp_print_value_fields (type, value_enclosing_type (val),
-			     value_contents_for_printing (val),
-			     value_embedded_offset (val), addr,
-			     stream, recurse, val,
-			     options, NULL, 1);
+		  addr = value_address (val);
+		  obstack_grow (&dont_print_statmem_obstack, (char *) &addr,
+						sizeof (CORE_ADDR));
+		  CHECK_TYPEDEF (type);
+		  cp_print_value_fields (type, value_enclosing_type (val),
+								 value_contents_for_printing (val),
+								 value_embedded_offset (val), addr,
+								 stream, recurse, val,
+								 options, NULL, 1);
+		}
+	  --structure_depth;
       return;
     }
 
