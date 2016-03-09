@@ -25,4 +25,8 @@
 /* This is all that python exports to gdb.  */
 extern const struct extension_language_defn extension_language_python;
 
+struct value *apply_val_child (struct value *object,
+			       struct value *index,
+			       const struct language_defn *language);
+
 #endif /* GDB_PYTHON_H */

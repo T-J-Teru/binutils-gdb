@@ -84,10 +84,10 @@ msymbol_hash_iw (const char *string)
 {
   unsigned int hash = 0;
 
-  while (*string && *string != '(')
+  while (*string && *string != '(' && !isstartoftemplate (string))
     {
       string = skip_spaces_const (string);
-      if (*string && *string != '(')
+      if (*string && *string != '(' && !isstartoftemplate (string))
 	{
 	  hash = SYMBOL_HASH_NEXT (hash, *string);
 	  ++string;
