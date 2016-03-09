@@ -43,7 +43,7 @@ EXECUTABLES = a2-run advance all-types annota1 annota1-watch_thread_num \
 	watch-vfork watch_thread_num watchpoint watchpoint-cond-gone \
 	watchpoint-hw watchpoint-hw-hit-once watchpoint-solib watchpoints \
 	wchar whatis whatis-exp catch-syscall \
-	pr10179 gnu_vector
+	pr10179 gnu_vector info-sources-by-binary-target
 
 MISCELLANEOUS = coremmap.data dprintf-pendshr.sl ../foobar.baz fixsectshr.sl \
 	pendshr.sl shreloc1.sl shreloc2.sl twice-tmp.c \
@@ -51,7 +51,8 @@ MISCELLANEOUS = coremmap.data dprintf-pendshr.sl ../foobar.baz fixsectshr.sl \
 	unloadshr.sl unloadshr2.sl watchpoint-solib-shr.sl \
 	weaklib1.sl weaklib2.sl hashline1.c hashline2.c hashline3.c \
 	auxv.gcore bigcore.corefile *.core *.debug *.stripped \
-	gcore-buffer-overflow.test gcore.test shreloc.txt tmp-fullname.c
+	gcore-buffer-overflow.test gcore.test shreloc.txt tmp-fullname.c \
+	info-sources-by-binary-shlib.so
 
 all info install-info dvi install uninstall installcheck check:
 	@echo "Nothing to be done for $@..."
