@@ -896,14 +896,14 @@ set_value_parent (struct value *value, struct value *parent)
 gdb_byte *
 value_contents_raw (struct value *value)
 {
-  allocate_value_contents (value);
+  allocate_value_contents_limited (value);
   return value->contents + value->embedded_offset;
 }
 
 gdb_byte *
 value_contents_all_raw (struct value *value)
 {
-  allocate_value_contents (value);
+  allocate_value_contents_limited (value);
   return value->contents;
 }
 
