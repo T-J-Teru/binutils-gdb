@@ -1172,7 +1172,7 @@ ppc_deal_with_atomic_sequence (struct frame_info *frame)
 
 /* Limit the number of skipped non-prologue instructions, as the examining
    of the prologue is expensive.  */
-static int max_skip_non_prologue_insns = 10;
+static int max_skip_non_prologue_insns = 20;
 
 /* Return nonzero if the given instruction OP can be part of the prologue
    of a function and saves a parameter on the stack.  FRAMEP should be
