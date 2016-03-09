@@ -3238,6 +3238,7 @@ value_from_contents_and_address (struct type *type,
       v->length = min (TYPE_LENGTH (type), length);
       v->contents = (gdb_byte *) xzalloc (v->length);
       memcpy (value_contents_raw (v), valaddr, value_length (v));
+      set_value_lazy (v, 0);
     }
   set_value_address (v, address);
   VALUE_LVAL (v) = lval_memory;
