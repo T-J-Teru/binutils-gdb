@@ -4271,12 +4271,14 @@ bpstat_explains_signal (bpstat bsp, enum gdb_signal sig)
    Return 1 otherwise.  */
 
 int
-bpstat_num (bpstat *bsp, int *num)
+bpstat_num (bpstat *bsp, int *num, char *stop)
 {
   struct breakpoint *b;
 
   if ((*bsp) == NULL)
     return 0;			/* No more breakpoint values */
+
+  *stop = (*bsp)->stop;
 
   /* We assume we'll never have several bpstats that correspond to a
      single breakpoint -- otherwise, this function might return the

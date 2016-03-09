@@ -1048,7 +1048,7 @@ extern enum print_stop_action bpstat_print (bpstat, int);
    Return -1 if stopped at a breakpoint that has been deleted since
    we set it.
    Return 1 otherwise.  */
-extern int bpstat_num (bpstat *, int *);
+extern int bpstat_num (bpstat *, int *, char *stop);
 
 /* Perform actions associated with the stopped inferior.  Actually, we
    just use this for breakpoint commands.  Perhaps other actions will
