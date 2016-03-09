@@ -152,13 +152,12 @@ uda_rmt_recv_reply (const char *fmt, ...)
 	  (*uda_rmt_cmd_exec) (reply + 1);
 	}
       else
-	abort ();
+	error (_("invalid UDA reply"));
     }
   if (errno)
-    perror ("receive reply");
+    perror_with_name ("receive reply");
   else
-    fprintf (stderr, "receive reply: unexpected EOF\n");
-  abort ();
+    error (_("receive reply: unexpected EOF\n"));
 }
 
 void
@@ -338,7 +337,7 @@ uda_rmt_vformat_msg (char *buf, const char *fmt, va_list ap_arg)
 					!skip_leading_zeros);
 	        }
 	      else
-		abort ();
+		error (_("invalid format string"));
 	      slen = strlen (hex_buf);
 	      gdb_assert ((bp + slen) < (last_byte - 1));
 	      strcpy (bp, hex_buf);
@@ -824,8 +823,7 @@ uda_rmt_vscan_msg (const char *msg, const char *fmt, va_list ap_arg)
   gdb_assert (!*cp);
   return ret;
 fmt_error:
-  fprintf (stderr, "uda_rmt_vscan_msg: bad format string: %s\n", fmt);
-  abort ();
+  error (_("uda_rmt_vscan_msg: bad format string: %s\n"), fmt);
 }
 
 /* Convert an error code from the debugger into an error message 
