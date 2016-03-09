@@ -2479,6 +2479,91 @@ eval_command (char *arg, int from_tty)
   do_cleanups (cleanups);
 }
 
+static void
+map_command (char *arg, int from_tty)
+{
+  char *exp = NULL;
+  char *function = NULL;
+  struct expression *expr, *fexpr;
+  struct cleanup *old_chain = 0;
+  char format = 0;  
+  struct value *val, *fval;
+  struct type *type;
+  struct value_print_options opts;  
+  int histindex;
+  
+  function = strstr (arg, " function ");
+  if (function == NULL)
+      error (_("Missing function argument"));
+  exp = savestring (arg, function - arg);
+  old_chain = make_cleanup (xfree, exp);
+  function += 10; /* strlen (" function ") */
+  
+  expr = parse_expression (exp);
+  fexpr = parse_expression (function);
+  make_cleanup (free_current_contents, &expr);
+  make_cleanup (free_current_contents, &fexpr);
+  val = evaluate_expression (expr);
+
+  type = (val != NULL) ? value_type (val) : NULL;
+  if (type &&
+      TYPE_CODE (type) == TYPE_CODE_ARRAY)
+    {
+      unsigned int things_printed = 0;
+      struct type *elttype = TYPE_TARGET_TYPE (type);
+      unsigned eltlen = TYPE_LENGTH (check_typedef (elttype));
+      unsigned len = TYPE_LENGTH (type) / eltlen;
+      unsigned int i;
+      struct type *range_type = TYPE_INDEX_TYPE (type);
+      LONGEST lowerbound, upperbound;
+      get_discrete_bounds (range_type, &lowerbound, &upperbound);
+      
+      annotate_array_section_begin (0, elttype);
+      get_user_print_options (&opts);
+      for (i = 0; i < len && things_printed < opts.print_max; i++)
+        {
+	  struct value *ind = value_from_longest(builtin_type (get_type_arch(type))->builtin_int, i);
+	  struct value *subscript = value_subscript(val, value_as_long (ind));
+	  set_internalvar (lookup_internalvar ("value"),
+		           subscript);
+          fval = evaluate_expression (fexpr);
+	  
+	  if (i != 0)
+	      printf_filtered (", ");
+	  
+	  annotate_value_begin (value_type (fval));
+	  
+	  print_formatted (fval, 0, &opts, gdb_stdout);
+	  
+	  annotate_value_end ();
+	}
+      
+      annotate_array_section_end ();
+      
+      if (i < len)
+        {
+          fprintf_filtered (gdb_stdout, "...");
+        }
+      printf_filtered ("\n");
+    }
+  else
+    {
+      set_internalvar (lookup_internalvar ("value"),
+		       val);	
+      fval = evaluate_expression (fexpr);
+
+      annotate_value_begin (value_type (fval));
+
+      print_formatted (fval, 0, &opts, gdb_stdout);
+      printf_filtered ("\n");
+
+      annotate_value_end ();
+    }
+      
+  
+  do_cleanups (old_chain);
+}
+
 void
 _initialize_printcmd (void)
 {
@@ -2637,6 +2722,12 @@ it.  Zero is equivalent to \"unlimited\"."),
 			    NULL,
 			    show_max_symbolic_offset,
 			    &setprintlist, &showprintlist);
+
+
+  add_com ("map", class_vars, map_command, _("\
+Maps values in collection EXP using function FUNCTION.\n      \
+map EXP function FUNCTION"));
+
   add_setshow_boolean_cmd ("symbol-filename", no_class,
 			   &print_symbol_filename, _("\
 Set printing of source filename and line number with <symbol>."), _("\
