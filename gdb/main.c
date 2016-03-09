@@ -45,6 +45,12 @@
 #include "event-top.h"
 #include "infrun.h"
 
+#include <sys/signal.h>
+#include <string.h>
+#ifdef __linux__
+#include <execinfo.h>
+#endif
+
 /* The selected interpreter.  This will be used as a set command
    variable, so it should always be malloc'ed - since
    do_setshow_command will free it.  */
@@ -1152,9 +1158,43 @@ captured_main (void *data)
   /* No exit -- exit is through quit_command.  */
 }
 
+static void
+sighandler(int signo)
+{
+  void *array[20];
+  size_t size;
+  char **strings;
+  size_t i;
+  
+  signal (signo, SIG_DFL);
+
+  fprintf (stderr, "%s\n", strsignal(signo));
+#ifdef __linux__
+  size = backtrace (array, 20);
+  strings = backtrace_symbols (array, size);
+
+  for (i = 0; i < size; i++)
+     fprintf (stderr, "%s\n", strings[i]);
+
+  free (strings);
+#endif
+  printf("%s ", get_prompt());
+  fflush(stdout);
+
+  raise(signo);
+}
+
 int
 gdb_main (struct captured_main_args *args)
 {
+  signal(SIGSEGV, sighandler);
+  signal(SIGABRT, sighandler);
+  signal(SIGFPE, sighandler);
+  signal(SIGBUS, sighandler);
+  signal(SIGTERM, sighandler);
+  signal(SIGINT, sighandler);
+  signal(SIGQUIT, sighandler);
+
   catch_errors (captured_main, args, "", RETURN_MASK_ALL);
   /* The only way to end up here is by an error (normal exit is
      handled by quit_force()), hence always return an error status.  */
