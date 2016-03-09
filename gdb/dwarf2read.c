@@ -12018,8 +12018,11 @@ read_array_type (struct die_info *die, struct dwarf2_cu *cu)
 
                 attr_alloc = dwarf2_attr(die, DW_AT_allocated, cu);
                 if (attr_alloc)
+                  {
+                    TYPE_INSTANCE_FLAGS (type) |= TYPE_INSTANCE_FLAG_ALLOCATABLE;
                     baton_holder->allocated_baton = 
                         make_loclist_baton (cu, DW_BLOCK(attr_alloc));
+                  }
             }
 
         /* PGI extensions */

@@ -3278,6 +3278,10 @@ recursive_dump_type (struct type *type, int spaces)
     {
       puts_filtered (" TYPE_INSTANCE_FLAG_IS_CO_SHAPE");
     }    
+  if (TYPE_ALLOCATABLE (type))
+    {
+      puts_filtered (" TYPE_INSTANCE_FLAG_ALLOCATABLE");
+    }
   puts_filtered ("\n");
   printfi_filtered (spaces, "length %d\n", TYPE_LENGTH (type));
   if (TYPE_OBJFILE_OWNED (type))
