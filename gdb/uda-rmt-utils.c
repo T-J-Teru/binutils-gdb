@@ -139,13 +139,6 @@ uda_rmt_recv_reply (const char *fmt, ...)
                 }
 	      return status;
 	    }
-	  else if (!reply[1])
-	    {
-	      /* Empty reply indicates no action taken.  */
-	      if (debug_uda)
-		printf ("<-- status: no information\n");
-	      return uda_no_information;
-	    }
 	  else
 	    {
 	      /* Reply has data payload.  */
