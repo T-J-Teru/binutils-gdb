@@ -1750,10 +1750,12 @@ value_copy (struct value *arg)
   struct type *encl_type = value_enclosing_type (arg);
   struct value *val;
 
-  if (value_lazy (arg))
-    val = allocate_value_lazy (encl_type);
-  else
-    val = allocate_value (encl_type);
+  val = allocate_value_lazy (encl_type);
+  if (!value_lazy (arg))
+    {
+      val->length = arg->length;
+      val->contents = (gdb_byte *) xzalloc (val->length);
+    }
   val->type = arg->type;
   VALUE_LVAL (val) = VALUE_LVAL (arg);
   val->location = arg->location;
