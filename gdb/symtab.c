@@ -1672,12 +1672,15 @@ lookup_symbol_aux_quick (struct objfile *objfile, int kind,
 				 STATIC_BLOCK : GLOBAL_BLOCK);
       sym = lookup_block_symbol (block, name, domain);
       if (!sym)
-	error (_("\
+	{
+	  warning (_("\
 Internal: %s symbol `%s' found in %s psymtab but not in symtab.\n\
 %s may be an inlined function, or may be a template function\n\
 (if a template, try specifying an instantiation: %s<type>)."),
-	       kind == GLOBAL_BLOCK ? "global" : "static",
-	       name, symtab_to_filename_for_display (symtab), name, name);
+		kind == GLOBAL_BLOCK ? "global" : "static",
+		name, symtab_to_filename_for_display (symtab), name, name);
+	  return NULL;
+	}
     }
   return fixup_symbol_section (sym, objfile);
 }
@@ -1877,12 +1880,15 @@ basic_lookup_transparent_type_quick (struct objfile *objfile, int kind,
       block = BLOCKVECTOR_BLOCK (bv, other_kind);
       sym = lookup_block_symbol (block, name, STRUCT_DOMAIN);
       if (!sym)
-	/* FIXME; error is wrong in one case.  */
-	error (_("\
+	{
+	  /* FIXME; error is wrong in one case.  */
+	  warning (_("\
 Internal: global symbol `%s' found in %s psymtab but not in symtab.\n\
 %s may be an inlined function, or may be a template function\n\
 (if a template, try specifying an instantiation: %s<type>)."),
-	       name, symtab_to_filename_for_display (symtab), name, name);
+		name, symtab_to_filename_for_display (symtab), name, name);
+	  return NULL;
+	}
     }
   if (!TYPE_IS_OPAQUE (SYMBOL_TYPE (sym)))
     return SYMBOL_TYPE (sym);
