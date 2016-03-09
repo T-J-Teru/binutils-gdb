@@ -315,12 +315,16 @@ void
 upc_value_fetch_lazy (struct value *val)
 {
   struct type *type = check_typedef (value_type (val));
-  unsigned length = TYPE_LENGTH (value_enclosing_type (val));
+  unsigned length;
   ULONGEST block_size = upc_blocksizeof (type);
   gdb_upc_pts_t pts = VALUE_SHARED_ADDR (val);
   int status;
   if (!uda_calls.uda_calc_pts_index_add)
-    error (_("UPC language support is not initialised"));  
+    error (_("UPC language support is not initialised"));
+  if (!value_repeated (val))
+    length = get_limited_length (check_typedef (value_enclosing_type (val)));
+  else
+    length = TYPE_LENGTH (check_typedef (value_enclosing_type (val)));
   if (TYPE_CODE (type) == TYPE_CODE_ARRAY)
     {
       struct type *elem_type;
