@@ -781,6 +781,22 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
 	}
     }
 
+  if (!input && gdb_datadir)
+    {
+      const char *basename = lbasename (objfile->name);
+      /* Also try the same file in a subdirectory of gdb's data
+	 directory.  */
+      debugfile = xmalloc (strlen (gdb_datadir) + strlen (basename)
+			   + strlen (language->suffix) + strlen ("/auto-load/") + 1);
+      strcpy (debugfile, gdb_datadir);
+      strcat (debugfile, "/auto-load/");
+      strcat (debugfile, basename);
+      strcat (debugfile, language->suffix);
+
+      make_cleanup (xfree, debugfile);
+      input = fopen (debugfile, "r");
+    }
+
   if (input)
     {
       make_cleanup_fclose (input);
