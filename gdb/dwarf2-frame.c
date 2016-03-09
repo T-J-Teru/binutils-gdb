@@ -1402,10 +1402,20 @@ dwarf2_frame_sniffer (const struct frame_unwind *self,
      extend one byte before its start address or we could potentially
      select the FDE of the previous function.  */
   CORE_ADDR block_addr = get_frame_address_in_block (this_frame);
+  CORE_ADDR pc = get_frame_pc (this_frame);
   struct dwarf2_fde *fde = dwarf2_frame_find_fde (&block_addr, NULL);
 
   if (!fde)
     return 0;
+
+  /* Note: dwarf2_frame_find_fde modifies block_addr to point to the first
+     instruction of the FDE.  */
+  if (block_addr == pc)
+    {
+      /* Return 0 if at the start of the function.  Some compilers emit bogus
+         unwind information for the first instruction.  */
+      return 0;
+    }
 
   /* On some targets, signal trampolines may have unwind information.
      We need to recognize them so that we set the frame type
