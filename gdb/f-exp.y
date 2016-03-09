@@ -203,7 +203,7 @@ static int parse_number (struct parser_state *, const char *, int,
 
 %token <ssym> NAME_OR_INT 
 
-%token POINTER SIZEOF COLONCOLON KIND
+%token ALLOCATABLE POINTER SIZEOF COLONCOLON KIND
 %token ERROR
 
 /* Special type cases, put in to allow the parser to distinguish different
@@ -594,6 +594,11 @@ variable:	name_not_typename
 type    :       ptype
         ;
 
+allocatable_or_ptr_or_space : ALLOCATABLE ','
+    | POINTER ','
+    | 
+    ;
+
 ptype	:	typebase
 	|	typebase abs_decl
 		{
@@ -667,7 +672,7 @@ ptype	:	typebase
 			{ $$ = lookup_pointer_type ($1); }
 	|	typebase array_mod
 			{ $$ = follow_f_types ($1); }
-	|	typebase ',' POINTER array_mod
+	|	typebase ',' allocatable_or_ptr_or_space POINTER array_mod
 			{ $$ = lookup_pointer_type (follow_f_types ($1)); }
 	;
 
@@ -1054,6 +1059,7 @@ static const struct token f77_keywords[] =
   { "single", SINGLE, BINOP_END },
   { "double", DOUBLE, BINOP_END },
   { "precision", PRECISION, BINOP_END },
+  { "allocatable", ALLOCATABLE, BINOP_END },
   { NULL, 0, 0 }
 }; 
 
