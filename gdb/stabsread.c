@@ -2163,6 +2163,7 @@ rs6000_builtin_type (int typenum, struct objfile *objfile)
   /* We recognize types numbered from -NUMBER_RECOGNIZED to -1.  */
 #define NUMBER_RECOGNIZED 36
   struct type *rettype = NULL;
+  int fortran = (current_subfile->language == language_fortran);
 
   if (typenum >= 0 || typenum < -NUMBER_RECOGNIZED)
     {
@@ -2174,8 +2175,14 @@ rs6000_builtin_type (int typenum, struct objfile *objfile)
     {
       /* This includes an empty slot for type number -0.  */
       negative_types = OBSTACK_CALLOC (&objfile->objfile_obstack,
-				       NUMBER_RECOGNIZED + 1, struct type *);
+				       2 * (NUMBER_RECOGNIZED + 1), struct type *);
       set_objfile_data (objfile, rs6000_builtin_type_data, negative_types);
+    }
+
+  if (fortran)
+    {
+      /* Use the alternate block for Fortran.  */
+      negative_types += NUMBER_RECOGNIZED + 1;
     }
 
   if (negative_types[-typenum] != NULL)
@@ -2197,76 +2204,76 @@ rs6000_builtin_type (int typenum, struct objfile *objfile)
          is other than 32 bits, then it should use a new negative type
          number (or avoid negative type numbers for that case).
          See stabs.texinfo.  */
-      rettype = init_type (TYPE_CODE_INT, 4, 0, "int", objfile);
+      rettype = init_type (TYPE_CODE_INT, 4, 0, fortran ? "integer" : "int", objfile);
       break;
     case 2:
-      rettype = init_type (TYPE_CODE_INT, 1, 0, "char", objfile);
+      rettype = init_type (TYPE_CODE_INT, 1, 0, fortran ? "character" : "char", objfile);
       break;
     case 3:
-      rettype = init_type (TYPE_CODE_INT, 2, 0, "short", objfile);
+      rettype = init_type (TYPE_CODE_INT, 2, 0, fortran ? "integer*2" : "short", objfile);
       break;
     case 4:
-      rettype = init_type (TYPE_CODE_INT, 4, 0, "long", objfile);
+      rettype = init_type (TYPE_CODE_INT, 4, 0, fortran ? "integer*4" : "long", objfile);
       break;
     case 5:
       rettype = init_type (TYPE_CODE_INT, 1, TYPE_FLAG_UNSIGNED,
-			   "unsigned char", objfile);
+			   fortran ? "logical*1" : "unsigned char", objfile);
       break;
     case 6:
-      rettype = init_type (TYPE_CODE_INT, 1, 0, "signed char", objfile);
+      rettype = init_type (TYPE_CODE_INT, 1, 0, fortran ? "integer*1" : "signed char", objfile);
       break;
     case 7:
       rettype = init_type (TYPE_CODE_INT, 2, TYPE_FLAG_UNSIGNED,
-			   "unsigned short", objfile);
+			   fortran ? "logical*2" : "unsigned short", objfile);
       break;
     case 8:
       rettype = init_type (TYPE_CODE_INT, 4, TYPE_FLAG_UNSIGNED,
-			   "unsigned int", objfile);
+			   fortran ? "logical*4" : "unsigned int", objfile);
       break;
     case 9:
       rettype = init_type (TYPE_CODE_INT, 4, TYPE_FLAG_UNSIGNED,
-			   "unsigned", objfile);
+			   fortran ? "logical*4" : "unsigned", objfile);
       break;
     case 10:
       rettype = init_type (TYPE_CODE_INT, 4, TYPE_FLAG_UNSIGNED,
-			   "unsigned long", objfile);
+			   fortran ? "logical*4" : "unsigned long", objfile);
       break;
     case 11:
       rettype = init_type (TYPE_CODE_VOID, 1, 0, "void", objfile);
       break;
     case 12:
       /* IEEE single precision (32 bit).  */
-      rettype = init_type (TYPE_CODE_FLT, 4, 0, "float", objfile);
+      rettype = init_type (TYPE_CODE_FLT, 4, 0, fortran ? "real" : "float", objfile);
       break;
     case 13:
       /* IEEE double precision (64 bit).  */
-      rettype = init_type (TYPE_CODE_FLT, 8, 0, "double", objfile);
+      rettype = init_type (TYPE_CODE_FLT, 8, 0, fortran ? "real*8" : "double", objfile);
       break;
     case 14:
       /* This is an IEEE double on the RS/6000, and different machines with
          different sizes for "long double" should use different negative
          type numbers.  See stabs.texinfo.  */
-      rettype = init_type (TYPE_CODE_FLT, 8, 0, "long double", objfile);
+      rettype = init_type (TYPE_CODE_FLT, 8, 0, fortran ? "real*16" : "long double", objfile);
       break;
     case 15:
-      rettype = init_type (TYPE_CODE_INT, 4, 0, "integer", objfile);
+      rettype = init_type (TYPE_CODE_INT, 4, 0, fortran ? "integer*4" : "integer", objfile);
       break;
     case 16:
       rettype = init_type (TYPE_CODE_BOOL, 4, TYPE_FLAG_UNSIGNED,
-			   "boolean", objfile);
+			   fortran ? "logical" : "boolean", objfile);
       break;
     case 17:
-      rettype = init_type (TYPE_CODE_FLT, 4, 0, "short real", objfile);
+      rettype = init_type (TYPE_CODE_FLT, 4, 0, fortran ? "real" : "short real", objfile);
       break;
     case 18:
-      rettype = init_type (TYPE_CODE_FLT, 8, 0, "real", objfile);
+      rettype = init_type (TYPE_CODE_FLT, 8, 0, fortran ? "real*8" : "real", objfile);
       break;
     case 19:
       rettype = init_type (TYPE_CODE_ERROR, 0, 0, "stringptr", objfile);
       break;
     case 20:
       rettype = init_type (TYPE_CODE_CHAR, 1, TYPE_FLAG_UNSIGNED,
-			   "character", objfile);
+			   fortran ? "character" : "char", objfile);
       break;
     case 21:
       rettype = init_type (TYPE_CODE_BOOL, 1, TYPE_FLAG_UNSIGNED,
@@ -2286,47 +2293,47 @@ rs6000_builtin_type (int typenum, struct objfile *objfile)
       break;
     case 25:
       /* Complex type consisting of two IEEE single precision values.  */
-      rettype = init_type (TYPE_CODE_COMPLEX, 8, 0, "complex", objfile);
+      rettype = init_type (TYPE_CODE_COMPLEX, 8, 0, fortran ? "complex*8" : "complex", objfile);
       TYPE_TARGET_TYPE (rettype) = init_type (TYPE_CODE_FLT, 4, 0, "float",
 					      objfile);
       break;
     case 26:
       /* Complex type consisting of two IEEE double precision values.  */
-      rettype = init_type (TYPE_CODE_COMPLEX, 16, 0, "double complex", NULL);
+      rettype = init_type (TYPE_CODE_COMPLEX, 16, 0, fortran ? "complex*16" : "double complex", objfile);
       TYPE_TARGET_TYPE (rettype) = init_type (TYPE_CODE_FLT, 8, 0, "double",
 					      objfile);
       break;
     case 27:
-      rettype = init_type (TYPE_CODE_INT, 1, 0, "integer*1", objfile);
+      rettype = init_type (TYPE_CODE_INT, 1, 0, fortran ? "integer*1" : "char", objfile);
       break;
     case 28:
-      rettype = init_type (TYPE_CODE_INT, 2, 0, "integer*2", objfile);
+      rettype = init_type (TYPE_CODE_INT, 2, 0, fortran ? "integer*2" : "short", objfile);
       break;
     case 29:
-      rettype = init_type (TYPE_CODE_INT, 4, 0, "integer*4", objfile);
+      rettype = init_type (TYPE_CODE_INT, 4, 0, fortran ? "integer*4" : "int", objfile);
       break;
     case 30:
       rettype = init_type (TYPE_CODE_CHAR, 2, 0, "wchar", objfile);
       break;
     case 31:
-      rettype = init_type (TYPE_CODE_INT, 8, 0, "long long", objfile);
+      rettype = init_type (TYPE_CODE_INT, 8, 0, fortran ? "integer*8" : "long long", objfile);
       break;
     case 32:
       rettype = init_type (TYPE_CODE_INT, 8, TYPE_FLAG_UNSIGNED,
-			   "unsigned long long", objfile);
+			   fortran ? "logical*8" : "unsigned long long", objfile);
       break;
     case 33:
       rettype = init_type (TYPE_CODE_BOOL, 8, TYPE_FLAG_UNSIGNED,
 			   "logical*8", objfile);
       break;
     case 34:
-      rettype = init_type (TYPE_CODE_INT, 8, 0, "integer*8", objfile);
+      rettype = init_type (TYPE_CODE_INT, 8, 0, fortran ? "integer*8" : "long long", objfile);
       break;
     case 35:
-      rettype = init_type (TYPE_CODE_INT, 8, 0, "unsigned long", objfile);
+      rettype = init_type (TYPE_CODE_INT, 8, TYPE_FLAG_UNSIGNED, fortran ? "logical*8" : "unsigned long", objfile);
       break;
     case 36:
-      rettype = init_type (TYPE_CODE_INT, 8, 0, "unsigned long", objfile);
+      rettype = init_type (TYPE_CODE_INT, 8, TYPE_FLAG_UNSIGNED, fortran ? "logical*8" : "unsigned long", objfile);
       break;
     }
   negative_types[-typenum] = rettype;
