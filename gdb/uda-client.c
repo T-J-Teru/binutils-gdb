@@ -43,11 +43,12 @@
 #define A_FMT ((sizeof (long) == 64) ? "%l" : "%L")
 
 #define TYPE_TBL_INIT_ALLOC 256
+#define DUMMY_THRNUM ((uda_tword_t)0xffffffff)
 
 static const struct type **type_tbl;
 static size_t type_tbl_alloc_size;
 static size_t type_tbl_size;
-static int mythread;
+extern uda_tword_t mythread;
 
 typedef struct minimal_symbol *sym_p;
 
@@ -169,12 +170,17 @@ read_local_bytes (const uda_tword_t thread_num,
 {
   CORE_ADDR local_addr = (CORE_ADDR) addr;
   int status;
-  uda_tword_t old_thread_num;
-  if (upcsingle && thread_num != mythread)
-    return uda_no_information;
-  old_thread_num = upc_thread_set (thread_num);
+  uda_tword_t old_thread_num = 0;
+  if (upcsingle)
+    {
+      if (thread_num != mythread && thread_num != 0 && thread_num != DUMMY_THRNUM)
+        return uda_no_information;
+    }
+  else if (thread_num != DUMMY_THRNUM)
+    old_thread_num = upc_thread_set (thread_num);
   status = target_read_memory (local_addr, data, length);
-  upc_thread_restore (old_thread_num);
+  if (!upcsingle && thread_num != DUMMY_THRNUM)
+    upc_thread_restore (old_thread_num);
   return status;
 }
 
@@ -192,12 +198,17 @@ write_local_bytes (const uda_tword_t thread_num,
 {
   CORE_ADDR local_addr = (CORE_ADDR) addr;
   int status;
-  uda_tword_t old_thread_num;
-  if (upcsingle && thread_num != mythread)
-    return uda_no_information;
-  old_thread_num = upc_thread_set (thread_num);
+  uda_tword_t old_thread_num = 0;
+  if (upcsingle)
+    {
+      if (thread_num != mythread && thread_num != 0 && thread_num != DUMMY_THRNUM)
+        return uda_no_information;
+    }
+  else if (thread_num != DUMMY_THRNUM)
+    old_thread_num = upc_thread_set (thread_num);
   status = target_write_memory (local_addr, data, length);
-  upc_thread_restore (old_thread_num);
+  if (!upcsingle && thread_num != DUMMY_THRNUM)
+    upc_thread_restore (old_thread_num);
   return status;
 }
 
@@ -306,6 +317,27 @@ uda_set_thread_num (const uda_tword_t thread_num)
   mythread = thread_num;
   uda_rmt_send_cmd ("Qupc.thread:%ux", thread_num);
   status = uda_rmt_recv_status ();
+  return status;
+}
+
+int
+uda_get_num_threads (uda_tword_t *num_threads)
+{
+  int status;
+  uda_rmt_send_cmd ("Qupc.get.threads");
+  *num_threads = 0;
+  status = uda_rmt_recv_reply ("%lux", num_threads);
+  return status;
+}
+
+int
+uda_get_thread_num (uda_tword_t *thread_num)
+{
+  int status;
+  uda_rmt_send_cmd ("Qupc.get.thread");
+  *thread_num = (uda_tword_t) -1;
+  status = uda_rmt_recv_reply ("%lux", thread_num);
+  mythread = *thread_num;
   return status;
 }
 
@@ -461,6 +493,7 @@ uda_client_connect (const char *service_name)
   FILE *c_in, *c_out;
   struct sockaddr_un saun;
   socklen_t len;
+  int status;
   /* Create a UNIX domain socket. */
   if ((connect_fd = socket (AF_UNIX, SOCK_STREAM, 0)) < 0)
     {
@@ -487,13 +520,24 @@ uda_client_connect (const char *service_name)
   setlinebuf (c_out);
   setvbuf (c_in, (char *) NULL, _IONBF, 0);
   uda_rmt_init (c_in, c_out, uda_client_cmd_exec);
+  uda_rmt_send_cmd ("Qupc.init");
+  status = uda_rmt_recv_status ();
+  if (status != uda_ok)
+    {
+      if (status == uda_bad_assistant)
+	error (_("UDA initialisation failed.\nFailed to load the assistant plugin.\nCheck the UDA_PLUGIN_LIBRARY environment variable."));
+      else
+	error (_("UDA initialisation failed."));
+    }
 }
 
 void
 init_uda_client(uda_callouts_p callouts)
 {
   callouts->uda_set_num_threads = &uda_set_num_threads;
-  callouts->uda_set_thread_num = &uda_set_thread_num;  
+  callouts->uda_set_thread_num = &uda_set_thread_num;
+  callouts->uda_get_num_threads = &uda_get_num_threads;
+  callouts->uda_get_thread_num = &uda_get_thread_num;
   callouts->uda_set_type_sizes_and_byte_order = &uda_set_type_sizes_and_byte_order;
   callouts->uda_symbol_to_pts = &uda_symbol_to_pts;
   callouts->uda_length_of_pts = &uda_length_of_pts;
