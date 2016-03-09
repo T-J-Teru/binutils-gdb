@@ -76,6 +76,9 @@ extern void floatformat_to_doublest (const struct floatformat *,
 extern void floatformat_from_doublest (const struct floatformat *,
 				       const DOUBLEST *in, void *out);
 
+extern int floatformat_is_inf (const struct floatformat *fmt, 
+                               const bfd_byte *uval, unsigned int len);
+
 extern int floatformat_is_negative (const struct floatformat *,
 				    const bfd_byte *);
 extern enum float_kind floatformat_classify (const struct floatformat *,
