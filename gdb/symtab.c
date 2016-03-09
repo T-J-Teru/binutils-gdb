@@ -5023,6 +5023,12 @@ symtab_observer_executable_changed (void)
   set_main_name (NULL);
 }
 
+/* Command to display the symbol for the main function */
+static void info_main_command(char* arg, int from_tty)
+{
+  printf_unfiltered("%s\n", main_name());
+}
+
 /* Return 1 if the supplied producer string matches the ARM RealView
    compiler (armcc).  */
 
@@ -5061,6 +5067,8 @@ All global and static variable names, or those matching REGEXP."));
   add_info ("functions", functions_info,
 	    _("All function names, or those matching REGEXP."));
 
+  add_info ("main", info_main_command,
+	    _("Get main symbol to identify entry point into program."));
   /* FIXME:  This command has at least the following problems:
      1.  It prints builtin types (in a very strange and confusing fashion).
      2.  It doesn't print right, e.g. with
