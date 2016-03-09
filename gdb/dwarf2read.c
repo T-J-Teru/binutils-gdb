@@ -16522,15 +16522,18 @@ fixup_partial_die (struct partial_die_info *part_die,
       spec_die = find_partial_die (part_die->spec_offset,
 				   part_die->spec_is_dwz, cu);
 
-      fixup_partial_die (spec_die, cu);
-
-      if (spec_die->name)
+      if (spec_die)
 	{
-	  part_die->name = spec_die->name;
+	  fixup_partial_die (spec_die, cu);
 
-	  /* Copy DW_AT_external attribute if it is set.  */
-	  if (spec_die->is_external)
-	    part_die->is_external = spec_die->is_external;
+	  if (spec_die->name)
+	    {
+	      part_die->name = spec_die->name;
+	      
+	      /* Copy DW_AT_external attribute if it is set.  */
+	      if (spec_die->is_external)
+		part_die->is_external = spec_die->is_external;
+	    }
 	}
     }
 
