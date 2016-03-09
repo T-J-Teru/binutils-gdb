@@ -42,6 +42,7 @@ static int structure_depth = 0; /* Don't unroll structs too deep -
 #define MAX_STRUCTURE_DEPTH 10  /* That should be deep enough! */
 
 struct f77_dim_pair {
+  int lb;
   int size;
   int offset;
 };
@@ -67,6 +68,8 @@ int f77_array_offset_tbl[MAX_FORTRAN_DIMS + 1][2];
 /* The following gives us the offset for row n where n is 1-based.  */
 
 #define F77_DIM_OFFSET(t, n) (((*t)[(n)]).offset)
+
+#define F77_DIM_LOWER_BOUND(t, n) (((*t)[(n)]).lb)
 
 int
 f77_get_lowerbound (struct type *type)
@@ -144,6 +147,7 @@ f77_create_arrayprint_offset_tbl (f77_array_dim* tbl, struct type *type, struct 
       lower = f77_get_lowerbound (tmp_type);
 
       F77_DIM_SIZE (tbl, ndimen) = upper - lower + 1;
+      F77_DIM_LOWER_BOUND (tbl, ndimen) = lower;
 
       if (F77_DIM_SIZE (tbl, ndimen) == 0) /* deal with assumed size array - print single element */
           F77_DIM_SIZE (tbl, ndimen) = 1;
@@ -181,8 +185,8 @@ f77_print_array_1 (f77_array_dim *tbl, int nss, int ndimensions, struct type *ty
 		   const struct value_print_options *options,
 		   int *elts)
 {
-  int i;
-
+  int i, lower_bound_index = F77_DIM_LOWER_BOUND (tbl, nss);
+  struct type *index_type = builtin_type (get_type_arch (type))->builtin_int;
   unsigned int print_max = options->print_max;
 
   if (val && value_repeated (val) && recurse == 0)
@@ -194,6 +198,8 @@ f77_print_array_1 (f77_array_dim *tbl, int nss, int ndimensions, struct type *ty
 	   (i < F77_DIM_SIZE (tbl, nss) && (*elts) < print_max);
 	   i++)
 	{
+	  maybe_print_array_index (index_type, i + lower_bound_index,
+				   stream, options);	  
 	  fprintf_filtered (stream, "( ");
 	  f77_print_array_1 (tbl, nss + 1, ndimensions, TYPE_TARGET_TYPE (type),
 			     valaddr,
@@ -210,6 +216,8 @@ f77_print_array_1 (f77_array_dim *tbl, int nss, int ndimensions, struct type *ty
       for (i = 0; i < F77_DIM_SIZE (tbl, nss) && (*elts) < print_max;
 	   i++, (*elts)++)
 	{
+	  maybe_print_array_index (index_type, i + lower_bound_index,
+				   stream, options);	  
 	  val_print (TYPE_TARGET_TYPE (type),
 		     valaddr,
 		     embedded_offset + i * F77_DIM_OFFSET (tbl, ndimensions),
