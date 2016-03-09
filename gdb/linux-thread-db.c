@@ -1582,8 +1582,12 @@ find_new_threads_callback (const td_thrhandle_t *th_p, void *data)
 
   err = info->td_thr_get_info_p (th_p, &ti);
   if (err != TD_OK)
-    error (_("find_new_threads_callback: cannot get thread info: %s"),
-	   thread_db_err_str (err));
+    {
+      if (err == TD_ERR)
+        return 0;
+      error (_("find_new_threads_callback: cannot get thread info: %s"),
+	     thread_db_err_str (err));
+    }
 
   if (ti.ti_lid == -1)
     {
