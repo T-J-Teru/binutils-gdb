@@ -2278,7 +2278,11 @@ static const struct token ident_tokens[] =
     {"__typeof", TYPEOF, OP_TYPEOF, 0 },
     {"typeof", TYPEOF, OP_TYPEOF, FLAG_SHADOW },
     {"__decltype", DECLTYPE, OP_DECLTYPE, FLAG_CXX },
-    {"decltype", DECLTYPE, OP_DECLTYPE, FLAG_CXX | FLAG_SHADOW }
+    {"decltype", DECLTYPE, OP_DECLTYPE, FLAG_CXX | FLAG_SHADOW },
+    
+    {"shared", SHARED_KEYWORD, OP_NULL, 0 },
+    {"relaxed", RELAXED_KEYWORD, OP_NULL, 0 },
+    {"strict", STRICT_KEYWORD, OP_NULL, 0 }
   };
 
 /* When we find that lexptr (the global var defined in parse.c) is
