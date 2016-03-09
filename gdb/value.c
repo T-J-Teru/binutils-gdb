@@ -40,6 +40,7 @@
 #include "tracepoint.h"
 #include "cp-abi.h"
 #include "user-regs.h"
+#include "f-lang.h"
 
 /* Prototypes for exported functions.  */
 
@@ -906,6 +907,43 @@ static int value_history_count;	/* Abs number of last entry stored.  */
 
 static struct value *all_values;
 
+#define MARKS_HARD_LIMIT 1000000
+   
+unsigned int get_limited_length(struct type *type)
+{
+  struct type *base;
+  /* read_element_limit (defined in value.h) is set in valprint.c. It's our
+     safety-net to make sure we don't try limiting anything that's not
+     going to be used for printing - and the 'print' command is specifically
+     excluded. 'output' is included, which is what DDT, 'info locals' and
+     'info args' use */
+  if(type->length>MARKS_HARD_LIMIT && read_element_limit>0 && type)
+  {
+    if(TYPE_CODE (type)==TYPE_CODE_ARRAY)
+    {
+      if (current_language->la_language == language_fortran) /* this ugly hack is needed because the C/C++ 
+								limited elements print of nested arrays isn't
+								quite right..*/
+	{
+	  for(base = TYPE_TARGET_TYPE (type); base && TYPE_CODE (base)==TYPE_CODE_ARRAY; base = TYPE_TARGET_TYPE (base))
+	    { /* iterate down until we get to the element type (a non-array type) */ 
+	    }
+	}
+      else 
+	{
+	  base = TYPE_TARGET_TYPE (type);
+	}
+      if(base)
+      {
+        unsigned int length = read_element_limit * TYPE_LENGTH (base);
+	return length > type->length ? type->length : length;
+      }
+    }
+  }
+  
+  return type->length;
+}
+
 /* Allocate a lazy value for type TYPE.  Its actual content is
    "lazily" allocated too: the content field of the return value is
    NULL; it will be allocated when it is fetched from the target.  */
@@ -954,7 +992,7 @@ static void
 allocate_value_contents (struct value *val)
 {
   if (!val->contents)
-    val->contents = (gdb_byte *) xzalloc (TYPE_LENGTH (val->enclosing_type));
+    val->contents = (gdb_byte *) xzalloc (get_limited_length (val->enclosing_type));
 }
 
 /* Allocate a  value  and its contents for type TYPE.  */
@@ -1183,6 +1221,12 @@ value_contents_for_printing_const (const struct value *value)
 {
   gdb_assert (!value->lazy);
   return value->contents;
+}
+
+const gdb_byte *
+value_contents_all_safe (struct value *value)
+{
+    return catch_errors_with_ptr_return((catch_errors_with_ptr_return_ftype *) value_contents_all, value, "", -1);
 }
 
 const gdb_byte *
@@ -2695,7 +2739,8 @@ value_as_address (struct value *val)
      for pointers to char, in which the low bits *are* significant.  */
   return gdbarch_addr_bits_remove (gdbarch, value_as_long (val));
 #else
-
+  int l;
+  CORE_ADDR r;
   /* There are several targets (IA-64, PowerPC, and others) which
      don't represent pointers to functions as simply the address of
      the function's entry point.  For example, on the IA-64, a
@@ -2782,7 +2827,11 @@ value_as_address (struct value *val)
     return gdbarch_integer_to_address (gdbarch, value_type (val),
 				       value_contents (val));
 
-  return unpack_long (value_type (val), value_contents (val));
+  l = read_element_limit;
+  read_element_limit = 16;  
+  r = unpack_long (value_type (val), value_contents (val));
+  read_element_limit = l;
+  return r;
 #endif
 }
 
@@ -3110,7 +3159,7 @@ value_primitive_field (struct value *arg1, int offset,
   set_value_component_location (v, arg1);
   VALUE_REGNUM (v) = VALUE_REGNUM (arg1);
   VALUE_FRAME_ID (v) = VALUE_FRAME_ID (arg1);
-  return v;
+  return f_fixup_value (v, NULL);
 }
 
 /* Given a value ARG1 of a struct or union type,
@@ -3848,7 +3897,7 @@ value_fetch_lazy (struct value *val)
       if (TYPE_LENGTH (type))
 	read_value_memory (val, 0, value_stack (val),
 			   addr, value_contents_all_raw (val),
-			   TYPE_LENGTH (type));
+			   get_limited_length (type));
     }
   else if (VALUE_LVAL (val) == lval_register)
     {
