@@ -1706,7 +1706,9 @@ val_print_array_elements (struct type *type,
       if (low_pos > high_pos)
 	len = 0;
       else
-	len = high_pos - low_pos + 1;
+	len = val
+	       ? min (high_pos - low_pos + 1, value_length (val) / eltlen)
+	       : (high_pos - low_pos + 1);
     }
   else
     {

@@ -6519,6 +6519,7 @@ ada_value_tag (struct value *val)
 static struct value *
 value_tag_from_contents_and_address (struct type *type,
 				     const gdb_byte *valaddr,
+				     unsigned length,
                                      CORE_ADDR address)
 {
   int tag_byte_offset;
@@ -6532,7 +6533,7 @@ value_tag_from_contents_and_address (struct type *type,
 				  : valaddr + tag_byte_offset);
       CORE_ADDR address1 = (address == 0) ? 0 : address + tag_byte_offset;
 
-      return value_from_contents_and_address (tag_type, valaddr1, address1);
+      return value_from_contents_and_address (tag_type, valaddr1, TYPE_LENGTH (tag_type), address1);
     }
   return NULL;
 }
@@ -6614,7 +6615,7 @@ ada_tag_value_at_base_address (struct value *obj)
     return obj;
 
   base_address = value_address (obj) - offset_to_top;
-  tag = value_tag_from_contents_and_address (obj_type, NULL, base_address);
+  tag = value_tag_from_contents_and_address (obj_type, NULL, TYPE_LENGTH (obj_type), base_address);
 
   /* Make sure that we have a proper tag at the new address.
      Otherwise, offset_to_top is bogus (which can happen when
@@ -6628,7 +6629,7 @@ ada_tag_value_at_base_address (struct value *obj)
   if (!obj_type)
     return obj;
 
-  return value_from_contents_and_address (obj_type, NULL, base_address);
+  return value_from_contents_and_address (obj_type, NULL, TYPE_LENGTH (obj_type), base_address);
 }
 
 /* Return the "ada__tags__type_specific_data" type.  */
@@ -7507,7 +7508,7 @@ ada_which_variant_applies (struct type *var_type, struct type *outer_type,
      because we will end up trying to resolve a type that is currently
      being constructed.  */
   outer = value_from_contents_and_address_unresolved (outer_type,
-						      outer_valaddr, 0);
+						      outer_valaddr, TYPE_LENGTH (outer_type), 0);
   discrim = ada_value_struct_elt (outer, discrim_name, 1);
   if (discrim == NULL)
     return -1;
@@ -8062,8 +8063,10 @@ ada_template_to_fixed_record_type_1 (struct type *type,
 		 causes problems because we will end up trying to
 		 resolve a type that is currently being
 		 constructed.  */
+	      check_size (rtype);
 	      dval = value_from_contents_and_address_unresolved (rtype,
 								 valaddr,
+								 TYPE_LENGTH (rtype),
 								 address);
 	      rtype = value_type (dval);
 	    }
@@ -8173,6 +8176,7 @@ ada_template_to_fixed_record_type_1 (struct type *type,
 	     problems because we will end up trying to resolve a type
 	     that is currently being constructed.  */
 	  dval = value_from_contents_and_address_unresolved (rtype, valaddr,
+							     TYPE_LENGTH (rtype),
 							     address);
 	  rtype = value_type (dval);
 	}
@@ -8336,7 +8340,7 @@ to_record_with_fixed_variant_part (struct type *type, const gdb_byte *valaddr,
 
   if (dval0 == NULL)
     {
-      dval = value_from_contents_and_address (type, valaddr, address);
+      dval = value_from_contents_and_address (type, valaddr, TYPE_LENGTH (type), address);
       type = value_type (dval);
     }
   else
@@ -8738,11 +8742,13 @@ ada_to_fixed_type_1 (struct type *type, const gdb_byte *valaddr,
 	      value_tag_from_contents_and_address
 	      (fixed_record_type,
 	       valaddr,
+	       TYPE_LENGTH (fixed_record_type),
 	       address);
 	    struct type *real_type = type_from_tag (tag);
 	    struct value *obj =
 	      value_from_contents_and_address (fixed_record_type,
 					       valaddr,
+					       TYPE_LENGTH (fixed_record_type),
 					       address);
             fixed_record_type = value_type (obj);
             if (real_type != NULL)
@@ -8982,7 +8988,7 @@ ada_to_fixed_value_create (struct type *type0, CORE_ADDR address,
   if (type == type0 && val0 != NULL)
     return val0;
   else
-    return value_from_contents_and_address (type, 0, address);
+    return value_from_contents_and_address (type, 0, TYPE_LENGTH (type), address);
 }
 
 /* A value representing VAL, but with a standard (static-sized) type

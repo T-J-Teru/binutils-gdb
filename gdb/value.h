@@ -648,6 +648,7 @@ extern struct value *value_from_contents_and_address_unresolved
      (struct type *, const gdb_byte *, CORE_ADDR);
 extern struct value *value_from_contents_and_address (struct type *,
 						      const gdb_byte *,
+						      unsigned length,
 						      CORE_ADDR);
 extern struct value *value_from_contents (struct type *, const gdb_byte *);
 
@@ -1110,5 +1111,10 @@ extern void set_value_repeated (struct value *value,
 extern int value_from_infcall (const struct value *value);
 extern void set_value_from_infcall (struct value *value,
 				    int from_infcall);
+
+extern unsigned value_length (const struct value *value);
+
+extern void value_copy_contents (struct value *to, struct value *from);
+extern void value_copy_contents_all_raw (struct value *to, struct value *from);
 
 #endif /* !defined (VALUE_H) */
