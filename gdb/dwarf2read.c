@@ -6248,8 +6248,8 @@ peek_die_abbrev (gdb_byte *info_ptr, unsigned int *bytes_read,
   abbrev = abbrev_table_lookup_abbrev (cu->abbrev_table, abbrev_number);
   if (!abbrev)
     {
-      error (_("Dwarf Error: Could not find abbrev number %d [in module %s]"),
-	     abbrev_number, bfd_get_filename (abfd));
+      warning (_("Dwarf Error: Could not find abbrev number %d [in module %s]"),
+		abbrev_number, bfd_get_filename (abfd));
     }
 
   return abbrev;
