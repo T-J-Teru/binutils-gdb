@@ -1806,7 +1806,8 @@ linux_nat_resume (struct target_ops *ops,
     {
       /* FIXME: What should we do if we are supposed to continue
 	 this thread with a signal?  */
-      gdb_assert (signo == GDB_SIGNAL_0);
+      if (WIFSTOPPED (lp->status) && WSTOPSIG (lp->status) != signo)
+	gdb_assert (signo == GDB_SIGNAL_0);
 
       if (debug_linux_nat)
 	fprintf_unfiltered (gdb_stdlog,
