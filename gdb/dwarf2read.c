@@ -70,6 +70,7 @@
 #include "filestuff.h"
 #include "build-id.h"
 #include "f-module.h"
+#include "upc-lang.h"
 
 #include <fcntl.h>
 #include <sys/types.h>
@@ -15013,13 +15014,208 @@ read_subroutine_type (struct die_info *die, struct dwarf2_cu *cu)
 }
 
 static struct type *
+read_berkeley_mangled_type (const char *mangled_name, struct die_info *die,
+			    struct dwarf2_cu *cu)
+{
+  struct objfile *objfile = cu->objfile;
+  struct gdbarch *gdbarch = get_objfile_arch (objfile);
+  struct comp_unit_head *cu_header = &cu->header;
+  struct type *this_type = NULL, *target_type;
+  struct obstack *obs = &objfile->objfile_obstack;
+
+  if (*mangled_name == 'R' || *mangled_name == 'S')
+    {
+      struct type_quals new_quals = null_type_quals, type_quals;
+      int strict = (*mangled_name == 'S');
+      long block;
+      mangled_name++;
+      block = atol (mangled_name);
+      mangled_name = strchr (mangled_name, '_');
+      if (mangled_name == NULL)
+	{
+	  warning ("Mangled type name missing expectesd _\n");
+	  return NULL;
+	}
+      mangled_name++;
+      target_type = read_berkeley_mangled_type (mangled_name, die, cu);
+      TYPE_QUAL_FLAGS (new_quals) = TYPE_INSTANCE_FLAG_UPC_SHARED;
+      TYPE_QUAL_FLAGS (new_quals) |= strict ? TYPE_INSTANCE_FLAG_UPC_STRICT :
+	TYPE_INSTANCE_FLAG_UPC_RELAXED;
+      if (block)
+	TYPE_QUAL_UPC_LAYOUT (new_quals) = block;
+      type_quals = merge_type_quals (TYPE_QUALS (target_type), new_quals);
+      this_type = make_qual_variant_type (type_quals, target_type, 0);
+    }
+  else if (*mangled_name == 'P')
+    {
+      mangled_name++;
+      target_type = read_berkeley_mangled_type (mangled_name, die, cu);
+      this_type = lookup_pointer_type (target_type);
+      if (upc_shared_type_p (target_type))
+        {
+          /* We don't know the size of a shared pointer until after upc_init
+	     is called.  */
+          TYPE_LENGTH (this_type) = 0;
+        }
+      else
+        {
+          TYPE_LENGTH (this_type) = cu_header->addr_size;
+        }
+    }
+  else if (*mangled_name == 'A')
+    {
+      struct type *range_type, *index_type;
+      const char *endptr;
+      long size;
+      int threads_factor = 0;
+      mangled_name++;
+      size = strtol (mangled_name, (char **) &endptr, 10);
+      if (endptr)
+	threads_factor = (*endptr == 'H');
+      mangled_name = strchr (mangled_name, '_');
+      if (mangled_name == NULL)
+	{
+	  warning ("Mangled type name missing expectesd _\n");
+	  return NULL;
+	}
+      mangled_name++;
+      target_type = read_berkeley_mangled_type (mangled_name, die, cu);
+      index_type = objfile_type (objfile)->builtin_int;
+      range_type = create_range_type (NULL, index_type, 0, size - 1);
+      if (threads_factor)
+        TYPE_INSTANCE_FLAGS (range_type) |=
+	  TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR;
+      this_type = create_array_type (NULL, target_type, range_type);
+    }
+  else if (*mangled_name == 'N')
+    {
+      const char *endptr;
+      int tlen;
+      char *struct_name;
+      mangled_name++;
+      tlen = strtol (mangled_name, (char **) &endptr, 10);
+      struct_name = obstack_copy0 (obs, endptr, tlen);
+      this_type = init_type (TYPE_CODE_STRUCT, 0, 0, struct_name, objfile);
+      TYPE_STUB (this_type) = 1;
+    }
+  else if (*mangled_name == 'r' || *mangled_name == 'V'
+	   || *mangled_name == 'K')
+    {
+      struct type_quals new_quals = null_type_quals, type_quals;
+      int qual_char = *mangled_name;
+      mangled_name++;
+      target_type = read_berkeley_mangled_type (mangled_name, die, cu);
+      switch (qual_char)
+	{
+	case 'V':
+	  TYPE_QUAL_FLAGS (new_quals) |= TYPE_INSTANCE_FLAG_VOLATILE;
+	  break;
+	case 'K':
+	  TYPE_QUAL_FLAGS (new_quals) |= TYPE_INSTANCE_FLAG_CONST;
+	  break;
+	case 'r':
+	  TYPE_QUAL_FLAGS (new_quals) |= TYPE_INSTANCE_FLAG_RESTRICT;
+	  break;
+	default:
+	  error (_
+		 ("Unrecognised type qualifier character in mangled type name: %c"),
+		 qual_char);
+	}
+      type_quals = merge_type_quals (TYPE_QUALS (target_type), new_quals);
+      this_type = make_qual_variant_type (type_quals, target_type, 0);
+    }
+  else
+    {
+      switch (*mangled_name)
+	{
+	case 'w':
+	  // FIXME: What if sizeof (wchar_t) is different for the target?
+	  this_type =
+	    init_type (TYPE_CODE_INT, sizeof (wchar_t), TYPE_FLAG_UNSIGNED,
+		       "wchar_t", objfile);
+	  break;
+	case 'b':
+	  this_type = builtin_type (gdbarch)->builtin_bool;
+	  break;
+	case 'c':
+	  this_type = builtin_type (gdbarch)->builtin_char;
+	  break;
+	case 'a':
+	  this_type = builtin_type (gdbarch)->builtin_signed_char;
+	  break;
+	case 'h':
+	  this_type = builtin_type (gdbarch)->builtin_unsigned_char;
+	  break;
+	case 's':
+	  this_type = builtin_type (gdbarch)->builtin_short;
+	  break;
+	case 't':
+	  this_type = builtin_type (gdbarch)->builtin_unsigned_short;
+	  break;
+	case 'i':
+	  this_type = builtin_type (gdbarch)->builtin_int;
+	  break;
+	case 'j':
+	  this_type = builtin_type (gdbarch)->builtin_unsigned_int;
+	  break;
+	case 'l':
+	  this_type = builtin_type (gdbarch)->builtin_long;
+	  break;
+	case 'm':
+	  this_type = builtin_type (gdbarch)->builtin_unsigned_long;
+	  break;
+	case 'x':
+	  this_type = builtin_type (gdbarch)->builtin_long_long;
+	  break;
+	case 'y':
+	  this_type = builtin_type (gdbarch)->builtin_unsigned_long_long;
+	  break;
+	case 'f':
+	  this_type = builtin_type (gdbarch)->builtin_float;
+	  break;
+	case 'd':
+	  this_type = builtin_type (gdbarch)->builtin_double;
+	  break;
+	case 'e':
+	  this_type = builtin_type (gdbarch)->builtin_long_double;
+	  break;
+	case 'v':
+	  this_type = builtin_type (gdbarch)->builtin_void;
+	  break;
+	case 'n':
+	  this_type = builtin_type (gdbarch)->builtin_int128;
+	  break;
+	case 'g':
+	  this_type = init_type (TYPE_CODE_FLT, 16, 0, NULL, objfile);
+	  break;
+	default:
+	  warning (_("Unrecognised mangled type char: %c"), *mangled_name);
+	}
+    }
+
+  if (!this_type)
+    this_type =
+      init_type (TYPE_CODE_ERROR, 0, 0, _("<unsupported mangled type>"),
+		 cu->objfile);
+
+  return this_type;
+}
+
+static struct type *
 read_typedef (struct die_info *die, struct dwarf2_cu *cu)
 {
   struct objfile *objfile = cu->objfile;
   const char *name = NULL;
   struct type *this_type, *target_type;
 
-  name = dwarf2_full_name (NULL, die, cu);
+  name = dwarf2_name (die, cu);
+  if (name && (strncmp(name, "__BMN_", 6) == 0
+      || strncmp(name, "__SMN_", 6) == 0))
+    {
+      this_type = read_berkeley_mangled_type (name + 6, die, cu);
+      return set_die_type (die, this_type, cu);
+    }
+  name = dwarf2_full_name ((char *) name, die, cu);
   this_type = init_type (TYPE_CODE_TYPEDEF, 0,
 			 TYPE_FLAG_TARGET_STUB, NULL, objfile);
   TYPE_NAME (this_type) = name;
