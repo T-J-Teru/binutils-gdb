@@ -3685,6 +3685,7 @@ static void
 handle_inferior_event_1 (struct execution_control_state *ecs)
 {
   enum stop_kind stop_soon;
+  struct thread_info *thread_info;  
 
   if (ecs->ws.kind == TARGET_WAITKIND_IGNORE)
     {
@@ -3881,6 +3882,16 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
 	context_switch (ecs->ptid);
       resume (GDB_SIGNAL_0);
       prepare_to_wait (ecs);
+      return;
+
+    case TARGET_WAITKIND_THREAD_EXITED:
+      if (debug_infrun)
+        fprintf_unfiltered (gdb_stdlog, "infrun: TARGET_WAITKIND_THREAD_EXITED\n");
+      target_terminal_ours ();
+      singlestep_breakpoints_inserted_p = 0;	/*SOFTWARE_SINGLE_STEP_P() */
+      cancel_single_step_breakpoints ();
+      stop_print_frame = 0;
+      stop_stepping (ecs);
       return;
 
     case TARGET_WAITKIND_EXITED:

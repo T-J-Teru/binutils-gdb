@@ -3191,6 +3191,43 @@ linux_nat_filter_event (int lwpid, int status)
       /* Dead LWP's aren't expected to reported a pending sigstop.  */
       lp->signalled = 0;
 
+
+      /* APB: While merging fcca03e5c21be8aaa7c037125427eb49b2862c45 the
+	 following block, which was updated upstream, was modified.  I was
+	 unable to figure out exactly what the correct merge was.  */
+      abort ();
+#if 0
+      if (num_lwps (GET_PID (lp->ptid)) > 1)
+       {
+	 ptid_t ptid = pid_to_ptid (GET_PID (lp->ptid));
+
+	 /* If there is at least one more LWP, then the exit signal
+	    was not the end of the debugged application and should be
+	    ignored.  */
+	 exit_lwp (lp);
+
+	  /* Discard the event if there is at least one thread running. */
+	  if (iterate_over_lwps (ptid, running_callback, NULL))
+	    {
+	      /* Discard the event.  */
+	      return NULL;
+	    }
+	  else
+	    {
+	      /* Generate a thread exit event. */
+	      if (debug_linux_nat)
+		fprintf_unfiltered (gdb_stdlog,
+				    "LLW: no more running threads\n");
+
+	      /* A thread exited and no more threads are running. This typically
+		happens when a thread dies and scheduler-locking is on - in that
+		case we don't want to start running another thread */
+	      lp = lwp_list;
+	      lp->waitstatus.kind = TARGET_WAITKIND_THREAD_EXITED;
+	    }
+       }
+#endif
+
       /* Store the pending event in the waitstatus, because
 	 W_EXITCODE(0,0) == 0.  */
       store_waitstatus (&lp->waitstatus, status);
@@ -3212,11 +3249,25 @@ linux_nat_filter_event (int lwpid, int status)
 
       exit_lwp (lp);
 
-      /* Make sure there is at least one thread running.  */
-      gdb_assert (iterate_over_lwps (ptid, running_callback, NULL));
+      /* Discard the event if there is at least one thread running. */
+      if (iterate_over_lwps (ptid, running_callback, NULL))
+	{
+	  /* Discard the event.  */
+	  return NULL;
+	}
+      else
+	{
+	  /* Generate a thread exit event. */
+	  if (debug_linux_nat)
+	    fprintf_unfiltered (gdb_stdlog,
+				"LLW: no more running threads\n");
 
-      /* Discard the event.  */
-      return NULL;
+	  /* A thread exited and no more threads are running. This typically
+	    happens when a thread dies and scheduler-locking is on - in that
+	    case we don't want to start running another thread */
+	  lp = lwp_list;
+	  lp->waitstatus.kind = TARGET_WAITKIND_THREAD_EXITED;
+	}
     }
 
   /* Make sure we don't report a SIGSTOP that we sent ourselves in
