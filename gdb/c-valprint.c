@@ -543,9 +543,13 @@ c_value_print (struct value *val, struct ui_file *stream,
       else
 	{
 	  /* normal case */
-	  fprintf_filtered (stream, "(");
-	  type_print (value_type (val), "", stream, -1);
-	  fprintf_filtered (stream, ") ");
+
+	  if (current_language->la_language != language_fortran)
+	    {
+	      fprintf_filtered (stream, "(");
+	      type_print (value_type (val), "", stream, -1);
+	      fprintf_filtered (stream, ") ");
+	    }
 	}
     }
 
