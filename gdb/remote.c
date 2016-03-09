@@ -132,7 +132,10 @@ static void sync_remote_interrupt_twice (int signo);
 
 static void interrupt_query (void);
 
+static void remote_switch_thread (struct ptid ptid);
+
 static void set_general_thread (struct ptid ptid);
+
 static void set_continue_thread (struct ptid ptid);
 
 static void get_offsets (void);
@@ -2032,6 +2035,15 @@ remote_thread_alive (struct target_ops *ops, ptid_t ptid)
   putpkt (rs->buf);
   getpkt (&rs->buf, &rs->buf_size, 0);
   return (rs->buf[0] == 'O' && rs->buf[1] == 'K');
+}
+
+/* UPC-GUM - Temporary switch thread on the target so memory 
+   read goes to the right processor. */
+
+static void
+remote_switch_thread (ptid_t ptid)
+{
+  set_thread (ptid, 1);
 }
 
 /* About these extended threadlist and threadinfo packets.  They are
@@ -12419,6 +12431,7 @@ Specify the serial device it is connected to\n\
   remote_ops.to_program_signals = remote_program_signals;
   remote_ops.to_thread_alive = remote_thread_alive;
   remote_ops.to_update_thread_list = remote_update_thread_list;
+  remote_ops.to_thread_switch = remote_switch_thread;
   remote_ops.to_pid_to_str = remote_pid_to_str;
   remote_ops.to_extra_thread_info = remote_threads_extra_info;
   remote_ops.to_get_ada_task_ptid = remote_get_ada_task_ptid;
@@ -13142,9 +13155,9 @@ Show the maximum size of the address (in bits) in a memory packet."), NULL,
        "Qbtrace-conf:pt:size", "btrace-conf-pt-size", 0);
 
   /* Assert that we've registered "set remote foo-packet" commands
-     for all packet configs.  */
+     for alxl packet configs.  */
   {
-    int i;
+    int i;x
 
     for (i = 0; i < PACKET_MAX; i++)
       {

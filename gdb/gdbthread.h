@@ -170,6 +170,7 @@ struct thread_info
 				    In fact, this may be overloaded with 
 				    kernel thread id, etc.  */
   int num;			/* Convenient handle (GDB thread id) */
+  int unum;			/* UPC thread number */
 
   /* The name of the thread, as specified by the user.  This is NULL
      if the thread does not have a user-given name.  */
@@ -256,6 +257,12 @@ struct thread_info
      a catchpoint, and thus the event is to be followed at the next
      resume of the thread, and not immediately.  */
   struct target_waitstatus pending_follow;
+
+  /* Collective breakpoint thread is stopped at. */
+  int collective_bp_num;
+
+  /* Collective step in process. */
+  int collective_step;
 
   /* True if this thread has been explicitly requested to stop.  */
   int stop_requested;
@@ -365,6 +372,9 @@ extern struct thread_info *any_live_thread_of_process (int pid);
 
 /* Change the ptid of thread OLD_PTID to NEW_PTID.  */
 void thread_change_ptid (ptid_t old_ptid, ptid_t new_ptid);
+
+/* Switch to the thread specified by 'ptid'.  */
+extern void switch_to_thread (ptid_t ptid);
 
 /* Iterator function to call a user-provided callback function
    once for each known thread.  */
@@ -501,5 +511,16 @@ extern struct value *get_last_thread_stack_temporary (ptid_t);
 extern int value_in_thread_stack_temporaries (struct value *, ptid_t);
 
 extern struct thread_info *thread_list;
+
+/* Collective breakpoints helper routines */
+extern int thread_clear_collective_bp(int);
+extern int thread_check_collective_bp (int);
+extern int thread_check_collective_step (void);
+
+/* Some UPC thread variables */
+extern int upcmode;
+extern int upc_sync_ok;
+extern int upc_thread_active;
+#define CLEAR_ALL_COLLECTIVE_BPS -1
 
 #endif /* GDBTHREAD_H */

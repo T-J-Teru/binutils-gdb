@@ -394,6 +394,12 @@ strip_bg_char (const char *args, int *bg_char_p)
 	return NULL;
     }
 
+  if (upcmode)
+    {
+      /* APB-TODO: Conflict while merging 1a122e0.  */
+      abort ();
+    }
+
   *bg_char_p = 0;
   return xstrdup (args);
 }
@@ -480,6 +486,8 @@ post_create_inferior (struct target_ops *target, int from_tty)
 static void
 kill_if_already_running (int from_tty)
 {
+  struct inferior *inf, *infnext;
+
   if (! ptid_equal (inferior_ptid, null_ptid) && target_has_execution)
     {
       /* Bail out before killing the program if we will not be able to
@@ -490,7 +498,26 @@ kill_if_already_running (int from_tty)
 	  && !query (_("The program being debugged has been started already.\n\
 Start it from the beginning? ")))
 	error (_("Program not restarted."));
-      target_kill ();
+
+      /* kill all inferiors */
+      for (inf = inferior_list; inf; inf = infnext)
+	{
+	  struct thread_info *tp;
+	  infnext = inf->next;
+	  tp = any_thread_of_process (inf->pid);
+	  if (!tp)
+	    error (_("Inferior has no threads."));
+          else
+	    {
+	      switch_to_thread (tp->ptid); 
+              target_kill ();
+	    } 
+	}
+      /* UPC clean-up - can we have an observer for this purpose */
+      {
+        void upc_thread_kill_cleanup ();
+        upc_thread_kill_cleanup ();
+      }
     }
 }
 
@@ -584,6 +611,11 @@ run_command_1 (char *args, int from_tty, int tbreak_at_main)
   if (args != NULL)
     set_inferior_args (args);
 
+  /* APB-TODO: While merging commit 1a122e0 there were some changes in this
+     area relating to async_disable_stdin and upc_thread_active.  I'm not
+     sure how to integrate these changes right now.  */
+  abort ();
+
   if (from_tty)
     {
       ui_out_field_string (uiout, NULL, "Starting program");
@@ -630,6 +662,8 @@ run_command_1 (char *args, int from_tty, int tbreak_at_main)
      breakpoint right at the entry point.  */
   proceed (regcache_read_pc (get_current_regcache ()), GDB_SIGNAL_0);
 
+  upc_sync_ok = 1;
+
   /* Since there was no error, there's no need to finish the thread
      states here.  */
   discard_cleanups (old_chain);
@@ -660,6 +694,11 @@ start_command (char *args, int from_tty)
 static int
 proceed_thread_callback (struct thread_info *thread, void *arg)
 {
+  /* If stopped on collective BP do not run - we want to wait for
+     all threads to arrive on collective BP */
+  if (is_collective_breakpoints() && thread->collective_bp_num)
+    return 0;
+
   /* We go through all threads individually instead of compressing
      into a single target `resume_all' request, because some threads
      may be stopped in internal breakpoints/events, or stopped waiting
@@ -776,6 +815,8 @@ continue_command (char *args, int from_tty)
   /* Find out whether we must run in the background.  */
   args = strip_bg_char (args, &async_exec);
   args_chain = make_cleanup (xfree, args);
+  if (upcmode)
+    async_exec = 1;
 
   prepare_execution_command (&current_target, async_exec);
 
@@ -789,6 +830,7 @@ continue_command (char *args, int from_tty)
 	    args = NULL;
 	}
     }
+  if (upcmode && is_collective_breakpoints()) all_threads = 1;
 
   if (!non_stop && all_threads)
     error (_("`-a' is meaningless in all-stop mode."));
@@ -901,6 +943,32 @@ delete_longjmp_breakpoint_cleanup (void *arg)
   delete_longjmp_breakpoint (thread);
 }
 
+/* Support for collective single stepping over multiple threads */
+struct step_arg { 
+    int skip_subroutines;
+    int single_inst;
+    int count;
+    int thread;
+};
+
+/* Do just one step operation for all threads - callback */
+static int
+step_once_callback (struct thread_info *t, void *data)
+{ 
+  struct step_arg *sa = data;
+
+  /* If stopped on collective BP do not step */
+  if (!t->collective_bp_num)
+    { 
+      switch_to_thread (t->ptid);
+      t->collective_step = 1;
+      step_once (sa->skip_subroutines, sa->single_inst, sa->count, t->unum);
+    } 
+  else
+    t->collective_step = 0;
+  return 0;
+} 
+
 static void
 step_1 (int skip_subroutines, int single_inst, char *count_string)
 {
@@ -917,6 +985,8 @@ step_1 (int skip_subroutines, int single_inst, char *count_string)
 
   count_string = strip_bg_char (count_string, &async_exec);
   args_chain = make_cleanup (xfree, count_string);
+  if (upcmode)
+    async_exec = 1;
 
   prepare_execution_command (&current_target, async_exec);
 
@@ -969,7 +1039,15 @@ step_1 (int skip_subroutines, int single_inst, char *count_string)
 	 event loop.  Let the continuation figure out how many other
 	 steps we need to do, and handle them one at the time, through
 	 step_once.  */
-      step_once (skip_subroutines, single_inst, count, thread);
+      if (upcmode && is_collective_stepping ())
+        {
+          struct step_arg sa = {skip_subroutines, single_inst, count, thread};
+          if (any_running())
+               error (_("Cannot do collective step while threads are running."));
+          else iterate_over_threads (step_once_callback, (void *)&sa);
+        }
+      else
+          step_once (skip_subroutines, single_inst, count, thread);
 
       /* We are running, and the continuation is installed.  It will
 	 disable the longjmp breakpoint as appropriate.  */
@@ -1157,6 +1235,8 @@ jump_command (char *arg, int from_tty)
   /* Find out whether we must run in the background.  */
   arg = strip_bg_char (arg, &async_exec);
   args_chain = make_cleanup (xfree, arg);
+  if (upcmode)
+    async_exec = 1;
 
   prepare_execution_command (&current_target, async_exec);
 
@@ -1242,6 +1322,8 @@ signal_command (char *signum_exp, int from_tty)
   /* Find out whether we must run in the background.  */
   signum_exp = strip_bg_char (signum_exp, &async_exec);
   args_chain = make_cleanup (xfree, signum_exp);
+  if (upcmode)
+    async_exec = 1;
 
   prepare_execution_command (&current_target, async_exec);
 
@@ -1470,6 +1552,8 @@ until_command (char *arg, int from_tty)
   /* Find out whether we must run in the background.  */
   arg = strip_bg_char (arg, &async_exec);
   args_chain = make_cleanup (xfree, arg);
+  if (upcmode)
+    async_exec = 1;
 
   prepare_execution_command (&current_target, async_exec);
 
@@ -1499,6 +1583,8 @@ advance_command (char *arg, int from_tty)
   /* Find out whether we must run in the background.  */
   arg = strip_bg_char (arg, &async_exec);
   args_chain = make_cleanup (xfree, arg);
+  if (upcmode)
+    async_exec = 1;
 
   prepare_execution_command (&current_target, async_exec);
 
@@ -1824,6 +1910,8 @@ finish_command (char *arg, int from_tty)
   /* Find out whether we must run in the background.  */
   arg = strip_bg_char (arg, &async_exec);
   args_chain = make_cleanup (xfree, arg);
+  if (upcmode)
+    async_exec = 1;
 
   prepare_execution_command (&current_target, async_exec);
 
@@ -2606,6 +2694,8 @@ attach_command (char *args, int from_tty)
 
   args = strip_bg_char (args, &async_exec);
   args_chain = make_cleanup (xfree, args);
+  if (upcmode)
+    async_exec = 1;
 
   attach_target = find_attach_target ();
 
@@ -2864,6 +2954,7 @@ interrupt_command (char *args, int from_tty)
       if (args != NULL
 	  && startswith (args, "-a"))
 	all_threads = 1;
+      if (upcmode && is_collective_breakpoints()) all_threads = 1;
 
       if (!non_stop && all_threads)
 	error (_("-a is meaningless in all-stop mode."));

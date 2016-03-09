@@ -67,8 +67,8 @@ static struct partial_symbol *find_pc_sect_psymbol (struct objfile *,
 static void fixup_psymbol_section (struct partial_symbol *psym,
 				   struct objfile *objfile);
 
-static struct compunit_symtab *psymtab_to_symtab (struct objfile *objfile,
-						  struct partial_symtab *pst);
+struct compunit_symtab *psymtab_to_symtab (struct objfile *objfile,
+					   struct partial_symtab *pst);
 
 /* Ensure that the partial symbols for OBJFILE have been loaded.  This
    function always returns its argument, as a convenience.  */
@@ -770,7 +770,7 @@ lookup_partial_symbol (struct objfile *objfile,
    which can happen.  Otherwise the result is the primary symtab
    that contains PST.  */
 
-static struct compunit_symtab *
+struct compunit_symtab *
 psymtab_to_symtab (struct objfile *objfile, struct partial_symtab *pst)
 {
   /* If it is a shared psymtab, find an unshared psymtab that includes

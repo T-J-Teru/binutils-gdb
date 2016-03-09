@@ -34,6 +34,7 @@
 #include "gdb_obstack.h"
 #include <ctype.h>
 #include "gdbcore.h"
+#include "upc-lang.h"
 
 extern void _initialize_c_language (void);
 
@@ -870,6 +871,46 @@ const struct language_defn c_language_defn =
   LANG_MAGIC
 };
 
+const struct language_defn upc_language_defn =
+{
+  "upc",				/* Language name */
+  language_upc,
+  range_check_off,
+  case_sensitive_on,
+  array_row_major,
+  macro_expansion_c,
+  &exp_descriptor_c,
+  c_parse,
+  c_error,
+  null_post_parser,
+  c_printchar,			/* Print a character constant */
+  c_printstr,			/* Function to print string constant */
+  c_emit_char,			/* Print a single char */
+  c_print_type,			/* Print a type using appropriate syntax */
+  c_print_typedef,              /* Print a typedef using appropriate syntax */
+  c_val_print,			/* Print a value using appropriate syntax */
+  c_value_print,		/* Print a top-level value */
+  upc_read_var_value,		/* la_read_var_value */
+  NULL,				/* Language specific skip_trampoline */
+  NULL,				/* value_of_this */
+  basic_lookup_symbol_nonlocal,	/* lookup_symbol_nonlocal */
+  basic_lookup_transparent_type,/* lookup_transparent_type */
+  NULL,				/* Language specific symbol demangler */
+  NULL,				/* Language specific class_name_from_physname */
+  c_op_print_tab,		/* expression operators for printing */
+  1,				/* c-style arrays */
+  0,				/* String lower bound */
+  default_word_break_characters,
+  default_make_symbol_completion_list,
+  c_language_arch_info,
+  default_print_array_index,
+  default_pass_by_reference,
+  c_get_string,
+  NULL,				/* la_get_symbol_name_cmp */
+  iterate_over_symbols,
+  LANG_MAGIC
+};
+
 enum cplus_primitive_types {
   cplus_primitive_type_int,
   cplus_primitive_type_long,
@@ -1097,6 +1138,7 @@ _initialize_c_language (void)
 {
   add_language (&c_language_defn);
   add_language (&cplus_language_defn);
+  add_language (&upc_language_defn);
   add_language (&asm_language_defn);
   add_language (&minimal_language_defn);
 }

@@ -27,6 +27,7 @@
 #include "gdbtypes.h"
 #include "expression.h"
 #include "language.h"
+#include "upc-lang.h"
 #include "target.h"
 #include "value.h"
 #include "demangle.h"
@@ -111,6 +112,8 @@ const struct floatformat *floatformats_ibm_long_double[BFD_ENDIAN_UNKNOWN] = {
   &floatformat_ibm_long_double_big,
   &floatformat_ibm_long_double_little
 };
+
+struct type_quals null_type_quals;
 
 /* Should opaque types be resolved?  */
 
@@ -412,12 +415,26 @@ make_reference_type (struct type *type, struct type **typeptr)
   TYPE_TARGET_TYPE (ntype) = type;
   TYPE_REFERENCE_TYPE (type) = ntype;
 
-  /* FIXME!  Assume the machine has only one representation for
-     references, and that it matches the (only) representation for
-     pointers!  */
+  if (upc_shared_type_p (type))
+    {
+      if (!currently_reading_symtab)
+        TYPE_LENGTH (ntype) = upc_pts_len (type);
+      else
+        /* FIXME! the default size calculation below, will
+           not work for all targets, or PTS formats.  */
+        TYPE_LENGTH (ntype) = 2 * gdbarch_ptr_bit (get_type_arch(type))
+	                            / TARGET_CHAR_BIT;
+    }
+  else
+    {
+       /* FIXME!  Assume the machine has only one representation for
+          references, and that it matches the (only) representation for
+           pointers!  */
 
-  TYPE_LENGTH (ntype) =
-    gdbarch_ptr_bit (get_type_arch (type)) / TARGET_CHAR_BIT;
+       TYPE_LENGTH (ntype) =
+         gdbarch_ptr_bit (get_type_arch (type)) / TARGET_CHAR_BIT;
+    }
+
   TYPE_CODE (ntype) = TYPE_CODE_REF;
 
   if (!TYPE_REFERENCE_TYPE (type))	/* Remember it, if don't have one.  */
@@ -566,19 +583,18 @@ address_space_int_to_name (struct gdbarch *gdbarch, int space_flag)
    STORAGE must be in the same obstack as TYPE.  */
 
 static struct type *
-make_qualified_type (struct type *type, int new_flags,
+make_qualified_type (struct type *type, struct type_quals new_quals,
 		     struct type *storage)
 {
   struct type *ntype;
 
   ntype = type;
-  do
-    {
-      if (TYPE_INSTANCE_FLAGS (ntype) == new_flags)
-	return ntype;
-      ntype = TYPE_CHAIN (ntype);
-    }
-  while (ntype != type);
+
+  do {
+    if (TYPE_QUALS_EQ (TYPE_QUALS (ntype), new_quals))
+      return ntype;
+    ntype = TYPE_CHAIN (ntype);
+  } while (ntype != type);
 
   /* Create a new type instance.  */
   if (storage == NULL)
@@ -605,8 +621,9 @@ make_qualified_type (struct type *type, int new_flags,
   TYPE_CHAIN (ntype) = TYPE_CHAIN (type);
   TYPE_CHAIN (type) = ntype;
 
-  /* Now set the instance flags and return the new type.  */
-  TYPE_INSTANCE_FLAGS (ntype) = new_flags;
+  /* Now set the qualifiers which include the instance
+     flags and the UPC layout specifier.  */
+  TYPE_QUALS (ntype) = new_quals;
 
   /* Set length of new type to that of the original type.  */
   TYPE_LENGTH (ntype) = TYPE_LENGTH (type);
@@ -631,14 +648,34 @@ make_type_with_address_space (struct type *type, int space_flag)
 			| TYPE_INSTANCE_FLAG_DATA_SPACE
 		        | TYPE_INSTANCE_FLAG_ADDRESS_CLASS_ALL))
 		   | space_flag);
-
-  return make_qualified_type (type, new_flags, NULL);
+  struct type_quals new_quals = TYPE_QUALS (type);
+  new_quals.instance_flags = new_flags;
+  return make_qualified_type (type, new_quals, NULL);
 }
 
-/* Make a "c-v" variant of a type -- a type that is identical to the
-   one supplied except that it may have const or volatile attributes
-   CNST is a flag for setting the const attribute
-   VOLTL is a flag for setting the volatile attribute
+/* Merge the type qualifiers Q2 into Q1 and return
+   the result.  Qualifier flags are OR'd together.
+   If the UPC layout factors are not equal, then
+   the layout factor of either Q1 or Q2 must be zero. 
+   The result will have the non-zero layout factor.  */
+struct type_quals 
+merge_type_quals (struct type_quals q1, struct type_quals q2)
+{
+  struct type_quals result;
+  result.instance_flags = q1.instance_flags | q2.instance_flags;
+  gdb_assert (q1.upc_layout == q2.upc_layout 
+              || q1.upc_layout == 0
+              || q2.upc_layout == 0);
+  if (q1.upc_layout != 0) 
+    result.upc_layout = q1.upc_layout;
+  else 
+    result.upc_layout = q2.upc_layout;
+  return result;
+}
+
+/* Make a (typically const/volatile) qualified variant of a type
+   -- a type that is identical to the
+   one supplied except that it may have differing type qualifiers 
    TYPE is the base type whose variant we are creating.
 
    If TYPEPTR and *TYPEPTR are non-zero, then *TYPEPTR points to
@@ -648,27 +685,17 @@ make_type_with_address_space (struct type *type, int space_flag)
    new type we construct.  */
 
 struct type *
-make_cv_type (int cnst, int voltl, 
-	      struct type *type, 
-	      struct type **typeptr)
+make_qual_variant_type (struct type_quals new_quals,
+			struct type *type,
+			struct type **typeptr)
 {
   struct type *ntype;	/* New type */
-
-  int new_flags = (TYPE_INSTANCE_FLAGS (type)
-		   & ~(TYPE_INSTANCE_FLAG_CONST 
-		       | TYPE_INSTANCE_FLAG_VOLATILE));
-
-  if (cnst)
-    new_flags |= TYPE_INSTANCE_FLAG_CONST;
-
-  if (voltl)
-    new_flags |= TYPE_INSTANCE_FLAG_VOLATILE;
 
   if (typeptr && *typeptr != NULL)
     {
       /* TYPE and *TYPEPTR must be in the same objfile.  We can't have
-	 a C-V variant chain that threads across objfiles: if one
-	 objfile gets freed, then the other has a broken C-V chain.
+	 a qualifier chain that threads across objfiles: if one
+	 objfile gets freed, then the other has a broken qualifier chain.
 
 	 This code used to try to copy over the main type from TYPE to
 	 *TYPEPTR if they were in different objfiles, but that's
@@ -681,8 +708,7 @@ make_cv_type (int cnst, int voltl,
       gdb_assert (TYPE_OBJFILE (*typeptr) == TYPE_OBJFILE (type));
     }
   
-  ntype = make_qualified_type (type, new_flags, 
-			       typeptr ? *typeptr : NULL);
+  ntype = make_qualified_type (type, new_quals, typeptr ? *typeptr : NULL);
 
   if (typeptr != NULL)
     *typeptr = ntype;
@@ -695,9 +721,12 @@ make_cv_type (int cnst, int voltl,
 struct type *
 make_restrict_type (struct type *type)
 {
+  int new_flags = TYPE_INSTANCE_FLAGS (type)
+		 | TYPE_INSTANCE_FLAG_RESTRICT;
+  struct type_quals new_quals = TYPE_QUALS (type);
+  new_quals.instance_flags = new_flags;
   return make_qualified_type (type,
-			      (TYPE_INSTANCE_FLAGS (type)
-			       | TYPE_INSTANCE_FLAG_RESTRICT),
+			      new_quals,
 			      NULL);
 }
 
@@ -1217,8 +1246,10 @@ make_vector_type (struct type *array_type)
   elt_type = TYPE_TARGET_TYPE (inner_array);
   if (TYPE_CODE (elt_type) == TYPE_CODE_INT)
     {
+      struct type_quals quals = TYPE_QUALS (elt_type);
       flags = TYPE_INSTANCE_FLAGS (elt_type) | TYPE_INSTANCE_FLAG_NOTTEXT;
-      elt_type = make_qualified_type (elt_type, flags, NULL);
+      quals.instance_flags |= flags;
+      elt_type = make_qualified_type (elt_type, quals, NULL);
       TYPE_TARGET_TYPE (inner_array) = elt_type;
     }
 
@@ -2219,7 +2250,7 @@ check_typedef (struct type *type)
   struct type *orig_type = type;
   /* While we're removing typedefs, we don't want to lose qualifiers.
      E.g., const/volatile.  */
-  int instance_flags = TYPE_INSTANCE_FLAGS (type);
+  struct type_quals type_quals = TYPE_QUALS (type);
 
   gdb_assert (type);
 
@@ -2233,7 +2264,7 @@ check_typedef (struct type *type)
 	  /* It is dangerous to call lookup_symbol if we are currently
 	     reading a symtab.  Infinite recursion is one danger.  */
 	  if (currently_reading_symtab)
-	    return make_qualified_type (type, instance_flags, NULL);
+	    return make_qualified_type (type, type_quals, NULL);
 
 	  name = type_name_no_tag (type);
 	  /* FIXME: shouldn't we separately check the TYPE_NAME and
@@ -2243,7 +2274,7 @@ check_typedef (struct type *type)
 	  if (name == NULL)
 	    {
 	      stub_noname_complaint ();
-	      return make_qualified_type (type, instance_flags, NULL);
+	      return make_qualified_type (type, type_quals, NULL);
 	    }
 	  sym = lookup_symbol (name, 0, STRUCT_DOMAIN, 0);
 	  if (sym)
@@ -2271,12 +2302,12 @@ check_typedef (struct type *type)
 	int new_instance_flags = TYPE_INSTANCE_FLAGS (type);
 
 	/* Treat code vs data spaces and address classes separately.  */
-	if ((instance_flags & ALL_SPACES) != 0)
+	if ((type_quals.instance_flags & ALL_SPACES) != 0)
 	  new_instance_flags &= ~ALL_SPACES;
-	if ((instance_flags & ALL_CLASSES) != 0)
+	if ((type_quals.instance_flags & ALL_CLASSES) != 0)
 	  new_instance_flags &= ~ALL_CLASSES;
 
-	instance_flags |= new_instance_flags;
+	type_quals.instance_flags = new_instance_flags;
       }
     }
 
@@ -2296,7 +2327,7 @@ check_typedef (struct type *type)
       if (name == NULL)
 	{
 	  stub_noname_complaint ();
-	  return make_qualified_type (type, instance_flags, NULL);
+	  return make_qualified_type (type, type_quals, NULL);
 	}
       newtype = lookup_transparent_type (name);
 
@@ -2313,9 +2344,7 @@ check_typedef (struct type *type)
 	     move over any other types NEWTYPE refers to, which could
 	     be an unbounded amount of stuff.  */
 	  if (TYPE_OBJFILE (newtype) == TYPE_OBJFILE (type))
-	    type = make_qualified_type (newtype,
-					TYPE_INSTANCE_FLAGS (type),
-					type);
+	    make_qual_variant_type (type_quals, newtype, &type);
 	  else
 	    type = newtype;
 	}
@@ -2334,7 +2363,7 @@ check_typedef (struct type *type)
       if (name == NULL)
 	{
 	  stub_noname_complaint ();
-	  return make_qualified_type (type, instance_flags, NULL);
+	  return make_qualified_type (type, type_quals, NULL);
 	}
       sym = lookup_symbol (name, 0, STRUCT_DOMAIN, 0);
       if (sym)
@@ -2343,9 +2372,7 @@ check_typedef (struct type *type)
              with the complete type only if they are in the same
              objfile.  */
 	  if (TYPE_OBJFILE (SYMBOL_TYPE(sym)) == TYPE_OBJFILE (type))
-            type = make_qualified_type (SYMBOL_TYPE (sym),
-					TYPE_INSTANCE_FLAGS (type),
-					type);
+	    make_qual_variant_type (type_quals, SYMBOL_TYPE (sym), &type);
 	  else
 	    type = SYMBOL_TYPE (sym);
         }
@@ -2367,7 +2394,7 @@ check_typedef (struct type *type)
 	}
     }
 
-  type = make_qualified_type (type, instance_flags, NULL);
+  type = make_qualified_type (type, type_quals, NULL);
 
   /* Cache TYPE_LENGTH for future use.  */
   TYPE_LENGTH (orig_type) = TYPE_LENGTH (type);

@@ -876,7 +876,10 @@ SFILES = ada-exp.y ada-lang.c ada-typeprint.c ada-valprint.c ada-tasks.c \
 	trad-frame.c \
 	tramp-frame.c \
 	typeprint.c \
+	uda-client.c uda-rmt-client-cmd.y uda-rmt-utils.c \
+	uda-plugin.c uda-plugin-iface.c \
 	ui-out.c utils.c ui-file.h ui-file.c \
+	upc-lang.c upc-thread.c \
 	user-regs.c \
 	valarith.c valops.c valprint.c value.c varobj.c common/vec.c \
 	xml-tdesc.c xml-support.c \
@@ -1052,6 +1055,9 @@ COMMON_OBS = $(DEPFILES) $(CONFIG_OBS) $(YYOBJ) \
 	dwarf2read.o mipsread.o stabsread.o corefile.o \
 	dwarf2expr.o dwarf2loc.o dwarf2-frame.o dwarf2-frame-tailcall.o \
 	ada-lang.o c-lang.o d-lang.o f-lang.o objc-lang.o \
+	upc-lang.o upc-thread.o \
+	uda-client.o uda-rmt-client-cmd.o uda-rmt-utils.o \
+	uda-plugin.o uda-plugin-iface.o \
 	ada-tasks.o ada-varobj.o c-varobj.o \
 	ui-out.o cli-out.o \
 	varobj.o vec.o \
@@ -1647,6 +1653,7 @@ ALLDEPFILES = \
 	aarch64-tdep.c aarch64-linux-tdep.c aarch64-newlib-tdep.c \
 	aarch64-linux-nat.c \
 	aix-thread.c \
+	upc-thread.c \
 	alphabsd-nat.c alpha-linux-nat.c \
 	alpha-tdep.c alpha-mdebug-tdep.c \
 	alpha-linux-tdep.c \

@@ -37,6 +37,7 @@
 #include "objc-lang.h"
 #include "d-lang.h"
 #include "ada-lang.h"
+#include "upc-lang.h"
 #include "go-lang.h"
 #include "p-lang.h"
 #include "addrmap.h"
@@ -3710,7 +3711,6 @@ skip_prologue_sal (struct symtab_and_line *sal)
 
   old_chain = save_current_space_and_thread ();
   switch_to_program_space_and_thread (sal->pspace);
-
   sym = find_pc_sect_function (sal->pc, sal->section);
   if (sym != NULL)
     {
@@ -5996,6 +5996,12 @@ find_main_name (void)
   if (new_main_name != NULL)
     {
       set_main_name (new_main_name, language_go);
+      return;
+    }
+  new_main_name = upc_main_name ();
+  if (new_main_name != NULL)
+    { 
+      set_main_name (new_main_name);
       return;
     }
 

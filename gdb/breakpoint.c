@@ -65,7 +65,8 @@
 #include "skip.h"
 #include "ax-gdb.h"
 #include "dummy-frame.h"
-#include "interps.h"
+#include "upc-thread.h"
+
 #include "format.h"
 
 /* readline include files */
@@ -445,6 +446,57 @@ show_automatic_hardware_breakpoints (struct ui_file *file, int from_tty,
    target fully stops.  This is a bit safer in case GDB crashes while
    processing user input.  */
 static int always_inserted_mode = 0;
+
+/* Collective breakpoints
+   If 1, gdb assumes that breakpoint set in all threads is a
+   collective one. */
+int collective_breakpoints = 0;
+
+int
+is_collective_breakpoints ()
+{
+  /* collective is valid in non-stop mode only */
+  return collective_breakpoints && non_stop && upcmode;
+}
+
+static void
+show_collective_breakpoints (struct ui_file *file, int from_tty,
+				     struct cmd_list_element *c,
+				     const char *value)
+{
+  if (!non_stop)
+  fprintf_filtered (file, _("\
+Usage of collective breakpoints is disabled in all-stop mode.\n"));
+  else
+  fprintf_filtered (file, _("\
+Usage of collective breakpoints is %s.\n"),
+value);
+}
+
+/* Collective stepping
+   If 1, gdb assumes that collective stepping is enabled. */
+int collective_stepping = 0;
+
+int
+is_collective_stepping ()
+{
+  /* collective is valid in non-stop mode only */
+  return collective_stepping && non_stop && upcmode;
+}
+
+static void
+show_collective_stepping (struct ui_file *file, int from_tty,
+				     struct cmd_list_element *c,
+				     const char *value)
+{
+  if (!non_stop)
+  fprintf_filtered (file, _("\
+Usage of collective stepping is disabled in all-stop mode.\n"));
+  else
+  fprintf_filtered (file, _("\
+Usage of collective stepping is %s.\n"),
+value);
+}
 
 static void
 show_always_inserted_mode (struct ui_file *file, int from_tty,
@@ -3057,6 +3109,22 @@ update_inserted_breakpoint_locations (void)
       if (!gdbarch_has_global_breakpoints (target_gdbarch ())
 	  && ptid_equal (inferior_ptid, null_ptid))
 	continue;
+
+#define DISABLE_INSERT_BP_FOR_RUNNING_THREAD_WORKAROUND
+#ifdef DISABLE_INSERT_BP_FOR_RUNNING_THREAD_WORKAROUND
+      /* In multiprocessing system DO NOT insert
+         breakpoint into running thread (ptrace reports an error). */
+      /* At this point we have current thread set as its space is
+         going to be used for breakpoint insertion. */
+      /* Make sure we are not stepping with step-resume breakpoint */
+      {
+        struct thread_info *btp;
+        btp = inferior_thread ();
+        if (upcmode &&
+	    is_running (inferior_ptid) &&
+            !btp->control.step_resume_breakpoint) continue;
+      }
+#endif
 
       val = insert_bp_location (bl, tmp_error_stream, &disabled_breaks,
 				    &hw_breakpoint_error, &hw_bp_details_reported);
@@ -6135,12 +6203,12 @@ bptype_string (enum bptype type)
 static void
 output_thread_groups (struct ui_out *uiout,
 		      const char *field_name,
-		      VEC(int) *inf_num,
+		      VEC(int) *inf_nums,
 		      int mi_only)
 {
   struct cleanup *back_to;
   int is_mi = ui_out_is_mi_like_p (uiout);
-  int inf;
+  int inf_num;
   int i;
 
   /* For backward compatibility, don't display inferiors in CLI unless
@@ -6150,23 +6218,30 @@ output_thread_groups (struct ui_out *uiout,
 
   back_to = make_cleanup_ui_out_list_begin_end (uiout, field_name);
 
-  for (i = 0; VEC_iterate (int, inf_num, i, inf); ++i)
+  for (i = 0; VEC_iterate (int, inf_nums, i, inf_num); ++i)
     {
       if (is_mi)
 	{
 	  char mi_group[10];
 
-	  xsnprintf (mi_group, sizeof (mi_group), "i%d", inf);
+	  xsnprintf (mi_group, sizeof (mi_group), "i%d", inf_num);
 	  ui_out_field_string (uiout, NULL, mi_group);
 	}
       else
 	{
+	  struct inferior *inf = find_inferior_id (inf_num);
+
 	  if (i == 0)
-	    ui_out_text (uiout, " inf ");
+	    {
+               if (upcmode)
+		ui_out_text (uiout, " UPC thread ");
+               else
+		ui_out_text (uiout, " inf ");
+	    }
 	  else
 	    ui_out_text (uiout, ", ");
-	
-	  ui_out_text (uiout, plongest (inf));
+
+	  ui_out_text (uiout, plongest (upc_thread_of_inferior(inf)));
 	}
     }
 
@@ -6191,6 +6266,27 @@ print_one_breakpoint_location (struct breakpoint *b,
   struct value_print_options opts;
 
   get_user_print_options (&opts);
+
+  /* UPC - don't show monitor thread if upc mode */
+  if (upcmode
+      && loc != NULL
+      && !header_of_multiple
+      && (allflag
+          || (!gdbarch_has_global_breakpoints (target_gdbarch())
+              && (number_of_program_spaces () > 1
+                  || number_of_inferiors () > 1)
+              && loc->owner->type != bp_catchpoint)))
+    {
+      struct inferior *inf;
+      for (inf = inferior_list; inf != NULL; inf = inf->next)
+	{
+	  if (inf->pspace == loc->pspace)
+	    {
+	      if (upc_thread_of_inferior(inf) == UPC_MONITOR_THREAD)
+                return;
+	    }
+	}
+    }
 
   gdb_assert (!loc || loc_number != 0);
   /* See comment in print_one_breakpoint concerning treatment of
@@ -6308,7 +6404,7 @@ print_one_breakpoint_location (struct breakpoint *b,
 	if (opts.addressprint)
 	  {
 	    annotate_field (4);
-	    if (header_of_multiple)
+	    if (header_of_multiple)x
 	      ui_out_field_string (uiout, "addr", "<MULTIPLE>");
 	    else if (b->loc == NULL || loc->shlib_disabled)
 	      ui_out_field_string (uiout, "addr", "<PENDING>");
@@ -6357,8 +6453,9 @@ print_one_breakpoint_location (struct breakpoint *b,
 	{
 	  /* FIXME: This seems to be redundant and lost here; see the
 	     "stop only in" line a little further down.  */
+          int t = show_thread_id (b->thread);
 	  ui_out_text (uiout, " thread ");
-	  ui_out_field_int (uiout, "thread", b->thread);
+	  ui_out_field_int (uiout, "thread", t);
 	}
       else if (b->task != 0)
 	{
@@ -6409,8 +6506,9 @@ print_one_breakpoint_location (struct breakpoint *b,
   if (!part_of_multiple && b->thread != -1)
     {
       /* FIXME should make an annotation for this.  */
+      int t = show_thread_id (b->thread);
       ui_out_text (uiout, "\tstop only in thread ");
-      ui_out_field_int (uiout, "thread", b->thread);
+      ui_out_field_int (uiout, "thread", t);
       ui_out_text (uiout, "\n");
     }
   
@@ -7299,6 +7397,8 @@ init_raw_breakpoint_without_location (struct breakpoint *b,
   b->condition_not_parsed = 0;
   b->py_bp_object = NULL;
   b->related_breakpoint = b;
+  b->max_threads_hit = 1;
+  b->threads_hit = 0;
 }
 
 /* Helper to set_raw_breakpoint below.  Creates a breakpoint
@@ -9492,14 +9592,18 @@ find_condition_and_thread (const char *tok, CORE_ADDR pc,
       else if (toklen >= 1 && strncmp (tok, "thread", toklen) == 0)
 	{
 	  char *tmptok;
+          int t;
 
 	  tok = end_tok + 1;
 	  *thread = strtol (tok, &tmptok, 0);
 	  if (tok == tmptok)
 	    error (_("Junk after thread keyword."));
-	  if (!valid_thread_id (*thread))
+
+          t = valid_input_thread_id(*thread);
+          if (t < 0)
 	    invalid_thread_id_error (*thread);
-	  tok = tmptok;
+          else
+            tok = tmptok;
 	}
       else if (toklen >= 1 && strncmp (tok, "task", toklen) == 0)
 	{
@@ -12319,9 +12423,16 @@ update_global_location_list (enum ugll_insert_mode insert_mode)
 		     Note that at this point, old_loc->owner is still
 		     valid, as delete_breakpoint frees the breakpoint
 		     only after calling us.  */
+#define DISABLE_REMOVE_BP_WARNING_FOR_RUNNING_THREAD_WORKAROUND
+#ifdef DISABLE_REMOVE_BP_WARNING_FOR_RUNNING_THREAD_WORKAROUND
+		  /* For UPC it is not clear that we can do anything. */
+                  /* Printing warnings for multiple threads does not make
+		     sense. */
+#else
 		  printf_filtered (_("warning: Error removing "
 				     "breakpoint %d\n"), 
 				   old_loc->owner->number);
+#endif
 		}
 	      removed = 1;
 	    }
@@ -15438,6 +15549,49 @@ all_tracepoints (void)
   return tp_vec;
 }
 
+/* The list of "maint collective" commands.  */
+
+struct cmd_list_element *maint_collective_cmd_list = NULL;
+
+static  void
+maint_collective_command (char *arg, int from_tty)
+{
+  printf_unfiltered (_("\"maintenance collective\" must be followed by the name of a command.\n"));
+  help_list (maint_collective_cmd_list, "maintenance collective ", -1, gdb_stdout);
+}
+
+/* Clear specified collective breakpint from all threads.
+     n   - clear specific collective brekpoint
+     all - clear all collective breakpoints
+*/
+
+static void
+maintenance_collective_clear (char *args, int from_tty)
+{
+  int bptno;
+  struct breakpoint *b;
+  if (!args)
+    {
+      printf_unfiltered (_("\"maintenance collective clear\" must be followed by the breakpoint number or \"all\".\n"));
+      return;
+    }
+  if (!strcmp(args, "all"))
+    {
+      thread_clear_collective_bp (CLEAR_ALL_COLLECTIVE_BPS);
+      return;
+    }
+  bptno = atoi(args);
+  /* does it exist? */
+  b = get_breakpoint (bptno);
+  if (b)
+    {
+      if (!thread_clear_collective_bp (bptno))
+        printf_unfiltered (_("No thread is stopped on the specified breakpoint.\n"));
+    }
+  else
+    printf_unfiltered (_("Not a valid breakpoint specified.\n"));
+}
+
 
 /* This help string is used for the break, hbreak, tbreak and thbreak
    commands.  It is defined as a macro to prevent duplication.
@@ -16318,6 +16472,38 @@ even if GDB disconnects or detaches from the target."),
   add_com ("agent-printf", class_vars, agent_printf_command, _("\
 agent-printf \"printf format string\", arg1, arg2, arg3, ..., argn\n\
 (target agent only) This is useful for formatted output in user-defined commands."));
+
+  add_setshow_boolean_cmd ("collective", no_class,
+			   &collective_breakpoints, _("\
+Set usage of collective breakpoints."), _("\
+Show usage of collective breakpoints."), _("\
+If set, the debugger will assume breakpoints for all threads are collective\n\
+and report only one breakpoint once all the threads reach them.  If not set,\n\
+all breakpoints from all threads are reported."),
+			   NULL,
+			   show_collective_breakpoints,
+			   &breakpoint_set_cmdlist,
+			   &breakpoint_show_cmdlist);
+  
+  add_prefix_cmd ("collective", class_maintenance, maint_collective_command,
+                  _("Collective breakpoint maintenance commands."), &maint_collective_cmd_list,
+                  "maintenance collective ", 0, &maintenancelist);
+
+  add_cmd ("clear", class_maintenance, maintenance_collective_clear,
+           _("Clear specified collective breakpoint from all threads."),
+           &maint_collective_cmd_list);
+
+  add_setshow_boolean_cmd ("collective_stepping", no_class,
+			   &collective_stepping, _("\
+Set usage of collective stepping."), _("\
+Show usage of collective stepping."), _("\
+If set, the debugger will assume breakpoints for all threads are collective\n\
+and report only one breakpoint once all the threads reach them.  If not set,\n\
+all breakpoints from all threads are reported."),
+			   NULL,
+			   show_collective_stepping,
+			   &breakpoint_set_cmdlist,
+			   &breakpoint_show_cmdlist);
 
   automatic_hardware_breakpoints = 1;
 

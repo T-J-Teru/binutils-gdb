@@ -626,6 +626,8 @@ struct target_ops
 
     int (*to_thread_alive) (struct target_ops *, ptid_t ptid)
       TARGET_DEFAULT_RETURN (0);
+    void (*to_thread_switch) (ptid_t ptid)
+      TARGET_DEFAULT_IGNORE ();
     void (*to_update_thread_list) (struct target_ops *)
       TARGET_DEFAULT_IGNORE ();
     char *(*to_pid_to_str) (struct target_ops *, ptid_t)

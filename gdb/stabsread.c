@@ -1507,6 +1507,7 @@ read_type (char **pp, struct objfile *objfile)
   struct type *type1;
   int typenums[2];
   char type_descriptor;
+  struct type_quals type_quals;
 
   /* Size in bits of type if specified by a type attribute, or -1 if
      there is no size attribute.  */
@@ -1855,13 +1856,17 @@ again:
 
     case 'k':			/* Const qualifier on some type (Sun) */
       type = read_type (pp, objfile);
-      type = make_cv_type (1, TYPE_VOLATILE (type), type,
+      type_quals = TYPE_QUALS (type);
+      TYPE_QUAL_FLAGS(type_quals) |= TYPE_INSTANCE_FLAG_CONST;
+      type = make_qual_variant_type (type_quals, type,
 			   dbx_lookup_type (typenums, objfile));
       break;
 
     case 'B':			/* Volatile qual on some type (Sun) */
       type = read_type (pp, objfile);
-      type = make_cv_type (TYPE_CONST (type), 1, type,
+      type_quals = TYPE_QUALS (type);
+      TYPE_QUAL_FLAGS(type_quals) |= TYPE_INSTANCE_FLAG_VOLATILE;
+      type = make_qual_variant_type (type_quals, type,
 			   dbx_lookup_type (typenums, objfile));
       break;
 

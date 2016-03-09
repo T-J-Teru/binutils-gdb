@@ -442,6 +442,38 @@ c_type_print_modifier (struct type *type, struct ui_file *stream,
       did_print_modifier = 1;
     }
 
+  if (TYPE_UPC_SHARED (type))
+    {
+      if (did_print_modifier || need_pre_space)
+	fprintf_filtered (stream, " ");
+      fprintf_filtered (stream, "shared");
+      if (TYPE_UPC_LAYOUT (type) == 0)
+        fprintf_filtered (stream, " [*]");
+      else if (TYPE_UPC_LAYOUT (type) != 1)
+#ifdef BFD64
+        fprintf_filtered (stream, " [%lu]", TYPE_UPC_LAYOUT (type));
+#else
+        fprintf_filtered (stream, " [%llu]", TYPE_UPC_LAYOUT (type));
+#endif
+      did_print_modifier = 1;
+    }
+
+  if (TYPE_UPC_STRICT (type))
+    {
+      if (did_print_modifier || need_pre_space)
+	fprintf_filtered (stream, " ");
+      fprintf_filtered (stream, "strict");
+      did_print_modifier = 1;
+    }
+
+  if (TYPE_UPC_RELAXED (type))
+    {
+      if (did_print_modifier || need_pre_space)
+	fprintf_filtered (stream, " ");
+      fprintf_filtered (stream, "relaxed");
+      did_print_modifier = 1;
+    }
+
   address_space_id = address_space_int_to_name (get_type_arch (type),
 						TYPE_INSTANCE_FLAGS (type));
   if (address_space_id)
@@ -500,7 +532,8 @@ c_type_print_args (struct type *type, struct ui_file *stream,
 	     And the const/volatile qualifiers are not present in the mangled
 	     names as produced by GCC.  */
 
-	  param_type = make_cv_type (0, 0, param_type, NULL);
+	  struct type_quals type_quals = null_type_quals;
+	  param_type = make_qual_variant_type (type_quals, param_type, NULL);
 	}
 
       if (language == language_java)
@@ -705,6 +738,13 @@ c_type_print_varspec_suffix (struct type *type,
 	else if (get_array_bounds (type, &low_bound, &high_bound))
 	  fprintf_filtered (stream, "%s", 
 			    plongest (high_bound - low_bound + 1));
+        if (TYPE_NFIELDS (type) == 1 && TYPE_FIELDS (type))
+          {
+	    struct type *subrange_type = TYPE_FIELDS (type)->type;
+	    if (subrange_type
+	      && TYPE_UPC_HAS_THREADS_FACTOR (subrange_type))
+            fprintf_filtered (stream, "*THREADS");
+          }
 	fprintf_filtered (stream, (is_vector ? ")))" : "]"));
 
 	c_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream,

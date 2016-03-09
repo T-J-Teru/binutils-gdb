@@ -1377,8 +1377,7 @@ address_info (char *exp, int from_tty)
 	  {
 	    section = MSYMBOL_OBJ_SECTION (msym.objfile, msym.minsym);
 	    load_addr = BMSYMBOL_VALUE_ADDRESS (msym);
-
-	    if (section
+x	    if (section
 		&& (section->the_bfd_section->flags & SEC_THREAD_LOCAL) != 0)
 	      printf_filtered (_("a thread-local variable at offset %s "
 				 "in the thread-local storage for `%s'"),
