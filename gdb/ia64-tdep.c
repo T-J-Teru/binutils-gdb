@@ -646,7 +646,11 @@ ia64_memory_insert_breakpoint (struct gdbarch *gdbarch,
   struct cleanup *cleanup;
 
   if (slotnum > 2)
-    error (_("Can't insert breakpoint for slot numbers greater than 2."));
+    {
+      warning (_("Can't insert breakpoint for slot numbers greater than 2.\n"
+	       "Using slot 0 instead"));
+      slotnum = 0;
+    }
 
   addr &= ~0x0f;
 
