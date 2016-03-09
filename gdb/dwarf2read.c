@@ -16248,9 +16248,10 @@ read_partial_die (const struct die_reader_specs *reader,
 	      part_die->name = DW_STRING (&attr);
 	      break;
 	    default:
-	      part_die->name
-		= dwarf2_canonicalize_name (DW_STRING (&attr), cu,
-					    &objfile->per_bfd->storage_obstack);
+	      if (part_die->name == NULL || cu->language == language_fortran)
+		part_die->name
+		  = dwarf2_canonicalize_name (DW_STRING (&attr), cu,
+					      &objfile->per_bfd->storage_obstack);
 	      break;
 	    }
 	  break;
@@ -16259,7 +16260,7 @@ read_partial_die (const struct die_reader_specs *reader,
 	  /* Note that both forms of linkage name might appear.  We
 	     assume they will be the same, and we only store the last
 	     one we see.  */
-	  if (cu->language == language_ada)
+	  if (cu->language == language_ada || part_die->name == NULL)
 	    part_die->name = DW_STRING (&attr);
 	  part_die->linkage_name = DW_STRING (&attr);
 	  break;
