@@ -746,6 +746,19 @@ sync_threadlists (void)
 
   qsort (pbuf, pcount, sizeof *pbuf, pcmp);
 
+  infpid = PIDGET (inferior_ptid);
+  
+  if (pd_active
+      && pcount >= 1
+      && pbuf[0].pthid == 1
+      && (thread = first_thread_of_process (infpid))
+      && ptid_get_tid (thread->ptid) == 0)
+    {
+      /* Thread 1 is the main thread. Change the main thread's TID to 1 so it
+         is synched too, otherwise it will show up as a duplicate of Thread 1.  */
+      thread_change_ptid (thread->ptid, BUILD_THREAD (pbuf[0].pthid, infpid));
+    }
+ 
   /* Accumulate an array of GDB threads sorted by pid.  */
 
   gcount = 0;
@@ -756,7 +769,6 @@ sync_threadlists (void)
 
   /* Apply differences between the two arrays to GDB's thread list.  */
 
-  infpid = PIDGET (inferior_ptid);
   for (pi = gi = 0; pi < pcount || gi < gcount;)
     {
       if (pi == pcount)
@@ -786,6 +798,9 @@ sync_threadlists (void)
 
 	  if (cmp_result == 0)
 	    {
+	      if (!gbuf[gi]->private)
+		gbuf[gi]->private =
+		  xmalloc (sizeof (struct private_thread_info));
 	      gbuf[gi]->private->pdtid = pdtid;
 	      gbuf[gi]->private->tid = tid;
 	      pi++;
@@ -1055,7 +1070,7 @@ aix_thread_wait (struct target_ops *ops,
 
       if (regcache_read_pc (regcache)
 	  - gdbarch_decr_pc_after_break (gdbarch) == pd_brk_addr)
-	return pd_activate (0);
+	return pd_activate (!pd_active);
     }
 
   return pd_update (0);
@@ -1812,7 +1827,7 @@ aix_thread_extra_thread_info (struct thread_info *thread)
 
   if (tid != PTHDB_INVALID_TID)
     /* i18n: Like "thread-identifier %d, [state] running, suspended" */
-    fprintf_unfiltered (buf, _("tid %d"), (int)tid);
+    fprintf_unfiltered (buf, _("tid %d, "), (int)tid);
 
   /* pthdb_pthread_state and pthdb_pthread_suspendstate both seem to return
    * nonsense on AIX 5.2. */
@@ -1820,7 +1835,7 @@ aix_thread_extra_thread_info (struct thread_info *thread)
   status = pthdb_pthread_state (pd_session, pdtid, &state);
   if (status != PTHDB_SUCCESS)
     state = PST_NOTSUP;
-  fprintf_unfiltered (buf, ", %s", state2str (state));
+  fprintf_unfiltered (buf, "%s", state2str (state));
 
   status = pthdb_pthread_suspendstate (pd_session, pdtid, 
 				       &suspendstate);
