@@ -147,7 +147,7 @@ static char *
 relocate_path (const char *progname, const char *initial, int flag)
 {
   if (flag)
-    return make_relative_prefix (progname, BINDIR, initial);
+    return make_relative_prefix_ignore_links (progname, BINDIR, initial);
   return xstrdup (initial);
 }
 
@@ -557,15 +557,7 @@ captured_main (void *data)
   gdb_datadir = relocate_gdb_directory (GDB_DATADIR,
 					GDB_DATADIR_RELOCATABLE);
 
-#ifdef WITH_PYTHON_PATH
-  {
-    /* For later use in helping Python find itself.  */
-    char *tmp = concat (WITH_PYTHON_PATH, SLASH_STRING, "lib", NULL);
-
-    python_libdir = relocate_gdb_directory (tmp, PYTHON_PATH_RELOCATABLE);
-    xfree (tmp);
-  }
-#endif
+  python_libdir = relocate_gdb_directory (LIBDIR, 1);
 
 #ifdef RELOC_SRCDIR
   add_substitute_path_rule (RELOC_SRCDIR,
