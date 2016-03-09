@@ -37,7 +37,9 @@ extern void upc_print_pts (struct ui_file *stream, int format,
 extern struct value *upc_pts_index_add (struct type *, struct value *,
                                         struct value *, LONGEST);
 extern struct value *upc_pts_diff (struct value *, struct value *);
-extern int upc_read_shared_mem (ULONGEST address, ULONGEST thread,
+extern int upc_read_shared_mem (const gdb_upc_pts_t pts,
+                                ULONGEST block_size,
+                                ULONGEST element_size,
                                 gdb_byte *data, int length);
 extern int upc_thread_count ();
 extern struct value *upc_read_var_value (struct symbol *var, struct frame_info *frame);

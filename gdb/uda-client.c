@@ -460,27 +460,35 @@ uda_calc_pts_diff      (const uda_debugger_pts_t *pts_1,
 
 int
 uda_read_shared_mem (const uda_taddr_t addrfield,
-                     const uda_tword_t thread_num,
-                     const uda_tword_t length,
+                     const uda_tword_t thread,
+		     const uda_tword_t phase,
+                     uda_tword_t block_size,
+                     uda_tword_t element_size,
+		     const uda_tword_t length,
 		     uda_binary_data_t *data)
 {
-  int status;
-  uda_rmt_send_cmd ("qupc.read.shared:%lux,%lux,%lux",
-                    addrfield, thread_num, length);
+  int status;  
+  uda_rmt_send_cmd ("qupc.read.shared:%lux,%lux,%lux,%lux,%lux,%lux",
+		    addrfield, thread, phase,
+		    block_size, element_size, length);
   status = uda_rmt_recv_reply ("%*b", &data->len, &data->bytes);
   return status;
 }
 
 int
 uda_write_shared_mem (const uda_taddr_t addrfield,
-                      const uda_tword_t thread_num,
+                      const uda_tword_t thread,
+		      const uda_tword_t phase,
+                      uda_tword_t block_size,
+                      uda_tword_t element_size,
 		      const uda_tword_t length,
 		      uda_tword_t *bytes_written,
 		      const uda_binary_data_t *bytes)
 {
   int status;
-  uda_rmt_send_cmd ("Qupc.write.shared:%lux,%lux,%*b",
-                    addrfield, thread_num, (size_t) length, bytes);
+  uda_rmt_send_cmd ("Qupc.write.shared:%lux,%lux,%lux,%lux,%lux,%*b",
+                    addrfield, thread, phase,
+		    block_size, element_size, (size_t) length, bytes);
   *bytes_written = 0;
   status = uda_rmt_recv_reply ("%lux", bytes_written);
   return status;
