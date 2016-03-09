@@ -5931,6 +5931,7 @@ partial_die_full_name (struct partial_die_info *pdi,
 	  struct die_info *die;
 	  struct attribute attr;
 	  struct dwarf2_cu *ref_cu = cu;
+          const char *name;
 
 	  /* DW_FORM_ref_addr is using section offset.  */
 	  attr.name = 0;
@@ -5938,7 +5939,11 @@ partial_die_full_name (struct partial_die_info *pdi,
 	  attr.u.unsnd = pdi->offset.sect_off;
 	  die = follow_die_ref (NULL, &attr, &ref_cu);
 
-	  return xstrdup (dwarf2_full_name (NULL, die, ref_cu));
+          name = dwarf2_full_name (NULL, die, ref_cu);
+          if (name == NULL)
+            return NULL;
+          else
+	    return xstrdup (name);
 	}
     }
 
