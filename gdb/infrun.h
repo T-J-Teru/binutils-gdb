@@ -56,6 +56,13 @@ extern int step_stop_if_no_debug;
    are kept running freely.  */
 extern int non_stop;
 
+/* If set, the inferior should be controlled in inferior-stop mode.  In
+   this mode, each inferior is controlled independently.  Execution
+   commands apply only to the the selected inferior by default, and stop
+   events stop only the inferior that had the event -- the other inferiors
+   are kept running freely.  */
+extern int inferior_stop;
+
 /* When set (default), the target should attempt to disable the
    operating system's address space randomization feature when
    starting an inferior.  */
