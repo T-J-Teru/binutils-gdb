@@ -1070,6 +1070,7 @@ variable:	qualified_name
 
 variable:	name_not_typename
 			{ struct symbol *sym = $1.sym;
+			  struct internalvar *isym = NULL;
 
 			  if (sym)
 			    {
@@ -1103,6 +1104,15 @@ variable:	name_not_typename
 			      write_exp_elt_opcode (pstate, STRUCTOP_PTR);
 			      write_exp_string (pstate, $1.stoken);
 			      write_exp_elt_opcode (pstate, STRUCTOP_PTR);
+			    }
+			  else if (parse_language->la_language == language_upc
+			           && (!strcmp ($1.stoken.ptr, "THREADS")
+				       || !strcmp ($1.stoken.ptr, "MYTHREAD"))
+				   && (isym = lookup_only_internalvar (copy_name ($1.stoken))))
+			    {
+				write_exp_elt_opcode (OP_INTERNALVAR);
+				write_exp_elt_intern (isym);
+				write_exp_elt_opcode (OP_INTERNALVAR);
 			    }
 			  else
 			    {
