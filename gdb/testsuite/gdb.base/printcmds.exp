@@ -424,7 +424,7 @@ proc test_print_repeats_10 {} {
     global gdb_prompt decimal
 
     for { set x 1 } { $x <= 16 } { incr x } {
-	gdb_test_no_output "set print elements $x"
+	gdb_test_no_output "set print characters $x"
 	for { set e 1 } { $e <= 16 } {incr e } {
 	    set v [expr $e - 1];
 	    set command "p &ctable2\[${v}*16\]"
@@ -464,7 +464,7 @@ proc test_print_repeats_10 {} {
 		set xstr "${xstr}\[.\]\[.\]\[.\]"
 	    }
 	    set string " = \[(\]unsigned char \[*\]\[)\] <ctable2(\\+$decimal)?> ${a}${xstr}";
-	    gdb_test "$command" "$string" "$command with print elements set to $x";
+	    gdb_test "$command" "$string" "$command with print characters set to $x";
 	}
     }
 }
@@ -489,23 +489,23 @@ proc test_print_strings {} {
 
     # Test that setting print elements unlimited doesn't completely suppress
     # printing; this was a bug in older gdb's.
-    gdb_test_no_output "set print elements 0"
+    gdb_test_no_output "set print characters 0"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with elements set to 0"
-    gdb_test_no_output "set print elements 1"
+	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with characters set to 0"
+    gdb_test_no_output "set print characters 1"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"t\"\\.\\.\\." "p teststring with elements set to 1"
-    gdb_test_no_output "set print elements 5"
+	" = (.unsigned char .. )?\"t\"\\.\\.\\." "p teststring with characters set to 1"
+    gdb_test_no_output "set print characters 5"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"tests\"\\.\\.\\." "p teststring with elements set to 5"
-    gdb_test_no_output "set print elements 19"
+	" = (.unsigned char .. )?\"tests\"\\.\\.\\." "p teststring with characters set to 5"
+    gdb_test_no_output "set print characters 19"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with elements set to 19"
-    gdb_test_no_output "set print elements 20"
+	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with characters set to 19"
+    gdb_test_no_output "set print characters 20"
     gdb_test "p teststring" \
-	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with elements set to 20"
+	" = (.unsigned char .. )?\"teststring contents\"" "p teststring with characters set to 20"
 
-    gdb_test_no_output "set print elements 8"
+    gdb_test_no_output "set print characters 8"
 
     gdb_test "p &ctable1\[0\]" \
 	" = \\(unsigned char \\*\\) <ctable1> \"\""
@@ -649,7 +649,7 @@ proc test_print_char_arrays {} {
 proc test_print_string_constants {} {
     global gdb_prompt
 
-    gdb_test_no_output "set print elements 50"
+    gdb_test_no_output "set print characters 50"
 
     if [target_info exists gdb,cannot_call_functions] {
 	setup_xfail "*-*-*" 2416

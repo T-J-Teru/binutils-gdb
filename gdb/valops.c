@@ -967,7 +967,7 @@ int
 value_fetch_lazy (struct value *val)
 {
   gdb_assert (value_lazy (val));
-  allocate_value_contents (val);
+  allocate_value_contents_limited (val);
   if (value_bitsize (val))
     {
       /* To read a lazy bitfield, read the entire enclosing value.  This

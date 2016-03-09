@@ -23,13 +23,6 @@
 #include "doublest.h"
 #include "frame.h"		/* For struct frame_id.  */
 
-/* The maximum number of array elements to read when fetching the array from 
-   the target. Set to print_max by printcmd.c and stack.c before calling some 
-   valops functions, then reset. 0 represents 'unlimited'. Used in 
-   get_limited_length for limiting array fetches - not necessarily structures 
-   with large array members for example. */
-int read_element_limit;
-
 unsigned int get_limited_length(struct type *type);
 
 struct block;
@@ -599,6 +592,7 @@ extern struct value *default_read_var_value (struct symbol *var,
 extern struct value *allocate_value (struct type *type);
 extern struct value *allocate_value_lazy (struct type *type);
 extern void allocate_value_contents (struct value *value);
+extern void allocate_value_contents_limited (struct value *value);
 extern void value_contents_copy (struct value *dst, int dst_offset,
 				 struct value *src, int src_offset,
 				 int length);

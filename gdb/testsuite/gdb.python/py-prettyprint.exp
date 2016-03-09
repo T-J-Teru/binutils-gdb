@@ -74,11 +74,11 @@ proc run_lang_tests {exefile lang} {
 	gdb_test "print derived" \
 	    " = \{.*<Vbase1> = pp class name: Vbase1.*<Vbase2> = \{.*<VirtualTest> = pp value variable is: 1,.*members of Vbase2:.*_vptr.Vbase2 = $hex.*<Vbase3> = \{.*members of Vbase3.*members of Derived:.*value = 2.*"
 	gdb_test "print ns " "\"embedded\\\\000null\\\\000string\""
-	gdb_py_test_silent_cmd "set print elements 3" "" 1
+	gdb_py_test_silent_cmd "set print characters 3" "" 1
 	gdb_test "print ns" "emb\.\.\.."
-	gdb_py_test_silent_cmd "set print elements 10" "" 1
+	gdb_py_test_silent_cmd "set print characters 10" "" 1
 	gdb_test "print ns" "embedded\\\\000n\.\.\.."
-	gdb_py_test_silent_cmd "set print elements 200" "" 1
+	gdb_py_test_silent_cmd "set print characters 200" "" 1
     }
 
     gdb_test "print ns2" ".error reading variable: Address 0x0 out of bounds."

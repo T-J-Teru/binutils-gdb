@@ -95,7 +95,7 @@ m2_printchar (int c, struct type *type, struct ui_file *stream)
 }
 
 /* Print the character string STRING, printing at most LENGTH characters.
-   Printing stops early if the number hits print_max; repeat counts
+   Printing stops early if the number hits print_smax; repeat counts
    are printed as appropriate.  Print ellipses at the end if we
    had to stop before printing LENGTH characters, or if FORCE_ELLIPSES.
    FIXME:  This is a copy of the same function from c-exp.y.  It should
@@ -117,7 +117,7 @@ m2_printstr (struct ui_file *stream, struct type *type, const gdb_byte *string,
       return;
     }
 
-  for (i = 0; i < length && things_printed < options->print_max; ++i)
+  for (i = 0; i < length && things_printed < options->print_smax; ++i)
     {
       /* Position of the character we are examining
          to see whether it is repeated.  */
