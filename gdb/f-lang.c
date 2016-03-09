@@ -584,7 +584,7 @@ const struct language_defn f_language_defn =
   default_read_var_value,	/* la_read_var_value */
   NULL,				/* Language specific skip_trampoline */
   NULL,                    	/* name_of_this */
-  f_lookup_symbol_nonlocal,	/* lookup_symbol_nonlocal */
+  cp_lookup_symbol_nonlocal,	/* lookup_symbol_nonlocal */
   basic_lookup_transparent_type,/* lookup_transparent_type */
   NULL,				/* Language specific symbol demangler */
   NULL,				/* Language specific

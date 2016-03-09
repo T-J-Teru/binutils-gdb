@@ -15,17 +15,11 @@
 #include "source.h"
 #include "value.h"
 #include "cp-support.h"
+#include "objfiles.h"
 
 #include <ctype.h>
 
-/* XXX: The following macro and two functions are now private. */
-
-/* A fast way to get from a psymtab to its symtab (after the first time).  */
-#define PSYMTAB_TO_SYMTAB(pst)  \
-    ((pst) -> symtab != NULL ? (pst) -> symtab : psymtab_to_symtab (pst))
-
-extern struct symtab *psymtab_to_symtab (struct partial_symtab *pst);
-char *psymtab_to_fullname (struct partial_symtab *ps, int *fail);
+static const struct objfile_data *f_module_objfile_data_key;
 
 /* A linked-list of pointers to this module's symbols.  */
 
@@ -44,13 +38,8 @@ struct modtab_symbol
 struct modtab_entry
 {
   char *name;
-  const struct partial_symtab *psymtab;
   struct modtab_symbol *sym_list;
 };
-
-/* Keep a hash-table of all modules.  */
-
-static struct htab *modtab = NULL;
 
 /* Keep a record of the "current" module.
 
@@ -58,6 +47,7 @@ static struct htab *modtab = NULL;
    module.  */
 
 static struct modtab_entry *open_module = NULL;
+static struct objfile *open_module_objfile = NULL;
 
 /* Hash function for a module-name.
 
@@ -95,12 +85,24 @@ modname_eq (const struct modtab_entry *lhs, const struct modtab_entry *rhs)
 
 /* Initialise the module hash-table.  */
 
-static void
-modtab_init ()
+static struct htab *
+modtab_init (struct objfile *objfile)
 {
-  modtab = htab_create_alloc (256, htab_hash_modname,
-                              (int (*) (const void *, const void *)) modname_eq,
-                              NULL, xcalloc, xfree);
+  struct htab *modtab = objfile_data (objfile, f_module_objfile_data_key);
+  if (!modtab)
+    {
+#if defined(USE_MMALLOC)
+      modtab = htab_create_alloc_ex (256, htab_hash_modname,
+				     (int (*) (const void *, const void *)) modname_eq,
+				     NULL,  objfile->md, xmcalloc, xmfree);
+#else
+      modtab = htab_create (256, htab_hash_modname,
+			   (int (*) (const void *, const void *)) modname_eq,
+			   NULL);
+#endif
+      set_objfile_data (objfile, f_module_objfile_data_key, modtab);
+    }
+  return modtab;				 
 }
 
 /* Open a new record of this Fortran module.
@@ -109,14 +111,13 @@ modtab_init ()
    when (if) the object-file's symbols have not been fully initialised.  */
 
 void
-f_module_announce (const char *name, const struct partial_symtab *psymtab)
-{
+f_module_announce (struct objfile *objfile, const char *name)
+{  
   struct modtab_entry *candidate, **slot;
+  struct htab *modtab = modtab_init (objfile);
 
-  candidate = (struct modtab_entry *) xmalloc (sizeof (struct modtab_entry));
-  candidate->name = (char *) xmalloc (strlen (name) + 1);
-  strcpy (candidate->name, name);
-  candidate->psymtab = psymtab;
+  candidate = (struct modtab_entry *) obstack_alloc (&objfile->objfile_obstack, sizeof (struct modtab_entry));
+  candidate->name = obstack_copy0 (&objfile->objfile_obstack, name, strlen (name));
   candidate->sym_list = NULL;
 
   slot = (struct modtab_entry **) htab_find_slot (modtab, candidate, INSERT);
@@ -127,12 +128,28 @@ f_module_announce (const char *name, const struct partial_symtab *psymtab)
     }
   else
     {
-      printf_filtered ("f_module_announce: module '%s' already present\n",
-                       name);
-
-      xfree (candidate->name);
-      xfree (candidate);
+      /* There will be a DW_TAG_module for every source file that used a module
+         so silently ignore duplicates.  */
+      obstack_free (&objfile->objfile_obstack, candidate);
+      /* candidate->name is freed automatically - see docs for obstack_free.  */
     }
+}
+
+/* Find a given Fortran modtab entry.  */
+
+static struct modtab_entry *
+f_module_lookup (struct objfile *objfile, const char *module_name)
+{
+  struct modtab_entry search_entry, *found_entry;
+  struct htab *modtab = objfile_data (objfile, f_module_objfile_data_key);
+  if (!modtab)
+    return NULL;
+  
+  /* const-correctness gone to pot.  */
+  search_entry.name = (char *) module_name;
+  found_entry = htab_find (modtab, &search_entry);
+
+  return found_entry;
 }
 
 /* Make this the "current" Fortran module.
@@ -141,7 +158,7 @@ f_module_announce (const char *name, const struct partial_symtab *psymtab)
    module until f_module_leave () is called.  */
 
 void
-f_module_enter (const char *name)
+f_module_enter (struct objfile *objfile, const char *name)
 {
   struct modtab_entry *found_entry;
 
@@ -151,11 +168,16 @@ f_module_enter (const char *name)
       return;
     }
 
-  found_entry = f_module_lookup (name);
+  found_entry = f_module_lookup (objfile, name);
 
   if (found_entry)
     {
       open_module = found_entry;
+      open_module_objfile = objfile;
+    }
+  else
+    {
+      printf_filtered ("f_module_enter: module present in symtab but not psymtab\n");
     }
 }
 
@@ -197,132 +219,21 @@ f_module_sym_add (const struct symbol *sym)
   {
     struct modtab_symbol *msym;
 
-    msym = (struct modtab_symbol *) xmalloc (sizeof (struct modtab_symbol));
+    msym = (struct modtab_symbol *) obstack_alloc (&open_module_objfile->objfile_obstack, sizeof (struct modtab_symbol));
     msym->sym = sym;
     msym->next = open_module->sym_list;
     open_module->sym_list = msym;
   }
 }
 
-/* Find a given Fortran modtab entry.  */
-
-struct modtab_entry *
-f_module_lookup (const char *module_name)
+static int module_name_matcher (const char *name, void *arg)
 {
-  struct modtab_entry search_entry, *found_entry;
-
-  /* const-correctness gone to pot.  */
-  search_entry.name = (char *) module_name;
-  found_entry = htab_find (modtab, &search_entry);
-
-  return found_entry;
+  return strstr (name, "::") != NULL;
 }
 
-/* Find a given symbol in a Fortran module entry.  */
-
-struct symbol *
-f_module_lookup_symbol (const struct modtab_entry *mte,
-                        const char *symbol_name)
+static int file_name_matcher (const char *name, void *arg, int basenames)
 {
-  struct symtab *s = NULL;
-  const struct modtab_symbol *sym_list;
-
-  if (mte->psymtab)
-    {
-      /* const-correctness gone to pot.  */
-
-      /* Force the fullname to be filled in.  */
-      if (mte->psymtab->fullname == NULL)
-        {
-          psymtab_to_fullname ((struct partial_symtab *) mte->psymtab, NULL);
-        }
-      
-      s = PSYMTAB_TO_SYMTAB ((struct partial_symtab *) mte->psymtab);
-    }
-
-  /* Careful! Need to grab the sym_list AFTER converting the psymtab
-     into a symtab (above).  */
-  sym_list = mte->sym_list;
-
-  while (sym_list)
-    {
-      const struct symbol *sym = sym_list->sym;
-
-      if (strcasecmp (symbol_name, SYMBOL_PRINT_NAME (sym)) == 0)
-        {
-          /* const-correctness gone to pot.  */
-          return (struct symbol *) sym;
-        }
-
-      sym_list = sym_list->next;
-    }
-
-  return NULL;
-}
-
-/* Find a non-local Fortran symbol.  */
-
-struct symbol *
-f_lookup_symbol_nonlocal (const char *name,
-                          const struct block *block,
-                          const domain_enum domain)
-{
-  struct symbol *sym = NULL;
-  char *p;
-  
-  /* Does name contain '::'?  */
-  p = strchr(name, ':');
-
-  /* Also check that any '::' is NOT at the beginning of the name.  */
-  if (p && p[1] == ':' && p != name)
-    {
-      const int module_name_len = p - name;
-      char *module_name;
-      const struct modtab_entry *module;
-
-      module_name = (char *) xmalloc (module_name_len + 1);
-      memcpy (module_name, name, module_name_len);
-      module_name[module_name_len] = '\0';
-
-      module = f_module_lookup (module_name);
-
-      if (module)
-        {
-          char *symbol_name;
-
-          symbol_name = (p + 2);
-
-          sym = f_module_lookup_symbol (module, symbol_name);
-        }
-
-      xfree (module_name);
-    }
-
-  if (sym)
-    {
-      return sym;
-    }
-   {
-       const char* block_name = block_scope (block);
-       int i;
-       char* lowercase_block = (char*) xmalloc(strlen (block_name) + strlen (name) + 3);
-       for (i = 0; block_name[i]; ++i)
-           lowercase_block[i] = tolower(block_name[i]);
-       lowercase_block[i++] = ':';
-       lowercase_block[i++] = ':';
-       strncpy (lowercase_block + i, name, strlen(name) + 1);
- 
-       sym = lookup_symbol_global(lowercase_block, block, domain);
-       xfree(lowercase_block);
-       if (sym) 
-         {
-           return sym; 
-         }
-   }
-
-  /* If we can't find it in our module list, let the default symbol-lookup
-     have a go.  */
-  return cp_lookup_symbol_nonlocal (name, block, domain);
+  return 1;
 }
 
 /* Pretty-print a module's name.
@@ -358,13 +269,25 @@ static void
 modules_info (char *ignore, int from_tty)
 {
   int first = 1;
+  struct objfile *objfile;
 
   printf_filtered ("All defined modules:\n\n");
 
-  htab_traverse_noresize (modtab, print_module_name, &first);
+  ALL_OBJFILES(objfile)
+  {
+    struct htab *modtab = objfile_data (objfile, f_module_objfile_data_key);
+    if (modtab)
+      htab_traverse_noresize (modtab, print_module_name, &first);
+  }
 
   printf_filtered ("\n");
 }
+
+struct print_module_symbols_data
+{
+  struct objfile *objfile;
+  domain_enum kind;
+};
 
 /* Pretty-print a module's symbols.
 
@@ -375,26 +298,22 @@ modules_info (char *ignore, int from_tty)
    yet been read, will cause that to happen first.  */
 
 static int
-print_module_symbols (const struct modtab_entry **slot, void *arg)
+print_module_symbols (void **slot, void *arg)
 {
   const struct modtab_entry *module = *((const struct modtab_entry **) slot);
-  const enum search_domain kind = *((const enum search_domain *) arg);
+  const struct print_module_symbols_data *data = (const struct print_module_symbols_data *) arg;
+  const enum search_domain kind = data->kind;
+  struct objfile *objfile = data->objfile;  
   const struct modtab_symbol *sym_list;
 
   printf_filtered ("\nModule %s:\n", module->name);
 
-  if (module->psymtab)
-    {
-      /* const-correctness gone to pot.  */
-
-      /* Force the fullname to be filled in.  */
-      if (module->psymtab->fullname == NULL)
-        {
-          psymtab_to_fullname ((struct partial_symtab *) module->psymtab, NULL);
-        }
-      
-      PSYMTAB_TO_SYMTAB ((struct partial_symtab *) module->psymtab);
-    }
+  /* Expand any symtabs with module symbols in.  */
+  objfile->sf->qf->expand_symtabs_matching (objfile,
+					  file_name_matcher,
+					  module_name_matcher,
+					  kind,
+					  NULL);
 
   /* Careful! Need to grab the sym_list AFTER converting the psymtab
      into a symtab (above).  */
@@ -408,14 +327,17 @@ print_module_symbols (const struct modtab_entry **slot, void *arg)
            SYMBOL_CLASS (sym) != LOC_BLOCK) ||
           (kind == FUNCTIONS_DOMAIN && SYMBOL_CLASS (sym) == LOC_BLOCK))
         {
+	  const char *fullname;
+
           type_print (SYMBOL_TYPE (sym),
                       (SYMBOL_CLASS (sym) == LOC_TYPEDEF
                        ? "" : SYMBOL_PRINT_NAME (sym)),
                       gdb_stdout, 0);
 
+	  fullname = symtab_to_fullname (sym->symtab);
           printf_filtered (";%s;%d;\n",
-                           (module->psymtab->fullname ?
-                            module->psymtab->fullname :
+                           (fullname ?
+                            fullname :
                             ""),
                            sym->line);
         }
@@ -445,24 +367,43 @@ module_symbol_info (char *module_name, enum search_domain kind, int from_tty)
   if (module_name)
     {
       const struct modtab_entry *found_entry;
+      struct objfile *objfile;
 
       printf_filtered ("All defined module %ss for \"%s\":\n",
                        classnames[(int) (kind - VARIABLES_DOMAIN)],
                        module_name);
 
-      found_entry = f_module_lookup (module_name);
+      ALL_OBJFILES(objfile)
+      {
+	found_entry = f_module_lookup (objfile, module_name);
 
-      if (found_entry)
-        {
-          print_module_symbols (&found_entry, &kind);
-        }
+	if (found_entry)
+	  {
+	    struct print_module_symbols_data data;
+	    data.objfile = objfile;
+	    data.kind = kind;
+	    print_module_symbols ((void **) &found_entry, &data);
+	  }
+      }
     }
   else
     {
+      struct objfile *objfile;
+
       printf_filtered ("All defined module %ss:\n",
                        classnames[(int) (kind - VARIABLES_DOMAIN)]);
 
-      htab_traverse_noresize (modtab, (int (*) (void **slot, void *arg)) print_module_symbols, &kind);
+      ALL_OBJFILES(objfile)
+      {
+	struct htab *modtab = objfile_data (objfile, f_module_objfile_data_key);
+	if (modtab)
+	  {
+	    struct print_module_symbols_data data;
+	    data.objfile = objfile;
+	    data.kind = kind;	    
+	    htab_traverse_noresize (modtab, print_module_symbols, &data);
+	  }
+      }
     }
 
   printf_filtered ("\n");
@@ -490,6 +431,15 @@ module_variables (char *module_name, int from_tty)
   module_symbol_info (module_name, VARIABLES_DOMAIN, from_tty);
 }
 
+static void
+f_module_per_objfile_free (struct objfile *objfile, void *d)
+{
+  struct htab *modtab = (struct htab *)d;
+  
+  if (modtab)
+    htab_delete (modtab);
+}
+
 /* Initialise the Fortran module code.  */
 
 extern void _initialize_f_module (void);
@@ -497,7 +447,8 @@ extern void _initialize_f_module (void);
 void
 _initialize_f_module (void)
 {
-  modtab_init ();
+  f_module_objfile_data_key
+    = register_objfile_data_with_cleanup (NULL, f_module_per_objfile_free);
 
   add_info ("modules", modules_info,
             _("All Fortran 90 modules."));
