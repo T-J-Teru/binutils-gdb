@@ -1210,7 +1210,8 @@ value_assign (struct value *toval, struct value *fromval)
   if (!deprecated_value_modifiable (toval))
     error (_("Left operand of assignment is not a modifiable lvalue."));
 
-  toval = coerce_ref (toval);
+  if (VALUE_LVAL (toval) != lval_internalvar)
+    toval = coerce_ref (toval);
 
   type = value_type (toval);
   if (VALUE_LVAL (toval) != lval_internalvar)

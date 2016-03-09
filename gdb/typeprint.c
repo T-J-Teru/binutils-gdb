@@ -462,10 +462,19 @@ whatis_exp (char *exp, int show)
   get_user_print_options (&opts);
   if (opts.objectprint)
     {
-      if (((TYPE_CODE (type) == TYPE_CODE_PTR)
-	   || (TYPE_CODE (type) == TYPE_CODE_REF))
+      if ((TYPE_CODE (type) == TYPE_CODE_PTR)
 	  && (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_CLASS))
-        real_type = value_rtti_indirect_type (val, &full, &top, &using_enc);
+        {
+          real_type = value_rtti_indirect_type (val, &full, &top, &using_enc);
+        }
+      else if ((TYPE_CODE (type) == TYPE_CODE_REF)
+	  && (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_CLASS))
+	{
+	  val = coerce_ref (val);
+	  real_type = value_rtti_type (val, &full, &top, &using_enc);
+	  if (real_type)
+	    real_type = lookup_reference_type (real_type);	  
+	}
       else if (TYPE_CODE (type) == TYPE_CODE_CLASS)
 	real_type = value_rtti_type (val, &full, &top, &using_enc);
     }
