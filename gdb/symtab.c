@@ -2902,7 +2902,7 @@ void
 skip_prologue_sal (struct symtab_and_line *sal)
 {
   struct symbol *sym;
-  struct symtab_and_line start_sal;
+  struct symtab_and_line start_sal, entry_sal;
   struct cleanup *old_chain;
   CORE_ADDR pc, saved_pc;
   struct obj_section *section;
@@ -2971,6 +2971,8 @@ skip_prologue_sal (struct symtab_and_line *sal)
       if (section_is_overlay (section) && !section_is_mapped (section))
 	pc = overlay_unmapped_address (pc, section);
 
+      entry_sal = find_pc_sect_line (pc, section, 0);
+
       /* Skip "first line" of function (which is actually its prologue).  */
       pc += gdbarch_deprecated_function_start_offset (gdbarch);
       if (skip)
@@ -2981,6 +2983,11 @@ skip_prologue_sal (struct symtab_and_line *sal)
 
       /* Calculate line number.  */
       start_sal = find_pc_sect_line (pc, section, 0);
+
+      /* Maybe gdbarch_skip_prologue went too far?  Don't let it skip more than
+	 one line.  */
+      if (entry_sal.line != sal->line && sal->pc <= start_sal.pc)
+	return;
 
       /* Check if gdbarch_skip_prologue left us in mid-line, and the next
 	 line is still part of the same function.  */
