@@ -564,6 +564,31 @@ upc_expand_threads_factor (struct type *type)
   TYPE_INSTANCE_FLAGS (type) &= ~TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR;  
 }
 
+struct value *
+upc_value_subscript (struct value *arg1, LONGEST index)
+{
+  struct value *ptrval, *retval, *valint;
+  struct type *valptrtype, *ptr_target, *element_type;
+  LONGEST subarray_sz, element_sz;  
+  struct gdbarch *gdbarch = get_type_arch (value_type (arg1));
+
+  element_type = check_typedef (value_type (arg1));
+  gdb_assert (TYPE_CODE (element_type) == TYPE_CODE_ARRAY);
+  while (TYPE_CODE (element_type) == TYPE_CODE_ARRAY)
+    element_type = check_typedef (TYPE_TARGET_TYPE (element_type));
+  element_sz = TYPE_LENGTH (element_type);
+
+  ptrval = coerce_array (arg1);
+  valptrtype = check_typedef (value_type (ptrval));
+  
+  ptr_target = check_typedef (TYPE_TARGET_TYPE (valptrtype));
+  subarray_sz = TYPE_LENGTH (ptr_target);
+  
+  valint = value_from_longest (builtin_type (gdbarch)->builtin_int, subarray_sz * index / element_sz);
+  retval = upc_pts_index_add (valptrtype, ptrval, valint, element_sz);
+  return value_ind (retval);
+}
+
 static void
 thread_value_read (struct value *v)
 {
