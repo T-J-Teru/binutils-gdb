@@ -147,6 +147,9 @@ struct buffer;
 # define TRAP_HWBKPT 4
 #endif
 
+
+extern int linux_ptrace_force_use_entry_point_to_call_inferior_functions;
+
 extern void linux_ptrace_attach_fail_reason (pid_t pid, struct buffer *buffer);
 
 /* Find all possible reasons we could have failed to attach to PTID
