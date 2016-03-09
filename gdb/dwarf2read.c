@@ -4997,7 +4997,7 @@ process_psymtab_comp_unit_reader (const struct die_reader_specs *reader,
 	  best_lowpc = lowpc;
 	  best_highpc = highpc;
 	}
-      else
+      else if (lowpc != highpc)
         {
 	  best_lowpc = min (lowpc, best_lowpc);
 	  best_highpc = max (highpc, best_highpc);
