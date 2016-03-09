@@ -1408,7 +1408,7 @@ lookup_static_symbol_aux (const char *name, const domain_enum domain)
 {
   struct objfile *objfile;
   struct symbol *sym;
-
+  
   sym = lookup_symbol_aux_symtabs (STATIC_BLOCK, name, domain);
   if (sym != NULL)
     return sym;
@@ -1418,6 +1418,11 @@ lookup_static_symbol_aux (const char *name, const domain_enum domain)
     sym = lookup_symbol_aux_quick (objfile, STATIC_BLOCK, name, domain);
     if (sym != NULL)
       return sym;
+    /* If 'quick' symbol lookup fails but minimal symbol works then don't search
+       any more objfiles (weak aliases don't appear in DWARF debug symbols, only
+       in the minimal symbols, but should trump later objfiles).  */
+    if (lookup_minimal_symbol (name, NULL, objfile) != NULL)
+      break;    
   }
 
   return NULL;
@@ -1592,6 +1597,11 @@ lookup_symbol_aux_symtabs (int block_index, const char *name,
     sym = lookup_symbol_aux_objfile (objfile, block_index, name, domain);
     if (sym)
       return sym;
+    /* If 'quick' symbol lookup fails but minimal symbol works then don't search
+       any more objfiles (weak aliases don't appear in DWARF debug symbols, only
+       in the minimal symbols, but should trump later objfiles).  */
+    if (lookup_minimal_symbol (name, NULL, objfile) != NULL)
+      break;
   }
 
   return NULL;
