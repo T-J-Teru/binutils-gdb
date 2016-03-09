@@ -717,21 +717,16 @@ lookup_minimal_symbol_by_pc_section_1 (CORE_ADDR pc,
 
 	      /* If the minimal symbol has a non-zero size, and this
 		 PC appears to be outside the symbol's contents, then
-		 refuse to use this symbol.  If we found a zero-sized
-		 symbol with an address greater than this symbol's,
-		 use that instead.  We assume that if symbols have
-		 specified sizes, they do not overlap.  */
+		 refuse to use this symbol if we found a zero-sized
+		 symbol with an address greater than this symbol's. */
 
 	      if (hi >= 0
 		  && MSYMBOL_SIZE (&msymbol[hi]) != 0
 		  && pc >= (SYMBOL_VALUE_ADDRESS (&msymbol[hi])
-			    + MSYMBOL_SIZE (&msymbol[hi])))
+			    + MSYMBOL_SIZE (&msymbol[hi]))
+		  && best_zero_sized != -1)
 		{
-		  if (best_zero_sized != -1)
-		    hi = best_zero_sized;
-		  else
-		    /* Go on to the next object file.  */
-		    continue;
+		  hi = best_zero_sized;
 		}
 
 	      /* The minimal symbol indexed by hi now is the best one in this
