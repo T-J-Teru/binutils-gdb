@@ -164,7 +164,7 @@ static int parse_number (char *, int, int, YYSTYPE *);
 %}
 
 %type <voidval> exp  type_exp start variable 
-%type <tval> type typebase typebase_no_ambig_sizes
+%type <tval> type typebase
 /* %type <bval> block */
 
 /* Fancy type parsing.  */
@@ -197,7 +197,7 @@ static int parse_number (char *, int, int, YYSTYPE *);
 
 %token <ssym> NAME_OR_INT 
 
-%token POINTER SIZEOF COLONCOLON
+%token POINTER SIZEOF COLONCOLON KIND
 %token ERROR
 
 /* Special type cases, put in to allow the parser to distinguish different
@@ -602,7 +602,7 @@ variable:	name_not_typename
 type    :       ptype
         ;
 
-ptype	:	typebase_no_ambig_sizes
+ptype	:	typebase
 	|	typebase ',' POINTER
 			{ $$ = lookup_pointer_type ($1); }
 	|	typebase array_mod
@@ -666,51 +666,24 @@ signed_int:	INT
 			{ $$ = -$2.val; }
 	;
 
-typebase  /* Implements (approximately): (type-qualifier)* type-specifier */
-	:	typebase_no_ambig_sizes	
-	|	INT_KEYWORD '(' INT ')'	%prec SIZE
+typebase
+	:	TYPENAME
+			{ $$ = $1.type; }
+	|	INT_KEYWORD	%prec BELOW_SIZE
+			{ $$ = parse_f_type->builtin_integer; }
+	|	INT_KEYWORD '*' INT	%prec SIZE
 			{ if ($3.val == 2)
 			  	$$ = parse_f_type->builtin_integer_s2;
 			  else if ($3.val == 4)
 			  	$$ = parse_f_type->builtin_integer;
 			  else if ($3.val == 8)
 				$$ = parse_f_type->builtin_integer_s8; }
-	|	LOGICAL_KEYWORD '(' INT ')'	%prec SIZE
-			{ if ($3.val == 1)
-				$$ = parse_f_type->builtin_logical_s1;
-			  else if ($3.val == 2)
-				$$ = parse_f_type->builtin_logical_s2;
-			  else if ($3.val == 4)
-				$$ = parse_f_type->builtin_logical;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_logical_s8; }
-	|	REAL_KEYWORD '(' INT ')'	%prec SIZE
-			{ if ($3.val == 4)
-				$$ = parse_f_type->builtin_real;
-			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_real_s8;
-			  else if ($3.val == 16)
-				$$ = parse_f_type->builtin_real_s16; }
-	|	COMPLEX_S8_KEYWORD '(' INT ')'	%prec SIZE
-			{ if ($3.val == 8)
-				$$ = parse_f_type->builtin_complex_s8;
-			  else if ($3.val == 16)
-				$$ = parse_f_type->builtin_complex_s16;
-			  else if ($3.val == 32)
-				$$ = parse_f_type->builtin_complex_s32; }
-	;
-
-typebase_no_ambig_sizes
-	:	TYPENAME
-			{ $$ = $1.type; }
-	|	INT_KEYWORD	%prec BELOW_SIZE
-			{ $$ = parse_f_type->builtin_integer; }
-	|	INT_KEYWORD '*' INT
-			{ if ($3.val == 2)
+	|	INT_KEYWORD KIND '=' INT ')'	%prec SIZE
+			{ if ($4.val == 2)
 			  	$$ = parse_f_type->builtin_integer_s2;
-			  else if ($3.val == 4)
+			  else if ($4.val == 4)
 			  	$$ = parse_f_type->builtin_integer;
-			  else if ($3.val == 8)
+			  else if ($4.val == 8)
 				$$ = parse_f_type->builtin_integer_s8; }
 	|	INT_S2_KEYWORD 
 			{ $$ = parse_f_type->builtin_integer_s2; }
@@ -720,7 +693,7 @@ typebase_no_ambig_sizes
 			{ $$ = parse_f_type->builtin_character; }
 	|	LOGICAL_KEYWORD	%prec BELOW_SIZE
 			{ $$ = parse_f_type->builtin_logical;} 
-	|	LOGICAL_KEYWORD '*' INT
+	|	LOGICAL_KEYWORD '*' INT	%prec SIZE
 			{ if ($3.val == 1)
 				$$ = parse_f_type->builtin_logical_s1;
 			  else if ($3.val == 2)
@@ -728,6 +701,15 @@ typebase_no_ambig_sizes
 			  else if ($3.val == 4)
 				$$ = parse_f_type->builtin_logical;
 			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_logical_s8; }
+	|	LOGICAL_KEYWORD KIND '=' INT ')'	%prec SIZE
+			{ if ($4.val == 1)
+				$$ = parse_f_type->builtin_logical_s1;
+			  else if ($4.val == 2)
+				$$ = parse_f_type->builtin_logical_s2;
+			  else if ($4.val == 4)
+				$$ = parse_f_type->builtin_logical;
+			  else if ($4.val == 8)
 				$$ = parse_f_type->builtin_logical_s8; }
 	|	LOGICAL_S8_KEYWORD
 			{ $$ = parse_f_type->builtin_logical_s8;}
@@ -737,23 +719,37 @@ typebase_no_ambig_sizes
 			{ $$ = parse_f_type->builtin_logical_s1;}
 	|	REAL_KEYWORD	 %prec BELOW_SIZE
 			{ $$ = parse_f_type->builtin_real;}
-	|	REAL_KEYWORD '*' INT
+	|	REAL_KEYWORD '*' INT	%prec SIZE
 			{ if ($3.val == 4)
 				$$ = parse_f_type->builtin_real;
 			  else if ($3.val == 8)
 				$$ = parse_f_type->builtin_real_s8;
 			  else if ($3.val == 16)
 				$$ = parse_f_type->builtin_real_s16; }
-	|       REAL_S8_KEYWORD
+	|	REAL_KEYWORD KIND '=' INT ')'	%prec SIZE
+			{ if ($4.val == 4)
+				$$ = parse_f_type->builtin_real;
+			  else if ($4.val == 8)
+				$$ = parse_f_type->builtin_real_s8;
+			  else if ($4.val == 16)
+				$$ = parse_f_type->builtin_real_s16; }
+	|	REAL_S8_KEYWORD
 			{ $$ = parse_f_type->builtin_real_s8;}
 	|	REAL_S16_KEYWORD
 			{ $$ = parse_f_type->builtin_real_s16; }
-	|	COMPLEX_S8_KEYWORD '*' INT
+	|	COMPLEX_S8_KEYWORD '*' INT	%prec SIZE
 			{ if ($3.val == 8)
 				$$ = parse_f_type->builtin_complex_s8;
 			  else if ($3.val == 16)
 				$$ = parse_f_type->builtin_complex_s16;
 			  else if ($3.val == 32)
+				$$ = parse_f_type->builtin_complex_s32; }
+	|	COMPLEX_S8_KEYWORD KIND '=' INT ')'	%prec SIZE
+			{ if ($4.val == 8)
+				$$ = parse_f_type->builtin_complex_s8;
+			  else if ($4.val == 16)
+				$$ = parse_f_type->builtin_complex_s16;
+			  else if ($4.val == 32)
 				$$ = parse_f_type->builtin_complex_s32; }
 	|	COMPLEX_S8_KEYWORD	 %prec BELOW_SIZE
 			{ $$ = parse_f_type->builtin_complex_s8;}
@@ -1196,6 +1192,15 @@ yylex (void)
     case '(':
       paren_depth++;
       lexptr++;
+      if (strncasecmp(lexptr, "KIND", 4) == 0)
+	{
+	  /* yacc only supports one lookahead symbols but two are needed to
+	   * decide whether a left paranthesis is starting a size/kind or
+	   * array dimensions. */
+	  lexptr += 4;
+	  yylval.opcode = BINOP_END;
+	  return KIND;
+	}
       return c;
       
     case ')':
