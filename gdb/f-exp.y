@@ -681,7 +681,9 @@ typebase  /* Implements (approximately): (type-qualifier)* type-specifier */
 			  else if ($3.val == 2)
 				$$ = parse_f_type->builtin_logical_s2;
 			  else if ($3.val == 4)
-				$$ = parse_f_type->builtin_logical; }
+				$$ = parse_f_type->builtin_logical;
+			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_logical_s8; }
 	|	REAL_KEYWORD '(' INT ')'	%prec SIZE
 			{ if ($3.val == 4)
 				$$ = parse_f_type->builtin_real;
@@ -724,7 +726,11 @@ typebase_no_ambig_sizes
 			  else if ($3.val == 2)
 				$$ = parse_f_type->builtin_logical_s2;
 			  else if ($3.val == 4)
-				$$ = parse_f_type->builtin_logical; }
+				$$ = parse_f_type->builtin_logical;
+			  else if ($3.val == 8)
+				$$ = parse_f_type->builtin_logical_s8; }
+	|	LOGICAL_S8_KEYWORD
+			{ $$ = parse_f_type->builtin_logical_s8;}
 	|	LOGICAL_S2_KEYWORD
 			{ $$ = parse_f_type->builtin_logical_s2;}
 	|	LOGICAL_S1_KEYWORD 
