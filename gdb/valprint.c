@@ -1054,6 +1054,7 @@ print_floating (const gdb_byte *valaddr, struct type *type,
 {
   DOUBLEST doub;
   int inv;
+  long long int dooby;
   const struct floatformat *fmt = NULL;
   unsigned len = TYPE_LENGTH (type);
   enum float_kind kind;
@@ -1081,6 +1082,17 @@ print_floating (const gdb_byte *valaddr, struct type *type,
 	  fputs_filtered ("inf", stream);
 	  return;
 	}
+    }
+
+
+  if (floatformat_is_inf (fmt, valaddr, len))
+    {
+      if (floatformat_is_negative (fmt, valaddr))
+	fprintf_filtered (stream, "-");
+      fprintf_filtered (stream, "inf(");
+      print_hex_chars(stream, valaddr, len, gdbarch_byte_order(get_type_arch(type)));
+      fprintf_filtered (stream, ")");
+      return;
     }
 
   /* NOTE: cagney/2002-01-15: The TYPE passed into print_floating()
