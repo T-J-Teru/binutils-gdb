@@ -89,7 +89,9 @@ require_partial_symbols (struct objfile *objfile, int verbose)
 				 objfile->name);
 	      gdb_flush (gdb_stdout);
 	    }
-	  (*objfile->sf->sym_read_psymbols) (objfile);
+          struct cleanup *back_to = increment_reading_symtab ();
+          (*objfile->sf->sym_read_psymbols) (objfile);
+          do_cleanups (back_to);
 	  if (verbose)
 	    {
 	      if (!objfile_has_symbols (objfile))
