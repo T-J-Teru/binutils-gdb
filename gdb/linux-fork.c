@@ -468,7 +468,7 @@ inferior_call_waitpid (ptid_t pptid, int pid)
   argv[2] = value_from_longest (builtin_type (gdbarch)->builtin_int, 0);
   argv[3] = 0;
 
-  retv = call_function_by_hand (waitpid_fn, 3, argv);
+  retv = call_function_by_hand_ex (waitpid_fn, language_c, 3, argv);
   if (value_as_long (retv) < 0)
     goto out;
 
@@ -683,7 +683,7 @@ checkpoint_command (char *args, int from_tty)
   old_chain = make_cleanup_restore_integer (&checkpointing_pid);
   checkpointing_pid = PIDGET (inferior_ptid);
 
-  ret = call_function_by_hand (fork_fn, 0, &ret);
+  ret = call_function_by_hand_ex (fork_fn, language_c, 0, &ret);
   do_cleanups (old_chain);
   if (!ret)	/* Probably can't happen.  */
     error (_("checkpoint: call_function_by_hand returned null."));

@@ -38,4 +38,7 @@ extern CORE_ADDR find_function_addr (struct value *function,
 extern struct value *call_function_by_hand (struct value *function, int nargs,
 					    struct value **args);
 
+extern struct value *
+call_function_by_hand_ex (struct value *function, enum language lang, int nargs, struct value **args);
+
 #endif

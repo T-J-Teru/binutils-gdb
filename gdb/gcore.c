@@ -285,7 +285,7 @@ call_target_sbrk (int sbrk_arg)
   target_sbrk_arg = value_from_longest (builtin_type (gdbarch)->builtin_int, 
 					sbrk_arg);
   gdb_assert (target_sbrk_arg);
-  ret = call_function_by_hand (sbrk_fn, 1, &target_sbrk_arg);
+  ret = call_function_by_hand_ex (sbrk_fn, language_c, 1, &target_sbrk_arg);
   if (ret == NULL)
     return (bfd_vma) 0;
 
