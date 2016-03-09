@@ -12350,9 +12350,20 @@ read_module_type (struct die_info *die, struct dwarf2_cu *cu)
 
   module_name = dwarf2_name (die, cu);
   if (!module_name)
-    complaint (&symfile_complaints,
-	       _("DW_TAG_module has no name, offset 0x%x"),
-               die->offset.sect_off);
+    {
+      struct attribute* attr;
+      complaint (&symfile_complaints,
+		_("DW_TAG_module has no name, offset 0x%x"),
+		die->offset.sect_off);
+      attr = dwarf2_attr (die, DW_AT_linkage_name, cu);
+      if (attr == NULL)
+	attr = dwarf2_attr (die, DW_AT_MIPS_linkage_name, cu);
+      if (attr && DW_STRING (attr))
+	{
+	  module_name = DW_STRING (attr);
+	}
+   }
+
   if (module_name && cu->language_defn 
       && (cu->language_defn->la_case_sensitivity == case_sensitive_off)) 
     {
