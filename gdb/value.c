@@ -259,6 +259,9 @@ struct value
      gdbarch_bits_big_endian=1 targets, it is the position of the MSB.  */
   int bitpos;
 
+  /* Length of contents above.  */
+  unsigned length;
+  
   /* The number of references to this value.  When a value is created,
      the value chain holds a reference, so REFERENCE_COUNT is 1.  If
      release_value is called, this value is removed from the chain but
@@ -727,6 +730,7 @@ allocate_value_lazy (struct type *type)
   val->initialized = 1;  /* Default to initialized.  */
   val->repeated = 0;
   val->from_infcall = 0;
+  val->length = 0;
 
   /* Values start out on the all_values chain.  */
   val->reference_count = 1;
@@ -740,7 +744,10 @@ void
 allocate_value_contents (struct value *val)
 {
   if (!val->contents)
-    val->contents = (gdb_byte *) xzalloc (TYPE_LENGTH (val->enclosing_type));
+    {
+      val->length = TYPE_LENGTH (val->enclosing_type);
+      val->contents = (gdb_byte *) xzalloc (val->length);
+    }
 }
 
 /* Allocate the contents of VAL (limited by get_limited_length) if it has not been allocated yet.  */
@@ -749,7 +756,10 @@ void
 allocate_value_contents_limited (struct value *val)
 {
   if (!val->contents)
-    val->contents = (gdb_byte *) xzalloc (get_limited_length (val->enclosing_type));
+    {
+      val->length = get_limited_length (val->enclosing_type);
+      val->contents = (gdb_byte *) xzalloc (val->length);
+    }
 }
 
 /* Allocate a  value  and its contents for type TYPE.  */
@@ -1098,16 +1108,12 @@ value_contents_writeable (struct value *value)
 int
 value_contents_equal (struct value *val1, struct value *val2)
 {
-  struct type *type1;
-  struct type *type2;
-
-  type1 = check_typedef (value_type (val1));
-  type2 = check_typedef (value_type (val2));
-  if (TYPE_LENGTH (type1) != TYPE_LENGTH (type2))
-    return 0;
+  int len = value_length (val1);
+  if (len != value_length (val2))
+     return 0;
 
   return (memcmp (value_contents (val1), value_contents (val2),
-		  TYPE_LENGTH (type1)) == 0);
+		  len) == 0);
 }
 
 int
@@ -1461,11 +1467,7 @@ value_copy (struct value *arg)
   val->pointed_to_offset = arg->pointed_to_offset;
   val->modifiable = arg->modifiable;
   if (!value_lazy (val))
-    {
-      memcpy (value_contents_all_raw (val), value_contents_all_raw (arg),
-	      TYPE_LENGTH (value_enclosing_type (arg)));
-
-    }
+    value_copy_contents_all_raw (val, arg);
   val->unavailable = VEC_copy (range_s, arg->unavailable);
   val->parent = arg->parent;
   if (val->parent)
@@ -2019,7 +2021,7 @@ set_internalvar_component (struct internalvar *var, int offset, int bitpos,
 		      value_as_long (newval), bitpos, bitsize);
       else
 	memcpy (addr + offset, value_contents (newval),
-		TYPE_LENGTH (value_type (newval)));
+		value_length (newval));
       break;
 
     default:
@@ -2671,9 +2673,12 @@ value_static_field (struct type *type, int fieldno)
 void
 set_value_enclosing_type (struct value *val, struct type *new_encl_type)
 {
-  if (TYPE_LENGTH (new_encl_type) > TYPE_LENGTH (value_enclosing_type (val))) 
-    val->contents =
-      (gdb_byte *) xrealloc (val->contents, TYPE_LENGTH (new_encl_type));
+  if (TYPE_LENGTH (new_encl_type) > value_length (val))
+    {
+      val->length = TYPE_LENGTH (new_encl_type);
+      val->contents =
+        (gdb_byte *) xrealloc (val->contents, val->length);
+    }
 
   val->enclosing_type = new_encl_type;
 }
@@ -2772,8 +2777,7 @@ value_primitive_field (struct value *arg1, int offset,
       else
 	{
 	  v = allocate_value (value_enclosing_type (arg1));
-	  value_contents_copy_raw (v, 0, arg1, 0,
-				   TYPE_LENGTH (value_enclosing_type (arg1)));
+	  value_copy_contents_all_raw (v, arg1);
 	}
       v->type = type;
       v->offset = value_offset (arg1);
@@ -2795,7 +2799,7 @@ value_primitive_field (struct value *arg1, int offset,
 	  v = allocate_value (type);
 	  value_contents_copy_raw (v, value_embedded_offset (v),
 				   arg1, value_embedded_offset (arg1) + offset,
-				   TYPE_LENGTH (type));
+				   value_length (v));
 	}
       v->offset = (value_offset (arg1) + offset
 		   + value_embedded_offset (arg1));
@@ -3224,16 +3228,16 @@ value_from_pointer (struct type *type, CORE_ADDR addr)
 struct value *
 value_from_contents_and_address (struct type *type,
 				 const gdb_byte *valaddr,
+				 unsigned length,
 				 CORE_ADDR address)
 {
-  struct value *v;
+  struct value *v = allocate_value_lazy (type);
 
-  if (valaddr == NULL)
-    v = allocate_value_lazy (type);
-  else
+  if (valaddr != NULL)
     {
-      v = allocate_value (type);
-      memcpy (value_contents_raw (v), valaddr, TYPE_LENGTH (type));
+      v->length = min (TYPE_LENGTH (type), length);
+      v->contents = (gdb_byte *) xzalloc (v->length);
+      memcpy (value_contents_raw (v), valaddr, value_length (v));
     }
   set_value_address (v, address);
   VALUE_LVAL (v) = lval_memory;
@@ -3249,7 +3253,7 @@ value_from_contents (struct type *type, const gdb_byte *contents)
   struct value *result;
 
   result = allocate_value (type);
-  memcpy (value_contents_raw (result), contents, TYPE_LENGTH (type));
+  memcpy (value_contents_raw (result), contents, value_length (result));
   return result;
 }
 
@@ -3275,7 +3279,7 @@ value_from_decfloat (struct type *type, const gdb_byte *dec)
 {
   struct value *val = allocate_value (type);
 
-  memcpy (value_contents_raw (val), dec, TYPE_LENGTH (type));
+  memcpy (value_contents_raw (val), dec, value_length (val));
   return val;
 }
 
@@ -3505,6 +3509,28 @@ int
 value_from_infcall (const struct value *value)
 {
   return value->from_infcall;
+}
+
+unsigned
+value_length (const struct value *value)
+{
+  if (value->contents)
+    return value->length;
+  return TYPE_LENGTH (value->enclosing_type);
+}
+
+void
+value_copy_contents (struct value *to, struct value *from)
+{
+  memcpy (value_contents_raw (to), value_contents (from),
+	  min (value_length (from), value_length (to)));
+}
+
+void
+value_copy_contents_all_raw (struct value *to, struct value *from)
+{
+  memcpy (value_contents_all_raw (to), value_contents_all_raw (from),
+	  min (value_length (from), value_length (to)));
 }
 
 void

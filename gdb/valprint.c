@@ -1667,7 +1667,9 @@ val_print_array_elements (struct type *type,
       if (low_bound > high_bound)
 	len = 0;
       else
-	len = high_bound - low_bound + 1;
+	len = val
+	       ? min (high_bound - low_bound + 1, value_length (val) / eltlen)
+	       : (high_bound - low_bound + 1);
     }
   else
     {

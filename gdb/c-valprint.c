@@ -161,7 +161,9 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
             error (_("Could not determine the array high bound"));
 
 	  eltlen = TYPE_LENGTH (elttype);
-	  len = high_bound - low_bound + 1;
+	  len = original_value
+		 ? min (high_bound - low_bound + 1, value_length (original_value) / eltlen)
+		 : (high_bound - low_bound + 1);
 	  if (options->prettyprint_arrays)
 	    {
 	      print_spaces_filtered (2 + 2 * recurse, stream);
@@ -197,7 +199,7 @@ c_val_print (struct type *type, const gdb_byte *valaddr,
 		  /* Force LA_PRINT_STRING to print ellipses if
 		     we've printed the maximum characters and
 		     the next character is not \000.  */
-		  if (temp_len == options->print_max && temp_len < len)
+		  if (temp_len == options->print_smax && temp_len < len)
 		    {
 		      ULONGEST val
 			= extract_unsigned_integer (valaddr + embedded_offset

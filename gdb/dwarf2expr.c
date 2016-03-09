@@ -1056,7 +1056,7 @@ execute_stack_op (struct dwarf_expr_context *ctx,
 					byte_order, result);
 	      }
 
-	    result_val = value_from_contents_and_address (type, buf, addr);
+	    result_val = value_from_contents_and_address (type, buf, TYPE_LENGTH (type), addr);
 	    break;
 	  }
 
