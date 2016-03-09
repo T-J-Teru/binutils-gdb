@@ -4104,11 +4104,12 @@ dwarf2_create_include_psymtab (char *name, struct partial_symtab *pst,
   subpst->symtab = NULL;
   subpst->read_symtab = pst->read_symtab;
   subpst->readin = 0;
+  subpst->dirname = pst->dirname;  
 
   /* No private part is necessary for include psymtabs.  This property
      can be used to differentiate between such include psymtabs and
      the regular ones.  */
-  subpst->read_symtab_private = NULL;
+  subpst->read_symtab_private = NULL; 
 }
 
 /* Read the Line Number Program data and extract the list of files
@@ -15482,9 +15483,9 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
 {
   const struct file_entry fe = lh->file_names [file_index];
   char *include_name = fe.name;
-  char *include_name_to_compare = include_name;
+  char *include_name_to_compare;
   char *dir_name = NULL;
-  const char *pst_filename;
+  char *pst_filename;
   char *copied_name = NULL;
   int file_is_pst;
 
@@ -15526,21 +15527,28 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
 					    include_name, (char *)NULL);
 	}
     }
-
-  pst_filename = pst->filename;
-  if (!IS_ABSOLUTE_PATH (pst_filename) && pst->dirname != NULL)
+  else
     {
-      copied_name = concat (pst->dirname, SLASH_STRING,
-			    pst_filename, (char *)NULL);
-      pst_filename = copied_name;
+      include_name_to_compare = xstrdup (include_name);
     }
+  simplify_path (include_name_to_compare);
+
+  if (!IS_ABSOLUTE_PATH (pst->filename) && pst->dirname != NULL)
+    {
+      pst_filename = concat (pst->dirname, SLASH_STRING,
+			      pst->filename, (char *)NULL);
+    }
+  else
+    {
+      pst_filename = xstrdup (pst->filename);
+    }
+  simplify_path (pst_filename);
 
   file_is_pst = FILENAME_CMP (include_name_to_compare, pst_filename) == 0;
 
   if (include_name_to_compare != include_name)
     xfree (include_name_to_compare);
-  if (copied_name != NULL)
-    xfree (copied_name);
+  xfree (pst_filename);
 
   if (file_is_pst)
     return NULL;
@@ -15889,6 +15897,15 @@ dwarf_decode_lines (struct line_header *lh, const char *comp_dir,
     {
       int file_index;
 
+      char *pst_filename;
+      if (!IS_ABSOLUTE_PATH (pst->filename) && pst->dirname != NULL)
+	pst_filename = concat (pst->dirname, SLASH_STRING,
+			       pst->filename, (char *)NULL);
+      else
+	pst_filename = xstrdup (pst->filename);
+      make_cleanup (xfree, pst_filename);
+      simplify_path (pst_filename);              
+      
       /* Now that we're done scanning the Line Header Program, we can
          create the psymtab of each included file.  */
       for (file_index = 0; file_index < lh->num_file_names; file_index++)

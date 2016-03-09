@@ -3791,6 +3791,82 @@ gdb_filename_fnmatch (const char *pattern, const char *string, int flags)
   return fnmatch (pattern, string, flags);
 }
 
+/*
+ * Simplify pathnames containing "." and ".." entries.
+ * ie, simplify_path("/a/b/c/./../d/..") returns "/a/b"
+ */
+void
+simplify_path (char *pathl)
+{
+  char *cur, *t;
+  int isrooted;
+  char *very_start = pathl, *start;
+
+  if (!*pathl)
+    return;
+
+  if ((isrooted = pathl[0] == '/'))
+    very_start++;
+
+  /* Before                       After
+   * /foo/                        /foo
+   * /foo/../../bar               /bar
+   * /foo/./blah/..               /foo
+   * .                            .
+   * ..                           ..
+   * ./foo                        foo
+   * foo/../../../bar             ../../bar
+   */
+
+  for (cur = t = start = very_start;;)
+    {
+      /* treat multiple '/'s as one '/' */
+      while (*t == '/')
+	t++;
+
+      if (*t == '\0')
+	{
+	  if (cur == pathl)
+	    /* convert empty path to dot */
+	    *cur++ = '.';
+	  *cur = '\0';
+	  break;
+	}
+
+      if (t[0] == '.')
+	{
+	  if (!t[1] || t[1] == '/')
+	    {
+	      t += 1;
+	      continue;
+	    }
+	  else if (t[1] == '.' && (!t[2] || t[2] == '/'))
+	    {
+	      if (!isrooted && cur == start)
+		{
+		  if (cur != very_start)
+		    *cur++ = '/';
+		  *cur++ = '.';
+		  *cur++ = '.';
+		  start = cur;
+		}
+	      else if (cur != start)
+		while (--cur > start && *cur != '/')
+		  ;
+	      t += 2;
+	      continue;
+	    }
+	}
+
+      if (cur != very_start)
+	*cur++ = '/';
+
+      /* find/copy next component of pathname */
+      while (*t && *t != '/')
+	*cur++ = *t++;
+    }
+}
+
 /* Provide a prototype to silence -Wmissing-prototypes.  */
 extern initialize_file_ftype _initialize_utils;
 
