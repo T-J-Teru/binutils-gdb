@@ -11227,7 +11227,19 @@ dwarf2_add_member_fn (struct field_info *fip, struct die_info *die,
 	    dwarf2_complex_location_expr_complaint ();
 
 	  if (!fnp->fcontext)
-	    fnp->fcontext = TYPE_TARGET_TYPE (TYPE_FIELD_TYPE (this_type, 0));
+	    {
+	      if (TYPE_MAIN_TYPE(this_type)->nfields != 0)
+	        {
+	          fnp->fcontext = TYPE_TARGET_TYPE (TYPE_FIELD_TYPE (this_type, 0));
+	        }
+	      else
+	        {
+                 const char *physname = dwarf2_physname (fieldname, die, cu);
+	          complaint(&symfile_complaints,
+	                    _("Member function \"%s\" has 0 fields and no <this>!"), 
+	                    physname);
+	        }
+	    }
 	}
       else if (attr_form_is_section_offset (attr))
         {
