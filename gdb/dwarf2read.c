@@ -6044,6 +6044,7 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
 			   0, (CORE_ADDR) 0, cu->language, objfile);
       break;
     case DW_TAG_namespace:
+    case DW_TAG_module:
       add_psymbol_to_list (actual_name, strlen (actual_name),
 			   built_actual_name != NULL,
 			   VAR_DOMAIN, LOC_TYPEDEF,
@@ -6126,6 +6127,10 @@ static void
 add_partial_module (struct partial_die_info *pdi, CORE_ADDR *lowpc,
 		    CORE_ADDR *highpc, int need_pc, struct dwarf2_cu *cu)
 {
+  /* Add a symbol for the module.  */
+
+  add_partial_symbol (pdi, cu);
+
   /* Now scan partial symbols in that module.  */
 
   if (pdi->has_children)
@@ -12357,12 +12362,43 @@ static void
 read_module (struct die_info *die, struct dwarf2_cu *cu)
 {
   struct die_info *child_die = die->child;
+  struct objfile *objfile = cu->objfile;
+  int is_anonymous;
+
+  /* Add a symbol associated to this if we haven't seen the namespace
+     before.  Also, add a using directive if it's an anonymous
+     namespace.  */
+
+  if (dwarf2_attr (die, DW_AT_extension, cu) == NULL)
+    {
+      struct type *type;
+
+      type = read_type_die (die, cu);
+      new_symbol (die, type, cu);
+
+      namespace_name (die, &is_anonymous, cu);
+      if (is_anonymous)
+	{
+	  const char *previous_prefix = determine_prefix (die, cu);
+
+	  cp_add_using_directive (previous_prefix, TYPE_NAME (type), NULL,
+				  NULL, NULL, 0, &objfile->objfile_obstack);
+	}
+    }
 
   while (child_die && child_die->tag)
     {
       process_die (child_die, cu);
       child_die = sibling_die (child_die);
     }
+
+  /* Leaving a new Fortran module.  */
+  if (cu->language == language_fortran)
+    {
+      f_module_leave();
+    }
+
+
 }
 
 /* Return the name of the namespace represented by DIE.  Set
@@ -16557,6 +16593,7 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	  }
 	  break;
 	case DW_TAG_namespace:
+        case DW_TAG_module:
 	  SYMBOL_CLASS (sym) = LOC_TYPEDEF;
 	  list_to_add = &global_symbols;
 
