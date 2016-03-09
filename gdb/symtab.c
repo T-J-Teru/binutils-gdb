@@ -82,6 +82,7 @@ static void functions_info (char *, int);
 static void variables_info (char *, int);
 
 static void sources_info (char *, int);
+static void sources_info_by_binary(char *, int);
 
 static int find_line_common (struct linetable *, int, int *, int);
 
@@ -3970,6 +3971,68 @@ sources_info (char *ignore, int from_tty)
   do_cleanups (cleanups);
 }
 
+
+/* sources_info_by_binary() is the implementation of a gdb extension command:
+   'info sources-by-binary'
+   It prints a list of object files with their source files
+   The output format is:
+
+   object_file-1
+     source-file-1
+     source-file-2
+     ...
+   object_file-2
+     source-file-1
+     ...
+
+   output_partial_symbol_filename2() is just a callback needed for
+   map_partial_symbol_filenames() to print out the file names of the partial
+   symbols. We want to match the output format as full symbols in
+   sources_info_by_binary()
+*/
+
+static void
+output_partial_symbol_filename2 (const char *filename, const char *fullname,
+				void *data)
+{
+  printf_filtered("  %s\n", fullname ? fullname : filename);
+}
+
+static void
+sources_info_by_binary(char *ignore, int from_tty)
+{
+  struct symtab *s;
+  struct objfile *objfile;
+  struct output_source_filename_data data;
+  struct cleanup *cleanups;
+
+  if(!have_full_symbols() && !have_partial_symbols())
+  {
+    error(_("No symbol table is loaded.  Use the \"file\" command."));
+  }
+
+  data.filename_seen_cache = create_filename_seen_cache();
+  cleanups = make_cleanup(delete_filename_seen_cache, data.filename_seen_cache);
+
+  data.first = 1;
+  for(objfile = current_program_space->objfiles; objfile != NULL; objfile = objfile->next)
+  {
+    const char *objectName = objfile->name;
+    printf_filtered("%s\n", objectName);
+    for(s = objfile->symtabs; s != NULL; s = s->next)
+    {
+      const char *symtabName = symtab_to_fullname(s);
+      printf_filtered("  %s\n", symtabName);
+    }
+    if(objfile->sf) // partial symbol table
+      objfile->sf->qf->map_symbol_filenames(objfile, output_partial_symbol_filename2, &data,
+					                        1 /*need_fullname*/);
+  }
+  printf_filtered ("\n\n");
+
+  do_cleanups(cleanups);
+}
+
 /* Compare FILE against all the NFILES entries of FILES.  If BASENAMES is
    non-zero compare only lbasename of FILES.  */
 
@@ -6015,6 +6078,9 @@ All global and static variable names, or those matching REGEXP."));
 
   add_info ("sources", sources_info,
 	    _("Source files in the program."));
+
+  add_info ("sources-by-binary", sources_info_by_binary,
+	    _("Source files in each executable or library."));
 
   add_com ("rbreak", class_breakpoint, rbreak_command,
 	   _("Set a breakpoint for all functions matching REGEXP."));
