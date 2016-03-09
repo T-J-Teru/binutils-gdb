@@ -90,6 +90,9 @@ static void set_schedlock_func (char *args, int from_tty,
 
 static int currently_stepping (struct thread_info *tp);
 
+
+static int in_gdb_sigmask (int);
+
 void _initialize_infrun (void);
 
 void nullify_last_target_wait_ptid (void);
@@ -101,6 +104,10 @@ static void insert_step_resume_breakpoint_at_caller (struct frame_info *);
 static void insert_longjmp_resume_breakpoint (struct gdbarch *, CORE_ADDR);
 
 static int maybe_software_singlestep (struct gdbarch *gdbarch, CORE_ADDR pc);
+
+static int looked_for_gdb_sigmask = 0;
+static struct objfile *gdb_sigmask_objfile = NULL;
+static CORE_ADDR gdb_sigmask_address = 0;
 
 /* When set, stop the 'step' command if we enter a function which has
    no line number information.  The normal behavior is that we step
@@ -4691,7 +4698,8 @@ handle_signal_stop (struct execution_control_state *ecs)
       if (stop_soon != NO_STOP_QUIETLY
 	  || ecs->event_thread->stop_requested
 	  || (!inf->detaching
-	      && signal_stop_state (ecs->event_thread->suspend.stop_signal)))
+	      && signal_stop_state (ecs->event_thread->suspend.stop_signal)
+	      && !in_gdb_sigmask (ecs->event_thread->suspend.stop_signal)))
 	{
 	  stop_waiting (ecs);
 	  return;
@@ -6675,7 +6683,6 @@ print_stop_event (struct target_waitstatus *ws)
    (pc, function, args, file, line number and line text).
    BREAKPOINTS_FAILED nonzero means stop was due to error
    attempting to insert breakpoints.  */
-
 void
 normal_stop (void)
 {
@@ -6903,6 +6910,34 @@ hook_stop_stub (void *cmd)
 {
   execute_cmd_pre_hook ((struct cmd_list_element *) cmd);
   return (0);
+}
+
+static int
+in_gdb_sigmask (int signo)
+{
+  int res;
+  LONGEST ret;
+
+  if (!looked_for_gdb_sigmask)
+    {
+      struct minimal_symbol *msymbol = lookup_minimal_symbol ("_gdb_sigmask", NULL, NULL);
+      if (msymbol)
+	{
+	  gdb_sigmask_objfile = msymbol_objfile (msymbol);	  
+	  gdb_sigmask_address = SYMBOL_VALUE_ADDRESS (msymbol);
+	}
+      looked_for_gdb_sigmask = 1;
+    }
+
+  if (looked_for_gdb_sigmask && gdb_sigmask_address == 0)
+    return 0;
+  if (signo >= objfile_type (gdb_sigmask_objfile)->builtin_int->length * TARGET_CHAR_BIT)
+    return 0;
+  res = safe_read_memory_integer (gdb_sigmask_address, objfile_type (gdb_sigmask_objfile)->builtin_int->length, 
+				  gdbarch_byte_order (get_objfile_arch (gdb_sigmask_objfile)), &ret);
+  if (!res)
+    return 0;
+  return (ret & (1 << signo)) ? 1 : 0;
 }
 
 int
