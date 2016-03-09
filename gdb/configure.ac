@@ -685,8 +685,14 @@ if test "${with_expat}" = no; then
   AC_MSG_WARN([expat support disabled; some features may be unavailable.])
   HAVE_LIBEXPAT=no
 else
-  AC_LIB_HAVE_LINKFLAGS([expat], [], [#include "expat.h"],
-			[XML_Parser p = XML_ParserCreate (0);])
+  if test -d "${srcdir}/../expat"; then
+    HAVE_LIBEXPAT=yes
+    LIBEXPAT=../expat/.libs/libexpat.a
+    AC_DEFINE(HAVE_LIBEXPAT, 1, [Define if you have the $1 library.])
+  else
+    AC_LIB_HAVE_LINKFLAGS([expat], [], [#include "expat.h"],
+			  [XML_Parser p = XML_ParserCreate (0);])
+  fi
   if test "$HAVE_LIBEXPAT" != yes; then
     if test "$with_expat" = yes; then
       AC_MSG_ERROR([expat is missing or unusable])

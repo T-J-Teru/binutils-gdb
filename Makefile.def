@@ -39,6 +39,9 @@ host_modules= { module= bison; no_check_cross= true; };
 host_modules= { module= cgen; };
 host_modules= { module= dejagnu; };
 host_modules= { module= etc; };
+host_modules= { module= expat;
+		extra_configure_flags='--disable-shared';
+		no_install= true; };
 host_modules= { module= fastjar; no_check_cross= true; };
 host_modules= { module= fixincludes;
 		missing= TAGS; };
@@ -358,6 +361,7 @@ dependencies = { module=all-gdb; on=all-build-bison; };
 dependencies = { module=all-gdb; on=all-sim; };
 dependencies = { module=all-gdb; on=all-libdecnumber; };
 dependencies = { module=all-gdb; on=all-libtermcap; };
+dependencies = { module=all-gdb; on=all-expat; };
 
 dependencies = { module=configure-libgui; on=configure-tcl; };
 dependencies = { module=configure-libgui; on=configure-tk; };
