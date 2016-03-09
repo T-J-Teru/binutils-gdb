@@ -153,7 +153,10 @@ enum target_waitkind
     TARGET_WAITKIND_NO_HISTORY,
 
     /* There are no resumed children left in the program.  */
-    TARGET_WAITKIND_NO_RESUMED
+    TARGET_WAITKIND_NO_RESUMED,
+
+    /* A thread has exited.  Only occurs in scheduler-locking mode.  */
+    TARGET_WAITKIND_THREAD_EXITED
   };
 
 struct target_waitstatus

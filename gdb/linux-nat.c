@@ -3284,12 +3284,33 @@ linux_nat_filter_event (int lwpid, int status, int *new_pending_p)
 
       if (num_lwps (GET_PID (lp->ptid)) > 1)
        {
+	 ptid_t ptid = pid_to_ptid (GET_PID (lp->ptid));
+	 
 	 /* If there is at least one more LWP, then the exit signal
 	    was not the end of the debugged application and should be
 	    ignored.  */
 	 exit_lwp (lp);
-	 return NULL;
-       }
+
+	  /* Discard the event if there is at least one thread running. */
+	  if (iterate_over_lwps (ptid, running_callback, NULL))
+	    {
+	      /* Discard the event.  */
+	      return NULL;
+	    }
+	  else
+	    {
+	      /* Generate a thread exit event. */
+	      if (debug_linux_nat)
+		fprintf_unfiltered (gdb_stdlog,
+				    "LLW: no more running threads\n");
+
+	      /* A thread exited and no more threads are running. This typically
+		happens when a thread dies and scheduler-locking is on - in that
+		case we don't want to start running another thread */
+	      lp = lwp_list;
+	      lp->waitstatus.kind = TARGET_WAITKIND_THREAD_EXITED;
+	    }
+	}
     }
 
   /* Check if the current LWP has previously exited.  In the nptl
@@ -3307,11 +3328,25 @@ linux_nat_filter_event (int lwpid, int status, int *new_pending_p)
 
       exit_lwp (lp);
 
-      /* Make sure there is at least one thread running.  */
-      gdb_assert (iterate_over_lwps (ptid, running_callback, NULL));
+      /* Discard the event if there is at least one thread running. */
+      if (iterate_over_lwps (ptid, running_callback, NULL))
+	{
+	  /* Discard the event.  */
+	  return NULL;
+	}
+      else
+	{
+	  /* Generate a thread exit event. */
+	  if (debug_linux_nat)
+	    fprintf_unfiltered (gdb_stdlog,
+				"LLW: no more running threads\n");
 
-      /* Discard the event.  */
-      return NULL;
+	  /* A thread exited and no more threads are running. This typically
+	    happens when a thread dies and scheduler-locking is on - in that
+	    case we don't want to start running another thread */
+	  lp = lwp_list;
+	  lp->waitstatus.kind = TARGET_WAITKIND_THREAD_EXITED;
+	}
     }
 
   /* Make sure we don't report a SIGSTOP that we sent ourselves in

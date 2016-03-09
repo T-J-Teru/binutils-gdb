@@ -3158,6 +3158,7 @@ handle_inferior_event (struct execution_control_state *ecs)
   int stepped_after_stopped_by_watchpoint = 0;
   struct symtab_and_line stop_pc_sal;
   enum stop_kind stop_soon;
+  struct thread_info *thread_info;  
 
   if (ecs->ws.kind == TARGET_WAITKIND_IGNORE)
     {
@@ -3399,6 +3400,16 @@ handle_inferior_event (struct execution_control_state *ecs)
 	context_switch (ecs->ptid);
       resume (0, GDB_SIGNAL_0);
       prepare_to_wait (ecs);
+      return;
+
+    case TARGET_WAITKIND_THREAD_EXITED:
+      if (debug_infrun)
+        fprintf_unfiltered (gdb_stdlog, "infrun: TARGET_WAITKIND_THREAD_EXITED\n");
+      target_terminal_ours ();
+      singlestep_breakpoints_inserted_p = 0;	/*SOFTWARE_SINGLE_STEP_P() */
+      cancel_single_step_breakpoints ();
+      stop_print_frame = 0;
+      stop_stepping (ecs);
       return;
 
     case TARGET_WAITKIND_EXITED:

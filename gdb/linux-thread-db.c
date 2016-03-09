@@ -1477,7 +1477,8 @@ thread_db_wait (struct target_ops *ops,
     return ptid;
 
   if (ourstatus->kind == TARGET_WAITKIND_EXITED
-      || ourstatus->kind == TARGET_WAITKIND_SIGNALLED)
+      || ourstatus->kind == TARGET_WAITKIND_SIGNALLED
+      || ourstatus->kind == TARGET_WAITKIND_THREAD_EXITED)
     return ptid;
 
   info = get_thread_db_info (GET_PID (ptid));
