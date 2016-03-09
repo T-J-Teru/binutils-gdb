@@ -2566,7 +2566,7 @@ proceed_after_attach (int pid)
    and wait for the trace-trap that results from attaching.  */
 
 static void
-attach_command_post_wait (char *args, int from_tty, int async_exec)
+attach_command_post_wait (char *args, int from_tty, int async_exec, int async_stop)
 {
   struct inferior *inferior;
 
@@ -2588,7 +2588,7 @@ attach_command_post_wait (char *args, int from_tty, int async_exec)
 
   post_create_inferior (&current_target, from_tty);
 
-  if (async_exec)
+  if (async_exec && !async_stop)
     {
       /* The user requested an `attach&', so be sure to leave threads
 	 that didn't get a signal running.  */
@@ -2638,6 +2638,7 @@ struct attach_command_continuation_args
   char *args;
   int from_tty;
   int async_exec;
+  int async_stop;
 };
 
 static void
@@ -2648,7 +2649,7 @@ attach_command_continuation (void *args, int err)
   if (err)
     return;
 
-  attach_command_post_wait (a->args, a->from_tty, a->async_exec);
+  attach_command_post_wait (a->args, a->from_tty, a->async_exec, a->async_stop);
 }
 
 static void
@@ -2663,7 +2664,7 @@ attach_command_continuation_free_args (void *args)
 void
 attach_command (char *args, int from_tty)
 {
-  int async_exec;
+  int async_exec = 0, async_stop = 0;
   struct cleanup *args_chain;
   struct target_ops *attach_target;
 
@@ -2697,6 +2698,11 @@ attach_command (char *args, int from_tty)
   if (non_stop && !attach_target->to_supports_non_stop (attach_target))
     error (_("Cannot attach to this target in non-stop mode"));
 
+  if (args && strncmp(args, "-s ", 3) == 0)
+    {
+      async_stop = 1;
+      args += 3;
+    }
   attach_target->to_attach (attach_target, args, from_tty);
   /* to_attach should push the target, so after this point we
      shouldn't refer to attach_target again.  */
@@ -2733,7 +2739,7 @@ attach_command (char *args, int from_tty)
 	 do so now, because we're going to install breakpoints and
 	 poke at memory.  */
 
-      if (async_exec)
+      if (async_exec && !async_stop)
 	/* The user requested an `attach&'; stop just one thread.  */
 	target_stop (inferior_ptid);
       else
@@ -2764,6 +2770,7 @@ attach_command (char *args, int from_tty)
 	  a->args = xstrdup (args);
 	  a->from_tty = from_tty;
 	  a->async_exec = async_exec;
+	  a->async_stop = async_stop;
 	  add_inferior_continuation (attach_command_continuation, a,
 				     attach_command_continuation_free_args);
 
@@ -2779,7 +2786,7 @@ attach_command (char *args, int from_tty)
   /* Done with ARGS.  */
   do_cleanups (args_chain);
 
-  attach_command_post_wait (args, from_tty, async_exec);
+  attach_command_post_wait (args, from_tty, async_exec, async_stop);
 }
 
 /* We had just found out that the target was already attached to an
@@ -2832,6 +2839,7 @@ notice_new_inferior (ptid_t ptid, int leave_running, int from_tty)
 	  a->args = xstrdup ("");
 	  a->from_tty = from_tty;
 	  a->async_exec = async_exec;
+	  a->async_stop = 0;
 	  add_inferior_continuation (attach_command_continuation, a,
 				     attach_command_continuation_free_args);
 
@@ -2843,7 +2851,7 @@ notice_new_inferior (ptid_t ptid, int leave_running, int from_tty)
     }
 
   async_exec = leave_running;
-  attach_command_post_wait ("" /* args */, from_tty, async_exec);
+  attach_command_post_wait ("" /* args */, from_tty, async_exec, 0);
 
   do_cleanups (old_chain);
 }
