@@ -1572,7 +1572,7 @@ read_pieced_value (struct value *v)
   struct piece_closure *c
     = (struct piece_closure *) value_computed_closure (v);
   struct frame_info *frame = frame_find_by_id (VALUE_FRAME_ID (v));
-  size_t type_len;
+  size_t type_len, value_len;
   size_t buffer_size = 0;
   char *buffer = NULL;
   struct cleanup *cleanup;
@@ -1595,6 +1595,7 @@ read_pieced_value (struct value *v)
     }
   else
     type_len = 8 * TYPE_LENGTH (value_type (v));
+  value_len = 8 * value_length (v);
 
   for (i = 0; i < c->n_pieces && offset < type_len; i++)
     {
@@ -1625,6 +1626,11 @@ read_pieced_value (struct value *v)
 	  dest_offset_bits = offset;
 	  source_offset_bits = 0;
 	}
+
+      if (dest_offset_bits >= value_len)
+          break;
+      if (dest_offset_bits + this_size_bits > value_len)
+          this_size_bits = value_len - dest_offset_bits;
 
       this_size = (this_size_bits + source_offset_bits % 8 + 7) / 8;
       source_offset = source_offset_bits / 8;
