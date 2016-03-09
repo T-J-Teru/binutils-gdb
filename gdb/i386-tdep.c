@@ -1579,7 +1579,126 @@ i386_analyze_frame_setup (struct gdbarch *gdbarch,
   if (target_read_code (pc, &op, 1))
     return pc;
 
-  if (op == 0x55)		/* pushl %ebp */
+  if (op == 0x53)		/* pushl %ebx */
+    {
+      /* Take into account that we've executed the `pushl %ebx' that
+	 starts this instruction sequence.  */
+      cache->saved_regs[I386_EBX_REGNUM] = 0;
+      cache->sp_offset += 4;
+      pc++;
+
+      /* If that's all, return now.  */
+      if (limit <= pc)
+	return limit;
+
+      /* Check for some special instructions that might be migrated by
+	 GCC into the prologue and skip them.  At this point in the
+	 prologue, code should only touch the scratch registers %eax,
+	 %ecx and %edx, so while the number of posibilities is sheer,
+	 it is limited.
+
+	 Make sure we only skip these instructions if we later see the
+	 `movl %esp, %ebp' that actually sets up the frame.  */
+      while (pc + skip < limit)
+	{
+	  insn = i386_match_insn (pc + skip, i386_frame_setup_skip_insns);
+	  if (insn == NULL)
+	    break;
+
+	  skip += insn->len;
+	}
+
+      /* If that's all, return now.  */
+      if (limit <= pc + skip)
+	return limit;
+
+      target_read_memory (pc + skip, &op, 1);
+
+      /* Check for `movl %esp, %ebx' -- can be written in two ways.  */
+      switch (op)
+	{
+	case 0x8b:
+	  if (read_memory_unsigned_integer (pc + skip + 1, 1, byte_order)
+	      != 0xdc)
+	    return pc;
+	  break;
+	case 0x89:
+	  if (read_memory_unsigned_integer (pc + skip + 1, 1, byte_order)
+	      != 0xe3)
+	    return pc;
+	  break;
+	case 0x53:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_EBX_REGNUM] = 0;
+	  skip -= 1;
+	  break;
+	case 0x55:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_EBP_REGNUM] = 0;
+	  skip -= 1;
+	  break;
+	case 0x56:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_ESI_REGNUM] = 0;
+	  skip -= 1;
+	  break;
+	case 0x57:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_EDI_REGNUM] = 0;
+	  skip -= 1;
+	  break;
+	default:
+	  return pc;
+	}
+
+      /* OK, we actually have a frame.  We just don't know how large
+	 it is yet.  Set its size to zero.  We'll adjust it if
+	 necessary.  We also now commit to skipping the special
+	 instructions mentioned before.  */
+      cache->locals = 0;
+      pc += (skip + 2);
+
+      /* If that's all, return now.  */
+      if (limit <= pc)
+	return limit;
+
+      /* Check for stack adjustment 
+
+	    subl $XXX, %esp
+
+	 NOTE: You can't subtract a 16-bit immediate from a 32-bit
+	 reg, so we don't have to worry about a data16 prefix.  */
+      target_read_memory (pc, &op, 1);
+      if (op == 0x83)
+	{
+	  /* `subl' with 8-bit immediate.  */
+	  if (read_memory_unsigned_integer (pc + 1, 1, byte_order) != 0xec)
+	    /* Some instruction starting with 0x83 other than `subl'.  */
+	    return pc;
+
+	  /* `subl' with signed 8-bit immediate (though it wouldn't
+	     make sense to be negative).  */
+	  cache->locals = read_memory_integer (pc + 2, 1, byte_order);
+	  return pc + 3;
+	}
+      else if (op == 0x81)
+	{
+	  /* Maybe it is `subl' with a 32-bit immediate.  */
+	  if (read_memory_unsigned_integer (pc + 1, 1, byte_order) != 0xec)
+	    /* Some instruction starting with 0x81 other than `subl'.  */
+	    return pc;
+
+	  /* It is `subl' with a 32-bit immediate.  */
+	  cache->locals = read_memory_integer (pc + 2, 4, byte_order);
+	  return pc + 6;
+	}
+      else
+	{
+	  /* Some instruction other than `subl'.  */
+	  return pc;
+	}
+    }
+  else if (op == 0x55)		/* pushl %ebp */
     {
       /* Take into account that we've executed the `pushl %ebp' that
 	 starts this instruction sequence.  */
@@ -1649,6 +1768,26 @@ i386_analyze_frame_setup (struct gdbarch *gdbarch,
 	      != 0x242c)
 	    return pc;
 	  pc += (skip + 3);
+	  break;
+	case 0x53:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_EBX_REGNUM] = 0;
+	  skip -= 1;
+	  break;
+	case 0x55:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_EBP_REGNUM] = 0;
+	  skip -= 1;
+	  break;
+	case 0x56:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_ESI_REGNUM] = 0;
+	  skip -= 1;
+	  break;
+	case 0x57:
+	  cache->sp_offset += 4;
+	  cache->saved_regs[I386_EDI_REGNUM] = 0;
+	  skip -= 1;
 	  break;
 	default:
 	  return pc;
