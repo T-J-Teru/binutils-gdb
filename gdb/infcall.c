@@ -613,17 +613,29 @@ dummy_frame_context_saver_setup (struct frame_id dummy_id, ptid_t ptid)
 /* Perform a function call in the inferior.
    ARGS is a vector of values of arguments (NARGS of them).
    FUNCTION is a value, the function to be called.
+   LANG is the language used for calling the function, if not given
+        (normal function) or language_unknown specified (in _ex function)
+        the current language will used.
    Returns a value representing what the function returned.
    May fail to return, if a breakpoint or signal is hit
    during the execution of the function.
 
    ARGS is modified to contain coerced values.  */
-
 struct value *
 call_function_by_hand_dummy (struct value *function,
 			     int nargs, struct value **args,
 			     dummy_frame_dtor_ftype *dummy_dtor,
 			     void *dummy_dtor_data)
+{
+  return call_function_by_hand_ex(
+      function,
+      language_unknown,
+      nargs,
+      args);
+}
+
+struct value *
+call_function_by_hand_ex (struct value *function, enum language lang, int nargs, struct value **args)
 {
   CORE_ADDR sp;
   struct type *values_type, *target_values_type;
@@ -647,6 +659,19 @@ call_function_by_hand_dummy (struct value *function,
   int stack_temporaries = thread_stack_temporaries_enabled_p (inferior_ptid);
   struct dummy_frame_context_saver *context_saver;
   struct cleanup *context_saver_cleanup;
+  enum language original_lang = current_language->la_language;
+
+  /* ALL-533: Set correct language of function, so that arguments can be passed
+     in the right way. Fixes infinite recursion when calling a Fortran function
+     which passes arguments by reference (see language_pass_by_reference) that
+     requires memory allocated in the target memory.
+
+     To allocate memory we call malloc(size_t) a C function in the target
+     program. But if we could call malloc using the Fortran language
+     malloc itself requires a call to malloc and so on!
+  */
+  if (lang != language_unknown)
+    original_lang = set_language(lang);
 
   if (TYPE_CODE (ftype) == TYPE_CODE_PTR)
     ftype = check_typedef (TYPE_TARGET_TYPE (ftype));
@@ -1317,6 +1342,7 @@ When the function is done executing, GDB will silently stop."),
 
     gdb_assert (retval);
     set_value_from_infcall (retval, 1);
+    set_language(original_lang); // ALL-236: Restore original language.
     return retval;
   }
 }

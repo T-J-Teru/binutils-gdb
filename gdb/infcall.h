@@ -58,5 +58,7 @@ extern struct regcache *dummy_frame_context_saver_get_regs
   (struct dummy_frame_context_saver *saver);
 extern struct dummy_frame_context_saver *dummy_frame_context_saver_setup
   (struct frame_id dummy_id, ptid_t ptid);
+extern struct value *
+call_function_by_hand_ex (struct value *function, enum language lang, int nargs, struct value **args);
 
 #endif
