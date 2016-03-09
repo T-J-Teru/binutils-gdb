@@ -275,6 +275,28 @@ uda_iface_set_thread_num (const uda_tword_t thread_num)
   return uda_ok;
 }
 
+static int
+uda_iface_get_num_threads (uda_tword_t *num_threads)
+{
+  *num_threads = uda_job->num_threads;
+  return uda_ok;
+}
+
+static int
+uda_iface_get_thread_num (uda_tword_t *thread_num)
+{
+  int status;
+  int n = 0;
+  status = uda_get_threadno (uda_job->current_thread, &n);
+  *thread_num = n;
+  /* current_thread may be set to thread 0 but we may actually be debugging
+     a different thread. Destroy the thread info so we don't retain the
+     incorrect thread no.  */
+  uda_destroy_thread_info (uda_job->current_thread);
+  uda_job->current_thread->info = NULL;
+  return status;
+}
+
 static
 int
 uda_iface_set_type_sizes_and_byte_order (const uda_target_type_sizes_t sizes,
@@ -916,6 +938,8 @@ init_uda_plugin (uda_callouts_p calls, char *dl_path)
   /* setup callouts for UPC language */
   calls->uda_set_num_threads = &uda_iface_set_num_threads;
   calls->uda_set_thread_num = &uda_iface_set_thread_num;
+  calls->uda_get_num_threads = &uda_iface_get_num_threads;
+  calls->uda_get_thread_num = &uda_iface_get_thread_num;  
   calls->uda_set_type_sizes_and_byte_order = &uda_iface_set_type_sizes_and_byte_order;
   calls->uda_symbol_to_pts = &uda_iface_symbol_to_pts;
   calls->uda_length_of_pts = &uda_iface_length_of_pts;

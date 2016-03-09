@@ -125,25 +125,6 @@ upc_thread_alive (struct thread_info *tp)
 int
 upc_thread_count ()
 {
-  struct symbol *threads_sym;
-  struct value *threads_val;
-  
-  if (upc_threads != 0)
-    return upc_threads;
-    
-  /* UPC program? */
-  threads_sym = lookup_symbol ("THREADS", 0, VAR_DOMAIN, NULL);
-  if (threads_sym)
-    {
-      threads_val = read_var_value (threads_sym, NULL);
-      if (threads_val)
-	upc_threads = value_as_long (threads_val);
-    }
-  else
-    {
-      error (_("upc_lang_init: Can't find THREADS variable. Is this a UPC program?"));
-    }
-
   return upc_threads;
 }
 
@@ -261,15 +242,15 @@ upc_enable_thread_debug (void)
   /* Enable UPC debugging if not already */
   if (!upc_thread_active)
     {
+      if (upcsingle)
+	return;
+
       msym = lookup_minimal_symbol ("THREADS", NULL, NULL);
       if (msym == NULL)
 	{
 	  debug ("upc_enable_thread_debug: No THREADS");
 	  return;
 	}
-
-      if (upcsingle)
-	return;
 
       push_target (&upc_thread_ops);
       upc_thread_active = 1;
