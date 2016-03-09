@@ -164,6 +164,14 @@ enum bptype
 
     /* Event for JIT compiled code generation or deletion.  */
     bp_jit_event,
+	 /*************************** Fast track debugging ****************************************************
+    added by kdavis@cray.com*/
+    bp_jump_to_debug,
+
+
+   /***************************** END - Fast track debugging *******************************************/
+
+    
 
     /* Breakpoint is placed at the STT_GNU_IFUNC resolver.  When hit GDB
        inserts new bp_gnu_ifunc_resolver_return at the caller.
@@ -776,6 +784,20 @@ struct breakpoint
 
     /* Number of threads that reached collective breakpoint */
     int threads_hit;
+
+    /************************************* Fast track debugging ************************************************************************
+	added by kdavis@cray.com*/
+	/* mlink@cray.com:
+
+	The address that will most likely correspond to the fast-track function's first instruction.
+	This is used when we need to jump to the fast-track function that contains a breakpoint.
+	*/
+	CORE_ADDR debug_jump_addr;
+	/************************************* Fast track debugging ************************************************************************/
+
+
+
+    
   };
 
 /* An instance of this type is used to represent a watchpoint.  It
@@ -993,6 +1015,12 @@ struct bpstat_what
        longjmp, false if we are handling an exception.  */
     int is_longjmp;
   };
+
+/******************************* Fast track debugging *******************************************************************************
+added by kdavis@cray.com */
+int check_for_debug_jump_breakpoint(struct regcache* regcache, bpstat bs);
+/******************************** END - Fast track debugging ***********************************************************************/
+  
 
 /* The possible return values for print_bpstat, print_it_normal,
    print_it_done, print_it_noop.  */

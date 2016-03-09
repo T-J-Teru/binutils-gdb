@@ -65,6 +65,12 @@
 #include "psymtab.h"
 #include "parser-defs.h"
 
+/******************** Fast track debugging code **************************
+added by kdavis@cray.com*/
+extern int enable_fast_track_debugging;
+/****************** END - Fast track debugging code **********************/
+
+
 /* Prototypes for local functions */
 
 static void rbreak_command (char *, int);
@@ -904,6 +910,7 @@ init_sal (struct symtab_and_line *sal)
   sal->explicit_pc = 0;
   sal->explicit_line = 0;
   sal->probe = NULL;
+  sal->debug_jump_addr = 0;
 }
 
 
@@ -2294,6 +2301,7 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
   /* Info on best line seen in this file.  */
 
   struct linetable_entry *prev;
+  struct linetalbe_entry *next;
 
   /* If this pc is not from the current frame,
      it is the address of the end of a call instruction.
@@ -2434,20 +2442,42 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
       /* Is this file's first line closer than the first lines of other files?
          If so, record this file, and its first line, as best alternate.  */
       if (item->pc > pc && (!alt || item->pc < alt->pc))
-	{
-	  alt = item;
-	  alt_symtab = s;
-	}
-
+	  {
+	    alt = item;
+	    alt_symtab = s;
+	  }
+	  int found_item = 0;
       for (i = 0; i < len; i++, item++)
-	{
+	  {
 	  /* Leave prev pointing to the linetable entry for the last line
 	     that started at or before PC.  */
-	  if (item->pc > pc)
-	    break;
 
-	  prev = item;
-	}
+		/*Modified by kdavis@cray.com
+		CCE 8.3.0 has changed from previous versions, and no longer
+		provides distinct PC's for the optimized function definition and
+		the functions last line.  They have the same PC, The following code was 
+		modified to force gdb to select the first PC of the two to get the
+		function definition.  Must create an internal breakpoint using this 
+		PC.*/
+
+	    if (item->pc > pc){
+	      break;
+	    }
+	    else if (item->pc == pc  && enable_fast_track_debugging && !found_item){
+	    	found_item = 1;
+	    	prev = item;
+	    }
+	    else if (item->pc == pc && enable_fast_track_debugging && found_item){
+			found_item++;
+	    }
+	    else if (item->pc > pc && enable_fast_track_debugging && found_item){
+	    	break;
+	    }
+	    else{
+	    	prev = item;
+	    }
+
+	  }
 
       /* At this point, prev points at the line whose start addr is <= pc, and
          item points at the next line.  If we ran off the end of the linetable
@@ -2472,8 +2502,8 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
       /* If another line (denoted by ITEM) is in the linetable and its
          PC is after BEST's PC, but before the current BEST_END, then
 	 use ITEM's PC as the new best_end.  */
-      if (best && i < len && item->pc > best->pc
-          && (best_end == 0 || best_end > item->pc))
+      if (best && i < len && item->pc >= best->pc
+          && (best_end == 0 || best_end >= item->pc))
 	best_end = item->pc;
     }
 
@@ -5116,6 +5146,236 @@ static void info_main_command(char* arg, int from_tty)
 {
   printf_unfiltered("%s\n", main_name());
 }
+
+
+/******************** Fast Track Debugging Code **********************************************************************************
+added by kdavis@cray.com
+
+   Helper to expand_line_sal below.  Appends new sal to SAL,
+   initializing it from SYMTAB, LINENO and PC.  */
+static void
+append_expanded_sal (struct symtabs_and_lines *sal,
+		     struct program_space *pspace,
+		     struct symtab *symtab,
+		     int lineno, CORE_ADDR pc)
+{
+  sal->sals = xrealloc (sal->sals,
+			sizeof (sal->sals[0])
+			* (sal->nelts + 1));
+  init_sal (sal->sals + sal->nelts);
+  sal->sals[sal->nelts].pspace = pspace;
+  sal->sals[sal->nelts].symtab = symtab;
+  sal->sals[sal->nelts].section = NULL;
+  sal->sals[sal->nelts].end = 0;
+  sal->sals[sal->nelts].line = lineno;
+  sal->sals[sal->nelts].pc = pc;
+  ++sal->nelts;
+}
+
+   /*Helper to expand_line_sal below.  Search in the symtabs for any
+   linetable entry that exactly matches FULLNAME and LINENO and append
+   them to RET.  If FULLNAME is NULL or if a symtab has no full name,
+   use FILENAME and LINENO instead.  If there is at least one match,
+   return 1; otherwise, return 0, and return the best choice in BEST_ITEM
+   and BEST_SYMTAB.  */
+
+static int
+append_exact_match_to_sals (char *filename, char *fullname, int lineno,
+			    struct program_space *explicit_pspace,
+			    struct symtabs_and_lines *ret,
+			    struct linetable_entry **best_item,
+			    struct symtab **best_symtab)
+{
+  struct program_space *pspace;
+  struct objfile *objfile;
+  struct symtab *symtab;
+  int exact = 0;
+  int j;
+  *best_item = 0;
+  *best_symtab = 0;
+
+  for (pspace = (explicit_pspace ? explicit_pspace : program_spaces);
+       pspace != NULL;
+       explicit_pspace ? (pspace = NULL) : (pspace = pspace->next))
+
+    //ALL_PSPACE_SYMTABS is defined in objfiles.h in preproc #define  line 569
+    //It used two other preproc macros
+    //1. Loops through all of the objfiles in the pspace until it gets to the last object of the list
+    //2. Loops through all of the symtabs in this object until it gets to the last symtab of the list
+
+    ALL_PSPACE_SYMTABS (pspace, objfile, symtab)  //modified by kdavis@cray.com
+    {
+      if (FILENAME_CMP (filename, symtab->filename) == 0)
+	{
+	  struct linetable *l;
+	  int len;
+
+	  if (fullname != NULL
+	      && symtab_to_fullname (symtab) != NULL  
+    	      && FILENAME_CMP (fullname, symtab->fullname) != 0)
+    	    continue;		  
+	  l = LINETABLE (symtab);
+	  if (!l)
+	    continue;
+	  len = l->nitems;
+
+	  for (j = 0; j < len; j++)
+	    {
+	      struct linetable_entry *item = &(l->item[j]);
+
+	      if (item->line == lineno)
+		{
+		  exact = 1;
+		  append_expanded_sal (ret, objfile->pspace,  //modified by kdavis@cray.com
+				       symtab, lineno, item->pc);
+		}
+	      else if (!exact && item->line > lineno
+		       && (*best_item == NULL
+			   || item->line < (*best_item)->line))
+		{
+		  *best_item = item;
+		  *best_symtab = symtab;
+		}
+	    }
+	}
+    }
+  return exact;
+}
+
+   /*Compute a set of all sals in all program spaces that correspond to
+   same file and line as SAL and return those.  If there are several
+   sals that belong to the same block, only one sal for the block is
+   included in results.  */
+
+struct symtabs_and_lines
+expand_line_sal (struct symtab_and_line sal)
+{
+  struct symtabs_and_lines ret;
+  int i, j;
+  struct objfile *objfile;
+  int lineno;
+  int deleted = 0;
+  struct block **blocks = NULL;
+  int *filter;
+  struct cleanup *old_chain;
+
+  ret.nelts = 0;
+  ret.sals = NULL;
+
+  /* Only expand sals that represent file.c:line.  */
+  if (sal.symtab == NULL || sal.line == 0 || sal.pc != 0)
+    {
+      ret.sals = xmalloc (sizeof (struct symtab_and_line));
+      ret.sals[0] = sal;
+      ret.nelts = 1;
+      return ret;
+    }
+  else
+    {
+      struct program_space *pspace;
+      struct linetable_entry *best_item = 0;
+      struct symtab *best_symtab = 0;
+      int exact = 0;
+      char *match_filename;
+
+      lineno = sal.line;
+      match_filename = sal.symtab->filename;
+
+      /* We need to find all symtabs for a file which name
+	 is described by sal.  We cannot just directly
+	 iterate over symtabs, since a symtab might not be
+	 yet created.  We also cannot iterate over psymtabs,
+	 calling PSYMTAB_TO_SYMTAB and working on that symtab,
+	 since PSYMTAB_TO_SYMTAB will return NULL for psymtab
+	 corresponding to an included file.  Therefore, we do
+	 first pass over psymtabs, reading in those with
+	 the right name.  Then, we iterate over symtabs, knowing
+	 that all symtabs we're interested in are loaded.  */
+
+      old_chain = save_current_program_space ();
+      for (pspace = (sal.explicit_pspace ? sal.explicit_pspace : program_spaces);
+	   pspace != NULL;
+	   sal.explicit_pspace ? (pspace = NULL) : (pspace = pspace->next))
+      {
+	set_current_program_space (pspace);
+	ALL_PSPACE_OBJFILES (pspace, objfile) //modified by kdavis@cray.com 
+	{
+	  
+	  if (objfile->sf)
+	    objfile->sf->qf->expand_symtabs_with_fullname (objfile,
+							   sal.symtab->filename);  
+	}
+      }
+      do_cleanups (old_chain);
+
+      /* Now search the symtab for exact matches and append them.  If
+	 none is found, append the best_item and all its exact
+	 matches.  */
+      symtab_to_fullname (sal.symtab);  
+      exact = append_exact_match_to_sals (sal.symtab->filename,
+					  sal.symtab->fullname, lineno,
+					  sal.explicit_pspace,
+					  &ret, &best_item, &best_symtab);
+      if (!exact && best_item)
+	  append_exact_match_to_sals (best_symtab->filename,
+				    best_symtab->fullname, best_item->line,
+				    sal.explicit_pspace,
+				    &ret, &best_item, &best_symtab);
+    }
+
+  /* For optimized code, compiler can scatter one source line accross
+     disjoint ranges of PC values, even when no duplicate functions
+     or inline functions are involved.  For example, 'for (;;)' inside
+     non-template non-inline non-ctor-or-dtor function can result
+     in two PC ranges.  In this case, we don't want to set breakpoint
+     on first PC of each range.  To filter such cases, we use containing
+     blocks -- for each PC found above we see if there are other PCs
+     that are in the same block.  If yes, the other PCs are filtered out.  */
+
+  old_chain = save_current_program_space ();
+  filter = alloca (ret.nelts * sizeof (int));
+  blocks = alloca (ret.nelts * sizeof (struct block *));
+  for (i = 0; i < ret.nelts; ++i)
+    {
+      set_current_program_space (ret.sals[i].pspace);
+
+      filter[i] = 1;
+      blocks[i] = block_for_pc_sect (ret.sals[i].pc, ret.sals[i].section);
+
+    }
+  do_cleanups (old_chain);
+
+  for (i = 0; i < ret.nelts; ++i)
+    if (blocks[i] != NULL)
+      for (j = i+1; j < ret.nelts; ++j)
+	if (blocks[j] == blocks[i])
+	  {
+	    filter[j] = 0;
+	    ++deleted;
+	    break;
+	  }
+
+  {
+    struct symtab_and_line *final =
+      xmalloc (sizeof (struct symtab_and_line) * (ret.nelts-deleted));
+
+    for (i = 0, j = 0; i < ret.nelts; ++i)
+      if (filter[i])
+	final[j++] = ret.sals[i];
+
+    ret.nelts -= deleted;
+    xfree (ret.sals);
+    ret.sals = final;
+  }
+
+  return ret;
+}
+
+/******************** END - Fast Track Debugging Code *****************************************************************************/
+
+
+
+
 
 /* Return 1 if the supplied producer string matches the ARM RealView
    compiler (armcc).  */

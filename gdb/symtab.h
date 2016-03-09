@@ -1125,6 +1125,18 @@ struct symtab_and_line
 
   /* The probe associated with this symtab_and_line.  */
   struct probe *probe;
+
+   /*********************************** Fast track debugging **********************************************************************************
+    added by kdavis@cray.com
+   mlink@cray.com:
+
+   Debug jump address is probably the first instruction of the fast-track function we will be "jumping" to. 
+   This address is saved here for when the breakpoint is actually created after the sals have been expanded.
+   */
+  CORE_ADDR debug_jump_addr;
+  /*********************************** Fast track debugging **********************************************************************************/	
+
+  
 };
 
 extern void init_sal (struct symtab_and_line *sal);
@@ -1273,6 +1285,15 @@ extern enum language language_of_main;
 struct symbol *lookup_global_symbol_from_objfile (const struct objfile *,
 						  const char *name,
 						  const domain_enum domain);
+
+/********************** Fast track debugging function definition**********************************************
+added by kdavis@cray.com*/
+extern struct symtabs_and_lines expand_line_sal (struct symtab_and_line sal);				
+		  
+/********************** Fast track debugging function definition**********************************************/
+
+
+						  
 
 /* Return 1 if the supplied producer string matches the ARM RealView
    compiler (armcc).  */

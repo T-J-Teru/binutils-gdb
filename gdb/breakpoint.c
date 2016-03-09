@@ -70,7 +70,7 @@
 #include "ax-gdb.h"
 #include "dummy-frame.h"
 #include "upc-thread.h"
-
+#include "regcache.h"
 #include "format.h"
 
 /* readline include files */
@@ -91,6 +91,10 @@ enum exception_event_kind
 };
 
 /* Prototypes for local functions.  */
+
+static void parse_breakpoint_sals (char **address, struct linespec_result *canonical);
+
+static void parse_fast_track_breakpoint_sals (struct  linespec_result *canonical, void *data); //added by kdavis@cray.com
 
 static void enable_delete_command (char *, int);
 
@@ -565,6 +569,27 @@ gdb_evaluates_breakpoint_condition_p (void)
 
   return (mode == condition_evaluation_host);
 }
+
+
+/*********************** Fast track debugging ***********************************************
+added by kdavis@cray.com*/
+
+int debug_fast_track_debugging = 0;
+
+int enable_fast_track_debugging = 0; /* set in dwarf2read, and read by infrun */
+
+static void
+show_debug_fast_track_debugging (struct ui_file *file, int from_tty,
+		   struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Gfast debugging is %s.\n"), value);
+}
+
+/*********************** END - Fast track debugging ********************************************/
+
+
+
+
 
 void _initialize_breakpoint (void);
 
@@ -3383,7 +3408,7 @@ create_std_terminate_master_breakpoint (void)
       addr = SYMBOL_VALUE_ADDRESS (bp_objfile_data->terminate_msym);
       b = create_internal_breakpoint (get_objfile_arch (objfile), addr,
                                       bp_std_terminate_master,
-				      &internal_breakpoint_ops);
+				      				  &internal_breakpoint_ops);
       b->addr_string = xstrdup (func_name);
       b->enable_state = bp_disabled;
     }
@@ -5503,6 +5528,17 @@ bpstat_what (bpstat bs_head)
 	{
 	case bp_none:
 	  break;
+	case bp_jump_to_debug:
+	/************************* Fast track debugging code ********************************
+	added by kdavis@cray.com
+    mlink@cray.com:
+    Don't stop for the jump, continue to the real breakpoint even if it is at the same location.
+    */		
+		this_action = BPSTAT_WHAT_SINGLE;
+		break;
+    /************************ End - Fast track debugging code **************************/
+
+	  
 	case bp_breakpoint:
 	case bp_hardware_breakpoint:
 	case bp_until:
@@ -6974,6 +7010,7 @@ init_bp_location (struct bp_location *loc, const struct bp_location_ops *ops,
   loc->shlib_disabled = 0;
   loc->enabled = 1;
 
+
   switch (owner->type)
     {
     case bp_breakpoint:
@@ -7017,6 +7054,10 @@ init_bp_location (struct bp_location *loc, const struct bp_location_ops *ops,
     case bp_fast_tracepoint:
     case bp_static_tracepoint:
       loc->loc_type = bp_loc_other;
+      break;
+    case bp_jump_to_debug: //added by kdavis@cray.com - fast track debugging
+      loc->loc_type = bp_loc_software_breakpoint;
+      mark_breakpoint_location_modified (loc);
       break;
     default:
       internal_error (__FILE__, __LINE__, _("unknown breakpoint type"));
@@ -9313,7 +9354,351 @@ create_breakpoint_sal (struct gdbarch *gdbarch,
   discard_cleanups (old_chain);
 
   install_breakpoint (internal, b, 0);
+  
 }
+
+/******************* Fast track debugging code ***************************************
+added by kdavis@cray.com*/
+
+
+struct captured_parse_breakpoint_args
+{
+    char **arg_p;
+    struct symtabs_and_lines *sals_p;
+    char ***addr_string_p;
+    int *not_found_ptr;
+};
+
+
+
+
+   /*Remove element at INDEX_TO_REMOVE from SAL, shifting other
+   elements to fill the void space.  */
+static void
+remove_sal (struct symtabs_and_lines *sal, int index_to_remove)
+{
+  int i = index_to_remove+1;
+  int last_index = sal->nelts-1;
+
+  for (;i <= last_index; ++i)
+    sal->sals[i-1] = sal->sals[i];
+
+  --(sal->nelts);
+}
+
+
+
+   /*If appropriate, obtains all sals that correspond to the same file
+   and line as SAL, in all program spaces.  Users debugging with IDEs,
+   will want to set a breakpoint at foo.c:line, and not really care
+   about program spaces.  This is done only if SAL does not have
+   explicit PC and has line and file information.  If we got just a
+   single expanded sal, return the original.
+
+   Otherwise, if SAL.explicit_line is not set, filter out all sals for
+   which the name of enclosing function is different from SAL.  This
+   makes sure that if we have breakpoint originally set in template
+   instantiation, say foo<int>(), we won't expand SAL to locations at
+   the same line in all existing instantiations of 'foo'.  
+ 
+   mlink@cray.com:
+ 
+   This is where most of the work is done when creating a fast-track breakpoint. 
+   We take advantage of gdb's internal routines to find fast-track functions since the
+   DWARF should correspond to the same file and line number and gdb already supports 
+   multiple breakpoint locations for other situations such as c++ templates. Also, if 
+   sal.explicit_line is not set then all functions that don't match the original function
+   or it's fast-track equivalent are filtered out (this is different from the original 
+   behavior where all functions that don't match are filtered out).  */
+ 
+static struct symtabs_and_lines
+expand_line_sal_maybe (struct symtab_and_line sal, struct linespec_result *canonical, 
+					   const struct breakpoint_ops *ops, enum bptype type )
+{
+  struct symtabs_and_lines expanded;
+  CORE_ADDR original_pc = sal.pc;
+  const char *original_function = NULL; //changed to const
+  int found;
+  int i;
+  CORE_ADDR debug_jump_addr = 0;
+  struct cleanup *old_chain;
+
+  /* If we have explicit pc, don't expand.
+     If we have no line number, we can't expand.  */
+  if (sal.explicit_pc || sal.line == 0 || sal.symtab == NULL)
+    {
+      expanded.nelts = 1;
+      expanded.sals = xmalloc (sizeof (struct symtab_and_line));
+      expanded.sals[0] = sal;
+      return expanded;
+    }
+
+  sal.pc = 0;
+
+  old_chain = save_current_space_and_thread ();
+
+  switch_to_program_space_and_thread (sal.pspace);
+
+  find_pc_partial_function (original_pc, &original_function, NULL, NULL);
+
+  /* Note that expand_line_sal visits *all* program spaces.  */
+  expanded = expand_line_sal (sal);
+
+
+	for (i = 0; i < expanded.nelts; ++i) {
+		CORE_ADDR func_addr, func_end;
+		const char *this_function;  //changed to const
+		CORE_ADDR pc = expanded.sals[i].pc;
+
+		/* We need to switch threads as well since we're about to
+		   read memory.  */
+		switch_to_program_space_and_thread (expanded.sals[i].pspace);
+
+		if (find_pc_partial_function(pc, &this_function, &func_addr, &func_end)) {
+			if (strstr(this_function, "dbg$")) {
+				// Note that the call to parse_breakpoint modifies what it points to.
+				// This is why we have two versions. If we didn't, the call to free would segfault.
+				char* this_function_copy;
+				char* this_function_copy_ptr;
+				
+				asprintf(&this_function_copy, "%s", this_function);
+				this_function_copy += 4;
+				this_function_copy_ptr = this_function_copy;
+				
+				if (!sal.explicit_line && strcmp(this_function_copy, original_function) != 0) {
+					remove_sal(&expanded, i);
+					--i;
+					goto done_FTD;
+				}
+				
+				/* andrewg@cray.com: if i is the only elt in expanded, we found a sal that
+				   cooresponds to the dbg$ line, but the original line was optimized away. We need
+				   to try finiding the PC based on the original function name.  This forces a 
+				   jump_to_debug breakpoint to be set.  */
+				if (expanded.nelts == 1) {
+					struct gdb_exception e;
+					struct captured_parse_breakpoint_args parse_args;
+					struct symtabs_and_lines func_sals;
+					struct gdbarch* arch;
+					CORE_ADDR original_func_addr = func_addr;
+					char **addr_string;
+					char *copy_arg = NULL;
+					char *addr_start = NULL;
+					int not_found = 0;
+					
+					func_sals.sals = NULL;
+					func_sals.nelts = 0;
+					addr_string = NULL;
+					
+					parse_args.arg_p = &this_function_copy_ptr;
+					parse_args.sals_p = &func_sals;
+					parse_args.addr_string_p = &addr_string;
+					parse_args.not_found_ptr = &not_found;
+					
+
+					TRY_CATCH (e, RETURN_MASK_ALL)
+					{
+				     	parse_fast_track_breakpoint_sals (canonical, &parse_args);
+					}				
+										
+					switch (e.reason)
+					{
+					case RETURN_QUIT:
+						throw_exception (e);
+					case RETURN_ERROR:
+						/* we encountered an error, so throw it. */
+						throw_exception (e);
+					default:
+						// if we didn't find any elts, then we don't have a cooresponding
+						// function. If we found more than one elt, something is messed up.
+						if (!func_sals.nelts) 
+						{
+							goto done_FTD;
+						}
+						if (func_sals.nelts > 1)
+						{
+							xfree (func_sals.sals);
+							goto done_FTD;
+						}
+					}
+					
+					// can we have the same function name in multiple files??
+					// I don't think any language allows that..
+					
+					// save the pc for the non-debug function
+					pc = func_sals.sals[0].pc;
+					
+					// switch to the non-debug functions pspace
+					switch_to_program_space_and_thread (func_sals.sals[0].pspace);
+					
+					// grab the function information for the non-debug function
+					if (find_pc_partial_function(pc, &this_function, &func_addr, &func_end)) {
+						if (strcmp(this_function, this_function_copy) == 0) {
+							struct breakpoint* b;
+							
+							ALL_BREAKPOINTS (b) {
+								if (b->type == bp_jump_to_debug && b->debug_jump_addr == original_func_addr) {
+									break;
+								}
+							}
+							
+							if (!b) {
+								if (debug_fast_track_debugging) {
+									printf_unfiltered("[Gfast] Making jump-to-debug breakpoint for %s -> %s\n", this_function, original_function);
+								}
+								arch = get_objfile_arch(func_sals.sals[0].symtab->objfile);
+								b = create_internal_breakpoint(arch, func_addr, bp_jump_to_debug, &internal_breakpoint_ops);      
+
+								
+								b->debug_jump_addr = original_func_addr;
+							}
+							else {
+								if (debug_fast_track_debugging) {
+									printf_unfiltered("[Gfast] Found existing jump-to-debug breakpoint for %s\n", this_function);
+								}
+							}
+							debug_jump_addr = original_func_addr;
+							break;
+						}
+					}
+				}
+				
+done_FTD:
+				this_function_copy -= 4;
+				free(this_function_copy);
+			}
+			else if (!sal.explicit_line && strcmp(this_function, original_function) != 0) {
+				remove_sal(&expanded, i);
+				--i;
+			}
+			else {
+				CORE_ADDR original_func_addr = func_addr;
+				char* debug_function;
+				int j;
+				struct gdbarch* arch;
+				asprintf(&debug_function, "dbg$%s", this_function);
+				
+				for (j = 0; j < expanded.nelts; ++j) {
+					pc = expanded.sals[j].pc;
+					
+					if (find_pc_partial_function(pc, &this_function, &func_addr, &func_end)) {
+						if (strcmp(this_function, debug_function) == 0) {
+							struct breakpoint* b;
+							
+							ALL_BREAKPOINTS (b) {
+								if (b->type == bp_jump_to_debug && b->debug_jump_addr == func_addr) {
+									break;
+								}
+							}
+	
+							if (!b) {
+								if (debug_fast_track_debugging) {
+									printf_unfiltered("[Gfast] Making jump-to-debug breakpoint for %s -> %s\n", original_function, this_function);
+								}
+								arch = get_objfile_arch(sal.symtab->objfile);
+								b = create_internal_breakpoint(arch, original_func_addr, bp_jump_to_debug, &internal_breakpoint_ops);
+								
+								b->debug_jump_addr = func_addr;
+							}
+							else {
+								if (debug_fast_track_debugging) {
+									printf_unfiltered("[Gfast] Found existing jump-to-debug breakpoint for %s\n", original_function);
+								}
+							}
+							debug_jump_addr = func_addr;
+							break;
+						}
+					}
+				}
+				
+				free(debug_function);
+			}
+		}
+	}
+
+
+
+  /* Skip the function prologue if necessary.  */
+  for (i = 0; i < expanded.nelts; ++i)
+    skip_prologue_sal (&expanded.sals[i]);
+
+  do_cleanups (old_chain);
+
+  if (expanded.nelts <= 1)
+    {
+      /* andrewg@cray.com: This is no longer an "ugly" workaround. If we find
+         a fast-track dbg$ breakpoint, but its non-debug routine line number was
+         optimized out, we do not want to return it before processing.
+         If the line number doesn't coorespond to a fast-track dbg$ breakpoint,
+         we will return it here.  
+         
+         This is un ugly workaround. If we get zero
+         expanded sals then something is really wrong.
+         Fix that by returnign the original sal. */
+      xfree (expanded.sals);
+      expanded.nelts = 1;
+      expanded.sals = xmalloc (sizeof (struct symtab_and_line));
+      sal.pc = original_pc;
+      expanded.sals[0] = sal;
+      return expanded;      
+    }
+
+  if (original_pc)
+    {
+      found = 0;
+      for (i = 0; i < expanded.nelts; ++i)
+	if (expanded.sals[i].pc == original_pc)
+	  {
+	    found = 1;
+	    break;
+	  }
+      /* #24147 */
+       /*gdb_assert (found); */
+    }
+	
+	
+	for (i = 0; i < expanded.nelts; ++i) {
+		expanded.sals[i].debug_jump_addr = debug_jump_addr;
+	}
+
+  return expanded;
+}
+
+
+  
+
+/* mlink@cray.com:
+
+Check if any of the breakpoints stopped at are ones that we should be jumping to a fast-track function.
+If we do find a fast-track breakpoint then write the pc to that address (do the jump).
+
+The funcion call for the following is in infrun.c*/
+
+int
+check_for_debug_jump_breakpoint(struct regcache* regcache, bpstat bs)
+{
+	for (; bs != NULL; bs = bs->next) {
+		if (bs->breakpoint_at && bs->bp_location_at->owner &&
+                 bs->bp_location_at->owner->type == bp_jump_to_debug) {
+			if (debug_fast_track_debugging) {
+				printf_unfiltered("[Gfast] Hit jump-to-debug internal breakpoint to %p\n", (void*)(bs->bp_location_at->owner->debug_jump_addr));
+			}
+			
+			regcache_write_pc(regcache, bs->bp_location_at->owner->debug_jump_addr);
+			return 1;
+		}
+	}
+	
+	return 0;
+}
+
+/******************* END - Fast track debugging code ***************************************/
+
+
+
+
+
+
 
 /* Add SALS.nelts breakpoints to the breakpoint table.  For each
    SALS.sal[i] breakpoint, include the corresponding ADDR_STRING[i]
@@ -9346,7 +9731,9 @@ create_breakpoints_sal (struct gdbarch *gdbarch,
     gdb_assert (VEC_length (linespec_sals, canonical->sals) == 1);
 
   for (i = 0; VEC_iterate (linespec_sals, canonical->sals, i, lsal); ++i)
-    {
+  {
+
+      struct symtabs_and_lines expanded;
       /* Note that 'addr_string' can be NULL in the case of a plain
 	 'break', without arguments.  */
       char *addr_string = (canonical->addr_string
@@ -9356,6 +9743,16 @@ create_breakpoints_sal (struct gdbarch *gdbarch,
       struct cleanup *inner = make_cleanup (xfree, addr_string);
 
       make_cleanup (xfree, filter_string);
+
+      
+	 /**************** Fast Track debugging code **********************
+	 added by kdavis@cray.com*/
+	 if (enable_fast_track_debugging){
+	 	expanded = expand_line_sal_maybe (lsal->sals.sals[i], canonical, ops, type);
+      	lsal->sals = expanded;
+      }
+      /************** End - Fast Track debugging code ***************/
+      
       create_breakpoint_sal (gdbarch, lsal->sals,
 			     addr_string,
 			     filter_string,
@@ -9364,11 +9761,26 @@ create_breakpoints_sal (struct gdbarch *gdbarch,
 			     thread, task, infnum, ignore_count, ops,
 			     from_tty, enabled, internal, flags,
 			     canonical->special_display);
+			     
       discard_cleanups (inner);
-    }
+  }
 }
 
-/* Parse ADDRESS which is assumed to be a SAL specification possibly
+
+
+    /* ****************** Fast Track debugging code *********************************
+    added by kdavis@cray.com
+	This function is a duplicate of parse_breakpoint_sals function. It was duplicated
+	because there are 16 other functions which call parse_breakpoint_sals.
+	None of which pass a reference to parse_args.arg_p,
+	parse_args.sals_p, parse_args.addr_string_p, etc. references. 
+	These are created in expand_line_sal_maybe (a fast track debugging function), and 
+	updated within this function at the decode_line_1 function call. expand_line_sal_maybe
+	then uses this udpated sals to set the correct fast track breakpoint.
+	
+
+
+   Parse ADDRESS which is assumed to be a SAL specification possibly
    followed by conditionals.  On return, SALS contains an array of SAL
    addresses found.  ADDR_STRING contains a vector of (canonical)
    address strings.  ADDRESS points to the end of the SAL.
@@ -9377,9 +9789,16 @@ create_breakpoints_sal (struct gdbarch *gdbarch,
    the caller's responsibility to free them.  */
 
 static void
-parse_breakpoint_sals (char **address,
-		       struct linespec_result *canonical)
+parse_fast_track_breakpoint_sals (struct  linespec_result *canonical, void *data)
 {
+
+	struct captured_parse_breakpoint_args *args = data;
+	char **address = args->arg_p;
+	char ***addr_string = args->addr_string_p;
+	struct symtabs_and_lines *sals = args->sals_p;
+	char *addr_start = *address;
+
+
   /* If no arg given, or if first arg is 'if ', use the default
      breakpoint.  */
   if ((*address) == NULL
@@ -9396,6 +9815,106 @@ parse_breakpoint_sals (char **address,
 	  init_sal (&sal);		/* Initialize to zeroes.  */
 	  lsal.sals.sals = (struct symtab_and_line *)
 	    xmalloc (sizeof (struct symtab_and_line));
+	     
+
+	  /* Set sal's pspace, pc, symtab, and line to the values
+	     corresponding to the last call to print_frame_info.
+	     Be sure to reinitialize LINE with NOTCURRENT == 0
+	     as the breakpoint line number is inappropriate otherwise.
+	     find_pc_line would adjust PC, re-set it back.  */
+	  get_last_displayed_sal (&sal);
+	  pc = sal.pc;
+	  sal = find_pc_line (pc, 0);
+
+	  /* "break" without arguments is equivalent to "break *PC"
+	     where PC is the last displayed codepoint's address.  So
+	     make sure to set sal.explicit_pc to prevent GDB from
+	     trying to expand the list of sals to include all other
+	     instances with the same symtab and line.  */
+	  sal.pc = pc;
+	  sal.explicit_pc = 1;
+
+	  lsal.sals.sals[0] = sal;
+	  lsal.sals.nelts = 1;
+	  lsal.canonical = NULL;
+
+	  VEC_safe_push (linespec_sals, canonical->sals, &lsal);
+	}
+      else
+	error (_("No default breakpoint address now."));
+    }
+  else
+    {
+      //struct symtabs_and_lines sals;
+      struct symtab_and_line cursal = get_current_source_symtab_and_line ();
+
+      /* Force almost all breakpoints to be in terms of the
+         current_source_symtab (which is decode_line_1's default).
+         This should produce the results we want almost all of the
+         time while leaving default_breakpoint_* alone.
+
+	 ObjC: However, don't match an Objective-C method name which
+	 may have a '+' or '-' succeeded by a '['.  */
+	  if (last_displayed_sal_is_valid () && (!cursal.symtab || ((strchr ("+-", (*address)[0]) != NULL)
+	 		  && ((*address)[1] != '[')))){
+
+			*sals = decode_line_1 (address, DECODE_LINE_FUNFIRSTLINE, get_last_displayed_symtab (),
+				       get_last_displayed_line ());
+	  }			       
+	  else
+	  {
+        	*sals = decode_line_1 (address, DECODE_LINE_FUNFIRSTLINE,(struct symtab *) NULL, 0);
+	  }	 
+ 
+
+	  /* For any SAL that didn't have a canonical string, fill one in. */
+	  if (sals->nelts > 0 && *addr_string == NULL)
+	    *addr_string = xcalloc (sals->nelts, sizeof (char **));
+	  if (addr_start != (*address))
+	  {
+	      int i;
+
+	      for (i = 0; i < sals->nelts; i++)
+          {
+		    /* Add the string if not present. */
+		    if ((*addr_string)[i] == NULL)
+		      (*addr_string)[i] = savestring (addr_start, (*address) - addr_start);
+		  }
+	  }
+   }
+}
+
+
+
+/* Parse ADDRESS which is assumed to be a SAL specification possibly
+   followed by conditionals.  On return, SALS contains an array of SAL
+   addresses found.  ADDR_STRING contains a vector of (canonical)
+   address strings.  ADDRESS points to the end of the SAL.
+
+   The array and the line spec strings are allocated on the heap, it is
+   the caller's responsibility to free them.  */
+
+static void
+parse_breakpoint_sals (char **address, struct linespec_result *canonical)
+{
+  /* If no arg given, or if first arg is 'if ', use the default
+     breakpoint.  */
+
+  if ((*address) == NULL
+      || (strncmp ((*address), "if", 2) == 0 && isspace ((*address)[2])))
+    {
+      /* The last displayed codepoint, if it's valid, is our default breakpoint
+         address.  */
+      if (last_displayed_sal_is_valid ())
+	{
+	  struct linespec_sals lsal;
+	  struct symtab_and_line sal;
+	  CORE_ADDR pc;
+
+	  init_sal (&sal);		/* Initialize to zeroes.  */
+	  lsal.sals.sals = (struct symtab_and_line *)
+	    xmalloc (sizeof (struct symtab_and_line));
+	     
 
 	  /* Set sal's pspace, pc, symtab, and line to the values
 	     corresponding to the last call to print_frame_info.
@@ -9434,18 +9953,17 @@ parse_breakpoint_sals (char **address,
 
 	 ObjC: However, don't match an Objective-C method name which
 	 may have a '+' or '-' succeeded by a '['.  */
-      if (last_displayed_sal_is_valid ()
-	  && (!cursal.symtab
-	      || ((strchr ("+-", (*address)[0]) != NULL)
-		  && ((*address)[1] != '['))))
-	decode_line_full (address, DECODE_LINE_FUNFIRSTLINE,
-			  get_last_displayed_symtab (),
-			  get_last_displayed_line (),
-			  canonical, NULL, NULL);
-      else
-	decode_line_full (address, DECODE_LINE_FUNFIRSTLINE,
-			  cursal.symtab, cursal.line, canonical, NULL, NULL);
-    }
+	  if (last_displayed_sal_is_valid () && (!cursal.symtab || ((strchr ("+-", (*address)[0]) != NULL)
+	 		  && ((*address)[1] != '[')))){
+		  
+	        decode_line_full (address, DECODE_LINE_FUNFIRSTLINE, get_last_displayed_symtab (),
+			  get_last_displayed_line (), canonical, NULL, NULL);
+	  }			       
+	  else
+	  {
+           decode_line_full (address, DECODE_LINE_FUNFIRSTLINE, cursal.symtab, cursal.line, canonical, NULL, NULL);	
+	  }	 
+   }
 }
 
 
@@ -9677,57 +10195,66 @@ create_breakpoint (struct gdbarch *gdbarch,
   volatile struct gdb_exception e;
   char *copy_arg = NULL;
   char *addr_start = arg;
+  char **addr_string;
   struct linespec_result canonical;
   struct cleanup *old_chain;
   struct cleanup *bkpt_chain = NULL;
   int pending = 0;
   int task = 0;
   int infnum = 0;
+  int not_found = 0;
   int prev_bkpt_count = breakpoint_count;
   struct program_space *pspace = current_program_space; 
+
+  /* If pending, then need access to sal.debug_jump_addr at bottom
+  of this function. This function uses linespec_sals to access
+  symtabs_and_lines, and thus symtab_and_line where debug_jump_addr
+  is a member.*/ 
+  
+  struct linespec_sals *ft_lsal;  //added by kdavis@cray.com
 
   gdb_assert (ops != NULL);
 
   init_linespec_result (&canonical);
 
   TRY_CATCH (e, RETURN_MASK_ALL)
-    {
+  {
       ops->create_sals_from_address (&arg, &canonical, type_wanted,
 				     addr_start, &copy_arg);
-    }
+  }
 
   /* If caller is interested in rc value from parse, set value.  */
   switch (e.reason)
-    {
+  {
     case GDB_NO_ERROR:
       if (VEC_empty (linespec_sals, canonical.sals))
-	return 0;
+		return 0;
       break;
     case RETURN_ERROR:
       switch (e.error)
-	{
-	case NOT_FOUND_ERROR:
+	  {
+	  case NOT_FOUND_ERROR:
 
-	  /* If pending breakpoint support is turned off, throw
-	     error.  */
+	      /* If pending breakpoint support is turned off, throw
+	      error.  */
 
-	  if (pending_break_support == AUTO_BOOLEAN_FALSE)
-	    throw_exception (e);
+	      if (pending_break_support == AUTO_BOOLEAN_FALSE)
+	        throw_exception (e);
 
-	  exception_print (gdb_stderr, e);
+	      exception_print (gdb_stderr, e);
 
           /* If pending breakpoint support is auto query and the user
-	     selects no, then simply return the error code.  */
-	  if (pending_break_support == AUTO_BOOLEAN_AUTO
-	      && !nquery (_("Make %s pending on future shared library load? "),
-			  bptype_string (type_wanted)))
-	    return 0;
+	      selects no, then simply return the error code.  */
+	      if (pending_break_support == AUTO_BOOLEAN_AUTO
+	          && !nquery (_("Make %s pending on future shared library load? "),
+			      bptype_string (type_wanted)))
+	              return 0;
 
-	  /* At this point, either the user was queried about setting
+	  	 /* At this point, either the user was queried about setting
 	     a pending breakpoint and selected yes, or pending
 	     breakpoint behavior is on and thus a pending breakpoint
 	     is defaulted on behalf of the user.  */
-	  {
+	  	{
 	    struct linespec_sals lsal;
 
 	    copy_arg = xstrdup (addr_start);
@@ -9737,7 +10264,8 @@ create_breakpoint (struct gdbarch *gdbarch,
 	    init_sal (&lsal.sals.sals[0]);
 	    pending = 1;
 	    VEC_safe_push (linespec_sals, canonical.sals, &lsal);
-	  }
+	    ft_lsal = &lsal;
+	   }
 	  break;
 	default:
 	  throw_exception (e);
@@ -9745,49 +10273,51 @@ create_breakpoint (struct gdbarch *gdbarch,
       break;
     default:
       throw_exception (e);
-    }
+ }
 
   /* Create a chain of things that always need to be cleaned up.  */
   old_chain = make_cleanup_destroy_linespec_result (&canonical);
 
   /* ----------------------------- SNIP -----------------------------
-     Anything added to the cleanup chain beyond this point is assumed
-     to be part of a breakpoint.  If the breakpoint create succeeds
-     then the memory is not reclaimed.  */
+  Anything added to the cleanup chain beyond this point is assumed
+  to be part of a breakpoint.  If the breakpoint create succeeds
+  then the memory is not reclaimed.  */
   bkpt_chain = make_cleanup (null_cleanup, 0);
 
+
+
   /* Resolve all line numbers to PC's and verify that the addresses
-     are ok for the target.  */
+  are ok for the target.  */
   if (!pending)
-    {
+  {
       int ix;
       struct linespec_sals *iter;
 
       for (ix = 0; VEC_iterate (linespec_sals, canonical.sals, ix, iter); ++ix)
-	breakpoint_sals_to_pc (&iter->sals);
-    }
+			breakpoint_sals_to_pc (&iter->sals);
+  }
 
   /* Fast tracepoints may have additional restrictions on location.  */
   if (!pending && type_wanted == bp_fast_tracepoint)
-    {
+  {
       int ix;
       struct linespec_sals *iter;
 
       for (ix = 0; VEC_iterate (linespec_sals, canonical.sals, ix, iter); ++ix)
-	check_fast_tracepoint_sals (gdbarch, &iter->sals);
-    }
+			check_fast_tracepoint_sals (gdbarch, &iter->sals);
+  }
 
   /* Verify that condition can be parsed, before setting any
-     breakpoints.  Allocate a separate condition expression for each
-     breakpoint.  */
+  breakpoints.  Allocate a separate condition expression for each
+  breakpoint.  */
   if (!pending)
-    {
+  {
       struct linespec_sals *lsal;
-
+      
       lsal = VEC_index (linespec_sals, canonical.sals, 0);
 
       if (parse_condition_and_thread)
-        {
+      {
 	    char *rest;
             /* Here we only parse 'arg' to separate condition
                from thread number, so parsing in context of first
@@ -9798,13 +10328,14 @@ create_breakpoint (struct gdbarch *gdbarch,
                                        &thread, &task, &infnum, &rest);
             if (cond_string)
                 make_cleanup (xfree, cond_string);
+
 	    if (rest)
 	      make_cleanup (xfree, rest);
 	    if (rest)
 	      extra_string = rest;
-        }
+      }
       else
-        {
+      {
             /* Create a private copy of condition string.  */
             if (cond_string)
             {
@@ -9859,6 +10390,7 @@ create_breakpoint (struct gdbarch *gdbarch,
       b->extra_string = NULL;
       b->ignore_count = ignore_count;
       b->disposition = tempflag ? disp_del : disp_donttouch;
+      b->debug_jump_addr = ft_lsal->sals.sals[0].debug_jump_addr;  //added by kdavis@cray.com
       b->condition_not_parsed = 1;
       b->enable_state = enabled ? bp_enabled : bp_disabled;
       if ((type_wanted != bp_breakpoint
@@ -9886,6 +10418,7 @@ create_breakpoint (struct gdbarch *gdbarch,
 
   return 1;
 }
+
 
 /* Set a breakpoint.
    ARG is a string describing breakpoint address,
@@ -13901,6 +14434,44 @@ delete_breakpoint (struct breakpoint *bpt)
   if (bpt->type == bp_none)
     return;
 
+
+	/************************** Fast Track Debugging code *******************************************
+	added by kdavis@cray.com 
+	mlink@cray.com:
+	Check if breakpoint is part of fast-track debugging and delete the jump breakpoint if no 
+	other breakpoints are referencing it.
+	*/
+	if (bpt->type != bp_jump_to_debug && bpt->debug_jump_addr) {
+		ALL_BREAKPOINTS (b) {
+			if (b->debug_jump_addr == bpt->debug_jump_addr) {
+				if (b->type == bp_jump_to_debug) {
+					break;
+				}
+			}
+		}
+		
+		bpt->debug_jump_addr = 0;
+		if (b) delete_breakpoint(b);
+	}
+	else if (bpt->type == bp_jump_to_debug) {
+		unsigned int __references = 0;
+		 
+		ALL_BREAKPOINTS (b) {
+			if (b != bpt && b->debug_jump_addr == bpt->debug_jump_addr) {
+				++__references;
+			}
+		}
+		
+		if (__references) {
+			return;
+		}
+	}
+  /****************************** END - Fast track debugging code ***********************************/
+
+
+
+    
+
   /* At least avoid this stale reference until the reference counting
      of breakpoints gets resolved.  */
   if (bpt->related_breakpoint != bpt)
@@ -14511,7 +15082,7 @@ breakpoint_re_set_default (struct breakpoint *b)
 }
 
 /* Default method for creating SALs from an address string.  It basically
-   calls parse_breakpoint_sals.  Return 1 for success, zero for failure.  */
+   calls parse_breakpoint_sals. */
 
 static void
 create_sals_from_address_default (char **arg,
@@ -16353,7 +16924,21 @@ _initialize_breakpoint (void)
   breakpoint_chain = 0;
   /* Don't bother to call set_breakpoint_count.  $bpnum isn't useful
      before a breakpoint is set.  */
+
   breakpoint_count = 0;
+   
+  /****************************** Fast track debugging code *********************************
+  added by kdavis@cray.com*/
+  add_setshow_zinteger_cmd ("Gfast", class_maintenance, &debug_fast_track_debugging, _("\
+  Set fast-track debugging."), _("\
+  Show fast-track debugging."), _("\
+  When non-zero, fast-track debugging is enabled."),
+			    NULL,
+			    show_debug_fast_track_debugging,
+			    &setdebuglist, &showdebuglist);
+  /****************************** END - Fast track debugging code ****************************/
+
+
 
   tracepoint_count = 0;
 
@@ -16721,6 +17306,7 @@ hardware.)"),
 			    &setlist, &showlist);
 
   can_use_hw_watchpoints = 1;
+
 
   /* Tracepoint manipulation commands.  */
 
