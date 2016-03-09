@@ -13560,6 +13560,12 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 	  /* Sun FORTE says 255 for -1; 254 for -2, etc.. yuk! */
 	  low |= (-1 ^ 0xff);
 	}
+      else if (cu->producer && strstr (cu->producer, "GNU Fortran"))
+	{
+	  /* GNU Fortran 4.6.3 32-bit says 0xfffffffe for -2, etc. */
+	  if (low >= 0x80000000 && low <= 0xffffffff)
+	      low |= (-1 ^ 0xffffffff);
+	}
       else 
 	{
 	  low = high;
