@@ -126,6 +126,11 @@ static int
 frame_show_address (struct frame_info *frame,
 		    struct symtab_and_line sal)
 {
+  if (backtrace_addresses == AUTO_BOOLEAN_TRUE)
+      return 1;
+  else if (backtrace_addresses == AUTO_BOOLEAN_FALSE)
+      return 0;
+
   /* If there is a line number, but no PC, then there is no location
      information associated with this sal.  The only way that should
      happen is for the call sites of inlined functions (SAL comes from

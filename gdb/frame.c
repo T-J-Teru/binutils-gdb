@@ -217,6 +217,17 @@ show_backtrace_limit (struct ui_file *file, int from_tty,
 }
 
 
+int backtrace_addresses = AUTO_BOOLEAN_AUTO;
+static void
+show_backtrace_addresses (struct ui_file *file, int from_tty,
+                          struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("\
+Whether addresses are shown in backtraces is %s.\n"),
+                    value);
+}
+
+
 static void
 fprint_field (struct ui_file *file, const char *name, int p, CORE_ADDR addr)
 {
@@ -2594,6 +2605,19 @@ are not of interest. Set this variable if you need to see them."),
 			   show_backtrace_exclude_start_thread,
 			   &set_backtrace_cmdlist,
 			   &show_backtrace_cmdlist);
+  
+  add_setshow_auto_boolean_cmd ("addresses", class_obscure,
+                                &backtrace_addresses, _("\
+Sets whether addresses are shown in backtraces."), _("\
+Shows whether addresses are shown in backtraces."), _("\
+If ON, addresses are always shown in backtraces.\n\
+If OFF, addresses are never shown in backtraces.\n\
+If AUTO (the default), addresses are shown in backtraces only if not at the\n\
+start of a line."),
+                                NULL,
+                                show_backtrace_addresses,
+                                &set_backtrace_cmdlist,
+                                &show_backtrace_cmdlist);
 
   add_setshow_boolean_cmd ("past-entry", class_obscure,
 			   &backtrace_past_entry, _("\

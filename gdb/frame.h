@@ -777,4 +777,7 @@ extern struct frame_info *create_new_frame (CORE_ADDR base, CORE_ADDR pc);
 extern int frame_unwinder_is (struct frame_info *fi,
 			      const struct frame_unwind *unwinder);
 
+/* Whether addresses are shown in backtraces.  */
+extern int backtrace_addresses;
+
 #endif /* !defined (FRAME_H)  */
