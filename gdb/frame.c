@@ -1883,12 +1883,31 @@ inside_func (struct frame_info *this_frame, const char *name, struct objfile *ob
 }
 
 static int
+inside_func_full (struct frame_info *this_frame, const char *name, struct objfile *objfile)
+{
+  struct symbol *sym = lookup_symbol(name, NULL, VAR_DOMAIN, 0);  
+  if (sym) {
+     CORE_ADDR maddr;
+     struct block *block;
+     block = SYMBOL_BLOCK_VALUE (sym); /* gives block for symtab */
+     if (block) {
+         maddr = gdbarch_convert_from_func_ptr_addr 
+         (get_frame_arch (this_frame),
+          BLOCK_START (block),
+          &current_target);
+         return maddr == get_frame_func (this_frame);
+     }
+  }
+  return 0;
+}
+
+static int
 inside_main_func (struct frame_info *this_frame)
 {
   int ret = 0;
   if (symfile_objfile != NULL)
     {
-      ret = inside_func(this_frame, main_name (), symfile_objfile) ||
+      ret = inside_func_full(this_frame, main_name (), symfile_objfile) ||
             inside_func(this_frame, "MAIN__", symfile_objfile) ||
             inside_func(this_frame, "_main_", symfile_objfile) ||
             inside_func(this_frame, "start__", symfile_objfile) ||
