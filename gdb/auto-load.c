@@ -847,6 +847,14 @@ auto_load_objfile_script (struct objfile *objfile,
 	}
     }
 
+  if (strcmp (lbasename (objfile->name), "libstdc++.so.6") != 0
+      && lookup_minimal_symbol ("__gxx_personality_v0", NULL, objfile) != NULL)
+    {
+      /* objfile is probably statically linked with libstdc++, auto-load the
+	 listdc++ pretty printers using the hard-coded name.  */
+      auto_load_objfile_script_1 (objfile, "libstdc++.so.6", language);
+    }
+
   do_cleanups (cleanups);
 }
 
