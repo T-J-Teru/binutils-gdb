@@ -1511,13 +1511,16 @@ lookup_objfile_from_block (const struct block *block)
   block = block_global_block (block);
   /* Go through SYMTABS.  */
   ALL_SYMTABS (obj, s)
-    if (block == BLOCKVECTOR_BLOCK (BLOCKVECTOR (s), GLOBAL_BLOCK))
+  {
+    struct blockvector *bv = BLOCKVECTOR(s);
+    if (bv && (block == BLOCKVECTOR_BLOCK (BLOCKVECTOR (s), GLOBAL_BLOCK)))
       {
 	if (obj->separate_debug_objfile_backlink)
 	  obj = obj->separate_debug_objfile_backlink;
 
 	return obj;
       }
+  }
 
   return NULL;
 }
