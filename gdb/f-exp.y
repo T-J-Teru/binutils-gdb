@@ -899,6 +899,7 @@ static const struct token dot_ops[] =
   { ".NEQV.", NOTEQUAL, BINOP_END },
   { ".neqv.", NOTEQUAL, BINOP_END },
   { ".EQV.", EQUAL, BINOP_END },
+  { "!=", NOTEQUAL, BINOP_END },
   { ".ne.", NOTEQUAL, BINOP_END },
   { ".NE.", NOTEQUAL, BINOP_END },
   { ".le.", LEQ, BINOP_END },
