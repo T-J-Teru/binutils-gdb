@@ -870,6 +870,7 @@ const struct language_defn c_language_defn =
   c_language_arch_info,
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   c_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
@@ -913,6 +914,7 @@ const struct language_defn upc_language_defn =
   c_language_arch_info,
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   c_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
@@ -1037,6 +1039,7 @@ const struct language_defn cplus_language_defn =
   cplus_language_arch_info,
   default_print_array_index,
   cp_pass_by_reference,
+  cp_pass_by_reference,
   c_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
@@ -1082,6 +1085,7 @@ const struct language_defn asm_language_defn =
   c_language_arch_info, 	/* FIXME: la_language_arch_info.  */
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   c_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
@@ -1132,6 +1136,7 @@ const struct language_defn minimal_language_defn =
   c_language_arch_info,
   default_print_array_index,
   default_pass_by_reference,
+  default_return_by_reference,
   c_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
