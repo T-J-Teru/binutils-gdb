@@ -230,6 +230,12 @@ upc_shared_var_address (struct symbol *var)
           return shared_addr;
       sym_addr = SYMBOL_VALUE_ADDRESS (msym);
     }
+  else if (SYMBOL_CLASS (var) == LOC_COMPUTED)
+    {
+      struct frame_info *frame = get_selected_frame (NULL);
+      struct value *value = SYMBOL_COMPUTED_OPS (var)->read_variable (var, frame);
+      sym_addr = value_address (value);
+    }
   else
     error (_("upc_shared_var_address: wrong symbol class"));
   if (elem_type)
