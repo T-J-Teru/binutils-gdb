@@ -621,6 +621,10 @@ is_thread_state (ptid_t ptid, enum thread_state state)
   struct thread_info *tp;
 
   tp = find_thread_ptid (ptid);
+  /* There is sometimes a window between inferior_ptid being set and the thread
+     actually being added to the list.  */
+  if (!tp)
+    return state == THREAD_RUNNING;
   gdb_assert (tp);
   return tp->state == state;
 }
