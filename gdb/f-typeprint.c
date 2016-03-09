@@ -429,9 +429,10 @@ f_type_print_base (struct type *type, struct ui_file *stream, int show,
 static int
 f_has_valid_type_name (struct type *type)
 {
+  char *c;
   return (TYPE_NAME (type) != NULL) &&
 	 ((TYPE_CODE (type) != TYPE_CODE_ARRAY && TYPE_CODE (type) != TYPE_CODE_STRING) ||
-	 strchr( TYPE_NAME (type), '(') != NULL);
+	 ((c = strchr( TYPE_NAME (type), '(')) != NULL && ((*c >= '0' && *c <= '9') || *c == '*' || *c == ':')));
 }
 
 static const char *
