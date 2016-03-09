@@ -708,8 +708,10 @@ set_stop_requested (ptid_t ptid, int stop)
   else
     {
       tp = find_thread_ptid (ptid);
-      gdb_assert (tp);
-      tp->stop_requested = stop;
+      if (!tp)
+        warning(_("set_stop_requested: failed to find thread `%s'."), target_pid_to_str (ptid));
+      else
+        tp->stop_requested = stop;
     }
 
   /* Call the stop requested observer so other components of GDB can
