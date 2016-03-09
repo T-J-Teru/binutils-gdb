@@ -106,6 +106,13 @@ annotate_starting (void)
 }
 
 void
+annotate_started (void)
+{
+  if (annotation_level > 0)
+    printf_filtered (("\n\032\032started\n"));
+}
+
+void
 annotate_stopped (void)
 {
   if (annotation_level > 1)

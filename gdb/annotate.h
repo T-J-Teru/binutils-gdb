@@ -23,6 +23,7 @@ extern void annotate_breakpoint (int);
 extern void annotate_catchpoint (int);
 extern void annotate_watchpoint (int);
 extern void annotate_starting (void);
+extern void annotate_started (void);
 extern void annotate_stopped (void);
 extern void annotate_exited (int);
 extern void annotate_signalled (void);

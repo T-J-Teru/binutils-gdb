@@ -2329,6 +2329,10 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal, int step)
   resume (force_step || step || bpstat_should_step (),
 	  tp->suspend.stop_signal);
 
+  /* Tell any frontend it's safe to send SIGINT and have it handled correctly */
+  annotate_started ();
+  gdb_flush (gdb_stdout);
+
   /* Wait for it to stop (if not standalone)
      and in any case decode why it stopped, and act accordingly.  */
   /* Do this only if we are not using the event loop, or if the target
