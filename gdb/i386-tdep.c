@@ -2068,6 +2068,188 @@ i386_skip_main_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
   return pc;
 }
 
+
+static int
+i386_analyze_frameless(CORE_ADDR pc, CORE_ADDR current_pc,
+		       struct i386_frame_cache *cache, enum bfd_endian byte_order)
+{
+  unsigned char op;
+  unsigned int pushes = 0;
+  int i = 0;
+  while (pc < current_pc)
+    {
+      op = read_memory_unsigned_integer (pc, 1, byte_order);
+ 
+      if (op >= 0x50 && op <= 0x57)
+	{
+	  if (i >= 8) pushes+=4;
+	  pc++;
+	  i++;
+	}
+      else {
+	i = 8;
+	if (op == 0xff)
+	  {
+	    pushes += 4;
+	    pc += 4;
+	  }
+	else if (op == 0x68)
+	  {
+	    pushes += 4;
+	    pc += 5;
+	  }
+	else if (op == 0x6a)
+	  {
+	    pushes += 4;
+	    pc += 2;
+	  }
+	else if (op >= 0x58 && op <= 0x5f)
+	  {
+	    pushes-=4;
+	    pc++;
+	  }
+	else if (op == 0x83) /* sub or add*/
+	  {
+	    int reg, val;
+	    reg = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	    val = read_memory_unsigned_integer (pc + 2, 1, byte_order);
+	    if (reg == 0xec)
+	      {
+		pushes += val;
+	      }
+	    else if (reg == 0xc4)
+	      {
+		pushes -= val;
+	      }
+	    pc += 3;
+	  }
+	else if (op == 0xe8)
+	  {
+ 	    /* call */
+	    pc += 5;
+	  }
+	else if (op == 0x8d)	/* lea ..(%eax), %edi */
+	  {
+	    int type = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	    switch (type)
+	      {
+	      case 0x91:
+		pc += 6;
+		break;
+	      case 0x5c :
+	      case 0x54 :
+	      case 0x4c : pc += 4;
+		break;
+	      case 0x78 : 
+	      case 0x0c:pc += 3;
+		break;
+
+	      default :
+		goto unknown;
+	      }
+	  }
+	else if (op == 0x3b) 	/* cmp */
+	  {
+	    int val = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	    if (val == 0x3c)
+	      pc += 3;
+	    else 
+	      pc += 2;
+	  }
+	else if (op == 0x74 || op == 0x75 || op == 0x73 || op == 0x7c)
+	  { 			/* small jumps */
+	    pc += 2;
+	  }
+	else if (op == 0x8b)	/* mov reg, reg */
+	  {
+	    int type = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	    switch (type) 
+	      {
+	      case 0x74:
+	      case 0x7c:
+	      case 0x54:
+	      case 0x4c:
+		pc += 4;
+		break;
+	      case 0x14:
+	      case 0x0c:
+		pc += 3;
+		break;
+	      default:
+		pc += 2;
+	      }
+	  }
+	else if (op == 0x89)	/* mov %edi, (%esp) */
+	  {
+	    int type = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	    switch (type) 
+	      {
+	      case 0x54:
+	      case 0x7c: 
+	      case 0x6c: pc += 4;
+		break;
+	      case 0x3c:
+	      case 0x04: pc += 3;
+		break;
+	      case 0x85:
+		break;
+	      default:
+	        goto unknown;
+	      }
+	  }
+	else if (op == 0xb8)
+	  {
+	    pc += 5;
+	  }
+	else if (op == 0x03 || op == 0x85 || op == 0x33)
+	  /* add reg, reg. test reg,reg, xor reg,reg */
+	  {
+	    pc += 2;
+	  }
+	else if (op == 0x0f)	/* je , jle etc... */
+	  {	
+	    int type = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	    if (type == 0xbe) pc +=3;
+	    else pc += 6;
+	  }
+	else if (op == 0xeb)	/* Jmp */
+	  {
+	    pc += 2;
+	  }
+	else if (op == 0xe9)	/* Jmp */
+	  {
+	    pc += 5;
+	  }
+	else if (op == 0xc7)	/* movl */
+	  {
+	    int type = read_memory_unsigned_integer (pc + 1, 1, byte_order);
+	    switch (type)
+	      {
+	      case 0x44:
+		pc += 8;
+		break;
+	      default:
+		goto unknown;
+	      }
+	  }
+	else if (op == 0x72) 	/* jb */
+	  {
+	    pc += 2;
+	  }
+	else if (op == 0xc1) 	/* jb */
+	  {
+	    pc += 3;
+	  }
+	else 
+	  {
+	    unknown:
+	    break;
+	  }
+      }
+    }
+  return pushes;  
+}
+
 /* This function is 64-bit safe.  */
 
 static CORE_ADDR
@@ -2126,6 +2308,9 @@ i386_frame_cache_1 (struct frame_info *this_frame,
 	 setup yet.  Try to reconstruct the base address for the stack
 	 frame by looking at the stack pointer.  For truly "frameless"
 	 functions this might work too.  */
+      int pushed_offset = (cache->pc != 0) ? i386_analyze_frameless(cache->pc,
+						 get_frame_pc (this_frame), 
+						 cache, byte_order) : 0;
 
       if (cache->saved_sp_reg != -1)
 	{
@@ -2150,7 +2335,7 @@ i386_frame_cache_1 (struct frame_info *this_frame,
 	     frame in %ebp.  */
 	  get_frame_register (this_frame, I386_ESP_REGNUM, buf);
 	  cache->base = extract_unsigned_integer (buf, 4, byte_order)
-			+ cache->sp_offset;
+			+ cache->sp_offset + pushed_offset;
 	}
       else
 	/* We're in an unknown function.  We could not find the start
