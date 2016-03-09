@@ -1186,7 +1186,7 @@ struct attr_abbrev
   };
 
 /* Size of abbrev_table.abbrev_hash_table.  */
-#define ABBREV_HASH_SIZE 121
+#define ABBREV_HASH_SIZE 12721
 
 /* Top level data structure to contain an abbreviation table.  */
 
