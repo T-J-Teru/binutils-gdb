@@ -129,6 +129,17 @@ show_filename_display_string (struct ui_file *file, int from_tty,
 {
   fprintf_filtered (file, _("Filenames are displayed as \"%s\".\n"), value);
 }
+
+int source_open = 1;
+static void
+show_source_open (struct ui_file *file, int from_tty,
+                    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("\
+Source opening is %s.\n"),
+                    value);
+}
+
  
 /* Line number of last line printed.  Default for various commands.
    current_source_line is usually, but not always, the same as this.  */
@@ -1013,6 +1024,9 @@ find_and_open_source (const char *filename,
           *fullname = rewritten_fullname;
         }
 
+      if (!source_open)
+	return -1;
+
       result = open (*fullname, OPEN_MODE);
       if (result >= 0)
 	{
@@ -1075,13 +1089,20 @@ find_and_open_source (const char *filename,
         }
     }
 
-  result = openp (path, OPF_SEARCH_IN_PATH, filename, OPEN_MODE, fullname);
-  if (result < 0)
+  if (!source_open)
     {
-      /* Didn't work.  Try using just the basename.  */
-      p = lbasename (filename);
-      if (p != filename)
-	result = openp (path, OPF_SEARCH_IN_PATH, p, OPEN_MODE, fullname);
+      result = -1;
+    }
+  else
+    {
+      result = openp (path, OPF_SEARCH_IN_PATH, filename, OPEN_MODE, fullname);
+      if (result < 0)
+	{
+	  /* Didn't work.  Try using just the basename.  */
+	  p = lbasename (filename);
+	  if (p != filename)
+	    result = openp (path, OPF_SEARCH_IN_PATH, p, OPEN_MODE, fullname);
+	}
     }
 
   return result;
@@ -1279,14 +1300,14 @@ int
 identify_source_line (struct symtab *s, int line, int mid_statement,
 		      CORE_ADDR pc)
 {
+  int charpos = -1;
   if (s->line_charpos == 0)
     get_filename_and_charpos (s, (char **) NULL);
   if (s->fullname == 0)
     return 0;
-  if (line > s->nlines)
-    /* Don't index off the end of the line_charpos array.  */
-    return 0;
-  annotate_source (s->fullname, line, s->line_charpos[line - 1],
+  if (line <= s->nlines && s->line_charpos != 0)
+    charpos = s->line_charpos[line - 1];
+  annotate_source (s->fullname, line, charpos,
 		   mid_statement, get_objfile_arch (s->objfile), pc);
 
   current_source_line = line;
@@ -1319,7 +1340,7 @@ print_source_lines_base (struct symtab *s, int line, int stopline,
 
   /* If printing of source lines is disabled, just print file and line
      number.  */
-  if (ui_out_test_flags (uiout, ui_source_list))
+  if (ui_out_test_flags (uiout, ui_source_list) && source_open)
     {
       /* Only prints "No such file or directory" once.  */
       if ((s != last_source_visited) || (!last_source_error))
@@ -1336,7 +1357,7 @@ print_source_lines_base (struct symtab *s, int line, int stopline,
   else
     {
       desc = last_source_error;
-	  flags |= PRINT_SOURCE_LINES_NOERROR;
+      flags |= PRINT_SOURCE_LINES_NOERROR;
       noprint = 1;
     }
 
@@ -1970,6 +1991,19 @@ set_substitute_path_command (char *args, int from_tty)
   forget_cached_source_info ();
 }
 
+static void
+set_source (char *arg, int from_tty)
+{
+  printf_unfiltered (
+     "\"set source\" must be followed by the name of a source subcommand.\n");
+  help_list (setsourcelist, "set source ", -1, gdb_stdout);
+}
+
+static void
+show_source (char *args, int from_tty)
+{
+  cmd_show_list (showsourcelist, from_tty, "");
+}
 
 void
 _initialize_source (void)
@@ -2101,4 +2135,19 @@ By default, relative filenames are displayed."),
 			show_filename_display_string,
 			&setlist, &showlist);
 
+  add_prefix_cmd ("source", no_class, set_source,
+                  _("Generic command for setting how sources are handled."),
+                  &setsourcelist, "set source ", 0, &setlist);
+
+  add_prefix_cmd ("source", no_class, show_source,
+                  _("Generic command for showing source settings."),
+                  &showsourcelist, "show source ", 0, &showlist);
+
+  add_setshow_boolean_cmd ("open", class_files,
+                           &source_open, _("\
+Set source opening."), _("\
+Show source opening."), 
+                           NULL, NULL,
+                           show_source_open,
+                           &setsourcelist, &showsourcelist);
 }

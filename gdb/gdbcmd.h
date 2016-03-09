@@ -127,6 +127,10 @@ extern struct cmd_list_element *showchecklist;
 
 extern struct cmd_list_element *save_cmdlist;
 
+extern struct cmd_list_element *setsourcelist;
+
+extern struct cmd_list_element *showsourcelist;
+
 extern void execute_command (char *, int);
 extern char *execute_command_to_string (char *p, int from_tty);
 

@@ -101,6 +101,10 @@ extern struct cmd_list_element *setchecklist;
 
 extern struct cmd_list_element *showchecklist;
 
+extern struct cmd_list_element *setsourcelist;
+
+extern struct cmd_list_element *showsourcelist;
+
 /* Exported to gdb/top.c */
 
 void init_cmd_lists (void);

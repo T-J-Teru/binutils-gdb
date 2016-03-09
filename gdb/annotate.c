@@ -419,8 +419,14 @@ annotate_source (char *filename, int line, int character, int mid,
   else
     printf_filtered (("\032\032"));
 
-  printf_filtered (("%s:%d:%d:%s:%s\n"), filename, line, character,
-		   mid ? "middle" : "beg", paddress (gdbarch, pc));
+  printf_filtered (("%s:%d:"), filename,
+		   line);
+  if (character != -1)
+    printf_filtered (("%d"), character);
+  else
+    printf_filtered (("??"));
+  printf_filtered ((":%s:"), mid ? "middle" : "beg");
+  printf_filtered (("%s\n"), paddress (gdbarch, pc));
 }
 
 void
