@@ -4952,6 +4952,12 @@ process_psymtab_comp_unit_reader (const struct die_reader_specs *reader,
   /* This must be done before calling dwarf2_build_include_psymtabs.  */
   attr = dwarf2_attr (comp_unit_die, DW_AT_comp_dir, cu);
   if (attr != NULL)
+    {
+      char *s = strstr(DW_STRING (attr), ":");
+      if (s != NULL) pst->dirname = xstrdup(s + 1); /* DWARF 2/3 suggest host:path (but not suggested for DWARF4)*/
+      else pst->dirname = DW_STRING (attr);
+    }
+  if (attr != NULL)
     pst->dirname = DW_STRING (attr);
 
   baseaddr = ANOFFSET (objfile->section_offsets, SECT_OFF_TEXT (objfile));
@@ -7959,8 +7965,12 @@ find_file_and_directory (struct die_info *die, struct dwarf2_cu *cu,
     }
 
   attr = dwarf2_attr (die, DW_AT_comp_dir, cu);
-  if (attr)
-    *comp_dir = DW_STRING (attr);
+  if (attr != NULL)
+    {
+      char *s = strstr(DW_STRING (attr), ":");
+      if (s != NULL) *comp_dir = xstrdup(s + 1); /* DWARF 2/3 suggest host:path (but not suggested for DWARF4)*/
+      else *comp_dir = DW_STRING (attr);
+    }
   else if (producer_is_gcc_lt_4_3 (cu) && *name != NULL
 	   && IS_ABSOLUTE_PATH (*name))
     {
