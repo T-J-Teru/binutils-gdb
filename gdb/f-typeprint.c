@@ -212,14 +212,37 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
       break;
 
     case TYPE_CODE_FUNC:
-      f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0,
-				   passed_a_ptr, 0, arrayprint_recurse_level);
-      if (passed_a_ptr)
-	fprintf_filtered (stream, ")");
+        f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0,
+                                     passed_a_ptr, 0, arrayprint_recurse_level);
+        if (passed_a_ptr)
+            fprintf_filtered (stream, ")");
 
-      fprintf_filtered (stream, "()");
+	{
+            int i, len = TYPE_NFIELDS (type);
+            fprintf_filtered (stream, "(");
+            if (len == 0
+                && TYPE_PROTOTYPED (type))
+                {
+                    fprintf_filtered (stream, "VOID");
+                }
+            else
+                for (i = 0; i < len; i++)
+                    {
+                        if (i > 0)
+                            {
+                                fputs_filtered (", ", stream);
+                                wrap_here ("    ");
+                            }
+                        f_print_type (TYPE_FIELD_TYPE (type, i), "", stream, -1, 0, 0);
+                    }
+            fprintf_filtered (stream, ")");
+            
+        }
+
       break;
-
+    case TYPE_CODE_TYPEDEF:
+	f_type_print_varspec_suffix (TYPE_TARGET_TYPE (type), stream, 0, 0, 0, 0);
+        break;
     case TYPE_CODE_UNDEF:
     case TYPE_CODE_STRUCT:
     case TYPE_CODE_UNION:
@@ -235,7 +258,6 @@ f_type_print_varspec_suffix (struct type *type, struct ui_file *stream,
     case TYPE_CODE_STRING:
     case TYPE_CODE_METHOD:
     case TYPE_CODE_COMPLEX:
-    case TYPE_CODE_TYPEDEF:
       /* These types do not need a suffix.  They are listed so that
          gcc -Wall will report types that may not have been considered.  */
       break;
