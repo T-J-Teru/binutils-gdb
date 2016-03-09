@@ -337,8 +337,10 @@ lookup_minimal_symbol (const char *name, const char *sfile,
                 /* Find the next symbol on the hash chain.  */
                 if (pass == 1)
                   msymbol = msymbol->hash_next;
-                else
+                else if (pass == 2)
                   msymbol = msymbol->demangled_hash_next;
+                else if (pass == 3)
+                  msymbol = msymbol->lowercase_hash_next;
 		}
 	    }
 	}
