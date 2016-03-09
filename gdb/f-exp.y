@@ -529,46 +529,6 @@ exp	:	exp '.' name
 			  write_exp_elt_opcode (STRUCTOP_STRUCT); }
 	;
 
-variable:       TYPENAME COLONCOLON NAME
-                        {
-                          const struct modtab_entry *module =
-                                f_module_lookup (copy_name ($1.stoken));
-
-                          if (module)
-                            {
-                              struct symbol *sym =
-                                f_module_lookup_symbol (module,
-                                                        copy_name ($3.stoken));
-
-                              if (sym)
-                                {
-                                  write_exp_elt_opcode (OP_VAR_VALUE);
-                                  write_exp_elt_block (NULL);
-                                  write_exp_elt_sym (sym);
-                                  write_exp_elt_opcode (OP_VAR_VALUE);
-                                }
-                              else
-                                {
-                                  if (!have_full_symbols () &&
-                                      !have_partial_symbols ())
-                                    error ("No symbol table is loaded.  Use the \"file\" command.");
-                                  else
-                                    error ("No symbol \"%s\" in current context.",
-                                           copy_name ($3.stoken));
-                                }
-                            }
-                          else
-                            {
-			      if (!have_full_symbols () &&
-                                  !have_partial_symbols ())
-				error ("No symbol table is loaded.  Use the \"file\" command.");
-			      else
-				error ("No module \"%s\" in current context.",
-				       copy_name ($1.stoken));
-                            }
-                        }
-        ;
-
 variable:	name_not_typename
 			{ struct symbol *sym = $1.sym;
 

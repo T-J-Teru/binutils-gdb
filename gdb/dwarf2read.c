@@ -6054,7 +6054,7 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
       /* Remember this symbol if it is for a Fortran module.  */
       if (cu->language == language_fortran)
         {
-          f_module_announce (actual_name, cu->per_cu->v.psymtab);
+          f_module_announce (objfile, actual_name);
         }
       break;
     case DW_TAG_class_type:
@@ -11971,6 +11971,7 @@ read_array_type (struct die_info *die, struct dwarf2_cu *cu)
 
         TYPE_FIELD_TYPE (type, 1) = (struct type*) baton_holder;
         
+        baton_holder->objfile = objfile; 
         baton_holder->baton_evaluation_function = (void*) dwarf2_evaluate_int; 
 
         if (attr && attr_form_is_block (attr))
@@ -12348,9 +12349,23 @@ read_module_type (struct die_info *die, struct dwarf2_cu *cu)
     complaint (&symfile_complaints,
 	       _("DW_TAG_module has no name, offset 0x%x"),
                die->offset.sect_off);
-  type = init_type (TYPE_CODE_MODULE, 0, 0, module_name, objfile);
+  if (module_name && cu->language_defn 
+      && (cu->language_defn->la_case_sensitivity == case_sensitive_off)) 
+    {
+      char *copy;
+      int len, i;
+
+      len = strlen (module_name);
+      copy = (char *) obstack_alloc (&cu->objfile->objfile_obstack, len + 1);
+      for (i= 0; i < len; i++)
+        copy[i] = tolower (module_name[i]);
+      copy[len] = 0;
+      module_name = copy;
+    }
+  type = init_type (TYPE_CODE_MODULE, 0, 0, NULL, objfile);
 
   /* determine_prefix uses TYPE_TAG_NAME.  */
+  TYPE_NAME (type) = module_name;
   TYPE_TAG_NAME (type) = TYPE_NAME (type);
 
   return set_die_type (die, type, cu);
@@ -16600,7 +16615,7 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
           /* Starting a new Fortran module.  */
           if (cu->language == language_fortran)
             {
-              f_module_enter(SYMBOL_LINKAGE_NAME(sym));
+              f_module_enter(objfile, SYMBOL_LINKAGE_NAME(sym));
             }
 	  break;
 	case DW_TAG_common_block:
