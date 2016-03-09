@@ -2465,7 +2465,7 @@ val_print_string (struct type *elttype, const char *encoding,
 {
   int force_ellipsis = 0;	/* Force ellipsis to be printed if nonzero.  */
   int errcode;			/* Errno returned from bad reads.  */
-  int found_nul;		/* Non-zero if we found the nul char.  */
+  int found_nul = 0;		/* Non-zero if we found the nul char.  */
   unsigned int fetchlimit;	/* Maximum number of chars to print.  */
   int bytes_read;
   gdb_byte *buffer = NULL;	/* Dynamically growable fetch buffer.  */
@@ -2496,8 +2496,9 @@ val_print_string (struct type *elttype, const char *encoding,
      LEN is -1.  */
 
   /* Determine found_nul by looking at the last character read.  */
-  found_nul = extract_unsigned_integer (buffer + bytes_read - width, width,
-					byte_order) == 0;
+  if (bytes_read > 0) /* Don't try reading before the start of buffer. */
+    found_nul = extract_unsigned_integer (buffer + bytes_read - width, width,
+					  byte_order) == 0;
   if (len == -1 && !found_nul)
     {
       gdb_byte *peekbuf;
