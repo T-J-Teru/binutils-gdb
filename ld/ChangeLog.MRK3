@@ -1,3 +1,11 @@
+2016-03-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ldmain.h (possibly_incorrect_error_message): Declare.
+	* ldmain.c (possibly_incorrect_error_message): Define.
+	(ld_cleanup): Possibly display additional warning message.
+	* ldmisc.c (vfinfo): Set possibly_incorrect_error_message if
+	appropriate.
+
 2016-02-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* scripttempl/mrk3.sc: Add entry to merge .mrk3.records sections.

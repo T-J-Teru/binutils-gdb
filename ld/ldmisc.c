@@ -354,13 +354,21 @@ vfinfo (FILE *fp, const char *fmt, va_list arg, bfd_boolean is_warning)
 		      lfinfo (fp, "%B:", abfd);
 
 		    if (filename != NULL)
-		      fprintf (fp, "%s:", filename);
+                      {
+                        possibly_incorrect_error_message
+                          = RELAXATION_ENABLED;
+                        fprintf (fp, "%s:", filename);
+                      }
 
 		    done = fmt[-1] != 'H';
 		    if (functionname != NULL && fmt[-1] == 'G')
 		      lfinfo (fp, "%T", functionname);
 		    else if (filename != NULL && linenumber != 0)
-		      fprintf (fp, "%u%s", linenumber, done ? "" : ":");
+                      {
+                        possibly_incorrect_error_message
+                          = RELAXATION_ENABLED;
+                        fprintf (fp, "%u%s", linenumber, done ? "" : ":");
+                      }
 		    else
 		      done = FALSE;
 		  }

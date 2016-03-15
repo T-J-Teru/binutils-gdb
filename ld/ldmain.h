@@ -21,6 +21,9 @@
 #ifndef LDMAIN_H
 #define LDMAIN_H
 
+/* See declaration in ldmain.c for more details.  */
+extern int possibly_incorrect_error_message;
+
 extern char *program_name;
 extern const char *ld_sysroot;
 extern char *ld_canon_sysroot;

@@ -43,6 +43,12 @@
 #include "plugin-api.h"
 #endif /* ENABLE_PLUGINS */
 
+/* MRK3 specific: This is set true when an error message is displayed that
+   might contain an incorrect location.  Then, on exit, we display some
+   additional text to inform the user about the possibly incorrect error
+   messages.  */
+int possibly_incorrect_error_message = 0;
+
 /* Somewhere above, sys/stat.h got included.  */
 #if !defined(S_ISDIR) && defined(S_IFDIR)
 #define	S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
@@ -170,6 +176,17 @@ ld_cleanup (void)
 #endif
   if (output_filename && delete_output_file_on_failure)
     unlink_if_ordinary (output_filename);
+  if (possibly_incorrect_error_message)
+    {
+      einfo (_("\
+\n\
+warning: error messages containing file and line number information\n\
+may have the wrong file and line number when linker relaxation is \n\
+enabled.  Disable linker relaxation in order to receive the correct\n\
+location information in linker error messages. Linker relaxation is \n\
+disabled by passing -mno-relax to the compiler or passing --no-relax\n\
+directly to the linker.\n"));
+    }
 }
 
 /* If there's a BFD assertion, we'll notice and exit with an error
