@@ -1,3 +1,11 @@
+2016-03-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* remote.c (PACKET enum): Remove PACKET_vKill.
+	(remote_kill): Use remote_multi_process_p.
+	(remote_vKill): Use PACKET_multiprocess_feature.
+	(_initialize_remote): Remove vKill configuration.
+	* NEWS: Mention removed commands.
+
 2016-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* buildsym.c (maybe_record_line): Remove stray debug print out.

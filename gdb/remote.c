@@ -1398,7 +1398,6 @@ enum {
   PACKET_vAttach,
   PACKET_vRun,
   PACKET_QStartNoAckMode,
-  PACKET_vKill,
   PACKET_qXfer_siginfo_read,
   PACKET_qXfer_siginfo_write,
   PACKET_qAttached,
@@ -8809,7 +8808,7 @@ remote_kill (struct target_ops *ops)
   int pid = ptid_get_pid (inferior_ptid);
   struct remote_state *rs = get_remote_state ();
 
-  if (packet_support (PACKET_vKill) != PACKET_DISABLE)
+  if (remote_multi_process_p (rs))
     {
       /* If we're stopped while forking and we haven't followed yet,
 	 kill the child task.  We need to do this before killing the
@@ -8850,7 +8849,7 @@ remote_kill (struct target_ops *ops)
 static int
 remote_vkill (int pid, struct remote_state *rs)
 {
-  if (packet_support (PACKET_vKill) == PACKET_DISABLE)
+  if (!remote_multi_process_p (rs))
     return -1;
 
   /* Tell the remote target to detach.  */
@@ -8859,7 +8858,7 @@ remote_vkill (int pid, struct remote_state *rs)
   getpkt (&rs->buf, &rs->buf_size, 0);
 
   switch (packet_ok (rs->buf,
-		     &remote_protocol_packets[PACKET_vKill]))
+		     &remote_protocol_packets[PACKET_multiprocess_feature]))
     {
     case PACKET_OK:
       return 0;
@@ -13677,9 +13676,6 @@ Show the maximum size of the address (in bits) in a memory packet."), NULL,
 
   add_packet_config_cmd (&remote_protocol_packets[PACKET_QStartNoAckMode],
 			 "QStartNoAckMode", "noack", 0);
-
-  add_packet_config_cmd (&remote_protocol_packets[PACKET_vKill],
-			 "vKill", "kill", 0);
 
   add_packet_config_cmd (&remote_protocol_packets[PACKET_qAttached],
 			 "qAttached", "query-attached", 0);
