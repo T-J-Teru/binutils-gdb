@@ -26,6 +26,7 @@ fragment <<EOF
 
 #include "elf/mrk3.h"
 #include "elf64-mrk3.h"
+#include "assert.h"
 
 static void
 gld${EMULATION_NAME}_after_parse (void)
@@ -193,13 +194,15 @@ handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBU
       os_data = lang_output_section_find (config.default_address_flags);
       if (os_data)
         {
-          flagbits = exp_get_vma(os_data->region->origin_exp, 0, output_secname);
+          flagbits = exp_get_vma (os_data->region->origin_exp, 0,
+                                  output_secname);
           flagbits &= 0xffffffff00000000ULL;
         }
       else
         {
           flagbits = 0;
-          einfo(_("%P: warning: unable to determine flags for '%s from '%s'\n"),
+          einfo(_("%P: warning: unable to determine flags for "
+                  "'%s from '%s'\n"),
                 asec->name, config.default_address_flags);
         }
     }
@@ -208,7 +211,23 @@ handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBU
   os->addr_tree = exp_intop (address | flagbits);
   push_stat_ptr (&os->children);
 
-  file_spec.name = xstrdup (abfd->filename);
+  if (abfd->my_archive != NULL)
+    {
+      size_t buff_len;
+      char *tmp;
+
+      buff_len = strlen (abfd->my_archive->filename) + 1 /* : */
+        + strlen (abfd->filename) + 1 /* \0 */;
+      tmp = xmalloc (buff_len);
+      strcpy (tmp, abfd->my_archive->filename);
+      strcat (tmp, ":");
+      strcat (tmp, abfd->filename);
+      /* The +1 is because the BUFF_LEN includes the null pointer.  */
+      assert (strlen (tmp) + 1 == buff_len);
+      file_spec.name = tmp;
+    }
+  else
+    file_spec.name = xstrdup (abfd->filename);
   file_spec.exclude_name_list = NULL;
   file_spec.sorted = none;
   file_spec.section_flag_list = NULL;

@@ -1,3 +1,10 @@
+2016-03-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* emultempl/mrk3.em: Add include of 'assert.h'.
+	(handle_special_placement_sections): Some fixes for line length,
+	and whitespace, AND, include archive name in file_spec when
+	placing one of the special location sections.
+
 2016-03-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ldmain.h (possibly_incorrect_error_message): Declare.
