@@ -268,21 +268,29 @@ EOF
 #
 PARSE_AND_LIST_PROLOGUE='
 #define OPTION_EMIT_DEBUG_RELOCS       	301
+#define OPTION_DEFAULT_ADDRESS_FLAGS	302
 '
 
 PARSE_AND_LIST_LONGOPTS='
-  { "emit-debug-relocs", no_argument, NULL, OPTION_EMIT_DEBUG_RELOCS},
+  { "emit-debug-relocs", no_argument, NULL, OPTION_EMIT_DEBUG_RELOCS },
+  { "default-address-flags", required_argument, NULL, OPTION_DEFAULT_ADDRESS_FLAGS },
 '
 
 PARSE_AND_LIST_OPTIONS='
-  fprintf (file, _("  --emit-debug-relocs         Like --emit-relocs, but only\n"
-                   "                              emit debug relocations.\n"));
+  fprintf (file, _("  --emit-debug-relocs         Like --emit-relocs, but only emit debug\n"
+                   "                              relocations.\n"));
+  fprintf (file, _("  --default-address-flags=SECTION\n"
+                   "                              Copy the address flags from SECTION for use in\n"
+                   "                              placing .mrk3.location.* sections.\n"));
 '
 
 PARSE_AND_LIST_ARGS_CASES='
     case OPTION_EMIT_DEBUG_RELOCS:
       mrk3_elf_set_only_emit_debug_relocs (TRUE);
       link_info.emitrelocations = TRUE;
+      break;
+    case OPTION_DEFAULT_ADDRESS_FLAGS:
+      config.default_address_flags = xstrdup(optarg);
       break;
 '
 

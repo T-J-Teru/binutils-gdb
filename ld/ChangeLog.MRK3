@@ -1,3 +1,13 @@
+2016-03-21  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* emultempl/mrk3.em (OPTION_DEFAULT_ADDRESS_FLAGS): Define.
+	(PARSE_AND_LIST_LONGOPTS): Add 'default-address-flags'.
+	(PARSE_AND_LIST_OPTIONS): Add 'default-address-flags' help text.
+	(PARSE_AND_LIST_ARGS_CASES): Handle OPTION_DEFAULT_ADDRESS_FLAGS.
+	* ldlex.h (option_values): Remove OPTION_DEFAULT_ADDRESS_FLAGS.
+	* lexsup.c (ld_options): Remove 'default-address-flags'.
+	(parse_args): Remove OPTION_DEFAULT_ADDRESS_FLAGS.
+
 2016-03-17  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* emultempl/mrk3.em: Add include of 'assert.h'.

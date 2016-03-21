@@ -528,10 +528,6 @@ static const struct ld_option ld_options[] =
   { {"pop-state", no_argument, NULL, OPTION_POP_STATE},
     '\0', NULL, N_("Pop state of flags governing input file handling"),
     TWO_DASHES },
-  { {"default-address-flags", required_argument, NULL,
-    OPTION_DEFAULT_ADDRESS_FLAGS}, '\0', N_("=SRC"),
-    N_("Sets the source of default address flags."),
-    TWO_DASHES },
   { {"print-memory-usage", no_argument, NULL, OPTION_PRINT_MEMORY_USAGE},
     '\0', NULL, N_("Report target memory usage"), TWO_DASHES },
   { {"orphan-handling", required_argument, NULL, OPTION_ORPHAN_HANDLING},
@@ -1559,10 +1555,6 @@ parse_args (unsigned argc, char **argv)
 	  else
 	    einfo (_("%P%F: invalid argument to option"
 		     " \"--orphan-handling\"\n"));
-	  break;
-
-	case OPTION_DEFAULT_ADDRESS_FLAGS:
-	  config.default_address_flags = xstrdup(optarg);
 	  break;
 	}
     }
