@@ -460,11 +460,6 @@ print_insn_arc (bfd_vma memaddr,
       insn[0] = (buffer[lowbyte] << 8) | buffer[highbyte];
       break;
 
-    default:
-      /* An unknown instruction is treated as being length 4.  This is
-         possibly not the best solution, but matches the behaviour that was
-         in place before the table based instruction length look-up was
-         introduced.  */
     case 4:
       /* This is a long instruction: Read the remaning 2 bytes.  */
       status = (*info->read_memory_func) (memaddr + 2, &buffer[2], 2, info);
@@ -475,6 +470,17 @@ print_insn_arc (bfd_vma memaddr,
 	}
       insn[0] = ARRANGE_ENDIAN (info, buffer);
       break;
+
+    default:
+      {
+        unsigned data;
+
+        data = (buffer[lowbyte] << 8) | buffer[highbyte];
+        /* Instruction of unknown length.  Display these 16-bits, and move
+           onto the next, hopefully we'll realign soon.  */
+        (*info->fprintf_func) (info->stream, ".short\t0x%04x", data);
+        return 2;
+      }
     }
 
   /* Set some defaults for the insn info.  */
