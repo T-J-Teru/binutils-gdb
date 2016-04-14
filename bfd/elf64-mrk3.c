@@ -1149,7 +1149,8 @@ mrk3_elf_relocate_section (bfd *output_bfd,
           if (ELF_ST_TYPE (sym->st_info) == STT_SECTION)
             relocation = BASEADDR (sec);
           else
-            relocation = BASEADDR (sec) + sym->st_value;
+            relocation = BASEADDR (sec) +
+                         MRK3_GET_ADDRESS_LOCATION(sym->st_value);
 
 	  name = bfd_elf_string_from_elf_section
 	    (input_bfd, symtab_hdr->sh_link, sym->st_name);

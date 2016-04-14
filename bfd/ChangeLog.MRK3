@@ -1,3 +1,8 @@
+2016-04-14  Edward Jones  <ed.jones@embecosm.com>
+
+  * elf64-mrk3.c (elf_relocate_section): If a symbol is not a section
+  offsets, only add the non-flag bits to the relocation.
+
 2016-03-07  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* elflink.c (elf_link_input_bfd): Only adjust symbol addresses
