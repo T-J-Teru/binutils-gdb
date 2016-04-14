@@ -189,6 +189,8 @@ struct thread_db_info
 
   td_err_e (*td_ta_new_p) (struct ps_prochandle * ps,
 				td_thragent_t **ta);
+  td_err_e (*td_ta_map_id2thr_p) (const td_thragent_t *ta, thread_t pt,
+				  td_thrhandle_t *__th);
   td_err_e (*td_ta_map_lwp2thr_p) (const td_thragent_t *ta,
 				   lwpid_t lwpid, td_thrhandle_t *th);
   td_err_e (*td_ta_thr_iter_p) (const td_thragent_t *ta,
@@ -762,7 +764,8 @@ try_thread_db_load_1 (struct thread_db_info *info)
 		return 0;
   }
 
-  info->td_ta_map_lwp2thr_p = verbose_dlsym (info->handle, "td_ta_map_lwp2thr");
+  info->td_ta_map_lwp2thr_p = verbose_dlsym (info->handle,
+					     "td_ta_map_lwp2thr");
   if (info->td_ta_map_lwp2thr_p == NULL)
   {
 		printf_unfiltered (_("Unable to load td_ta_map_lwp2thr\n"));
@@ -774,13 +777,6 @@ try_thread_db_load_1 (struct thread_db_info *info)
   {
 		printf_unfiltered (_("Unable to load td_ta_thr_iter\n"));
 		return 0;
-  }
-
-  info->td_thr_validate_p = verbose_dlsym (info->handle, "td_thr_validate");
-  if (info->td_thr_validate_p == NULL)
-  {
- 	printf_unfiltered (_("Unable to load td_thr_validate\n"));
-	return 0;
   }
 
   info->td_thr_get_info_p = verbose_dlsym (info->handle, "td_thr_get_info");
@@ -1981,7 +1977,7 @@ thread_db_pid_to_str (struct target_ops *ops, ptid_t ptid)
       static char buf[64];
       thread_t tid;
 
-      tid = thread_info->private->tid;
+      tid = thread_info->priv->tid;
       if (print_task_groups)
 	snprintf (buf, sizeof (buf), "Thread 0x%lx (LWP %d.%ld)",
 		  tid, ptid_get_pid (ptid), ptid_get_lwp (ptid));
@@ -2202,7 +2198,7 @@ static void info_tdbthreads (char *args, int from_tty)
 {
 	struct thread_db_info *info = NULL;
 	struct callback_data data;
-	info = get_thread_db_info (GET_PID (inferior_ptid));
+	info = get_thread_db_info (ptid_get_pid (inferior_ptid));
 	data.info = info;
 	data.new_threads = 1;
 	if (info == NULL)
@@ -2240,7 +2236,7 @@ static void tdb_thread_fetch_registers (struct target_ops *ops, struct regcache 
   gdb_fpregset_t *fpregset_p = &fpregset;
   struct target_ops *target_beneath;
   struct thread_db_info *info;
-  info = get_thread_db_info (GET_PID (inferior_ptid));
+  info = get_thread_db_info (ptid_get_pid (inferior_ptid));
   target_beneath = find_target_beneath (ops);
   if (!(ptid_get_tid(inferior_ptid) != 0))
     {
@@ -2304,7 +2300,7 @@ static void tdb_thread_store_registers(struct target_ops *ops, struct regcache *
   prfpregset_t fpregset;
   struct target_ops *target_beneath;
   struct thread_db_info *info;
-  info = get_thread_db_info (GET_PID (inferior_ptid));
+  info = get_thread_db_info (ptid_get_pid (inferior_ptid));
   target_beneath = find_target_beneath (ops);
   if (!(ptid_get_tid(inferior_ptid) != 0))
     {
@@ -2372,7 +2368,7 @@ thread_db_find_thread_from_tid (struct thread_info *thread, void *data)
 {
   long *tid = (long *) data;
 
-  if (thread->private->tid == *tid)
+  if (thread->priv->tid == *tid)
     return 1;
 
   return 0;
@@ -2574,15 +2570,15 @@ init_thread_db_ops (void)
   complete_target_initialization (&thread_db_ops);
   /* MPC BEGIN */
   if (tdb_debug) {
-    thread_db_ops.to_fetch_registers 	= 	tdb_thread_fetch_registers;
-    thread_db_ops.to_store_registers 	= 	tdb_thread_store_registers;
-    thread_db_ops.to_prepare_to_store 	= 	tdb_thread_prepare_to_store;
+    thread_db_ops.to_fetch_registers = tdb_thread_fetch_registers;
+    thread_db_ops.to_store_registers = tdb_thread_store_registers;
+    thread_db_ops.to_prepare_to_store = tdb_thread_prepare_to_store;
   }
   /* MPC END */
 }
 
 /* MPC BEGIN */
-static int tdb_verbosity_level = 0 ;
+static unsigned int tdb_verbosity_level = 0 ;
 
 static void set_tdb_verbosity (char *args, int from_tty, struct cmd_list_element *c)
 {
