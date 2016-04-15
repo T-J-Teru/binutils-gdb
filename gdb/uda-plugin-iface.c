@@ -34,13 +34,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
-#include <stdio.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <unistd.h>
-#include <assert.h>
 #include "defs.h"
 #include "value.h"
 #include "target.h"
@@ -52,6 +45,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 #include "uda-plugin.h"
 #include "uda-plugin-iface.h"
 #include "upc-thread.h"
+
+#include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <assert.h>
 
 /* UDA job information.  */
 uda_job_t *uda_job;
@@ -142,11 +143,12 @@ lookup_symbol_address (const char *symbol)
   const struct minimal_symbol *msym;
   CORE_ADDR retaddr;
   struct obj_section *obj_section;
-  msym = lookup_minimal_symbol (symbol, NULL, NULL);
-  if (!msym)
+  struct bound_minimal_symbol bmsym;
+  bmsym = lookup_minimal_symbol (symbol, NULL, NULL);
+  if (!bmsym.minsym)
     return 0;
-  retaddr = SYMBOL_VALUE_ADDRESS(msym);
-  obj_section = SYMBOL_OBJ_SECTION (msym);
+  retaddr = MSYMBOL_VALUE_ADDRESS(bmsym.objfile, bmsym.minsym);
+  obj_section = MSYMBOL_OBJ_SECTION (bmsym.objfile, bmsym.minsym);
   if (obj_section && (obj_section->the_bfd_section->flags & SEC_THREAD_LOCAL) != 0)
     retaddr = target_translate_tls_address (obj_section->objfile, retaddr);
   return retaddr;

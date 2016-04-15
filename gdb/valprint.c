@@ -334,7 +334,7 @@ scalar_or_string_type (struct type *type)
       return 1;
     default:
       /* else, check for scalar */
-      return scalar_type_p(type);
+      return val_print_scalar_type_p(type);
     }
 }
 
@@ -1756,7 +1756,7 @@ val_print_array_elements (struct type *type,
       else
 	  len = val
 	    ? min (high_pos - low_pos + 1, value_length (val) / eltlen)
-	    : (high_pos - low_pos + 1;
+	    : (high_pos - low_pos + 1);
     }
   else
     {
@@ -2987,5 +2987,5 @@ Show printing of array indexes"), NULL, NULL, show_print_array_indexes,
                             &user_print_options.max_depth, _("\
 Set maximum print depth."), _("\
 Show maximum print depth"), NULL, NULL, show_print_max_depth,
-                            &setprintlist, &showprintlist);  
+                            &setprintlist, &showprintlist);
 }

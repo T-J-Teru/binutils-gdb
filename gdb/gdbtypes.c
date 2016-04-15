@@ -423,8 +423,14 @@ make_reference_type (struct type *type, struct type **typeptr)
       if (!currently_reading_symtab)
 	{
 	  volatile struct gdb_exception e;
-	  TRY_CATCH (e, RETURN_MASK_ALL)
-	    len = upc_pts_len (type);
+	  TRY
+	    {
+	      len = upc_pts_len (type);
+	    }
+	  CATCH (e, RETURN_MASK_ALL)
+	    {
+	    }
+	  END_CATCH
 	}
       TYPE_LENGTH (ntype) = len;
     }
@@ -719,6 +725,23 @@ make_qual_variant_type (struct type_quals new_quals,
   return ntype;
 }
 
+/* Make a const / volatile type */
+struct type *
+make_cv_type (int cnst, int voltl,
+	      struct type *type,
+	      struct type **typeptr)
+{
+  struct type_quals type_quals;
+
+  type_quals = TYPE_QUALS (type);
+  if (cnst)
+    TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_CONST;
+  if (voltl)
+    TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_VOLATILE;
+  return make_qual_variant_type (type_quals, type, typeptr);
+}
+
+
 /* Make a 'restrict'-qualified version of TYPE.  */
 
 struct type *
@@ -738,12 +761,13 @@ make_restrict_type (struct type *type)
 struct type *
 make_unqualified_type (struct type *type)
 {
-  return make_qualified_type (type,
-			      (TYPE_INSTANCE_FLAGS (type)
-			       & ~(TYPE_INSTANCE_FLAG_CONST
-				   | TYPE_INSTANCE_FLAG_VOLATILE
-				   | TYPE_INSTANCE_FLAG_RESTRICT)),
-			      NULL);
+  struct type_quals type_quals;
+
+  type_quals = TYPE_QUALS (type);
+  TYPE_QUAL_FLAGS (type_quals) &= ~(TYPE_INSTANCE_FLAG_CONST
+				    | TYPE_INSTANCE_FLAG_VOLATILE
+				    | TYPE_INSTANCE_FLAG_RESTRICT);
+  return make_qualified_type (type, type_quals, NULL);
 }
 
 /* Make a '_Atomic'-qualified version of TYPE.  */
@@ -751,10 +775,11 @@ make_unqualified_type (struct type *type)
 struct type *
 make_atomic_type (struct type *type)
 {
-  return make_qualified_type (type,
-			      (TYPE_INSTANCE_FLAGS (type)
-			       | TYPE_INSTANCE_FLAG_ATOMIC),
-			      NULL);
+  struct type_quals type_quals;
+
+  type_quals = TYPE_QUALS (type);
+  TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_ATOMIC;
+  return make_qualified_type (type, type_quals, NULL);
 }
 
 /* Replace the contents of ntype with the type *type.  This changes the
@@ -2425,8 +2450,14 @@ check_typedef (struct type *type)
       if (upc_shared_type_p (elttype))
 	{
 	  volatile struct gdb_exception e;
-	  TRY_CATCH (e, RETURN_MASK_ALL)
-	    TYPE_LENGTH (type) = upc_pts_len (elttype);
+	  TRY
+	    {
+	      TYPE_LENGTH (type) = upc_pts_len (elttype);
+	    }
+	  CATCH (e, RETURN_MASK_ALL)
+	    {
+	    }
+	  END_CATCH
 	}
     }
 

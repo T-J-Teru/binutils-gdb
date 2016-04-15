@@ -583,11 +583,11 @@ exp	:	UNKNOWN_CPP_NAME '('
 	;
 
 exp     :       UNOP_INTRINSIC '(' exp ')'
-			{ write_exp_elt_opcode ($1); }
+			{ write_exp_elt_opcode (pstate, $1); }
 	;
 
 exp     :       BINOP_INTRINSIC '(' exp ',' exp ')'
-			{ write_exp_elt_opcode ($1); }
+			{ write_exp_elt_opcode (pstate, $1); }
 	;
 
 lcurly	:	'{'
@@ -1105,14 +1105,14 @@ variable:	name_not_typename
 			      write_exp_string (pstate, $1.stoken);
 			      write_exp_elt_opcode (pstate, STRUCTOP_PTR);
 			    }
-			  else if (parse_language->la_language == language_upc
+			  else if (parse_language (pstate)->la_language == language_upc
 			           && (!strcmp ($1.stoken.ptr, "THREADS")
 				       || !strcmp ($1.stoken.ptr, "MYTHREAD"))
 				   && (isym = lookup_only_internalvar (copy_name ($1.stoken))))
 			    {
-				write_exp_elt_opcode (OP_INTERNALVAR);
-				write_exp_elt_intern (isym);
-				write_exp_elt_opcode (OP_INTERNALVAR);
+  			        write_exp_elt_opcode (pstate, OP_INTERNALVAR);
+				write_exp_elt_intern (pstate, isym);
+				write_exp_elt_opcode (pstate, OP_INTERNALVAR);
 			    }
 			  else
 			    {
@@ -1355,7 +1355,7 @@ typebase  /* Implements (approximately): (type-qualifier)* type-specifier */
 						(struct block *) NULL,
 						0); }
 	|	VOID_KEYWORD
-			{ $$ = parse_type->builtin_void; }
+ 	                { $$ = parse_type (pstate)->builtin_void; }
 	|	STRUCT name
 			{ $$ = lookup_struct (copy_name ($2),
 					      expression_context_block); }
@@ -1470,7 +1470,7 @@ type_name:	TYPENAME
 		{
 		  $$.stoken.ptr = "void";
 		  $$.stoken.length = 4;
-		  $$.type = parse_type->builtin_void;
+		  $$.type = parse_type (pstate)->builtin_void;
 		}
 	;
 
@@ -2874,8 +2874,8 @@ lex_one_token (struct parser_state *par_state, int *is_quoted_name)
   tryname:
 
   for (i = 0; i < sizeof intrinsics / sizeof intrinsics[0]; i++)
-    if (strncmp (tokstart, intrinsics[i].operator, strlen(intrinsics[i].operator)) == 0
-	&& strlen(intrinsics[i].operator) == namelen)
+    if (strncmp (tokstart, intrinsics[i].oper, strlen(intrinsics[i].oper)) == 0
+	&& strlen(intrinsics[i].oper) == namelen)
       {
         yylval.opcode = intrinsics[i].opcode;
         return intrinsics[i].token;

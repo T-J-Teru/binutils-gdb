@@ -532,8 +532,6 @@ thread_db_get_tls_address (struct thread_info *thread, CORE_ADDR offset,
 
   saved_thread = current_thread;
   current_thread = thread;
-  saved_inferior = current_inferior;
-  current_inferior = thread;
 
   if (load_module != 0)
     {
@@ -557,7 +555,6 @@ thread_db_get_tls_address (struct thread_info *thread, CORE_ADDR offset,
     }
 
   current_thread = saved_thread;
-  current_inferior = saved_inferior;
   if (err == TD_OK)
     {
       *address = (CORE_ADDR) (uintptr_t) addr;

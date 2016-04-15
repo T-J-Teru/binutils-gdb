@@ -625,6 +625,13 @@ extern void default_iterate_over_objfiles_in_search_order
   ALL_OBJFILES (objfile)		\
     ALL_OBJFILE_COMPUNITS (objfile, cu)
 
+/* Traverse all symtabs in all compunits, in all object files, in the
+   single program space provided.  */
+#define ALL_PSPACE_SYMTABS(ps, of, cu, s)	\
+  ALL_PSPACE_OBJFILES (ps, of)		\
+    ALL_OBJFILE_COMPUNITS (of, cu)		\
+      ALL_OBJFILE_FILETABS (of, cu, s)
+
 /* Traverse all minimal symbols in all objfiles in the current symbol
    space.  */
 

@@ -173,7 +173,7 @@ add_minsym_to_lowercase_hash_table (struct minimal_symbol *sym,
   if (sym->lowercase_hash_next == NULL)
     {
       unsigned int hash
-	= msymbol_lc_hash (SYMBOL_SEARCH_NAME (sym)) % MINIMAL_SYMBOL_HASH_SIZE;
+	= msymbol_lc_hash (MSYMBOL_SEARCH_NAME (sym)) % MINIMAL_SYMBOL_HASH_SIZE;
       sym->lowercase_hash_next = table[hash];
       table[hash] = sym;
     }
@@ -289,7 +289,7 @@ lookup_minimal_symbol (const char *name, const char *sfile,
 		    }
 		  else if (pass == 3)
 		    {
-		      match = strcmp_lower (SYMBOL_LINKAGE_NAME (msymbol), 
+		      match = strcmp_lower (MSYMBOL_LINKAGE_NAME (msymbol), 
 					    modified_name) == 0;
 		    }
 

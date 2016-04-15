@@ -170,7 +170,7 @@ static struct obstack pending_block_obstack;
    are just waiting to be built into a blockvector when finalizing the
    associated symtab.  */
 
-static struct pending_block *pending_blocks;
+struct pending_block *pending_blocks;
 
 struct subfile_stack
   {

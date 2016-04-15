@@ -68,6 +68,7 @@
 #include "upc-thread.h"
 #include "regcache.h"
 #include "format.h"
+#include "interps.h"
 
 /* readline include files */
 #include "readline/readline.h"
@@ -4448,73 +4449,6 @@ hardware_watchpoint_inserted_in_range (struct address_space *aspace,
   return 0;
 }
 
-/* breakpoint_thread_match (PC, PTID) returns true if the breakpoint at
-   PC is valid for process/thread PTID.  */
-
-int
-breakpoint_thread_match (struct address_space *aspace, CORE_ADDR pc,
-			 ptid_t ptid)
-{
-  struct bp_location *bl, **blp_tmp;
-  /* The thread and task IDs associated to PTID, computed lazily.  */
-  int thread = -1;
-  int task = 0;
-  int infnum = 0;
-  
-  ALL_BP_LOCATIONS (bl, blp_tmp)
-    {
-      if (bl->loc_type != bp_loc_software_breakpoint
-	  && bl->loc_type != bp_loc_hardware_breakpoint)
-	continue;
-
-      /* ALL_BP_LOCATIONS bp_location has bl->OWNER always non-NULL.  */
-      if (!breakpoint_enabled (bl->owner)
-	  && bl->owner->enable_state != bp_permanent)
-	continue;
-
-      if (!breakpoint_location_address_match (bl, aspace, pc))
-	continue;
-
-      if (bl->owner->thread != -1)
-	{
-	  /* This is a thread-specific breakpoint.  Check that ptid
-	     matches that thread.  If thread hasn't been computed yet,
-	     it is now time to do so.  */
-	  if (thread == -1)
-	    thread = pid_to_thread_id (ptid);
-	  if (bl->owner->thread != thread)
-	    continue;
-	}
-
-      if (bl->owner->task != 0)
-        {
-	  /* This is a task-specific breakpoint.  Check that ptid
-	     matches that task.  If task hasn't been computed yet,
-	     it is now time to do so.  */
-	  if (task == 0)
-	    task = ada_get_task_number (ptid);
-	  if (bl->owner->task != task)
-	    continue;
-        }
-
-      if (bl->owner->infnum != 0)
-        {
-	  if (infnum == 0)
-	    infnum = pid_to_gdb_inferior_id (ptid_get_pid (ptid));
-	  if (bl->owner->infnum != infnum)
-	    continue;
-        }
-
-      if (overlay_debugging 
-	  && section_is_overlay (bl->section)
-	  && !section_is_mapped (bl->section))
-	continue;	    /* unmapped overlay -- can't be a match */
-
-      return 1;
-    }
-
-  return 0;
-}
 
 
 /* bpstat stuff.  External routines' interfaces are documented
@@ -6523,7 +6457,7 @@ print_one_breakpoint_location (struct breakpoint *b,
 	if (opts.addressprint)
 	  {
 	    annotate_field (4);
-	    if (header_of_multiple)x
+	    if (header_of_multiple)
 	      ui_out_field_string (uiout, "addr", "<MULTIPLE>");
 	    else if (b->loc == NULL || loc->shlib_disabled)
 	      ui_out_field_string (uiout, "addr", "<PENDING>");
@@ -9622,34 +9556,29 @@ expand_line_sal_maybe (struct symtab_and_line sal, struct linespec_result *canon
 					parse_args.sals_p = &func_sals;
 					parse_args.addr_string_p = &addr_string;
 					parse_args.not_found_ptr = &not_found;
-					
 
-					TRY_CATCH (e, RETURN_MASK_ALL)
+					TRY
 					{
-				     	parse_fast_track_breakpoint_sals (canonical, &parse_args);
-					}				
-										
-					switch (e.reason)
-					{
-					case RETURN_QUIT:
-						throw_exception (e);
-					case RETURN_ERROR:
-						/* we encountered an error, so throw it. */
-						throw_exception (e);
-					default:
-						// if we didn't find any elts, then we don't have a cooresponding
-						// function. If we found more than one elt, something is messed up.
-						if (!func_sals.nelts) 
-						{
-							goto done_FTD;
-						}
-						if (func_sals.nelts > 1)
-						{
-							xfree (func_sals.sals);
-							goto done_FTD;
-						}
+					  parse_fast_track_breakpoint_sals (canonical, &parse_args);
 					}
-					
+					CATCH (e, RETURN_MASK_ALL)
+					  {
+					    throw_exception (e);
+					  }
+					END_CATCH
+
+					  // if we didn't find any elts, then we don't have a cooresponding
+					  // function. If we found more than one elt, something is messed up.
+					  if (!func_sals.nelts) 
+					    {
+					      goto done_FTD;
+					    }
+					if (func_sals.nelts > 1)
+					  {
+					    xfree (func_sals.sals);
+					    goto done_FTD;
+					  }
+
 					// can we have the same function name in multiple files??
 					// I don't think any language allows that..
 					
@@ -9674,7 +9603,7 @@ expand_line_sal_maybe (struct symtab_and_line sal, struct linespec_result *canon
 								if (debug_fast_track_debugging) {
 									printf_unfiltered("[Gfast] Making jump-to-debug breakpoint for %s -> %s\n", this_function, original_function);
 								}
-								arch = get_objfile_arch(func_sals.sals[0].symtab->objfile);
+								arch = get_objfile_arch(SYMTAB_OBJFILE (func_sals.sals[0].symtab));
 								b = create_internal_breakpoint(arch, func_addr, bp_jump_to_debug, &internal_breakpoint_ops);      
 
 								
@@ -9723,7 +9652,7 @@ done_FTD:
 								if (debug_fast_track_debugging) {
 									printf_unfiltered("[Gfast] Making jump-to-debug breakpoint for %s -> %s\n", original_function, this_function);
 								}
-								arch = get_objfile_arch(sal.symtab->objfile);
+								arch = get_objfile_arch(SYMTAB_OBJFILE (sal.symtab));
 								b = create_internal_breakpoint(arch, original_func_addr, bp_jump_to_debug, &internal_breakpoint_ops);
 								
 								b->debug_jump_addr = func_addr;
@@ -15646,48 +15575,6 @@ invalidate_bp_value_on_memory_change (struct inferior *inferior,
 		}
 	  }
       }
-}
-
-/* Create and insert a raw software breakpoint at PC.  Return an
-   identifier, which should be used to remove the breakpoint later.
-   In general, places which call this should be using something on the
-   breakpoint chain instead; this function should be eliminated
-   someday.  */
-
-void *
-deprecated_insert_raw_breakpoint (struct gdbarch *gdbarch,
-				  struct address_space *aspace, CORE_ADDR pc)
-{
-  struct bp_target_info *bp_tgt;
-
-  bp_tgt = XZALLOC (struct bp_target_info);
-
-  bp_tgt->placed_address_space = aspace;
-  bp_tgt->placed_address = pc;
-
-  if (target_insert_breakpoint (gdbarch, bp_tgt) != 0)
-    {
-      /* Could not insert the breakpoint.  */
-      xfree (bp_tgt);
-      return NULL;
-    }
-
-  return bp_tgt;
-}
-
-/* Remove a breakpoint BP inserted by
-   deprecated_insert_raw_breakpoint.  */
-
-int
-deprecated_remove_raw_breakpoint (struct gdbarch *gdbarch, void *bp)
-{
-  struct bp_target_info *bp_tgt = bp;
-  int ret;
-
-  ret = target_remove_breakpoint (gdbarch, bp_tgt);
-  xfree (bp_tgt);
-
-  return ret;
 }
 
 /* One (or perhaps two) breakpoints used for software single

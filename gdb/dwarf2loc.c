@@ -1221,7 +1221,7 @@ dwarf_expr_push_dwarf_reg_entry_value (struct dwarf_expr_context *ctx,
 
   baton_local.frame = caller_frame;
   baton_local.per_cu = caller_per_cu;
-  baton_local.obj_address = 0;
+  baton_local.object_address = 0;
 
   saved_ctx.gdbarch = ctx->gdbarch;
   saved_ctx.addr_size = ctx->addr_size;
@@ -1251,6 +1251,7 @@ dwarf_expr_get_addr_index (void *baton, unsigned int index)
   return dwarf2_read_addr_index (debaton->per_cu, index);
 }
 
+#if 0
 /* Callback function for get_object_address. Return the address of the VLA
    object.  */
 
@@ -1261,11 +1262,12 @@ dwarf_expr_get_obj_addr (void *baton)
 
   gdb_assert (debaton != NULL);
 
-  if (debaton->obj_address == 0)
+  if (debaton->object_address == 0)
     error (_("Location address is not set."));
 
-  return debaton->obj_address;
+  return debaton->object_address;
 }
+#endif
 
 /* VALUE must be of type lval_computed with entry_data_value_funcs.  Perform
    the indirect method on it, that is use its stored target value, the sole
@@ -2451,7 +2453,7 @@ dwarf2_locexpr_baton_eval (const struct dwarf2_locexpr_baton *dlbaton,
 
   baton.frame = get_selected_frame (NULL);
   baton.per_cu = dlbaton->per_cu;
-  baton.obj_address = addr;
+  baton.object_address = addr;
 
   objfile = dwarf2_per_cu_objfile (dlbaton->per_cu);
 
@@ -2532,7 +2534,7 @@ dwarf2_evaluate_property (const struct dynamic_prop *prop,
 	if (data != NULL)
 	  {
 	    val = dwarf2_evaluate_loc_desc (baton->referenced_type, frame, data,
-					    size, baton->loclist.per_cu);
+					    size, baton->loclist.per_cu, 0);
 	    if (!value_optimized_out (val))
 	      {
 		*value = value_as_address (val);
@@ -2715,6 +2717,7 @@ needs_get_addr_index (void *baton, unsigned int index)
   return 1;
 }
 
+#if 0
 /* DW_OP_push_object_address has a frame already passed through.  */
 
 static CORE_ADDR
@@ -2723,6 +2726,7 @@ needs_get_obj_addr (void *baton)
   /* Nothing to do.  */
   return 1;
 }
+#endif
 
 /* Virtual method table for dwarf2_loc_desc_needs_frame below.  */
 

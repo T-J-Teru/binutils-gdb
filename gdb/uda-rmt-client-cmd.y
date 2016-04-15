@@ -23,7 +23,6 @@
 
 #include "defs.h"
 #include <ctype.h>
-#include "gdb_string.h"
 #include "uda-types-client.h"
 #include "uda-rmt-utils.h"
 #include "uda-client.h"
@@ -312,7 +311,7 @@ const kw_entry_t yykw[] =
 #define reset_scan() { yycp = yytext; yyleng = 0; }
 
 int
-yylex()
+yylex(void)
 {
   int ch_token;
   yytext = yycp;

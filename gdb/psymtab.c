@@ -76,6 +76,8 @@ struct compunit_symtab *psymtab_to_symtab (struct objfile *objfile,
 struct objfile *
 require_partial_symbols (struct objfile *objfile, int verbose)
 {
+  struct cleanup *back_to;
+
   if ((objfile->flags & OBJF_PSYMTABS_READ) == 0)
     {
       objfile->flags |= OBJF_PSYMTABS_READ;
@@ -88,7 +90,7 @@ require_partial_symbols (struct objfile *objfile, int verbose)
 				 objfile_name (objfile));
 	      gdb_flush (gdb_stdout);
 	    }
-          struct cleanup *back_to = increment_reading_symtab ();
+          back_to = increment_reading_symtab ();
           (*objfile->sf->sym_read_psymbols) (objfile);
           do_cleanups (back_to);
 	  if (verbose)

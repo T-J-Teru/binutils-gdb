@@ -427,7 +427,7 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
       if (structure_depth <= MAX_STRUCTURE_DEPTH) 
 	{
 	  fprintf_filtered (stream, "( ");
-	  TRY_CATCH (exception, -1)
+	  TRY
 	    {
 	      for (index = 0; index < TYPE_NFIELDS (type); index++)
 		{
@@ -441,7 +441,11 @@ f_val_print (struct type *type, const gdb_byte *valaddr, int embedded_offset,
 		    fputs_filtered (", ", stream);
 		}
 	    }
-	  exception_print (gdb_stderr, exception);
+	  CATCH (exception, -1)
+	    {
+	      exception_print (gdb_stderr, exception);
+	    }
+	  END_CATCH
 	  fprintf_filtered (stream, " )");
 	}
       --structure_depth;

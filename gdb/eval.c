@@ -39,6 +39,7 @@
 #include "valprint.h"
 #include "gdb_obstack.h"
 #include "objfiles.h"
+#include "python/python.h"
 #include <ctype.h>
 #include <math.h>
 
@@ -2213,6 +2214,7 @@ evaluate_subexp_standard (struct type *expect_type,
       arg1 = coerce_ref (arg1);
       arg2 = coerce_ref (arg2);
       {
+	
 	struct value *ret = apply_val_child (arg1, arg2,
 					     exp->language_defn);
 	if (ret)
@@ -2395,7 +2397,7 @@ evaluate_subexp_standard (struct type *expect_type,
 	      {
 		element_type = TYPE_TARGET_TYPE (type);
 		range_type = TYPE_INDEX_TYPE (type);
-		new_range_types[i - 1] = create_range_type ((struct type *) NULL,
+		new_range_types[i - 1] = create_static_range_type ((struct type *) NULL,
 						            TYPE_TARGET_TYPE (range_type),
 						            lowerbound,
 						            upperbound);

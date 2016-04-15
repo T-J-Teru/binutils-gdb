@@ -33,6 +33,7 @@
 #include "gdbthread.h"
 #include "top.h"
 #include "upc-thread.h"
+#include "objfiles.h"
 
 #define	GDB_UPC_PROMPT "(gdb-upc) "
 
@@ -122,7 +123,7 @@ upc_thread_alive (struct thread_info *tp)
 
 /* Number of UPC threads in the system */
 int
-upc_thread_count ()
+upc_thread_count (void)
 {
   return upc_threads;
 }
@@ -147,7 +148,7 @@ upc_thread_num (struct thread_info *tp)
 }
 
 int
-upc_current_thread_num ()
+upc_current_thread_num (void)
 {
   struct thread_info *tp;
   /* find current and target threads */
@@ -257,14 +258,14 @@ upc_enable_thread_debug (void)
       if (upcsingle)
 	return;
 
-      msym = lookup_minimal_symbol ("THREADS", NULL, NULL);
+      msym = lookup_minimal_symbol ("THREADS", NULL, NULL).minsym;
       if (msym == NULL)
 	{
 	  debug ("upc_enable_thread_debug: No THREADS");
 	  return;
 	}
 
-      msym = lookup_minimal_symbol ("MYTHREAD", NULL, NULL);
+      msym = lookup_minimal_symbol ("MYTHREAD", NULL, NULL).minsym;
       if (msym == NULL)
 	{
 	  debug ("upc_enable_thread_debug: No MYTHREAD");
@@ -275,7 +276,7 @@ upc_enable_thread_debug (void)
       upc_thread_active = 1;
 
       /* check for pthreads run-time */
-      msym = lookup_minimal_symbol ("UPC_PTHREADS", NULL, NULL);
+      msym = lookup_minimal_symbol ("UPC_PTHREADS", NULL, NULL).minsym;
       if (msym != NULL)
 	{
 	  debug ("upc_enable_thread_debug: PTHREADS implementation");
@@ -369,15 +370,16 @@ upc_thread_attach (struct thread_info *t)
 	  CORE_ADDR gate_addr = 0;
 	  gdb_byte buf = 1;
 	  struct minimal_symbol *msym;
+	  struct bound_minimal_symbol bmsym;
 
-	  msym = lookup_minimal_symbol ("MPIR_being_debugged", NULL, NULL);
-	  if (msym == NULL)
+	  bmsym = lookup_minimal_symbol ("MPIR_being_debugged", NULL, NULL);
+	  if (bmsym.minsym == NULL)
 	    {
 	      debug
 		("upc_enable_thread_debug: No MPIR_being_debugged in UPC thread");
 	      return;
 	    }
-	  gate_addr = SYMBOL_VALUE_ADDRESS (msym);
+	  gate_addr = MSYMBOL_VALUE_ADDRESS (bmsym.objfile, bmsym.minsym);
 	  write_memory (gate_addr, &buf, 1);
 	}
     }
@@ -467,7 +469,7 @@ upc_thread_exit (struct thread_info *t, int silent)
 
 /* Cleanup after re-run (target kill) */
 void
-upc_thread_kill_cleanup ()
+upc_thread_kill_cleanup (void)
 {
 
   /* ... make sure we clear upcmode */
@@ -770,7 +772,7 @@ show_upcsingle (struct ui_file *file, int from_tty,
 }
 
 void
-_initialize_upc_thread ()
+_initialize_upc_thread (void)
 {
   init_upc_thread_ops ();
   add_target (&upc_thread_ops);

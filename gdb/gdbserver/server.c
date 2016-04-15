@@ -1971,7 +1971,7 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
 	 the library at all.  We also re-validate breakpoints when we
 	 see a second GDB breakpoint for the same address, and or when
 	 we access breakpoint shadows.  */
-      if (current_inferior != NULL)
+      if (current_thread != NULL)
 	{
 	  validate_breakpoints ();
 

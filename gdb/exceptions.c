@@ -229,13 +229,17 @@ gdb_byte* catch_errors_with_ptr_return (catch_errors_with_ptr_return_ftype *func
 {
   volatile gdb_byte *val = 0;
   volatile struct gdb_exception exception;
-  TRY_CATCH (exception, mask)
+  TRY
     {
       val = func (func_args);
     }
-  print_any_exception (gdb_stderr, errstring, exception);
-  if (exception.reason != 0)
-    return 0;
+  CATCH (exception, mask)
+    {
+      exception_fprintf (gdb_stderr, exception, "%s", errstring);
+      return 0;
+    }
+  END_CATCH
+    exception_fprintf (gdb_stderr, exception, "%s", errstring);
   return (gdb_byte*) val;
 }
 

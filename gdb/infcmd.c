@@ -866,6 +866,7 @@ continue_command (char *args, int from_tty)
       int num, stat;
       int stopped = 0;
       struct thread_info *tp;
+      char stop;
 
       if (non_stop && !inferior_stop)
 	tp = find_thread_ptid (inferior_ptid);
@@ -880,7 +881,6 @@ continue_command (char *args, int from_tty)
       if (tp != NULL)
 	bs = tp->control.stop_bpstat;
 
-      char stop;
       while ((stat = bpstat_num (&bs, &num, &stop)) != 0)
 	if (stat > 0)
 	  {
@@ -1062,7 +1062,7 @@ step_1 (int skip_subroutines, int single_inst, char *count_string)
       if (upcmode && is_collective_stepping ())
         {
           struct step_arg sa = {skip_subroutines, single_inst, count, thread};
-          if (any_running())
+          if (any_running ())
                error (_("Cannot do collective step while threads are running."));
           else iterate_over_threads (step_once_callback, (void *)&sa);
         }

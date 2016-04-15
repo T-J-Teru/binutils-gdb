@@ -10,7 +10,6 @@
 
 #include "block.h"
 #include "command.h"
-#include "gdb_string.h"
 #include "hashtab.h"
 #include "source.h"
 #include "value.h"
@@ -188,7 +187,7 @@ f_module_enter (struct objfile *objfile, const char *name)
    the (now) previous Fortran module.  */
 
 void
-f_module_leave ()
+f_module_leave (void)
 {
   if (!open_module)
     {
@@ -310,10 +309,11 @@ print_module_symbols (void **slot, void *arg)
 
   /* Expand any symtabs with module symbols in.  */
   objfile->sf->qf->expand_symtabs_matching (objfile,
-					  file_name_matcher,
-					  module_name_matcher,
-					  kind,
-					  NULL);
+					    file_name_matcher,
+					    module_name_matcher,
+					    NULL,
+					    kind,
+					    NULL);
 
   /* Careful! Need to grab the sym_list AFTER converting the psymtab
      into a symtab (above).  */
@@ -334,7 +334,7 @@ print_module_symbols (void **slot, void *arg)
                        ? "" : SYMBOL_PRINT_NAME (sym)),
                       gdb_stdout, 0);
 
-	  fullname = symtab_to_fullname (sym->symtab);
+	  fullname = symtab_to_fullname (symbol_symtab (sym));
           printf_filtered (";%s;%d;\n",
                            (fullname ?
                             fullname :

@@ -870,6 +870,18 @@ is_running (ptid_t ptid)
 }
 
 int
+any_running (void)
+{
+  struct thread_info *tp;
+
+  for (tp = thread_list; tp; tp = tp->next)
+    if (tp->state == THREAD_RUNNING)
+      return 1;
+
+  return 0;
+}
+
+int
 is_executing (ptid_t ptid)
 {
   struct thread_info *tp;
@@ -1257,17 +1269,18 @@ switch_to_thread (ptid_t ptid)
 	    {
 	      volatile struct gdb_exception ex;
 
-	      TRY_CATCH (ex, RETURN_MASK_ALL)
+	      TRY
 		{
 		  struct frame_info *frame;
 		  frame = get_selected_frame (NULL);
 		  tp->selected_frame_id = get_frame_id (frame);
 		  tp->selected_frame_level = frame_relative_level (frame);
 		}
-	      if (ex.reason < 0)
+	      CATCH (ex, RETURN_MASK_ALL)
 		{
 		  tp->selected_frame_level = -1;
 		}
+	      END_CATCH
 	    }
 	  else
 	    tp->selected_frame_level = -1;
@@ -1613,14 +1626,15 @@ thread_apply_all_command (char *cmd, int from_tty)
           else
 	    printf_filtered (_("\nThread %d (%s):\n"),
 			 tp->num, target_pid_to_str (inferior_ptid));
-		  TRY_CATCH (ex, RETURN_MASK_ALL)
-			{
-			  execute_command (cmd, from_tty);
-			}
-		  if (ex.reason < 0)
-			{
-			  printf_filtered("<%s>\n", ex.message);
-			}
+		  TRY
+		    {
+		      execute_command (cmd, from_tty);
+		    }
+		  CATCH (ex, RETURN_MASK_ALL)
+		    {
+		      printf_filtered("<%s>\n", ex.message);
+		    }
+		  END_CATCH
 	  strcpy (cmd, saved_cmd);	/* Restore exact command used
 					   previously.  */
 	}
@@ -1651,7 +1665,7 @@ thread_apply_command (char *tidlist, int from_tty)
   saved_cmd = xstrdup (cmd);
   old_chain = make_cleanup (xfree, saved_cmd);
 
-  init_number_or_range (&state, tidlist);x
+  init_number_or_range (&state, tidlist);
   while (!state.finished && state.string < cmd)
     {
       struct thread_info *tp;
@@ -1679,14 +1693,15 @@ thread_apply_command (char *tidlist, int from_tty)
           else
 	    printf_filtered (_("\nThread %d (%s):\n"), tp->num,
 			   target_pid_to_str (inferior_ptid));
-	  TRY_CATCH (ex, RETURN_MASK_ALL)
+	  TRY
 	  {
 	    execute_command (cmd, from_tty);
 	  }
-	  if (ex.reason < 0)
+	  CATCH (ex, RETURN_MASK_ALL)
 	  {
 	    printf_filtered("<%s>\n", ex.message);
 	  }
+	  END_CATCH
 
 	  /* Restore exact command used previously.  */
 	  strcpy (cmd, saved_cmd);
@@ -1960,7 +1975,7 @@ thread_check_collective_bp (int bpnum)
 
 /* Collective step - check if threads completed a step */
 int
-thread_check_collective_step ()
+thread_check_collective_step (void)
 {
   struct thread_info *tp;
   for (tp = thread_list; tp; tp = tp->next)

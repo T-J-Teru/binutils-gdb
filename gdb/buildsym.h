@@ -189,14 +189,6 @@ EXTERN struct pending_block *pending_blocks;
 
 
 
-struct subfile_stack
-  {
-    struct subfile_stack *next;
-    char *name;
-  };
-
-
-
 #define next_symbol_text(objfile) (*next_symbol_text_func)(objfile)
 
 /* Function to invoke get the next symbol.  Return the symbol name.  */
@@ -221,7 +213,7 @@ extern void really_free_pendings (void *dummy);
 
 extern struct subfile *find_subfile (const char *name, const char *dirname);
 
-extern void start_subfile (const char *name, const char *dirname);
+extern void start_subfile (const char *name);
 
 extern void patch_subfile_names (struct subfile *subfile, char *name);
 

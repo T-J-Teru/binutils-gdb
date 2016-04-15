@@ -2106,7 +2106,7 @@ static void info_tdbthreads (char *args, int from_tty);
 static int info_cb (const td_thrhandle_t *th, void *arg);
 int tdb_remove_dead_threads (struct thread_info *thread, void *data);
 static void tdb_thread_fetch_registers (struct target_ops *ops, struct regcache *regcache, int regnum);
-static void tdb_thread_prepare_to_store (struct regcache *regcache);
+static void tdb_thread_prepare_to_store (struct target_ops *ops, struct regcache *regcache);
 static void tdb_thread_store_registers (struct target_ops *ops, struct regcache *regcache, int regnum);
 
 
@@ -2353,7 +2353,8 @@ static void tdb_thread_store_registers(struct target_ops *ops, struct regcache *
 
 }
 
-static void tdb_thread_prepare_to_store(struct regcache *regcache)
+static void tdb_thread_prepare_to_store (struct target_ops *ops,
+					 struct regcache *regcache)
 {
 	
 }
@@ -2363,7 +2364,7 @@ static void tdb_thread_prepare_to_store(struct regcache *regcache)
 /* Callback routine used to find a thread based on the TID part of
    its PTID.  */
 
-static int
+ATTRIBUTE_UNUSED static int
 thread_db_find_thread_from_tid (struct thread_info *thread, void *data)
 {
   long *tid = (long *) data;

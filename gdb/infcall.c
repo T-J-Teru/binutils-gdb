@@ -398,7 +398,7 @@ get_function_name (CORE_ADDR funaddr, char *buf, int buf_size)
    Return the exception if there's an error, or an exception with
    reason >= 0 if there's no error.
 
-   This is done inside a TRY_CATCH so the caller needn't worry about
+   This is done inside a TRY .... CATCH so the caller needn't worry about
    thrown errors.  The caller should rethrow if there's an error.  */
 
 static struct gdb_exception
@@ -627,16 +627,6 @@ call_function_by_hand_dummy (struct value *function,
 			     dummy_frame_dtor_ftype *dummy_dtor,
 			     void *dummy_dtor_data)
 {
-  return call_function_by_hand_ex(
-      function,
-      language_unknown,
-      nargs,
-      args);
-}
-
-struct value *
-call_function_by_hand_ex (struct value *function, enum language lang, int nargs, struct value **args)
-{
   CORE_ADDR sp;
   struct type *values_type, *target_values_type;
   unsigned char struct_return = 0, hidden_first_param_p = 0;
@@ -660,6 +650,8 @@ call_function_by_hand_ex (struct value *function, enum language lang, int nargs,
   struct dummy_frame_context_saver *context_saver;
   struct cleanup *context_saver_cleanup;
   enum language original_lang = current_language->la_language;
+  int call_dummy_location;
+  enum language lang = language_unknown;
 
   /* ALL-533: Set correct language of function, so that arguments can be passed
      in the right way. Fixes infinite recursion when calling a Fortran function
@@ -841,7 +833,7 @@ call_function_by_hand_ex (struct value *function, enum language lang, int nargs,
      not just the breakpoint but also an extra word containing the
      size (?) of the structure being passed.  */
 
-  const int call_dummy_location =
+  call_dummy_location =
 #if defined (__linux__)
     (linux_ptrace_force_use_entry_point_to_call_inferior_functions
      ? AT_ENTRY_POINT

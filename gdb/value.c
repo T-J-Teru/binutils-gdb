@@ -42,6 +42,7 @@
 #include "user-regs.h"
 #include "f-lang.h"
 #include "valprint.h"
+#include "upc-lang.h"
 
 /* Prototypes for exported functions.  */
 
@@ -3633,6 +3634,7 @@ value_from_pointer (struct type *type, CORE_ADDR addr)
 struct value *
 value_from_contents_and_address_unresolved (struct type *type,
 					    const gdb_byte *valaddr,
+					    unsigned length,
 					    CORE_ADDR address)
 {
   struct value *v;
@@ -3640,7 +3642,13 @@ value_from_contents_and_address_unresolved (struct type *type,
   if (valaddr == NULL)
     v = allocate_value_lazy (type);
   else
-    v = value_from_contents (type, valaddr);
+    {
+      v = allocate_value_lazy (type);
+      v->length = min (TYPE_LENGTH (type), length);
+      v->contents = (gdb_byte *) xzalloc (v->length);
+      set_value_lazy (v, 0);
+      memcpy (value_contents_raw (v), valaddr, value_length (v));
+    }
   set_value_address (v, address);
   VALUE_LVAL (v) = lval_memory;
   return v;
@@ -3664,7 +3672,13 @@ value_from_contents_and_address (struct type *type,
   if (valaddr == NULL)
     v = allocate_value_lazy (resolved_type);
   else
-    v = value_from_contents (resolved_type, valaddr);
+    {
+      v = allocate_value_lazy (resolved_type);
+      v->length = min (TYPE_LENGTH (resolved_type), length);
+      v->contents = (gdb_byte *) xzalloc (v->length);
+      set_value_lazy (v, 0);
+      memcpy (value_contents_raw (v), valaddr, value_length (v));
+    }
   if (TYPE_DATA_LOCATION (resolved_type_no_typedef) != NULL
       && TYPE_DATA_LOCATION_KIND (resolved_type_no_typedef) == PROP_CONST)
     address = TYPE_DATA_LOCATION_ADDR (resolved_type_no_typedef);
@@ -3926,7 +3940,7 @@ value_fetch_lazy (struct value *val)
     {
       /* Keep it optimized out.  */;
       set_value_lazy (val, 0);
-      return 0;
+      return;
     }
   allocate_value_contents_limited (val);
   /* A value is either lazy, or fully fetched.  The
