@@ -356,14 +356,13 @@ execute_cmd_post_hook (struct cmd_list_element *c)
 /* Execute the command in CMD.  */
 static void
 do_restore_user_call_depth (void * call_depth)
-{	
+{
   int *depth = call_depth;
 
   (*depth)--;
   if ((*depth) == 0)
     in_user_command = 0;
 }
-
 
 void
 execute_user_command (struct cmd_list_element *c, char *args)
@@ -472,31 +471,28 @@ execute_control_command (struct command_line *cmd)
   switch (cmd->control_type)
     {
     case simple_control:
-	  {
-		volatile struct gdb_exception ex;
-		/* A simple command, execute it and return.  */
-		new_line = insert_args (cmd->line);
-		if (!new_line)
-		  break;
-		make_cleanup (free_current_contents, &new_line);
+      {
+	volatile struct gdb_exception ex;
+	/* A simple command, execute it and return.  */
+	new_line = insert_args (cmd->line);
+	if (!new_line)
+	  break;
+	make_cleanup (free_current_contents, &new_line);
 
-		TRY_CATCH (ex, RETURN_MASK_ALL)
-		  {
-			execute_command (new_line, 0);
-		  }
-               if (ex.reason < 0)
-                 {
-		    if (throw_user_command_exceptions)
-		      {
-		    	throw_exception (ex);
-		      }
-		    else
-		      {
-		    	exception_print(gdb_stderr, ex);
-		      }
-                 }
-		ret = cmd->control_type;
+	TRY
+	  {
+	    execute_command (new_line, 0);
 	  }
+	CATCH (ex, RETURN_MASK_ALL)
+	  {
+	    if (throw_user_command_exceptions)
+	      throw_exception (ex);
+	    else
+	      exception_print (gdb_stderr, ex);
+	  }
+	END_CATCH
+	ret = cmd->control_type;
+      }
       break;
 
     case continue_control:
@@ -678,7 +674,6 @@ execute_control_command_untraced (struct command_line *cmd)
   suppress_next_print_command_trace = 1;
   return execute_control_command (cmd);
 }
-
 
 /* "while" command support.  Executes a body of statements while the
    loop condition is nonzero.  */

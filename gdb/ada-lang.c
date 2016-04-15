@@ -2553,7 +2553,7 @@ ada_value_primitive_packed_val (struct value *obj, const gdb_byte *valaddr,
 
   if (is_dynamic_type (value_type (v)))
     v = value_from_contents_and_address (value_type (v), value_contents (v),
-					 0);
+					 TYPE_LENGTH (value_type (v)), 0);
   return v;
 }
 

@@ -13250,7 +13250,7 @@ Show the maximum size of the address (in bits) in a memory packet."), NULL,
   /* Assert that we've registered "set remote foo-packet" commands
      for alxl packet configs.  */
   {
-    int i;x
+    int i;
 
     for (i = 0; i < PACKET_MAX; i++)
       {

@@ -379,7 +379,7 @@ gdbscm_make_lazy_value (SCM type_scm, SCM address_scm)
      and future-proofing we do.  */
   TRY
   {
-    value = value_from_contents_and_address (type, NULL, address);
+    value = value_from_contents_and_address (type, NULL, TYPE_LENGTH (type), address);
   }
   CATCH (except, RETURN_MASK_ALL)
     {

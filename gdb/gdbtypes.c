@@ -719,6 +719,24 @@ make_qual_variant_type (struct type_quals new_quals,
   return ntype;
 }
 
+/* Make a const / volatile type */
+struct type *
+make_cv_type (int cnst, int voltl,
+	      struct type *type,
+	      struct type **typeptr)
+{
+  struct type_quals type_quals;
+
+  gdb_assert (cnst || voltl);
+  type_quals = TYPE_QUALS (type);
+  if (cnst)
+    TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_CONST;
+  if (voltl)
+    TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_VOLATILE;
+  return make_qual_variant_type (type_quals, type, typeptr);
+}
+
+
 /* Make a 'restrict'-qualified version of TYPE.  */
 
 struct type *

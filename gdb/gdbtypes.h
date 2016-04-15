@@ -1798,6 +1798,8 @@ extern struct type_quals merge_type_quals (struct type_quals, struct type_quals)
 
 extern struct type *make_qual_variant_type (struct type_quals, struct type *, struct type **);
 
+extern struct type *make_cv_type (int, int, struct type *, struct type **);
+
 extern struct type *make_restrict_type (struct type *);
 
 extern struct type *make_unqualified_type (struct type *);

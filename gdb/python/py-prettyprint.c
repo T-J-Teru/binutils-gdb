@@ -523,9 +523,9 @@ print_children (PyObject *printer, const char *hint,
 	pretty = options->prettyformat_structs;
     }
 
-  if (pretty == Val_pretty_default)
-    pretty = ((is_array ? options->prettyprint_arrays : options->prettyprint_structs)
-	       ? Val_prettyprint : Val_no_prettyprint);
+  if (pretty == Val_prettyformat_default)
+    pretty = ((is_array ? options->prettyformat_arrays : options->prettyformat_structs)
+	      ? Val_prettyformat : Val_no_prettyformat);
   
   /* Manufacture a dummy Python frame to work around Python 2.4 bug,
      where it insists on having a non-NULL tstate->frame when
@@ -931,7 +931,7 @@ apply_val_child (struct value *object,
   
   if (PyObject_HasAttr (printer, gdbpy_child_cst))
     {
-      TRY_CATCH (except, RETURN_MASK_ALL)
+      TRY
 	{
 	  child = PyObject_CallMethodObjArgs (printer, gdbpy_child_cst, index_obj, NULL);
 	  if (! child)
@@ -939,6 +939,10 @@ apply_val_child (struct value *object,
 	  make_cleanup_py_decref (child);
 	  result = convert_value_from_python (child);
 	}
+      CATCH (except, RETURN_MASK_ALL)
+	{
+	}
+      END_CATCH
     }
   else if (PyObject_HasAttr (printer, gdbpy_children_cst))
     {

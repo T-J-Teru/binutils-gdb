@@ -384,8 +384,9 @@ gdbpy_get_xmethod_arg_types (const struct extension_language_defn *extlang,
   PyObject *get_arg_types_method;
   PyObject *py_argtype_list, *list_iter = NULL, *item;
   struct cleanup *cleanups;
-  struct type **type_array, *obj_type;
+  struct type **type_array, *obj_type, *obj_ptr_type;
   int i = 1, arg_count;
+  struct type_quals type_quals;
 
   /* Set nargs to -1 so that any premature return from this function returns
      an invalid/unusable number of arg types.  */
@@ -496,7 +497,11 @@ gdbpy_get_xmethod_arg_types (const struct extension_language_defn *extlang,
      be a 'const' value.  Hence, create a 'const' variant of the 'this' pointer
      type.  */
   obj_type = type_object_to_type (worker_data->this_type);
-  type_array[0] = make_cv_type (1, 0, lookup_pointer_type (obj_type), NULL);
+  obj_ptr_type = lookup_pointer_type (obj_type);
+  type_quals = TYPE_QUALS (obj_ptr_type);
+  TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_CONST;
+  type_array[0] = make_qual_variant_type (type_quals, obj_ptr_type, NULL);
+
   *nargs = i;
   *arg_types = type_array;
   do_cleanups (cleanups);
