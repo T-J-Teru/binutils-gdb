@@ -1323,7 +1323,7 @@ identify_source_line (struct symtab *s, int line, int mid_statement,
 		      CORE_ADDR pc)
 {
   int charpos = -1;
-  char *fullname;
+  const char *fullname;
   if (s->line_charpos == 0)
     get_filename_and_charpos (s, (char **) NULL);
   fullname = s->fullname;
@@ -1597,8 +1597,8 @@ line_info (char *arg, int from_tty)
 	    }
 	  else
 	    {
-              struct block *b;
-              char *name;
+              const struct block *b;
+              const char *name;
                 
 	      printf_filtered ("Line %d of \"%s\"",
 			       sal.line,
@@ -1620,9 +1620,9 @@ line_info (char *arg, int from_tty)
                     {
                       if (SYMBOL_LINE (BLOCK_FUNCTION (b)) != 0)
                         {
-                          name = SYMBOL_SYMTAB (BLOCK_FUNCTION (b))->fullname;
+                          name = symbol_symtab (BLOCK_FUNCTION (b))->fullname;
                           if (name==0)
-                            name = SYMBOL_SYMTAB (BLOCK_FUNCTION (b))->filename;
+                            name = symbol_symtab (BLOCK_FUNCTION (b))->filename;
                           printf_filtered ("This is at an inlined function \"%s\" called from line %d of \"%s\".\n",
                               SYMBOL_PRINT_NAME (BLOCK_FUNCTION (b)),
                               SYMBOL_LINE (BLOCK_FUNCTION (b)),

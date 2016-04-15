@@ -373,8 +373,8 @@ addrmap_mutable_set_empty (struct addrmap *self,
        n = addrmap_splay_tree_successor (map, addrmap_node_key (n)))
     {
       if (! addrmap_node_value (n)
-          || (this->precedence_fn
-              && this->precedence_fn (obj, addrmap_node_value (n))))
+          || (self->precedence_fn
+              && self->precedence_fn (obj, addrmap_node_value (n))))
         addrmap_node_set_value (n, obj);
     }
 

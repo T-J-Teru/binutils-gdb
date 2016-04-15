@@ -920,7 +920,7 @@ auto_load_objfile_script (struct objfile *objfile,
   if (!auto_load_objfile_script_1 (objfile, realname, language))
     {
       /* Try again with the original name.  */
-      if (!auto_load_objfile_script_1 (objfile, objfile->name, language))
+      if (!auto_load_objfile_script_1 (objfile, objfile_name (objfile), language))
 	{
 	  /* For Windows/DOS .exe executables, strip the .exe suffix, so that
 	    FOO-gdb.gdb could be used for FOO.exe, and try again.  */
@@ -941,8 +941,8 @@ auto_load_objfile_script (struct objfile *objfile,
 	}
     }
 
-  if (strcmp (lbasename (objfile->name), "libstdc++.so.6") != 0
-      && lookup_minimal_symbol ("__gxx_personality_v0", NULL, objfile) != NULL)
+  if (strcmp (lbasename (objfile_name (objfile)), "libstdc++.so.6") != 0
+      && lookup_minimal_symbol ("__gxx_personality_v0", NULL, objfile).minsym != NULL)
     {
       /* objfile is probably statically linked with libstdc++, auto-load the
 	 listdc++ pretty printers using the hard-coded name.  */

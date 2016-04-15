@@ -306,11 +306,11 @@ exp	:	exp '('
 	;
 
 exp     :       UNOP_INTRINSIC '(' exp ')'
-                        { write_exp_elt_opcode ($1); }
+                        { write_exp_elt_opcode (pstate, $1); }
         ;
 
 exp     :       BINOP_INTRINSIC '(' exp ',' exp ')'
-                        { write_exp_elt_opcode ($1); }
+                        { write_exp_elt_opcode (pstate, $1); }
 
 arglist	:
 	;
@@ -339,19 +339,19 @@ subrange:	exp ':' exp	%prec ABOVE_COMMA
 			  write_exp_elt_opcode (pstate, OP_F90_RANGE); }
 	;
 
-subrange:	exp ':'	%prec ABOVE_COMMA
+subrange:	exp colon_star	%prec ABOVE_COMMA
 			{ write_exp_elt_opcode (pstate, OP_F90_RANGE);
 			  write_exp_elt_longcst (pstate, HIGH_BOUND_DEFAULT);
 			  write_exp_elt_opcode (pstate, OP_F90_RANGE); }
 	;
 
-subrange:	':' exp	%prec ABOVE_COMMA
+subrange:	star_colon exp	%prec ABOVE_COMMA
 			{ write_exp_elt_opcode (pstate, OP_F90_RANGE);
 			  write_exp_elt_longcst (pstate, LOW_BOUND_DEFAULT);
 			  write_exp_elt_opcode (pstate, OP_F90_RANGE); }
 	;
 
-subrange:	':'	%prec ABOVE_COMMA
+subrange:	star_colon_star	%prec ABOVE_COMMA
 			{ write_exp_elt_opcode (pstate, OP_F90_RANGE);
 			  write_exp_elt_longcst (pstate, BOTH_BOUND_DEFAULT);
 			  write_exp_elt_opcode (pstate, OP_F90_RANGE); }
@@ -440,11 +440,11 @@ exp	:	exp GREATERTHAN exp
 	;
 
 exp	:	exp '>' exp
-			{ write_exp_elt_opcode (BINOP_GTR); }
+			{ write_exp_elt_opcode (pstate, BINOP_GTR); }
 	;
 
 exp	:	exp '<' exp
-			{ write_exp_elt_opcode (BINOP_LESS); }
+			{ write_exp_elt_opcode (pstate, BINOP_LESS); }
 	;
 
 exp	:	exp '&' exp
@@ -468,7 +468,7 @@ exp	:	exp BOOL_OR exp
 	;
 
 exp	:	exp BIN_MOD exp
-			{ write_exp_elt_opcode (BINOP_REM); }
+			{ write_exp_elt_opcode (pstate, BINOP_REM); }
 	;
 
 exp	:	exp '=' exp
@@ -541,15 +541,15 @@ exp	:	STRING_LITERAL
 	;
 
 exp	:	exp ARROW name
-			{ write_exp_elt_opcode (STRUCTOP_PTR);
-			  write_exp_string ($3);
-			  write_exp_elt_opcode (STRUCTOP_PTR); }
+			{ write_exp_elt_opcode (pstate, STRUCTOP_PTR);
+			  write_exp_string (pstate, $3);
+			  write_exp_elt_opcode (pstate, STRUCTOP_PTR); }
 	;
 
 exp	:	exp '.' name
-			{ write_exp_elt_opcode (STRUCTOP_STRUCT);
-			  write_exp_string ($3);
-			  write_exp_elt_opcode (STRUCTOP_STRUCT); }
+			{ write_exp_elt_opcode (pstate, STRUCTOP_STRUCT);
+			  write_exp_string (pstate, $3);
+			  write_exp_elt_opcode (pstate, STRUCTOP_STRUCT); }
 	;
 
 variable:	name_not_typename
@@ -596,77 +596,8 @@ type    :       ptype
 
 allocatable_or_ptr_or_space : ALLOCATABLE ','
     | POINTER ','
-    | 
     ;
 
-ptype	:	typebase
-	|	typebase abs_decl
-		{
-		  /* This is where the interesting stuff happens.  */
-		  int done = 0;
-		  int array_size;
-		  struct type *follow_type = $1;
-		  struct type *range_type;
-		  
-		  while (!done)
-		    switch (pop_type ())
-		      {
-		      case tp_end:
-			done = 1;
-			break;
-		      case tp_pointer:
-			follow_type = lookup_pointer_type (follow_type);
-			break;
-		      case tp_reference:
-			follow_type = lookup_reference_type (follow_type);
-			break;
-		      case tp_array:
-			array_size = pop_type_int ();
-			if (array_size != -1)
-			  {
-			    range_type =
-			      create_static_range_type ((struct type *) NULL,
-							parse_f_type (pstate)
-							->builtin_integer,
-							0, array_size - 1);
-			    follow_type =
-			      create_array_type ((struct type *) NULL,
-						 follow_type, range_type);
-			  }
-			else
-			  follow_type = lookup_pointer_type (follow_type);
-			break;
-		      case tp_function:
-			follow_type = lookup_function_type (follow_type);
-			break;
-		      }
-		  $$ = follow_type;
-		}
-	;
-
-abs_decl:	'*'
-			{ push_type (tp_pointer); $$ = 0; }
-	|	'*' abs_decl
-			{ push_type (tp_pointer); $$ = $2; }
-	|	'&'
-			{ push_type (tp_reference); $$ = 0; }
-	|	'&' abs_decl
-			{ push_type (tp_reference); $$ = $2; }
-	|	direct_abs_decl
-	;
-
-direct_abs_decl: '(' abs_decl ')'
-			{ $$ = $2; }
-	| 	direct_abs_decl func_mod
-			{ push_type (tp_function); }
-	|	func_mod
-			{ push_type (tp_function); }
-	;
-
-func_mod:	'(' ')'
-			{ $$ = 0; }
-	|	'(' nonempty_typelist ')'
-			{ free ($2); $$ = 0; }
 ptype	:	typebase
 	|	typebase ',' POINTER
 			{ $$ = lookup_pointer_type ($1); }
@@ -739,80 +670,108 @@ signed_int:	INT
 typebase
 	:	TYPENAME
 			{ $$ = $1.type; }
-	|	INT_KEYWORD
+	|	INT_KEYWORD	%prec BELOW_SIZE
 			{ $$ = parse_f_type (pstate)->builtin_integer; }
+	|	INT_KEYWORD '*' INT	%prec SIZE
+			{ if ($3.val == 2)
+			  	$$ = parse_f_type (pstate)->builtin_integer_s2;
+			  else if ($3.val == 4)
+			  	$$ = parse_f_type (pstate)->builtin_integer;
+			  else if ($3.val == 8)
+				$$ = parse_f_type (pstate)->builtin_integer_s8; }
+	|	INT_KEYWORD KIND '=' INT ')'	%prec SIZE
+			{ if ($4.val == 2)
+			  	$$ = parse_f_type (pstate)->builtin_integer_s2;
+			  else if ($4.val == 4)
+			  	$$ = parse_f_type (pstate)->builtin_integer;
+			  else if ($4.val == 8)
+				$$ = parse_f_type (pstate)->builtin_integer_s8; }
 	|	INT_S2_KEYWORD 
 			{ $$ = parse_f_type (pstate)->builtin_integer_s2; }
+	|	INT_S8_KEYWORD 
+			{ $$ = parse_f_type (pstate)->builtin_integer_s8; }
 	|	CHARACTER 
-	                { $$ = parse_f_type (pstate)->builtin_character; }
+			{ $$ = parse_f_type (pstate)->builtin_character; }
 	|	CHARACTER '*' INT	%prec SIZE
-			{ if ($3.val == 1) $$ = parse_f_type->builtin_character; }
+			{ if ($3.val == 1) $$ = parse_f_type (pstate)->builtin_character; }
 	|       CHARACTER KIND '=' INT ')'      %prec SIZE
-			{ if ($4.val == 1) $$ = parse_f_type->builtin_character; }
+			{ if ($4.val == 1) $$ = parse_f_type (pstate)->builtin_character; }
 	|	LOGICAL_KEYWORD	%prec BELOW_SIZE
-			{ $$ = parse_f_type->builtin_logical;} 
+			{ $$ = parse_f_type (pstate)->builtin_logical;} 
 	|	LOGICAL_KEYWORD '*' INT	%prec SIZE
 			{ if ($3.val == 1)
-				$$ = parse_f_type->builtin_logical_s1;
+				$$ = parse_f_type (pstate)->builtin_logical_s1;
 			  else if ($3.val == 2)
-				$$ = parse_f_type->builtin_logical_s2;
+				$$ = parse_f_type (pstate)->builtin_logical_s2;
 			  else if ($3.val == 4)
-				$$ = parse_f_type->builtin_logical;
+				$$ = parse_f_type (pstate)->builtin_logical;
 			  else if ($3.val == 8)
-				$$ = parse_f_type->builtin_logical_s8; }
+				$$ = parse_f_type (pstate)->builtin_logical_s8; }
 	|	LOGICAL_KEYWORD KIND '=' INT ')'	%prec SIZE
 			{ if ($4.val == 1)
-				$$ = parse_f_type->builtin_logical_s1;
+				$$ = parse_f_type (pstate)->builtin_logical_s1;
 			  else if ($4.val == 2)
-				$$ = parse_f_type->builtin_logical_s2;
+				$$ = parse_f_type (pstate)->builtin_logical_s2;
 			  else if ($4.val == 4)
-				$$ = parse_f_type->builtin_logical;
+				$$ = parse_f_type (pstate)->builtin_logical;
 			  else if ($4.val == 8)
-				$$ = parse_f_type->builtin_logical_s8; }
+				$$ = parse_f_type (pstate)->builtin_logical_s8; }
 	|	LOGICAL_S8_KEYWORD
-			{ $$ = parse_f_type (pstate)->builtin_logical_s8; }
-	|	LOGICAL_KEYWORD 
-			{ $$ = parse_f_type (pstate)->builtin_logical; }
+			{ $$ = parse_f_type (pstate)->builtin_logical_s8;}
 	|	LOGICAL_S2_KEYWORD
-			{ $$ = parse_f_type (pstate)->builtin_logical_s2; }
+			{ $$ = parse_f_type (pstate)->builtin_logical_s2;}
 	|	LOGICAL_S1_KEYWORD 
-			{ $$ = parse_f_type (pstate)->builtin_logical_s1; }
-	|	REAL_KEYWORD 
-			{ $$ = parse_f_type (pstate)->builtin_real; }
+			{ $$ = parse_f_type (pstate)->builtin_logical_s1;}
+	|	REAL_KEYWORD	 %prec BELOW_SIZE
+			{ $$ = parse_f_type (pstate)->builtin_real;}
+	|	REAL_KEYWORD '*' INT	%prec SIZE
+			{ if ($3.val == 4)
+				$$ = parse_f_type (pstate)->builtin_real;
+			  else if ($3.val == 8)
+				$$ = parse_f_type (pstate)->builtin_real_s8;
+			  else if ($3.val == 16)
+				$$ = parse_f_type (pstate)->builtin_real_s16; }
+	|	REAL_KEYWORD KIND '=' INT ')'	%prec SIZE
+			{ if ($4.val == 4)
+				$$ = parse_f_type (pstate)->builtin_real;
+			  else if ($4.val == 8)
+				$$ = parse_f_type (pstate)->builtin_real_s8;
+			  else if ($4.val == 16)
+				$$ = parse_f_type (pstate)->builtin_real_s16; }
 	|       REAL_S8_KEYWORD
-			{ $$ = parse_f_type (pstate)->builtin_real_s8; }
+			{ $$ = parse_f_type (pstate)->builtin_real_s8;}
 	|	REAL_S16_KEYWORD
 			{ $$ = parse_f_type (pstate)->builtin_real_s16; }
 	|	COMPLEX_S8_KEYWORD '*' INT	%prec SIZE
 			{ if ($3.val == 8)
-				$$ = parse_f_type->builtin_complex_s8;
+				$$ = parse_f_type (pstate)->builtin_complex_s8;
 			  else if ($3.val == 16)
-				$$ = parse_f_type->builtin_complex_s16;
+				$$ = parse_f_type (pstate)->builtin_complex_s16;
 			  else if ($3.val == 32)
-				$$ = parse_f_type->builtin_complex_s32; }
+				$$ = parse_f_type (pstate)->builtin_complex_s32; }
 	|	COMPLEX_S8_KEYWORD KIND '=' INT ')'	%prec SIZE
 			{ if ($4.val == 4)
-				$$ = parse_f_type->builtin_complex_s8;
+				$$ = parse_f_type (pstate)->builtin_complex_s8;
 			  else if ($4.val == 8)
-				$$ = parse_f_type->builtin_complex_s16;
+				$$ = parse_f_type (pstate)->builtin_complex_s16;
 			  else if ($4.val == 16)
-				$$ = parse_f_type->builtin_complex_s32; }
+				$$ = parse_f_type (pstate)->builtin_complex_s32; }
 	|	COMPLEX_S8_KEYWORD	 %prec BELOW_SIZE
-			{ $$ = parse_f_type->builtin_complex_s8;}
+			{ $$ = parse_f_type (pstate)->builtin_complex_s8;}
 	|	COMPLEX_KEYWORD
-			{ $$ = parse_f_type->builtin_complex_s8;}
+			{ $$ = parse_f_type (pstate)->builtin_complex_s8;}
 	|	COMPLEX_S16_KEYWORD 
 			{ $$ = parse_f_type (pstate)->builtin_complex_s16; }
 	|	COMPLEX_S32_KEYWORD 
 			{ $$ = parse_f_type (pstate)->builtin_complex_s32; }
 	|	SINGLE PRECISION
-			{ $$ = parse_f_type->builtin_real;}
+			{ $$ = parse_f_type (pstate)->builtin_real;}
 	|	DOUBLE PRECISION
-			{ $$ = parse_f_type->builtin_real_s8;}
+			{ $$ = parse_f_type (pstate)->builtin_real_s8;}
 	|	SINGLE COMPLEX_KEYWORD
-			{ $$ = parse_f_type->builtin_complex_s8;}
+			{ $$ = parse_f_type (pstate)->builtin_complex_s8;}
 	|	DOUBLE COMPLEX_KEYWORD
-			{ $$ = parse_f_type->builtin_complex_s16;}
+			{ $$ = parse_f_type (pstate)->builtin_complex_s16;}
 	;
 
 name	:	NAME
@@ -1191,8 +1150,8 @@ follow_f_types (struct type *follow_type)
 			lower_bound = bounds[--index];
 			upper_bound = bounds[--index];
 			range_type =
-				create_range_type ((struct type *) NULL,
-				  parse_f_type->builtin_integer, lower_bound,
+				create_static_range_type ((struct type *) NULL,
+				  parse_f_type (pstate)->builtin_integer, lower_bound,
 				  upper_bound);
 			follow_type =
 				create_array_type ((struct type *) NULL,
@@ -1434,7 +1393,7 @@ yylex (void)
 	  || strncmp (tokstart, "inf", namelen) == 0)
       && (tokstart[namelen] == ' ' || tokstart[namelen] == '\t'))
     {
-      char *p = tokstart + namelen + 1;
+      const char *p = tokstart + namelen + 1;
       while (*p == ' ' || *p == '\t')
 	p++;
       if (*p >= '0' && *p <= '9')
@@ -1455,8 +1414,8 @@ yylex (void)
       }
 
   for (i = 0; i < sizeof intrinsics / sizeof intrinsics[0]; i++)
-    if (strncasecmp (tokstart, intrinsics[i].operator, strlen(intrinsics[i].operator)) == 0
- 	&& strlen(intrinsics[i].operator) == namelen)
+    if (strncasecmp (tokstart, intrinsics[i].oper, strlen(intrinsics[i].oper)) == 0
+ 	&& strlen(intrinsics[i].oper) == namelen)
       {
         yylval.opcode = intrinsics[i].opcode;
         return intrinsics[i].token;

@@ -42,6 +42,7 @@
 #include "user-regs.h"
 #include "f-lang.h"
 #include "valprint.h"
+#include "upc-lang.h"
 
 /* Prototypes for exported functions.  */
 
@@ -3930,7 +3931,7 @@ value_fetch_lazy (struct value *val)
     {
       /* Keep it optimized out.  */;
       set_value_lazy (val, 0);
-      return 0;
+      return;
     }
   allocate_value_contents_limited (val);
   /* A value is either lazy, or fully fetched.  The

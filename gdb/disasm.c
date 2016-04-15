@@ -28,7 +28,7 @@
 
 
 /* This variable limits the number of instructions that are disassembled (-1 = no limit). */
-static unsigned int disassemble_instruction_limit = -1;
+static int disassemble_instruction_limit = -1;
 
 /* Disassemble functions.
    FIXME: We should get rid of all the duplicate code in gdb that does
@@ -550,7 +550,7 @@ void
 _initialize_disasm (void)
 {
   add_setshow_zuinteger_unlimited_cmd ("disassemble-instruction-limit", no_class,
-			   & disassemble_instruction_limit, _("\
+			   &disassemble_instruction_limit, _("\
 Set disassemble instruction limit."), _("\
 Show disassemble instruction limit."), _("\
 The option disassemble_instruction_limit limits the number of instructions that are disassembled.\n"),
