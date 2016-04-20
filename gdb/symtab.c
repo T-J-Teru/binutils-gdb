@@ -235,14 +235,6 @@ static unsigned int symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
    Default set to "off" to not slow down the common case.  */
 int basenames_may_differ = 0;
 
-/* The size of the cache is staged here.  */
-static unsigned int new_symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
-
-/* The current value of the symbol cache size.
-   This is saved so that if the user enters a value too big we can restore
-   the original value from here.  */
-static unsigned int symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
-
 /* Allow the user to configure the debugger behavior with respect
    to multiple-choice menus when more than one symbol matches during
    a symbol lookup.  */
@@ -265,23 +257,6 @@ const char *
 multiple_symbols_select_mode (void)
 {
   return multiple_symbols_mode;
-}
-
-/* Return the name of a domain_enum.  */
-
-const char *
-domain_name (domain_enum e)
-{
-  switch (e)
-    {
-    case UNDEF_DOMAIN: return "UNDEF_DOMAIN";
-    case VAR_DOMAIN: return "VAR_DOMAIN";
-    case STRUCT_DOMAIN: return "STRUCT_DOMAIN";
-	  /*    case MODULE_DOMAIN: return "MODULE_DOMAIN"; */
-    case LABEL_DOMAIN: return "LABEL_DOMAIN";
-    case COMMON_BLOCK_DOMAIN: return "COMMON_BLOCK_DOMAIN";
-    default: gdb_assert_not_reached ("bad domain_enum");
-    }
 }
 
 /* Block in which the most recently searched-for symbol was found.
@@ -2261,60 +2236,6 @@ lookup_symbol_aux (const char *name, const struct block *block,
   return sym;
 }
 
-/* Search all static file-level symbols for NAME from DOMAIN.  Do the symtabs
-   first, then check the psymtabs.  If a psymtab indicates the existence of the
-   desired name as a file-level static, then do psymtab-to-symtab conversion on
-   the fly and return the found symbol.  */
-
-struct symbol *
-lookup_static_symbol_aux (const char *name, const domain_enum domain)
-{
-  struct symbol_cache *cache = get_symbol_cache (current_program_space);
-  struct objfile *objfile;
-  struct symbol *result;
-  struct block_symbol_cache *bsc;
-  struct symbol_cache_slot *slot;
-
-  /* Lookup in STATIC_BLOCK is not current-objfile-dependent, so just pass
-	 NULL for OBJFILE_CONTEXT.  */
-  result = symbol_cache_lookup (cache, NULL, STATIC_BLOCK, name, domain,
-								&bsc, &slot);
-  if (result != NULL)
-	{
-	  if (result == SYMBOL_LOOKUP_FAILED)
-		return NULL;
-	  return result;
-	}
-  
-  result = lookup_symbol_aux_symtabs (STATIC_BLOCK, name, domain);
-  if (result != NULL)
-	{
-	  /* Still pass NULL for OBJFILE_CONTEXT here.  */
-	  symbol_cache_mark_found (bsc, slot, NULL, result);
-	  return result;
-	}
-  
-  ALL_OBJFILES (objfile)
-  {
-    result = lookup_symbol_aux_quick (objfile, STATIC_BLOCK, name, domain);
-    if (result != NULL)
-	  {
-		/* Still pass NULL for OBJFILE_CONTEXT here.  */
-		symbol_cache_mark_found (bsc, slot, NULL, result);
-		return result;
-	  }
-    /* If 'quick' symbol lookup fails but minimal symbol works then don't search
-       any more objfiles (weak aliases don't appear in DWARF debug symbols, only
-       in the minimal symbols, but should trump later objfiles).  */
-    if (lookup_minimal_symbol (name, NULL, objfile) != NULL)
-      break;    
-  }
-
-  /* Still pass NULL for OBJFILE_CONTEXT here.  */
-  symbol_cache_mark_not_found (bsc, slot, NULL, name, domain);
-  return NULL;
-}
-
 /* Check to see if the symbol is defined in BLOCK or its superiors.
    Don't search STATIC_BLOCK or GLOBAL_BLOCK.  */
 
@@ -2379,7 +2300,6 @@ lookup_objfile_from_block (const struct block *block)
 
 	return obj;
       }
-  }
 
   return NULL;
 }
@@ -2490,7 +2410,7 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile, int block_index,
       /* If 'quick' symbol lookup fails but minimal symbol works then don't search
 	 any more objfiles (weak aliases don't appear in DWARF debug symbols, only
 	 in the minimal symbols, but should trump later objfiles).  */
-      if (lookup_minimal_symbol (name, NULL, objfile) != NULL)
+      if (lookup_minimal_symbol (name, NULL, objfile).minsym != NULL)
 	break;
     }
 
@@ -3368,6 +3288,8 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
 
   ALL_COMPUNIT_FILETABS (cust, iter_s)
     {
+      int found_item;
+
       /* Find the best line in this symtab.  */
       l = SYMTAB_LINETABLE (iter_s);
       if (!l)
@@ -3388,11 +3310,9 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
       /* Is this file's first line closer than the first lines of other files?
          If so, record this file, and its first line, as best alternate.  */
       if (item->pc > pc && (!alt || item->pc < alt->pc))
-	  {
-	    alt = item;
-	    alt_symtab = s;
-	  }
-	  int found_item = 0;
+	alt = item;
+
+      found_item = 0;
       for (i = 0; i < len; i++, item++)
 	  {
 	  /* Leave prev pointing to the linetable entry for the last line
@@ -4524,19 +4444,23 @@ sources_info_by_binary(char *ignore, int from_tty)
   cleanups = make_cleanup(delete_filename_seen_cache, data.filename_seen_cache);
 
   data.first = 1;
-  for(objfile = current_program_space->objfiles; objfile != NULL; objfile = objfile->next)
-  {
-    const char *objectName = objfile->name;
-    printf_filtered("%s\n", objectName);
-    for(s = objfile->symtabs; s != NULL; s = s->next)
+  for(objfile = current_program_space->objfiles;
+      objfile != NULL;
+      objfile = objfile->next)
     {
-      const char *symtabName = symtab_to_fullname(s);
-      printf_filtered("  %s\n", symtabName);
+      struct compunit_symtab *cu;
+      const char *objectName;
+
+      printf_filtered("%s\n", objfile_name (objfile));
+      ALL_OBJFILE_FILETABS (objfile, cu, s)
+	printf_filtered("  %s\n", symtab_to_fullname(s));
+
+      if(objfile->sf) /* partial symbol table.  */
+	objfile->sf->qf->map_symbol_filenames(objfile,
+					      output_partial_symbol_filename2,
+					      &data,
+					      1 /*need_fullname*/);
     }
-    if(objfile->sf) // partial symbol table
-      objfile->sf->qf->map_symbol_filenames(objfile, output_partial_symbol_filename2, &data,
-					                        1 /*need_fullname*/);
-  }
   printf_filtered ("\n\n");
 
   do_cleanups(cleanups);
@@ -6265,8 +6189,8 @@ find_main_name (void)
     }
   new_main_name = upc_main_name ();
   if (new_main_name != NULL)
-    { 
-      set_main_name (new_main_name);
+    {
+      set_main_name (new_main_name, language_upc);
       return;
     }
 
@@ -6355,7 +6279,7 @@ append_expanded_sal (struct symtabs_and_lines *sal,
    and BEST_SYMTAB.  */
 
 static int
-append_exact_match_to_sals (char *filename, char *fullname, int lineno,
+append_exact_match_to_sals (const char *filename, char *fullname, int lineno,
 			    struct program_space *explicit_pspace,
 			    struct symtabs_and_lines *ret,
 			    struct linetable_entry **best_item,
@@ -6364,6 +6288,7 @@ append_exact_match_to_sals (char *filename, char *fullname, int lineno,
   struct program_space *pspace;
   struct objfile *objfile;
   struct symtab *symtab;
+  struct compunit_symtab *cu;
   int exact = 0;
   int j;
   *best_item = 0;
@@ -6372,48 +6297,42 @@ append_exact_match_to_sals (char *filename, char *fullname, int lineno,
   for (pspace = (explicit_pspace ? explicit_pspace : program_spaces);
        pspace != NULL;
        explicit_pspace ? (pspace = NULL) : (pspace = pspace->next))
+    ALL_PSPACE_SYMTABS (pspace, objfile, cu, symtab)
+      {
+	if (FILENAME_CMP (filename, symtab->filename) == 0)
+	  {
+	    struct linetable *l;
+	    int len;
 
-    //ALL_PSPACE_SYMTABS is defined in objfiles.h in preproc #define  line 569
-    //It used two other preproc macros
-    //1. Loops through all of the objfiles in the pspace until it gets to the last object of the list
-    //2. Loops through all of the symtabs in this object until it gets to the last symtab of the list
+	    if (fullname != NULL
+		&& symtab_to_fullname (symtab) != NULL
+		&& FILENAME_CMP (fullname, symtab->fullname) != 0)
+	      continue;
+	    l = SYMTAB_LINETABLE (symtab);
+	    if (!l)
+	      continue;
+	    len = l->nitems;
 
-    ALL_PSPACE_SYMTABS (pspace, objfile, symtab)  //modified by kdavis@cray.com
-    {
-      if (FILENAME_CMP (filename, symtab->filename) == 0)
-	{
-	  struct linetable *l;
-	  int len;
+	    for (j = 0; j < len; j++)
+	      {
+		struct linetable_entry *item = &(l->item[j]);
 
-	  if (fullname != NULL
-	      && symtab_to_fullname (symtab) != NULL  
-    	      && FILENAME_CMP (fullname, symtab->fullname) != 0)
-    	    continue;		  
-	  l = LINETABLE (symtab);
-	  if (!l)
-	    continue;
-	  len = l->nitems;
-
-	  for (j = 0; j < len; j++)
-	    {
-	      struct linetable_entry *item = &(l->item[j]);
-
-	      if (item->line == lineno)
-		{
-		  exact = 1;
-		  append_expanded_sal (ret, objfile->pspace,  //modified by kdavis@cray.com
-				       symtab, lineno, item->pc);
-		}
-	      else if (!exact && item->line > lineno
-		       && (*best_item == NULL
-			   || item->line < (*best_item)->line))
-		{
-		  *best_item = item;
-		  *best_symtab = symtab;
-		}
-	    }
-	}
-    }
+		if (item->line == lineno)
+		  {
+		    exact = 1;
+		    append_expanded_sal (ret, objfile->pspace,  //modified by kdavis@cray.com
+					 symtab, lineno, item->pc);
+		  }
+		else if (!exact && item->line > lineno
+			 && (*best_item == NULL
+			     || item->line < (*best_item)->line))
+		  {
+		    *best_item = item;
+		    *best_symtab = symtab;
+		  }
+	      }
+	  }
+      }
   return exact;
 }
 
@@ -6430,7 +6349,7 @@ expand_line_sal (struct symtab_and_line sal)
   struct objfile *objfile;
   int lineno;
   int deleted = 0;
-  struct block **blocks = NULL;
+  const struct block **blocks = NULL;
   int *filter;
   struct cleanup *old_chain;
 
@@ -6451,7 +6370,7 @@ expand_line_sal (struct symtab_and_line sal)
       struct linetable_entry *best_item = 0;
       struct symtab *best_symtab = 0;
       int exact = 0;
-      char *match_filename;
+      const char *match_filename;
 
       lineno = sal.line;
       match_filename = sal.symtab->filename;

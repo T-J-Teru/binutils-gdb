@@ -15902,19 +15902,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
       && !TYPE_UNSIGNED (base_type) && (high.data.const_val & negative_mask))
     high.data.const_val |= negative_mask;
 
-  /* APB-TODO: Merge conflict in 1e257eb.  Note sure what to do.  */
-  abort ();
-
   range_type = create_range_type (NULL, orig_base_type, &low, &high);
-#if 0
-  range_type = create_range_type_d_pgi (NULL, orig_base_type, low, high,
-				       stride, soffset, lstride, 
-				       low_compute, high_compute,
-				       count_compute,
-				       stride_compute, soffset_compute,
-				       lstride_compute,
-				       (LONGEST (*)(void*, CORE_ADDR, void*)) dwarf2_evaluate_int);
-#endif
 
   if (high_bound_is_count)
     TYPE_RANGE_DATA (range_type)->flag_upper_bound_is_count = 1;
@@ -20003,7 +19991,7 @@ wellformed:
 	      struct pending_block *pblock;
 	      struct block *block;
 	      /* Find the innermost block that contains the new block's PC range.  */
-	      for (pblock = pending_blocks; 
+	      for (pblock = pending_blocks;
 		   pblock && pblock != context_stack->old_blocks;
 		   pblock = pblock->next)
 		{

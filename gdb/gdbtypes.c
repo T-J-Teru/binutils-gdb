@@ -423,8 +423,14 @@ make_reference_type (struct type *type, struct type **typeptr)
       if (!currently_reading_symtab)
 	{
 	  volatile struct gdb_exception e;
-	  TRY_CATCH (e, RETURN_MASK_ALL)
-	    len = upc_pts_len (type);
+	  TRY
+	    {
+	      len = upc_pts_len (type);
+	    }
+	  CATCH (e, RETURN_MASK_ALL)
+	    {
+	    }
+	  END_CATCH
 	}
       TYPE_LENGTH (ntype) = len;
     }
@@ -756,12 +762,13 @@ make_restrict_type (struct type *type)
 struct type *
 make_unqualified_type (struct type *type)
 {
-  return make_qualified_type (type,
-			      (TYPE_INSTANCE_FLAGS (type)
-			       & ~(TYPE_INSTANCE_FLAG_CONST
-				   | TYPE_INSTANCE_FLAG_VOLATILE
-				   | TYPE_INSTANCE_FLAG_RESTRICT)),
-			      NULL);
+  struct type_quals type_quals;
+
+  type_quals = TYPE_QUALS (type);
+  TYPE_QUAL_FLAGS (type_quals) &= ~(TYPE_INSTANCE_FLAG_CONST
+				    | TYPE_INSTANCE_FLAG_VOLATILE
+				    | TYPE_INSTANCE_FLAG_RESTRICT);
+  return make_qualified_type (type, type_quals, NULL);
 }
 
 /* Make a '_Atomic'-qualified version of TYPE.  */
@@ -769,10 +776,11 @@ make_unqualified_type (struct type *type)
 struct type *
 make_atomic_type (struct type *type)
 {
-  return make_qualified_type (type,
-			      (TYPE_INSTANCE_FLAGS (type)
-			       | TYPE_INSTANCE_FLAG_ATOMIC),
-			      NULL);
+  struct type_quals type_quals;
+
+  type_quals = TYPE_QUALS (type);
+  TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_ATOMIC;
+  return make_qualified_type (type, type_quals, NULL);
 }
 
 /* Replace the contents of ntype with the type *type.  This changes the
@@ -876,25 +884,6 @@ create_range_type (struct type *result_type, struct type *index_type,
 		   const struct dynamic_prop *low_bound,
 		   const struct dynamic_prop *high_bound)
 {
-  return create_range_type_d (result_type, index_type, low_bound, high_bound, 0, 0, 0, 0);
-}
-
-struct type *
-create_range_type_d (struct type *result_type, struct type *index_type,
-		    LONGEST low_bound, LONGEST high_bound, void *dwarf_low, 
-		    void *dwarf_high, void *dwarf_count,
-		    LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
-{
-  return create_range_type_d_pgi (result_type, index_type, low_bound, high_bound, 0, 0, 0, dwarf_low, dwarf_high, dwarf_count, 0, 0, 0, expr_evaluate);
-}
-
-struct type *
-create_range_type_d_pgi (struct type *result_type, struct type *index_type,
-		        LONGEST low_bound, LONGEST high_bound, LONGEST stride, LONGEST soffset, LONGEST lstride,
-                         void *dwarf_low, void *dwarf_high, void *dwarf_count,
-                         void *dwarf_stride, void *dwarf_soffset, void *dwarf_lstride,
-		        LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*))
-{
   if (result_type == NULL)
     result_type = alloc_type_copy (index_type);
   TYPE_CODE (result_type) = TYPE_CODE_RANGE;
@@ -918,21 +907,6 @@ create_range_type_d_pgi (struct type *result_type, struct type *index_type,
      is negative as unsigned.  */
   if (high_bound->kind == PROP_CONST && high_bound->data.const_val < 0)
     TYPE_UNSIGNED (result_type) = 0;
-
-  /* APB-TODO: Conflict while merging 1e257eb, not sure how these should be
-     resolved.  */
-  abort ();
-
-  TYPE_LOW_BOUND_BATON (result_type) = dwarf_low;
-  TYPE_HIGH_BOUND_BATON (result_type) = dwarf_high;
-  TYPE_COUNT_BOUND_BATON (result_type) = dwarf_count;
-  TYPE_STRIDE_BATON (result_type) = dwarf_stride;
-  TYPE_LSTRIDE_BATON (result_type) = dwarf_lstride;
-  TYPE_SOFFSET_BATON (result_type) = dwarf_soffset;
-  TYPE_STRIDE_VALUE (result_type) = stride;
-  TYPE_LSTRIDE_VALUE (result_type) = lstride;
-  TYPE_SOFFSET_VALUE (result_type) = soffset;
-  TYPE_BOUND_BATON_FUNCTION (result_type) = expr_evaluate;
 
   return result_type;
 }
@@ -2456,8 +2430,14 @@ check_typedef (struct type *type)
       if (upc_shared_type_p (elttype))
 	{
 	  volatile struct gdb_exception e;
-	  TRY_CATCH (e, RETURN_MASK_ALL)
-	    TYPE_LENGTH (type) = upc_pts_len (elttype);
+	  TRY
+	    {
+	      TYPE_LENGTH (type) = upc_pts_len (elttype);
+	    }
+	  CATCH (e, RETURN_MASK_ALL)
+	    {
+	    }
+	  END_CATCH
 	}
     }
 

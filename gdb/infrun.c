@@ -197,6 +197,7 @@ set_disable_randomization (char *args, int from_tty,
 
 int non_stop = 0;
 static int non_stop_1 = 0;
+static int inferior_stop_1 = 0;
 
 static void
 set_non_stop (char *args, int from_tty,
@@ -223,9 +224,6 @@ show_non_stop (struct ui_file *file, int from_tty,
 /* "Observer mode" is somewhat like a more extreme version of
    non-stop, in which all GDB operations that might affect the
    target's execution have been disabled.  */
-
-static int non_stop_1 = 0;
-static int inferior_stop_1 = 0;
 
 int observer_mode = 0;
 static int observer_mode_1 = 0;
@@ -841,64 +839,69 @@ jump_to_debug_function(CORE_ADDR addr, struct regcache *regcache)
 	const char *original_function = NULL; //TEST!! - Added const to be inline with find_pc_partial_function funciton declaration
 	CORE_ADDR orignal_func_addr;
 
-	if (find_pc_partial_function(addr, &original_function, &orignal_func_addr, NULL)) {
-		if (addr == orignal_func_addr) {
-			struct symtab *s;
-			struct symtab_and_line sal;
-			struct symtabs_and_lines expanded;
-			int i;
-			
-			s = find_pc_symtab (addr);
-	  
-			if (s && s->language != language_asm) {
-			  struct gdb_exception e;
+	if (find_pc_partial_function(addr, &original_function, &orignal_func_addr, NULL))
+	  {
+	    if (addr == orignal_func_addr)
+	      {
+		struct symtab *s;
+		struct symtab_and_line sal;
+		struct symtabs_and_lines expanded;
+		struct compunit_symtab *cust;
+		int i;
 
-			  /* Stop stepping when inserting breakpoints
-			     has failed.  */
-			  TRY_CATCH (e, RETURN_MASK_ERROR)
+		s = find_pc_line_symtab (addr);
+		if (s && s->language != language_asm)
+		  {
+		    struct gdb_exception e;
+
+		    /* Stop stepping when inserting breakpoints
+		       has failed.  */
+		    TRY
+		      {
+			orignal_func_addr = gdbarch_skip_prologue(get_regcache_arch (regcache), orignal_func_addr);
+		      }
+		    CATCH (e, RETURN_MASK_ERROR)
+		      {
+		      }
+		    END_CATCH
+		  }
+
+		sal = find_pc_line(orignal_func_addr, 0);
+		sal.pc = 0;
+		expanded = expand_line_sal(sal);
+
+		for (i = 0; i < expanded.nelts; ++i)
+		  {
+		    CORE_ADDR func_addr, func_end;
+		    const char *this_function;
+		    CORE_ADDR pc = expanded.sals[i].pc;
+
+		    if (find_pc_partial_function(pc, &this_function, &func_addr, &func_end))
+		      {
+			if (strstr(this_function, "dbg$"))
 			  {
-			    orignal_func_addr = gdbarch_skip_prologue(get_regcache_arch (regcache), orignal_func_addr);
+			    char* this_function_copy;
+
+			    asprintf(&this_function_copy, "%s", this_function);
+			    this_function_copy += 4;
+
+			    if (strcmp(this_function_copy, original_function) == 0)
+			      {
+				regcache_write_pc(regcache, pc);
+				// stop_pc = pc;
+				i = expanded.nelts;
+
+				if (debug_fast_track_debugging)
+				  printf_unfiltered("[Gfast] Stepping into debug function %s [%p]\n", this_function, (void*)pc);
+			      }
+
+			    this_function_copy -= 4;
+			    free(this_function_copy);
 			  }
-			}
-			
-			sal = find_pc_line(orignal_func_addr, 0);
-			sal.pc = 0;
-			expanded = expand_line_sal(sal);
-			
-//			printf("%s:%d: %s 0x%x 0x%x %d 0x%x %d %d %p\n", __FUNCTION__, __LINE__, original_function, orignal_func_addr, read_pc(), 
-//          expanded.nelts, sal.pc, sal.line, sal.explicit_line, sal.symtab);
-			
-			for (i = 0; i < expanded.nelts; ++i) {
-				CORE_ADDR func_addr, func_end;
-				const char *this_function;   
-				CORE_ADDR pc = expanded.sals[i].pc;
-				
-				if (find_pc_partial_function(pc, &this_function, &func_addr, &func_end)) {
-//					printf("%s: function=%s\n", __FUNCTION__, this_function);
-					
-					if (strstr(this_function, "dbg$")) {
-						char* this_function_copy;
-						
-						asprintf(&this_function_copy, "%s", this_function);
-						this_function_copy += 4;
-						
-						if (strcmp(this_function_copy, original_function) == 0) {
-							regcache_write_pc(regcache, pc);
-	//						stop_pc = pc;
-							i = expanded.nelts;
-							
-							if (debug_fast_track_debugging) {
-								printf_unfiltered("[Gfast] Stepping into debug function %s [%p]\n", this_function, (void*)pc);
-							}
-						}
-						
-						this_function_copy -= 4;
-						free(this_function_copy);
-					}
-				}
-			}
-		}
-	}
+		      }
+		  }
+	      }
+	  }
 }
 /********************************** End - fast track debugging code ***************************************************/
 
@@ -2597,6 +2600,16 @@ clear_proceed_status_thread (struct thread_info *tp)
   bpstat_clear (&tp->control.stop_bpstat);
 }
 
+static int
+clear_proceed_status_callback (struct thread_info *tp, void *data)
+{
+  if (is_exited (tp->ptid))
+    return 0;
+
+  clear_proceed_status_thread (tp);
+  return 0;
+}
+
 void
 clear_proceed_status (int step)
 {
@@ -2955,9 +2968,6 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal)
   /* Fill in with reasonable starting values.  */
   init_thread_stepping_state (tp);
 
-  /* Reset to normal state.  */
-  init_infwait_state ();
-
   /* APB: While merging 34e1b76675ee339ca3bd19f8bf615b77e9091e12 the
      following line was added, not sure if this is still the right place
      for this code though.  */
@@ -3231,14 +3241,7 @@ for_each_just_stopped_thread (for_each_just_stopped_thread_callback_func func)
   if (!target_has_execution || ptid_equal (inferior_ptid, null_ptid))
     return;
 
-  if (inferior_stop)
-    {
-        /* If in non-stop mode, only delete the step-resume or
-           longjmp-resume breakpoint of the inferior that just stopped
-           stepping.  */
-      iterate_over_inferior_threads (ptid_get_pid (inferior_ptid), delete_step_resume_breakpoint_callback, NULL);
-    }
-  else if (non_stop)
+  if (non_stop)
     {
       /* If in non-stop mode, only the current thread stopped.  */
       func (inferior_thread ());
@@ -3750,15 +3753,6 @@ init_thread_stepping_state (struct thread_info *tss)
   tss->step_after_step_resume_breakpoint = 0;
 }
 
-/* Set the cached copy of the last ptid/waitstatus.  */
-
-static void
-set_last_target_status (ptid_t ptid, struct target_waitstatus status)
-{
-  target_last_wait_ptid = ptid;
-  target_last_waitstatus = status;
-}
-
 /* Return the cached copy of the last pid/waitstatus returned by
    target_wait()/deprecated_target_wait_hook().  The data is actually
    cached by handle_inferior_event(), which gets called immediately
@@ -3785,6 +3779,8 @@ get_last_target_status (ptid_t *ptidp, struct target_waitstatus *status)
     }
 }
 
+/* Set the cached copy of the last ptid/waitstatus.  */
+
 static void
 set_last_target_status (ptid_t ptid,  struct target_waitstatus *status)
 {
@@ -3799,7 +3795,7 @@ set_last_target_status (ptid_t ptid,  struct target_waitstatus *status)
   info = inferior_data (inf, infrun_inferior_data);
   if (info == NULL)
     {
-      info = XZALLOC (struct target_status);
+      info = xzalloc (sizeof (struct target_status));
       set_inferior_data (inf, infrun_inferior_data, info);
     }
   info->wait_ptid = ptid;
@@ -4289,13 +4285,13 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
       return;
 
     case TARGET_WAITKIND_THREAD_EXITED:
+      /* APB: This block was added from some commit, and I don't think that
+	 it merged correctly.  */
+      abort ();
       if (debug_infrun)
         fprintf_unfiltered (gdb_stdlog, "infrun: TARGET_WAITKIND_THREAD_EXITED\n");
       target_terminal_ours ();
-      singlestep_breakpoints_inserted_p = 0;	/*SOFTWARE_SINGLE_STEP_P() */
-      cancel_single_step_breakpoints ();
       stop_print_frame = 0;
-      stop_stepping (ecs);
       return;
 
     case TARGET_WAITKIND_EXITED:
@@ -7447,11 +7443,12 @@ in_gdb_sigmask (int signo)
 
   if (!looked_for_gdb_sigmask)
     {
-      struct minimal_symbol *msymbol = lookup_minimal_symbol ("_gdb_sigmask", NULL, NULL);
-      if (msymbol)
+      struct bound_minimal_symbol bmsym =
+	lookup_minimal_symbol ("_gdb_sigmask", NULL, NULL);
+      if (bmsym.minsym)
 	{
-	  gdb_sigmask_objfile = msymbol_objfile (msymbol);	  
-	  gdb_sigmask_address = SYMBOL_VALUE_ADDRESS (msymbol);
+	  gdb_sigmask_objfile = bmsym.objfile;
+	  gdb_sigmask_address = MSYMBOL_VALUE_ADDRESS (bmsym.objfile, bmsym.minsym);
 	}
       looked_for_gdb_sigmask = 1;
     }

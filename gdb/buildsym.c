@@ -170,7 +170,7 @@ static struct obstack pending_block_obstack;
    are just waiting to be built into a blockvector when finalizing the
    associated symtab.  */
 
-static struct pending_block *pending_blocks;
+struct pending_block *pending_blocks;
 
 struct subfile_stack
   {
@@ -206,16 +206,19 @@ htab_alloc_ptr(size_t t1, size_t t2)
   return xcalloc(t1, t2);
 }
 
-static char *subfile_fullname (const struct subfile *subfile)
+static char *
+subfile_fullname (const struct subfile *subfile)
 {
-  if (!IS_ABSOLUTE_PATH (subfile->name) && subfile->dirname != NULL)
-    return concat (subfile->dirname, SLASH_STRING, subfile->name, (char *)NULL);
+  if (!IS_ABSOLUTE_PATH (subfile->name)
+      && subfile->buildsym_compunit->comp_dir != NULL)
+    return concat (subfile->buildsym_compunit->comp_dir,
+		   SLASH_STRING, subfile->name, (char *) NULL);
   else
     return xstrdup (subfile->name);
 }
 
 static int
-htab_eq_subfile(const void* s, const void* t)
+htab_eq_subfile (const void* s, const void* t)
 {
   int ret;
   /* emulate strcmp() return values extended to handle null values, so
@@ -725,12 +728,14 @@ find_subfile (const char *name, const char *dirname)
 {
   struct subfile dummy = {0};
   struct subfile *subfile;
+  struct buildsym_compunit bscu;
 
   if (!subfiles_map)
     return NULL;
 
   dummy.name = (char*) name;
-  dummy.dirname = (char*) dirname;
+  bscu.comp_dir = (char*) dirname;
+  dummy.buildsym_compunit = &bscu;
 
   if ((subfile = htab_find (subfiles_map, &dummy)))
     {

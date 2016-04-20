@@ -52,8 +52,8 @@ cp_scan_for_anonymous_namespaces (const struct symbol *const symbol,
 				  struct objfile *const objfile)
 {
   if (SYMBOL_DEMANGLED_NAME (symbol) != NULL &&
-      SYMBOL_SYMTAB (symbol) != NULL &&
-      SYMBOL_SYMTAB (symbol)->objfile != NULL) 
+      symbol_symtab (symbol) != NULL &&
+      symbol_symtab (symbol)->objfile != NULL) 
     {
       const char *name = SYMBOL_DEMANGLED_NAME (symbol);
       unsigned int previous_component;

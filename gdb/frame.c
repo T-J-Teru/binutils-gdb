@@ -1836,7 +1836,7 @@ get_prev_frame_if_no_cycle (struct frame_info *this_frame)
 }
 
 /* Helper function for get_prev_frame_always, this is called inside a
-   TRY_CATCH block.  Return the frame that called THIS_FRAME or NULL if
+   TRY ... CATCH block.  Return the frame that called THIS_FRAME or NULL if
    there is no such frame.  This may throw an exception.  */
 
 static struct frame_info *

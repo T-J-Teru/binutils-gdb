@@ -3836,11 +3836,15 @@ stabs_evaluate_allocated (void *baton, struct value *val, void* frame)
   volatile struct gdb_exception exception;
   CORE_ADDR array_addr = 0;  
 
-  TRY_CATCH (exception, -1)
+  TRY
     {
       array_addr = stabs_evaluate_allocated_safely (baton, val, frame);
     }
-  exception_print (gdb_stderr, exception); 
+  CATCH (exception, -1)
+    {
+      exception_print (gdb_stderr, exception);
+    }
+  END_CATCH
   if (exception.reason != 0)
     return 0;
   else return array_addr;
@@ -4033,10 +4037,7 @@ read_array_type (char **pp, struct type *type,
   abort ();
 
   range_type =
-#if 0
     create_static_range_type ((struct type *) NULL, index_type, lower, upper);
-#endif
-    create_range_type_d ((struct type *) NULL, index_type, lower, upper, lower_baton, upper_baton, NULL, (LONGEST (*)(void*, CORE_ADDR, void*)) &stabs_evaluate_bound);
   /* XLF emits arrays with minor dimension first, but GDB expects major dimension first.  */
   if (current_subfile->language == language_fortran
       && TYPE_CODE (element_type) == TYPE_CODE_ARRAY)

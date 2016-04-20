@@ -682,7 +682,7 @@ print_frame_args (struct symbol *func, struct frame_info *frame,
 
 	  {
 	    volatile struct gdb_exception except;
-	    TRY_CATCH (except, RETURN_MASK_ERROR)
+	    TRY
 	    {
 	      type = SYMBOL_TYPE (sym);
 	      if (!print_args
@@ -717,10 +717,13 @@ print_frame_args (struct symbol *func, struct frame_info *frame,
 		  print_frame_arg (&entryarg);
 		}
 	    }
-	    if (except.reason < 0)
-	      fprintf_filtered(stream, "<error reading variable %s (%s)>",
-			      SYMBOL_PRINT_NAME (sym),
-			      except.message);
+	    CATCH (except, RETURN_MASK_ERROR)
+	      {
+		fprintf_filtered(stream, "<error reading variable %s (%s)>",
+				 SYMBOL_PRINT_NAME (sym),
+				 except.message);
+	      }
+	    END_CATCH
 	  }
 
 	  xfree (arg.error);
@@ -781,7 +784,7 @@ show_disassemble_next_line (struct ui_file *file, int from_tty,
                     value);
 }
 
-/* Use TRY_CATCH to catch the exception from the gdb_disassembly
+/* Use TRY ... CATCH to catch the exception from the gdb_disassembly
    because it will be broken by filter sometime.  */
 
 static void
@@ -1980,12 +1983,6 @@ backtrace_command (char *arg, int from_tty)
 
   do_cleanups (old_chain);
 }
-
-static void
-backtrace_full_command (char *arg, int from_tty)
-{
-  backtrace_command_1 (arg, 1 /* show_locals */, 1 /* show_args */, from_tty);
-}
 
 
 /* Iterate over the local variables of a block B, calling CB with
@@ -2706,15 +2703,6 @@ With a negative argument, print outermost -COUNT frames.\nUse of the \
 Use of the 'no-filters' qualifier prohibits frame filters from executing\n\
 on this backtrace.\n"));
   add_com_alias ("bt", "backtrace", class_stack, 0);
-  if (xdb_commands)
-    {
-      add_com_alias ("t", "backtrace", class_stack, 0);
-      add_com ("T", class_stack, backtrace_full_command, _("\
-Print backtrace of all stack frames, or innermost COUNT frames\n\
-and the values of the local variables.\n\
-With a negative argument, print outermost -COUNT frames.\n\
-Usage: T <count>\n.  If \"noargs\" is an argument, don't print out the arguments."));
-    }
 
   add_com_alias ("where", "backtrace", class_alias, 0);
   add_info ("stack", backtrace_command,

@@ -97,7 +97,7 @@ struct value_print_options
   int symbol_print;
 
   /* Maximum print depth.  */
-  int max_depth;
+  unsigned int max_depth;
 };
 
 /* The global print options set by the user.  In general this should
