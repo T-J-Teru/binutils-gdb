@@ -1145,8 +1145,10 @@ mrk3_elf_relocate_section (bfd *output_bfd,
              non-relocatable link, the symbol value for a section symbol
              becomes the VMA of the section.  As a result, adding the
              symbol value to the section base address results in an
-             incorrect (double) value for the address being patched in.  */
-          if (ELF_ST_TYPE (sym->st_info) == STT_SECTION)
+             incorrect (double) value for the address being patched in.
+             We check whether the input BFD is executable to determine whether
+             we are relinking a full executable.   */
+          if (input_bfd && elf_elfheader (input_bfd)->e_type == ET_EXEC)
             relocation = BASEADDR (sec);
           else
             relocation = BASEADDR (sec) +
