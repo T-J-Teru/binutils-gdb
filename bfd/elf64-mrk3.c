@@ -2878,7 +2878,23 @@ mrk3_elf_size_dynamic_sections (bfd *output_bfd,
   asection *tmpplt = elf_hash_table(info)->splt;
   asection *plt = bfd_get_section_by_name (output_bfd, ".plt");
   BFD_ASSERT (plt != NULL);
-  plt->contents = bfd_zalloc (output_bfd, tmpplt->size);
+  /* FIXME: b314 describes an invalid memory write issue when the size of the
+     output .plt section is not the same size as the input .plt; in these
+     cases the resizing will incorrectly make the memory allocation smaller
+     than the real PLT section requires for padding.
+
+     The only case we can really see where someone would do this is when they
+     place an ALIGN directive within the output section. Currently we work
+     around this issue by making the size of this section the largest we can
+     imagine someone wanting this section to be. This only affects linker
+     run-time memory usage, and does not artificially increase the size of the
+     section.
+
+     As our use of PLT requires it to be within one 16-bit page, we add 64KiB
+     to the allocation, as even if someone exhausts this limit, even if the
+     link succeeded, a run-time memory error would immediately occur the first
+     time a PLT function pointer is used.  */
+  plt->contents = bfd_zalloc (output_bfd, tmpplt->size + 65536);
   plt->size = tmpplt->size;
   elf_hash_table(info)->splt = plt;
 
