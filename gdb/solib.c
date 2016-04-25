@@ -22,7 +22,6 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <libgen.h>
-#include "gdb_string.h"
 #include "symtab.h"
 #include "bfd.h"
 #include "symfile.h"
@@ -258,6 +257,10 @@ solib_find_1 (char *in_pathname, int *fd, int is_solib)
       return temp_pathname;
     }
 
+  /* The following was added in commit ec3ab3c but needs to be reworked to
+     reflect recent changes within gdb.  */
+  abort ();
+#if 0
   if (!gdb_sysroot_is_empty) 
       {
           char buf[PATH_MAX + 1]; 
@@ -317,6 +320,7 @@ solib_find_1 (char *in_pathname, int *fd, int is_solib)
           }
           while (*p != '\0' && depth++ < 50);        
       }
+#endif
   /* Now see if we can open it.  */
   found_file = gdb_open_cloexec (temp_pathname, O_RDONLY | O_BINARY, 0);
   if (found_file < 0)
@@ -971,7 +975,7 @@ update_solib_list (int from_tty, struct target_ops *target)
 
 	  /* Some targets' section tables might be referring to
 	     sections from so->abfd; remove them.  */
-	  remove_target_sections (old_gdb, old_gdb->abfd);
+	  remove_target_sections (old_gdb);
 
 	  free_so (old_gdb);
 	  old_gdb = tmp;

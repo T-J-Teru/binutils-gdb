@@ -53,7 +53,7 @@ cp_scan_for_anonymous_namespaces (const struct symbol *const symbol,
 {
   if (SYMBOL_DEMANGLED_NAME (symbol) != NULL &&
       symbol_symtab (symbol) != NULL &&
-      symbol_symtab (symbol)->objfile != NULL) 
+      symbol_objfile (symbol) != NULL) 
     {
       const char *name = SYMBOL_DEMANGLED_NAME (symbol);
       unsigned int previous_component;
@@ -300,8 +300,9 @@ cp_lookup_bare_symbol (const struct language_defn *langdef,
       struct type *type;
 
       lang_this = lookup_language_this (language_def (language_cplus), block);
-      if (lang_this == NULL || SYMBOL_TYPE (this) == NULL
-	  || TYPE_TARGET_TYPE (SYMBOL_TYPE (this)) == NULL)
+      if (lang_this == NULL
+	  || SYMBOL_TYPE (lang_this) == NULL
+	  || TYPE_TARGET_TYPE (SYMBOL_TYPE (lang_this)) == NULL)
 	return NULL;
 
       type = check_typedef (TYPE_TARGET_TYPE (SYMBOL_TYPE (lang_this)));
@@ -833,7 +834,7 @@ lookup_namespace_scope (const struct language_defn *langdef,
   strncpy (the_namespace, scope, scope_len);
   the_namespace[scope_len] = '\0';
   /* #18135: Ignore constructors in implicit search for members / methods.  */
-  if (strcmp (namespace, name) == 0)
+  if (strcmp (the_namespace, name) == 0)
     return NULL;
   return cp_lookup_symbol_in_namespace (the_namespace, name,
 					block, domain, 1);

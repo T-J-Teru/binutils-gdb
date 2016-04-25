@@ -6108,7 +6108,7 @@ main_info_cleanup (struct program_space *pspace, void *data)
   xfree (info);
 }
 
-static void
+void
 set_main_name (const char *name, enum language lang)
 {
   struct main_info *info = get_main_info ();

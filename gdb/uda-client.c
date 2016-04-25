@@ -29,7 +29,6 @@
 #include "target.h"
 #include "gdbcmd.h"
 #include "gdbtypes.h"
-#include "gdb_string.h"
 #include "gdbthread.h"
 #include "symtab.h"
 #include "inferior.h"
@@ -59,11 +58,12 @@ lookup_symbol_address (const char *symbol)
   const struct minimal_symbol *msym;
   CORE_ADDR retaddr;
   struct obj_section *obj_section;
-  msym = lookup_minimal_symbol (symbol, NULL, NULL);
-  if (!msym)
+  struct bound_minimal_symbol bmsym;
+  bmsym = lookup_minimal_symbol (symbol, NULL, NULL);
+  if (!bmsym.minsym)
     return 0;
-  retaddr = SYMBOL_VALUE_ADDRESS(msym);
-  obj_section = SYMBOL_OBJ_SECTION (msym);
+  retaddr = MSYMBOL_VALUE_ADDRESS(bmsym.objfile, bmsym.minsym);
+  obj_section = MSYMBOL_OBJ_SECTION (bmsym.objfile, bmsym.minsym);
   if (obj_section && (obj_section->the_bfd_section->flags & SEC_THREAD_LOCAL) != 0)
     retaddr = target_translate_tls_address (obj_section->objfile, retaddr);
   return retaddr;

@@ -1491,6 +1491,7 @@ quit_confirm (void)
   return qr;
 }
 
+#if 0
 /* Helper routine for quit_force that requires error handling.  */
 
 static int
@@ -1513,6 +1514,7 @@ quit_target (void *arg)
 					     exiting.  */
   return 0;
 }
+#endif
 
 static void
 emergency_exit(int signo)

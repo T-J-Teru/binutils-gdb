@@ -818,6 +818,6 @@ extern int frame_unwinder_is (struct frame_info *fi,
 			      const struct frame_unwind *unwinder);
 
 /* Whether addresses are shown in backtraces.  */
-extern int backtrace_addresses;
+extern enum auto_boolean backtrace_addresses;
 
 #endif /* !defined (FRAME_H)  */

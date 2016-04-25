@@ -23,7 +23,6 @@
 #include <ctype.h>
 #include <poll.h>
 #include "gdb_assert.h"
-#include "gdb_string.h"
 #include "gdbcmd.h"
 #include "uda-types.h"
 #include "uda-rmt-utils.h"

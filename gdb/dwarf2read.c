@@ -1511,7 +1511,7 @@ static LONGEST read_offset_1 (bfd *, const gdb_byte *, unsigned int);
 static sect_offset read_abbrev_offset (struct dwarf2_section_info *,
 				       sect_offset);
 
-static const gdb_byte *read_n_bytes (bfd *, const gdb_byte *, unsigned int);
+static gdb_byte *read_n_bytes (bfd *, const gdb_byte *, unsigned int);
 
 static const char *read_direct_string (bfd *, const gdb_byte *, unsigned int *);
 
@@ -6698,7 +6698,6 @@ scan_partial_symbols (struct partial_die_info *first_die, CORE_ADDR *lowpc,
 	    case DW_TAG_subprogram:
 	      add_partial_subprogram (pdi, lowpc, highpc, set_addrmap, cu);
 	      break;
-	    case DW_TAG_imported_declaration:
 	    case DW_TAG_constant:
 	    case DW_TAG_variable:
 	    case DW_TAG_typedef:
@@ -6713,7 +6712,7 @@ scan_partial_symbols (struct partial_die_info *first_die, CORE_ADDR *lowpc,
 	    case DW_TAG_structure_type:
 	      if (!pdi->is_declaration)
 		{
-		  add_partial_type (pdi, lowpc, highpc, need_pc, cu);
+		  add_partial_type (pdi, lowpc, highpc, set_addrmap, cu);
 		}
 	      break;
 	    case DW_TAG_enumeration_type:
@@ -6976,7 +6975,6 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
 			     list, 0, 0, cu->language, objfile);
       }
       break;
-    case DW_TAG_imported_declaration:
     case DW_TAG_variable:
       if (pdi->d.locdesc)
 	addr = decode_locdesc (pdi->d.locdesc, cu);
@@ -7059,13 +7057,6 @@ add_partial_symbol (struct partial_die_info *pdi, struct dwarf2_cu *cu)
         {
           f_module_announce (objfile, actual_name);
         }
-      break;
-    case DW_TAG_module:
-      add_psymbol_to_list (actual_name, strlen (actual_name),
-			   built_actual_name != NULL,
-			   MODULE_DOMAIN, LOC_TYPEDEF,
-			   &objfile->global_psymbols,
-			   0, (CORE_ADDR) 0, cu->language, objfile);
       break;
     case DW_TAG_class_type:
     case DW_TAG_interface_type:
@@ -9171,7 +9162,7 @@ find_file_and_directory (struct die_info *die, struct dwarf2_cu *cu,
 		  if (strcmp(lh->file_names[k].name, *name) == 0
 		      && lh->file_names[k].dir_index)
 		    {
-		      char *dirname = 
+		      const char *dirname = 
 			lh->include_dirs[lh->file_names[k].dir_index - 1];
 		      if (dirname != NULL && IS_ABSOLUTE_PATH(dirname))
 			{
@@ -9353,7 +9344,7 @@ read_file_scope (struct die_info *die, struct dwarf2_cu *cu)
   if (cu->line_header && !cu->decoded_lines)
     {
       cu->decoded_lines = 1;
-      dwarf_decode_lines (cu->line_header, comp_dir, cu, NULL, 1);
+      dwarf_decode_lines (cu->line_header, comp_dir, cu, NULL, lowpc, 1);
     } 
 
   /* Decode macro information, if present.  Dwarf 2 macro information
@@ -14647,6 +14638,7 @@ read_tag_reference_type (struct die_info *die, struct dwarf2_cu *cu)
   return set_die_type (die, type, cu);
 }
 
+#if 0
 /* Add the given cv-qualifiers to the element type of the array.  GCC
    outputs DWARF type qualifiers that apply to an array, not the
    element type.  But GDB relies on the array element type to carry
@@ -14676,10 +14668,14 @@ add_array_cv_type (struct die_info *die, struct dwarf2_cu *cu,
 
   return set_die_type (die, base_type, cu);
 }
+#endif
 
 static struct type *
 read_upc_shared_qual_type (struct die_info *die, struct dwarf2_cu *cu)
 {
+  struct type_quals type_quals = null_type_quals;
+  struct attribute *attr;
+
   /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
      resolved.  */
   abort ();
@@ -14702,9 +14698,6 @@ read_upc_shared_qual_type (struct die_info *die, struct dwarf2_cu *cu)
   cv_type = make_cv_type (1, TYPE_VOLATILE (base_type), base_type, 0);
   return set_die_type (die, cv_type, cu);
 #endif
-
-  struct type_quals type_quals = null_type_quals;
-  struct attribute *attr;
 
   TYPE_QUAL_FLAGS (type_quals) = TYPE_INSTANCE_FLAG_UPC_SHARED;
 
@@ -14896,7 +14889,10 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
     }
 
   index_type = objfile_type (objfile)->builtin_int;
-  range_type = create_range_type_d (NULL, index_type, 1, length, NULL, NULL, len_compute, (LONGEST (*)(void*, CORE_ADDR, void*)) dwarf2_evaluate_int);
+
+  /* APB: This did not merge correctly, needs more work.  */
+  abort ();
+  // range_type = create_range_type (NULL, index_type, 1, length, NULL, NULL, len_compute, (LONGEST (*)(void*, CORE_ADDR, void*)) dwarf2_evaluate_int);
   char_type = language_string_char_type (cu->language_defn, gdbarch);
   type = create_string_type (NULL, char_type, range_type);
 
@@ -14985,7 +14981,7 @@ read_subroutine_type (struct die_info *die, struct dwarf2_cu *cu)
       case DW_CC_program:
 	/* Set this subroutine as the "main" subroutine
 	   for the program. */
-	set_main_name (TYPE_NAME (ftype));
+	set_main_name (TYPE_NAME (ftype), cu->language);
 	break;
       case DW_CC_normal:
       case DW_CC_nocall:
@@ -15182,7 +15178,7 @@ read_berkeley_mangled_type (const char *mangled_name, struct die_info *die,
       mangled_name++;
       target_type = read_berkeley_mangled_type (mangled_name, die, cu);
       index_type = objfile_type (objfile)->builtin_int;
-      range_type = create_range_type (NULL, index_type, 0, size - 1);
+      range_type = create_static_range_type (NULL, index_type, 0, size - 1);
       if (threads_factor)
         TYPE_INSTANCE_FLAGS (range_type) |=
 	  TYPE_INSTANCE_FLAG_UPC_HAS_THREADS_FACTOR;
@@ -15537,7 +15533,7 @@ attr_to_dynamic_prop (const struct attribute *attr, struct die_info *die,
   return 1;
 }
 
-
+#if 0
 static struct dwarf2_loclist_baton *
 create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_cu *cu) 
 {
@@ -15553,7 +15549,7 @@ create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_
       baton->data = DW_BLOCK(attr)->data;
     }
   else 
-    if (is_ref_attr (attr))
+    if (attr_form_is_ref (attr))
       {
 	int size;
 	struct die_info *ref_die =
@@ -15674,6 +15670,7 @@ create_bound_baton (struct die_info *die, struct attribute *attr, struct dwarf2_
       }
   return baton;
 }
+#endif
 
 /* Read the given DW_AT_subrange DIE.  */
 
@@ -15753,9 +15750,9 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   /* APB-TODO: Merge conflict in 1e257eb.  Note sure what to do.  */
   abort ();
 
+#if 0
   if (attr)
     attr_to_dynamic_prop (attr, die, cu, &low);
-#if 0
   if (attr) 
     {
       low_compute = create_bound_baton (die, attr, cu);
@@ -15763,7 +15760,6 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
       if (!low_compute)
 	low = dwarf2_get_attr_constant_value (attr, 0);
     }
-#endif
   else if (!low_default_is_valid)
     complaint (&symfile_complaints, _("Missing DW_AT_lower_bound "
 				      "- DIE at 0x%x [in module %s]"),
@@ -15847,6 +15843,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 	  low = high;
 	}
     }
+#endif
 
   /* Dwarf-2 specifications explicitly allows to create subrange types
      without specifying a base type.
@@ -17608,14 +17605,14 @@ read_offset_1 (bfd *abfd, const gdb_byte *buf, unsigned int offset_size)
   return retval;
 }
 
-static const gdb_byte *
+static gdb_byte *
 read_n_bytes (bfd *abfd, const gdb_byte *buf, unsigned int size)
 {
   /* If the size of a host char is 8 bits, we can return a pointer
      to the buffer, otherwise we have to copy the data to a buffer
      allocated on the temporary obstack.  */
   gdb_assert (HOST_CHAR_BIT == 8);
-  return buf;
+  return (gdb_byte *) buf;
 }
 
 static const char *
@@ -17956,7 +17953,6 @@ set_cu_language (unsigned int lang, struct dwarf2_cu *cu)
     case DW_LANG_C99:
     case DW_LANG_C11:
     case DW_LANG_C:
-    case DW_LANG_UPC:
       cu->language = language_c;
       break;
     case DW_LANG_C_plus_plus:
@@ -18387,7 +18383,7 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
 
       for (i = 0; i < lh->num_file_names; i++)
         {
-          char *dir = NULL;
+          const char *dir = NULL;
 
           fe = &lh->file_names[i];
           if (fe->dir_index)
@@ -18405,7 +18401,7 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
           const char *first_subfile_basename = lbasename(first_subfile->name);
           for (i = 0; i < lh->num_file_names; i++)
             {
-              char *dir = NULL;
+              const char *dir = NULL;
 
               fe = &lh->file_names[i];
               if (fe->dir_index)
@@ -18421,13 +18417,18 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
 
       for (i = 0; i < lh->num_file_names; i++)
         {
-          char *dir = NULL;
+          const char *dir = NULL;
 
           fe = &lh->file_names[i];
           if (fe->dir_index)
             dir = lh->include_dirs[fe->dir_index - 1];
-          dwarf2_start_subfile (fe->name, dir, comp_dir);
+          dwarf2_start_subfile (fe->name, dir);
 
+	  /* APB: This did not merge correctly, and needs additional
+	     thought.  */
+	  abort ();
+
+#if 0
           /* Skip the main file; we don't need it, and it must be
              allocated last, so that it will show up before the
              non-primary symtabs in the objfile's symtab list.  */
@@ -18435,9 +18436,9 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
             continue;
 
           if (current_subfile->symtab == NULL)
-            current_subfile->symtab = allocate_symtab (current_subfile->name,
-                                                       cu->objfile);
+            current_subfile->symtab = allocate_symtab (cust, current_subfile->name);
           fe->symtab = current_subfile->symtab;
+#endif
         }
     }
 
@@ -18516,7 +18517,7 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
     {
       include_name_to_compare = xstrdup (include_name);
     }
-  simplify_path (include_name_to_compare);
+  simplify_path ((char *) include_name_to_compare);
 
   if (!IS_ABSOLUTE_PATH (pst->filename) && pst->dirname != NULL)
     {
@@ -18527,13 +18528,13 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
     {
       pst_filename = xstrdup (pst->filename);
     }
-  simplify_path (pst_filename);
+  simplify_path ((char *) pst_filename);
 
   file_is_pst = FILENAME_CMP (include_name_to_compare, pst_filename) == 0;
 
   if (include_name_to_compare != include_name)
-    xfree (include_name_to_compare);
-  xfree (pst_filename);
+    xfree ((char *) include_name_to_compare);
+  xfree ((char *) pst_filename);
 
   if (file_is_pst)
     return NULL;
@@ -19474,11 +19475,16 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	 
 	  if (!cu->decoded_lines)
 	    {
+	      /* APB: This failed to merge correctly.  */
+	      abort ();
+
+#if 0
 	      /* dwarf_decode_lines changes current_subfile but we don't want that.  */
 	      old_subfile = current_subfile;
 	      cu->decoded_lines = 1;
 	      dwarf_decode_lines (cu->line_header, cu->comp_dir, cu, NULL, 1);
 	      current_subfile = old_subfile;
+#endif
 	    }
 
 	  attr = dwarf2_attr (die,
@@ -19580,7 +19586,7 @@ wellformed:
               /* Set this subroutine as the "main" subroutine
                  for the program. */
               attr2 = dwarf2_attr (die, DW_AT_MIPS_linkage_name, cu);
-              set_main_name (attr2 ? DW_STRING (attr2) : name);
+              set_main_name (attr2 ? DW_STRING (attr2) : name, cu->language);
               break;
             case DW_CC_normal:
             case DW_CC_nocall:
@@ -19934,7 +19940,6 @@ wellformed:
 			   ? &global_symbols : cu->list_in_scope);
 	  }
 	  break;
-	case DW_TAG_imported_declaration:
 	case DW_TAG_namespace:
 	  SYMBOL_ACLASS_INDEX (sym) = LOC_TYPEDEF;
 	  list_to_add = &global_symbols;
@@ -20003,9 +20008,14 @@ wellformed:
 		    }
 		}
 
+	      /* APB: This failed to merge correctly.  */
+	      abort ();
+
+#if 0
 	      block
 		= finish_block (0, &local_symbols, bupc_context->old_blocks, bupc_context->start_addr,
 				bupc_highpc, objfile);
+#endif
 	      if (pblock != context_stack->old_blocks)
 	        {
 		  /* The new block will be a child of pblock->block.  */
@@ -20382,7 +20392,7 @@ lookup_die_type (struct die_info *die, const struct attribute *attr,
 		  char *message, *saved;
 
 		  message = xstrprintf (_("<recursive type in %s, CU 0x%x, DIE 0x%x>"),
-					objfile->name,
+					objfile_name (objfile),
 					cu->header.offset.sect_off,
 					die->offset.sect_off);
 		  saved = obstack_copy0 (&objfile->objfile_obstack,
@@ -20930,10 +20940,11 @@ dwarf2_name (struct die_info *die, struct dwarf2_cu *cu)
           CORE_ADDR lowpc, highpc;
           if (dwarf2_get_pc_bounds (die, &lowpc, &highpc, cu, NULL))
           {
-              struct minimal_symbol* minsym = lookup_minimal_symbol_by_pc (lowpc);
-              if (minsym)
+	    struct minimal_symbol* minsym =
+	      lookup_minimal_symbol_by_pc (lowpc).minsym;
+	    if (minsym)
               {
-                  return SYMBOL_LINKAGE_NAME(minsym);
+		return MSYMBOL_LINKAGE_NAME(minsym);
               }
           }
       }

@@ -880,7 +880,9 @@ elf_gnu_ifunc_resolve_addr (struct gdbarch *gdbarch, CORE_ADDR pc)
   /* STT_GNU_IFUNC resolver functions have no parameters.  FUNCTION is the
      function entry address.  ADDRESS may be a function descriptor.  */
 
-  address_val = call_function_by_hand_ex (function, language_c, 0, NULL);
+  /* This did not merge correctly, needs more work.  */
+  abort ();
+  // address_val = call_function_by_hand_ex (function, language_c, 0, NULL);
   address = value_as_address (address_val);
   address = gdbarch_convert_from_func_ptr_addr (gdbarch, address,
 						&current_target);

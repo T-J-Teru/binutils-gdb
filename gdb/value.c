@@ -3634,9 +3634,16 @@ value_from_pointer (struct type *type, CORE_ADDR addr)
 struct value *
 value_from_contents_and_address_unresolved (struct type *type,
 					    const gdb_byte *valaddr,
+					    unsigned length,
 					    CORE_ADDR address)
 {
   struct value *v;
+
+  /* The merge of 4e8c023a07149e6a5ca784f45c4b0cd74c252e3e changed
+     value_from_contents_and_address to add a length field.  I added a
+     length field to this function too, but it's not used, I need to figure
+     that out.  */
+  abort ();
 
   if (valaddr == NULL)
     v = allocate_value_lazy (type);
@@ -3661,6 +3668,10 @@ value_from_contents_and_address (struct type *type,
   struct type *resolved_type = resolve_dynamic_type (type, valaddr, address);
   struct type *resolved_type_no_typedef = check_typedef (resolved_type);
   struct value *v;
+
+  /* The merge of 4e8c023a07149e6a5ca784f45c4b0cd74c252e3e did not go well
+     here, need to figure out what should be done with length.  */
+  abort ();
 
   if (valaddr == NULL)
     v = allocate_value_lazy (resolved_type);

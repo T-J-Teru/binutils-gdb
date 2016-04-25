@@ -188,12 +188,18 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
  		    if (!rval || invalid_bound (r))
 		      {
 			TYPE_LOW_BOUND(range_type) = 1;
-			TYPE_LOW_BOUND_UNDEFINED (range_type) = 1;
+			/* The following was added in commit 30b17042 but
+			   needs to be reworked.  */
+			abort ();
+			// TYPE_LOW_BOUND_UNDEFINED (range_type) = 1;
 		      }
 		    else
 		      {
 			TYPE_LOW_BOUND(range_type) = r;
-			TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
+			/* The following was added in commit 30b17042 but
+			   needs to be reworked.  */
+			abort ();
+			// TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
 		      }
 		  }
 		if (TYPE_HIGH_BOUND_BATON(range_type)) 
@@ -215,12 +221,18 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
  		    if (!rval || invalid_bound (r))
 		      {
 			TYPE_HIGH_BOUND(range_type) = 1;
-			TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+			/* The following was added in commit 30b17042 but
+			   needs to be reworked.  */
+			abort ();
+			// TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
 		      }
 		    else
 		      {
 			TYPE_HIGH_BOUND(range_type) = r;
-			TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
+			/* The following was added in commit 30b17042 but
+			   needs to be reworked.  */
+			abort ();
+			//TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
 		      }
 		  }
 		if (TYPE_COUNT_BOUND_BATON(range_type)) 
@@ -243,14 +255,22 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
  		    if (!rval || invalid_bound (r))
 		      {
 			TYPE_HIGH_BOUND(range_type) = 1;
-			TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+			/* The following was added in commit 30b17042 but
+			   needs to be reworked.  */
+			abort ();
+			//TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
 		      }
 		    else
 		      {
 			/* note.. upper bound is inclusive */
 			TYPE_HIGH_BOUND(range_type) = r + TYPE_LOW_BOUND(range_type) - 1;
 			if (!TYPE_LOW_BOUND_UNDEFINED(range_type))
-			  TYPE_HIGH_BOUND_UNDEFINED(range_type) = 0;
+			  {
+			    /* The following was added in commit 30b17042 but
+			       needs to be reworked.  */
+			    abort ();
+			    //TYPE_HIGH_BOUND_UNDEFINED(range_type) = 0;
+			  }
 		      }
 		  }
 		/* Check the bounds are sane. */
@@ -261,7 +281,10 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 		      {
 			TYPE_HIGH_BOUND(range_type) = 
 			  TYPE_LOW_BOUND(range_type) + 1;
-			TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+			/* The following was added in commit 30b17042 but
+			   needs to be reworked.  */
+			abort ();
+			//TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
 		      }
 		    else
 		      {

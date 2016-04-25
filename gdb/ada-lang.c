@@ -8063,7 +8063,7 @@ ada_template_to_fixed_record_type_1 (struct type *type,
 		 causes problems because we will end up trying to
 		 resolve a type that is currently being
 		 constructed.  */
-	      check_size (rtype);
+	      ada_ensure_varsize_limit (rtype);
 	      dval = value_from_contents_and_address_unresolved (rtype,
 								 valaddr,
 								 TYPE_LENGTH (rtype),

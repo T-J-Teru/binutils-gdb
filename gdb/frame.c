@@ -315,7 +315,7 @@ show_backtrace_limit (struct ui_file *file, int from_tty,
 }
 
 
-int backtrace_addresses = AUTO_BOOLEAN_AUTO;
+enum auto_boolean backtrace_addresses = AUTO_BOOLEAN_AUTO;
 static void
 show_backtrace_addresses (struct ui_file *file, int from_tty,
                           struct cmd_list_element *c, const char *value)
@@ -2139,7 +2139,7 @@ inside_func_full (struct frame_info *this_frame, const char *name, struct objfil
   struct symbol *sym = lookup_symbol(name, NULL, VAR_DOMAIN, 0);  
   if (sym) {
      CORE_ADDR maddr;
-     struct block *block;
+     const struct block *block;
      block = SYMBOL_BLOCK_VALUE (sym); /* gives block for symtab */
      if (block) {
          maddr = gdbarch_convert_from_func_ptr_addr 
@@ -2305,7 +2305,7 @@ get_prev_frame (struct frame_info *this_frame)
     {
       if (inside_func(prev_frame, "start_thread", NULL))
 	{
-	  struct frame_info *prev_prev_frame = get_prev_frame_1 (prev_frame);
+	  struct frame_info *prev_prev_frame = get_prev_frame_always (prev_frame);
 	  if (prev_prev_frame
 	      && inside_func(prev_prev_frame, "clone", NULL))
 	    {
@@ -2315,7 +2315,7 @@ get_prev_frame (struct frame_info *this_frame)
 	}
       else if (inside_func(prev_frame, "clone", NULL))
 	{
-	  struct frame_info *prev_prev_frame = get_prev_frame_1 (prev_frame);
+	  struct frame_info *prev_prev_frame = get_prev_frame_always (prev_frame);
 	  if (prev_prev_frame
 	      && (get_frame_type (prev_prev_frame) == NORMAL_FRAME
 	          || get_frame_type (prev_prev_frame) == INLINE_FRAME)
@@ -2326,7 +2326,7 @@ get_prev_frame (struct frame_info *this_frame)
 	}
       else if (inside_func(prev_frame, "_pthread_body", NULL))
 	{
-	  struct frame_info *prev_prev_frame = get_prev_frame_1 (prev_frame);
+	  struct frame_info *prev_prev_frame = get_prev_frame_always (prev_frame);
 	  if (prev_prev_frame
 	      && (get_frame_type (prev_prev_frame) == NORMAL_FRAME
 	          || get_frame_type (prev_prev_frame) == INLINE_FRAME)

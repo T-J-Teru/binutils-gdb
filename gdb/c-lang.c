@@ -883,6 +883,7 @@ const struct language_defn c_language_defn =
 const struct language_defn upc_language_defn =
 {
   "upc",				/* Language name */
+  "UPC",
   language_upc,
   range_check_off,
   case_sensitive_on,
@@ -918,6 +919,9 @@ const struct language_defn upc_language_defn =
   c_get_string,
   NULL,				/* la_get_symbol_name_cmp */
   iterate_over_symbols,
+  &c_varobj_ops,
+  NULL,
+  NULL,
   LANG_MAGIC
 };
 

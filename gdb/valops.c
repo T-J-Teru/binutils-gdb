@@ -196,7 +196,9 @@ value_allocate_space_in_inferior (int len)
   struct value *blocklen;
 
   blocklen = value_from_longest (builtin_type (gdbarch)->builtin_int, len);
-  val = call_function_by_hand_ex (val, language_c, 1, &blocklen);
+  /* This did not merge correctly, needs more work.  */
+  abort ();
+  // val = call_function_by_hand_ex (val, language_c, 1, &blocklen);
   if (value_logical_not (val))
     {
       if (!target_has_execution)

@@ -34,11 +34,11 @@
 #include "gdbcmd.h"
 #include "gdbthread.h"
 #include "gdb_assert.h"
-#include "gdb_string.h"
 #include "uda-types-client.h"
 #include "uda-client.h"
 #include "uda-defs.h"
 #include "upc-thread.h"
+#include "objfiles.h"
 
 #define UDA_SERVICE "/tmp/uda_service"
 
@@ -77,7 +77,7 @@ char *
 upc_main_name (void)
 {
   struct minimal_symbol *msym;
-  msym = lookup_minimal_symbol (UPC_MAIN_PROGRAM_SYMBOL_NAME, NULL, NULL);
+  msym = lookup_minimal_symbol (UPC_MAIN_PROGRAM_SYMBOL_NAME, NULL, NULL).minsym;
   if (msym != NULL)
     {
       return UPC_MAIN_PROGRAM_SYMBOL_NAME;
@@ -224,11 +224,12 @@ upc_shared_var_address (struct symbol *var)
   else if (SYMBOL_CLASS (var) == LOC_UNRESOLVED)
     {
       struct minimal_symbol *msym;
+      struct bound_minimal_symbol bmsym;
 
-      msym = lookup_minimal_symbol (SYMBOL_LINKAGE_NAME (var), NULL, NULL);
-      if (msym == NULL)
+      bmsym = lookup_minimal_symbol (SYMBOL_LINKAGE_NAME (var), NULL, NULL);
+      if (bmsym.minsym == NULL)
           return shared_addr;
-      sym_addr = SYMBOL_VALUE_ADDRESS (msym);
+      sym_addr = MSYMBOL_VALUE_ADDRESS (bmsym.objfile, bmsym.minsym);
     }
   else if (SYMBOL_CLASS (var) == LOC_COMPUTED)
     {

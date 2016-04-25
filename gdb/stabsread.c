@@ -1017,7 +1017,7 @@ define_symbol (CORE_ADDR valu, char *string, int desc, int type,
     case 'J':
       /* An internal function definition.  */
       SYMBOL_TYPE (sym) = read_type (&p, objfile);
-      SYMBOL_CLASS (sym) = LOC_BLOCK;
+      SYMBOL_ACLASS_INDEX (sym) = LOC_BLOCK;
       SYMBOL_DOMAIN (sym) = VAR_DOMAIN;
       add_symbol_to_list (sym, &file_symbols);
       goto process_function_types;
@@ -1534,7 +1534,7 @@ read_xlf_char_type(char** pp, struct type* rettype, struct objfile *objfile)
   *pp +=3; 
   bound = read_huge_number(pp, 0, &bits, 0);
   chartype = objfile_type (objfile)->builtin_char;
-  range_type = create_range_type((struct type *) NULL, objfile_type (objfile)->builtin_int, 1, bound);
+  range_type = create_static_range_type((struct type *) NULL, objfile_type (objfile)->builtin_int, 1, bound);
   rettype = create_array_type ( rettype, chartype, range_type);
   TYPE_CODE (rettype) = TYPE_CODE_STRING;
   return rettype;
@@ -3809,7 +3809,7 @@ stabs_evaluate_allocated_safely (void *baton, struct value *val, void* frame)
       upper = value_as_long ( value_at (objfile_type (b->objfile)->builtin_long, obj + offset + (i * 3 + 1) * (is64bit ? 8 : 4)))
 	+ lower - 1;
 
-      range_type = create_range_type (NULL, objfile_type (b->objfile)->builtin_long, lower, upper);
+      range_type = create_static_range_type (NULL, objfile_type (b->objfile)->builtin_long, lower, upper);
 
       target_type = create_array_type(NULL, target_type, range_type);
     }
@@ -3865,7 +3865,7 @@ read_allocatable_array (struct type* type, char **pp, struct objfile *objfile, i
   baton->allocatable = allocatable;
   baton->descriptor_offset = offset;
   baton->objfile = objfile; 
-  range_type = create_range_type(NULL, objfile_type (objfile)->builtin_int, 0, 1);
+  range_type = create_static_range_type(NULL, objfile_type (objfile)->builtin_int, 0, 1);
   type = create_array_type(type, baton->element_type, range_type);
 
   stabs_create_generic_allocated_baton (type, baton, range_type);
@@ -3874,6 +3874,10 @@ read_allocatable_array (struct type* type, char **pp, struct objfile *objfile, i
   return type;
 }
 
+#if 0
+
+/* This is added as part of 33fe3027342c2847717bc1d92eb8f44d26ead964
+   however, that commit seems to have merged very badly.  */
 
 static LONGEST
 stabs_evaluate_bound (void *baton, struct value *pobj, void *frame)
@@ -3915,6 +3919,7 @@ stabs_evaluate_bound (void *baton, struct value *pobj, void *frame)
     }
   return 0;
 }
+#endif
 
 /* Read a definition of an array type,
    and create and return a suitable type object.
