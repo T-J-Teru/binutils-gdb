@@ -18331,11 +18331,12 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
 {
   const struct file_entry fe = lh->file_names [file_index];
   const char *include_name = fe.name;
-  const char *include_name_to_compare = include_name;
+  char *include_name_to_compare = NULL;
   const char *dir_name = NULL;
-  const char *pst_filename;
+  char *pst_filename;
   char *copied_name = NULL;
   int file_is_pst;
+  struct cleanup *old_chain = make_cleanup (null_cleanup, NULL);
 
   if (fe.dir_index && lh->include_dirs != NULL)
     dir_name = lh->include_dirs[fe.dir_index - 1];
@@ -18363,48 +18364,40 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
 	 DW_AT_name = "./hello.c"
 
       */
-
       if (dir_name != NULL)
 	{
 	  char *tem = concat (dir_name, SLASH_STRING,
-			      include_name, (char *)NULL);
+			      include_name, (char *) NULL);
 
 	  make_cleanup (xfree, tem);
 	  include_name = tem;
-	  include_name_to_compare = include_name;
+	  include_name_to_compare = tem;
 	}
+
       if (!IS_ABSOLUTE_PATH (include_name) && comp_dir != NULL)
 	{
 	  char *tem = concat (comp_dir, SLASH_STRING,
-			      include_name, (char *)NULL);
-
+			      include_name, (char *) NULL);
 	  make_cleanup (xfree, tem);
 	  include_name_to_compare = tem;
 	}
     }
-  else
-    {
-      include_name_to_compare = xstrdup (include_name);
-    }
-  simplify_path ((char *) include_name_to_compare);
+
+  if (include_name_to_compare == NULL)
+    include_name_to_compare = xstrdup (include_name);
+  simplify_path (include_name_to_compare);
 
   if (!IS_ABSOLUTE_PATH (pst->filename) && pst->dirname != NULL)
-    {
-      pst_filename = concat (pst->dirname, SLASH_STRING,
-			      pst->filename, (char *)NULL);
-    }
+    pst_filename = concat (pst->dirname, SLASH_STRING,
+			   pst->filename, (char *) NULL);
   else
-    {
-      pst_filename = xstrdup (pst->filename);
-    }
-  simplify_path ((char *) pst_filename);
+    pst_filename = xstrdup (pst->filename);
 
+  make_cleanup (xfree, pst_filename);
+  simplify_path (pst_filename);
   file_is_pst = FILENAME_CMP (include_name_to_compare, pst_filename) == 0;
 
-  if (include_name_to_compare != include_name)
-    xfree ((char *) include_name_to_compare);
-  xfree ((char *) pst_filename);
-
+  do_cleanups (old_chain);
   if (file_is_pst)
     return NULL;
   return include_name;
