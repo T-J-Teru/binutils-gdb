@@ -19007,8 +19007,8 @@ dwarf_decode_lines (struct line_header *lh, const char *comp_dir,
       else
 	pst_filename = xstrdup (pst->filename);
       make_cleanup (xfree, pst_filename);
-      simplify_path (pst_filename);              
-      
+      simplify_path (pst_filename);
+
       /* Now that we're done scanning the Line Header Program, we can
          create the psymtab of each included file.  */
       for (file_index = 0; file_index < lh->num_file_names; file_index++)

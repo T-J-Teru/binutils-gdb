@@ -1184,8 +1184,6 @@ watch_main_source_file_lossage (void)
 	  else
 	    prev_mainsub_alias->next = mainsub_alias->next;
 	  xfree (mainsub_alias->name);
-	  /* #41883 (ALL-284): Do not leave xfree'd subfiles in map. */
-	  htab_remove_elt(subfiles_map, mainsub_alias);
 	  xfree (mainsub_alias);
 	}
     }
