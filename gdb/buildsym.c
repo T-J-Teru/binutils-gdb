@@ -192,71 +192,6 @@ static void record_pending_block (struct objfile *objfile,
 				  struct block *block,
 				  struct pending_block *opblock);
 
-static htab_t subfiles_map;
-
-static void
-htab_free_ptr(PTR p)
-{
-  free(p);
-}
-
-static PTR
-htab_alloc_ptr(size_t t1, size_t t2)
-{
-  return xcalloc(t1, t2);
-}
-
-static char *
-subfile_fullname (const struct subfile *subfile)
-{
-  if (!IS_ABSOLUTE_PATH (subfile->name)
-      && subfile->buildsym_compunit->comp_dir != NULL)
-    return concat (subfile->buildsym_compunit->comp_dir,
-		   SLASH_STRING, subfile->name, (char *) NULL);
-  else
-    return xstrdup (subfile->name);
-}
-
-static int
-htab_eq_subfile (const void* s, const void* t)
-{
-  int ret;
-  /* emulate strcmp() return values extended to handle null values, so
-	 s, t both null => s == t => return 0
-	 s null, t not null => s < t => return -1
-	 s not null, t null => s > t => return +1 */
-  if (!s)
-	{
-	  ret = t ? -1 : 0; 
-	}
-  else if (!t)
-	{
-	  ret = 1;
-	}
-  else
-	{
-	  char *fullname1 = subfile_fullname ((const struct subfile *) s);
-	  char *fullname2 = subfile_fullname ((const struct subfile *) t);
-	  simplify_path (fullname1);
-	  simplify_path (fullname2);
-	  ret = !strcmp (fullname1, fullname2);
-	  xfree (fullname1);
-	  xfree (fullname2);
-	}
-  return ret;
-}
-
-static hashval_t
-htab_hash_subfile(const void *p)
-{
-  char *fullname = subfile_fullname ((const struct subfile *) p);
-  hashval_t ret;
-  simplify_path (fullname);
-  ret = htab_hash_string (fullname);
-  xfree (fullname);
-  return ret;
-}
-
 /* Initial sizes of data structures.  These are realloc'd larger if
    needed, and realloc'd down to the size actually used, when
    completed.  */
@@ -726,22 +661,39 @@ make_blockvector (void)
 struct subfile *
 find_subfile (const char *name, const char *dirname)
 {
-  struct subfile dummy = {0};
   struct subfile *subfile;
-  struct buildsym_compunit bscu;
+  char *abs_name;
 
-  if (!subfiles_map)
-    return NULL;
+  if (!IS_ABSOLUTE_PATH (name) && dirname != NULL)
+    abs_name = concat (dirname, SLASH_STRING, name, (char *) NULL);
+  else
+    abs_name = xstrdup (name);
+  simplify_path (abs_name);
 
-  dummy.name = (char*) name;
-  bscu.comp_dir = (char*) dirname;
-  dummy.buildsym_compunit = &bscu;
-
-  if ((subfile = htab_find (subfiles_map, &dummy)))
+  for (subfile = buildsym_compunit->subfiles; subfile; subfile = subfile->next)
     {
-      current_subfile = subfile;
-      return subfile;
+      char *subfile_name;
+
+      /* If NAME is an absolute path, and this subfile is not, then
+	 attempt to create an absolute path to compare.  */
+      if (!IS_ABSOLUTE_PATH (subfile->name) && dirname != NULL)
+	subfile_name = concat (dirname, SLASH_STRING,
+			       subfile->name, (char *) NULL);
+      else
+	subfile_name = xstrdup (subfile->name);
+      simplify_path (subfile_name);
+
+      if (FILENAME_CMP (subfile_name, name) == 0)
+	{
+	  xfree (subfile_name);
+	  xfree (abs_name);
+	  return subfile;
+	}
+
+      xfree (subfile_name);
     }
+
+  xfree (abs_name);
   return NULL;
 }
 
@@ -759,50 +711,11 @@ start_subfile (const char *name)
 
   subfile_dirname = buildsym_compunit->comp_dir;
 
-  /* APB-TODO: Conflict while merging d2819f0, not sure how these should be
-     resolved.  */
-  abort ();
-
-#if 0
-  /* See if this subfile is already known as a subfile of the current
-     main source file.  */
-  struct subfile dummy = {0};
-  dummy.name = (char *) name;
-  dummy.dirname = (char*) dirname;
-
-      if ((subfile = htab_find (subfiles_map, &dummy)))
-        {
-          current_subfile = subfile;
-          return;
-        }
-    }
-#endif
-
   /* See if this subfile is already registered.  */
-
-  for (subfile = buildsym_compunit->subfiles; subfile; subfile = subfile->next)
+  if ((subfile = find_subfile (name, subfile_dirname)) != NULL)
     {
-      char *subfile_name;
-
-      /* If NAME is an absolute path, and this subfile is not, then
-	 attempt to create an absolute path to compare.  */
-      if (IS_ABSOLUTE_PATH (name)
-	  && !IS_ABSOLUTE_PATH (subfile->name)
-	  && subfile_dirname != NULL)
-	subfile_name = concat (subfile_dirname, SLASH_STRING,
-			       subfile->name, (char *) NULL);
-      else
-	subfile_name = subfile->name;
-
-      if (FILENAME_CMP (subfile_name, name) == 0)
-	{
-	  current_subfile = subfile;
-	  if (subfile_name != subfile->name)
-	    xfree (subfile_name);
-	  return;
-	}
-      if (subfile_name != subfile->name)
-	xfree (subfile_name);
+      current_subfile = subfile;
+      return;
     }
 
   /* This subfile is not known.  Add an entry for it.  */
@@ -863,11 +776,6 @@ start_subfile (const char *name)
     {
       subfile->language = subfile->next->language;
     }
-
-     { 
-         PTR *slot = htab_find_slot (subfiles_map, subfile, INSERT);
-         *slot = subfile;
-     }
 }
 
 /* Start recording information about a primary source file (IOW, not an
@@ -1198,11 +1106,6 @@ restart_symtab (struct compunit_symtab *cust,
   buildsym_compunit = start_buildsym_compunit (COMPUNIT_OBJFILE (cust),
 					       COMPUNIT_DIRNAME (cust));
   buildsym_compunit->compunit_symtab = cust;
-
-  /* Initialize the list of sub source files with one entry for this
-     file (the top-level source file).  */
-  subfiles_map = htab_create_alloc(100, htab_hash_subfile, htab_eq_subfile,
-				   NULL, htab_alloc_ptr, htab_free_ptr);
 }
 
 /* Subroutine of end_symtab to simplify it.  Look for a subfile that
@@ -1273,8 +1176,6 @@ watch_main_source_file_lossage (void)
 	  else
 	    prev_mainsub_alias->next = mainsub_alias->next;
 	  xfree (mainsub_alias->name);
-	  /* #41883 (ALL-284): Do not leave xfree'd subfiles in map. */
-	  htab_remove_elt(subfiles_map, mainsub_alias);
 	  xfree (mainsub_alias);
 	}
     }

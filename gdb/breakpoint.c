@@ -10318,6 +10318,7 @@ create_breakpoint (struct gdbarch *gdbarch,
 	    init_sal (&lsal.sals.sals[0]);
 	    pending = 1;
 	    VEC_safe_push (linespec_sals, canonical.sals, &lsal);
+        ft_lsal = &lsal;
 	  }
 	}
       else
@@ -10336,8 +10337,6 @@ create_breakpoint (struct gdbarch *gdbarch,
   to be part of a breakpoint.  If the breakpoint create succeeds
   then the memory is not reclaimed.  */
   bkpt_chain = make_cleanup (null_cleanup, 0);
-
-
 
   /* Resolve all line numbers to PC's and verify that the addresses
   are ok for the target.  */
@@ -10360,51 +10359,6 @@ create_breakpoint (struct gdbarch *gdbarch,
 			check_fast_tracepoint_sals (gdbarch, &iter->sals);
   }
 
-  /* While merging 3daecfce66b49770a13611fb5724e2b8e65dafe5 the following
-     block was added, but I don't know what to do with it.  */
-  abort ();
-#if 0
-  {
-      struct linespec_sals *lsal;
-
-      lsal = VEC_index (linespec_sals, canonical.sals, 0);
-
-      if (parse_condition_and_thread)
-      {
-	    char *rest;
-            /* Here we only parse 'arg' to separate condition
-               from thread number, so parsing in context of first
-               sal is OK.  When setting the breakpoint we'll 
-               re-parse it in context of each sal.  */
-
-            find_condition_and_thread (arg, lsal->sals.sals[0].pc, &cond_string,
-                                       &thread, &task, &infnum, &rest);
-            if (cond_string)
-                make_cleanup (xfree, cond_string);
-
-	    if (rest)
-	      make_cleanup (xfree, rest);
-	    if (rest)
-	      extra_string = rest;
-      }
-      else
-      {
-            /* Create a private copy of condition string.  */
-            if (cond_string)
-            {
-                cond_string = xstrdup (cond_string);
-                make_cleanup (xfree, cond_string);
-            }
-            /* Create a private copy of any extra string.  */
-            if (extra_string)
-	      {
-                extra_string = xstrdup (extra_string);
-                make_cleanup (xfree, extra_string);
-	      }
-      }
-  }
-#endif
-  
   /* Verify that condition can be parsed, before setting any
   breakpoints.  Allocate a separate condition expression for each
   breakpoint.  */

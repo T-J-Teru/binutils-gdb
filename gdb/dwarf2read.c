@@ -18424,11 +18424,6 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
             dir = lh->include_dirs[fe->dir_index - 1];
           dwarf2_start_subfile (fe->name, dir);
 
-	  /* APB: This did not merge correctly, and needs additional
-	     thought.  */
-	  abort ();
-
-#if 0
           /* Skip the main file; we don't need it, and it must be
              allocated last, so that it will show up before the
              non-primary symtabs in the objfile's symtab list.  */
@@ -18436,9 +18431,11 @@ dwarf_decode_line_header (unsigned int offset, struct dwarf2_cu *cu,
             continue;
 
           if (current_subfile->symtab == NULL)
-            current_subfile->symtab = allocate_symtab (cust, current_subfile->name);
+	    {
+	      struct compunit_symtab *cust = buildsym_compunit_symtab ();
+	      current_subfile->symtab = allocate_symtab (cust, current_subfile->name);
+	    }
           fe->symtab = current_subfile->symtab;
-#endif
         }
     }
 
@@ -19138,8 +19135,8 @@ dwarf_decode_lines (struct line_header *lh, const char *comp_dir,
       else
 	pst_filename = xstrdup (pst->filename);
       make_cleanup (xfree, pst_filename);
-      simplify_path (pst_filename);              
-      
+      simplify_path (pst_filename);
+
       /* Now that we're done scanning the Line Header Program, we can
          create the psymtab of each included file.  */
       for (file_index = 0; file_index < lh->num_file_names; file_index++)
@@ -19150,37 +19147,6 @@ dwarf_decode_lines (struct line_header *lh, const char *comp_dir,
 	    if (include_name != NULL)
               dwarf2_create_include_psymtab (include_name, pst, objfile);
           }
-    }
-  else
-    {
-      /* APB: From ccbae9f270625091b6ce50e69dd90a82afc8e4ac the following
-	 code was removed.  Not sure if it should still be removed or not.  */
-      abort ();
-#if 0
-      /* Make sure a symtab is created for every file, even files
-	 which contain only variables (i.e. no code with associated
-	 line numbers).  */
-      struct compunit_symtab *cust = buildsym_compunit_symtab ();
-      int i;
-
-      for (i = 0; i < lh->num_file_names; i++)
-	{
-	  const char *dir = NULL;
-	  struct file_entry *fe;
-
-	  fe = &lh->file_names[i];
-	  if (fe->dir_index && lh->include_dirs != NULL)
-	    dir = lh->include_dirs[fe->dir_index - 1];
-	  dwarf2_start_subfile (fe->name, dir);
-
-	  if (current_subfile->symtab == NULL)
-	    {
-	      current_subfile->symtab
-		= allocate_symtab (cust, current_subfile->name);
-	    }
-	  fe->symtab = current_subfile->symtab;
-	}
-#endif
     }
 }
 
