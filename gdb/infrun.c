@@ -2731,25 +2731,6 @@ find_thread_needs_step_over (struct thread_info *except)
 
       if (thread_still_needs_step_over (tp))
 	return tp;
-
-      /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 this
-	 block appeared, not sure what to do with it.  */
-      abort ();
-#if 0
-      /* Switch back to WAIT_PID thread.  */
-      switch_to_thread (wait_ptid);
-
-      if (debug_infrun)
-	fprintf_unfiltered (gdb_stdlog,
-			    "infrun: prepare_to_proceed (step=%d), "
-			    "switched to [%s]\n",
-			    step, target_pid_to_str (inferior_ptid));
-
-      /* We return 1 to indicate that there is a breakpoint here,
-	 so we need to step over it before continuing to avoid
-	 hitting it straight away.  */
-      return 1;
-#endif
     }
 
   return NULL;
@@ -2877,45 +2858,6 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal)
 	}
     }
 
-  /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 the
-     following block appeared, not sure  what to do with it.  */
-  abort ();
-#if 0
-    {
-    if (prepare_to_proceed (step))
-	force_step = 1;
-    }
-
-  /* prepare_to_proceed may change the current thread.  */
-  tp = inferior_thread ();
-
-  if (force_step)
-    {
-      tp->control.trap_expected = 1;
-      /* If displaced stepping is enabled, we can step over the
-	 breakpoint without hitting it, so leave all breakpoints
-	 inserted.  Otherwise we need to disable all breakpoints, step
-	 one instruction, and then re-add them when that step is
-	 finished.  */
-      if (!use_displaced_stepping (gdbarch))
-        {
-          if (inferior_stop)
-              remove_breakpoints_pid (ptid_get_pid (inferior_ptid));
-          else
-            remove_breakpoints ();
-        }
-    }
-
-  /* We can insert breakpoints if we're not trying to step over one,
-     or if we are stepping over one but we're using displaced stepping
-     to do so.  */
-  if (! tp->control.trap_expected || use_displaced_stepping (gdbarch))
-    insert_breakpoints ();
-
-  if (!non_stop || inferior_stop)
-    ;
-#endif
-
   /* If we need to step over a breakpoint, and we're not using
      displaced stepping to do so, insert all breakpoints (watchpoints,
      etc.) but the one we're stepping over, step one instruction, and
@@ -2967,11 +2909,6 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal)
 
   /* Fill in with reasonable starting values.  */
   init_thread_stepping_state (tp);
-
-  /* APB: While merging 34e1b76675ee339ca3bd19f8bf615b77e9091e12 the
-     following line was added, not sure if this is still the right place
-     for this code though.  */
-  abort ();
 
   /* Set SIGINT handler to note_signal so SIGINT signals from this point
      on are not lost.  If the target wants to pass SIGINT to the inferior

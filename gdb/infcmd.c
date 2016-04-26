@@ -583,6 +583,10 @@ run_command_1 (char *args, int from_tty, int tbreak_at_main)
   args = strip_bg_char (args, &async_exec);
   args_chain = make_cleanup (xfree, args);
 
+  /* Force async for UPC programs.  */
+  if (upc_thread_active)
+    async_exec = 1;
+
   /* Do validation and preparation before possibly changing anything
      in the inferior.  */
 
@@ -612,11 +616,6 @@ run_command_1 (char *args, int from_tty, int tbreak_at_main)
   /* If there were other args, beside '&', process them.  */
   if (args != NULL)
     set_inferior_args (args);
-
-  /* APB-TODO: While merging commit 1a122e0 there were some changes in this
-     area relating to async_disable_stdin and upc_thread_active.  I'm not
-     sure how to integrate these changes right now.  */
-  abort ();
 
   if (from_tty)
     {
