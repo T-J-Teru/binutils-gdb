@@ -580,6 +580,10 @@ run_command_1 (char *args, int from_tty, int tbreak_at_main)
   args = strip_bg_char (args, &async_exec);
   args_chain = make_cleanup (xfree, args);
 
+  /* Force async for UPC programs.  */
+  if (upc_thread_active)
+    async_exec = 1;
+
   /* Do validation and preparation before possibly changing anything
      in the inferior.  */
 
