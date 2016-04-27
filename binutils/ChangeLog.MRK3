@@ -1,3 +1,7 @@
+2016-04-27  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* doc/binutils.texi (nm): Update description of --size-sort.
+
 2015-11-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* od-mrk3.c (elf64_mrk3_dump_records): Support ORG/ALIGN with and
