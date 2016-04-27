@@ -1,3 +1,10 @@
+2016-04-27  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Update symbol sizes
+	when deleting bytes.
+	(mrk3_elf_relax_insert_bytes): Update symbol sizes when inserting
+	bytes.
+
 2016-04-22  Simon Cook  <simon.cook@embecosm.com>
 
 	* elf64-mrk3.c (mrk3_elf_size_dynamic_sections): Add 64k to end of PLT

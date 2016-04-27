@@ -1639,7 +1639,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
         }
     }
 
-  /* Adjust the locations of local symbols defined in this section.  */
+  /* Adjust the local symbols defined in this section.  */
   isym = retrieve_local_syms (abfd);
   sec_shndx = _bfd_elf_section_from_bfd_section (abfd, sec);
   if (isym != NULL)
@@ -1649,14 +1649,26 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
       isymend = isym + symtab_hdr->sh_info;
       for (; isym < isymend; isym++)
 	{
-	  if (isym->st_shndx == sec_shndx
-	      && isym->st_value > addr
-	      && isym->st_value < toaddr)
-	    isym->st_value -= count;
+	  if (isym->st_shndx == sec_shndx)
+            {
+              if (isym->st_value > addr
+                  && isym->st_value < toaddr)
+                isym->st_value -= count;
+
+              if (isym->st_value <= addr
+                  && isym->st_value + isym->st_size > addr)
+                {
+                  /* If this assert fires then we have a symbol that ends
+                     part way through an instruction.  Does that make
+                     sense?  */
+                  BFD_ASSERT (isym->st_value + isym->st_size >= addr + count);
+                  isym->st_size -= count;
+                }
+            }
 	}
     }
 
-  /* Now adjust the locations of global symbols defined in this section.  */
+  /* Now adjust the global symbols defined in this section.  */
   symcount = (symtab_hdr->sh_size / sizeof (Elf64_External_Sym)
               - symtab_hdr->sh_info);
   sym_hashes = elf_sym_hashes (abfd);
@@ -1666,11 +1678,22 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
       struct elf_link_hash_entry *sym_hash = *sym_hashes;
       if ((sym_hash->root.type == bfd_link_hash_defined
            || sym_hash->root.type == bfd_link_hash_defweak)
-          && sym_hash->root.u.def.section == sec
-          && sym_hash->root.u.def.value > addr
-          && sym_hash->root.u.def.value < toaddr)
+          && sym_hash->root.u.def.section == sec)
         {
-          sym_hash->root.u.def.value -= count;
+          if (sym_hash->root.u.def.value > addr
+              && sym_hash->root.u.def.value < toaddr)
+            sym_hash->root.u.def.value -= count;
+
+          if (sym_hash->root.u.def.value <= addr
+              && (sym_hash->root.u.def.value + sym_hash->size > addr))
+            {
+              /* If this assert fires then we have a symbol that ends
+                 part way through an instruction.  Does that make
+                 sense?  */
+              BFD_ASSERT (sym_hash->root.u.def.value + sym_hash->size
+                          >= addr + count);
+              sym_hash->size -= count;
+            }
         }
     }
 
@@ -1798,10 +1821,16 @@ mrk3_elf_relax_insert_bytes (bfd *abfd,
       isymend = isym + symtab_hdr->sh_info;
       for (; isym < isymend; isym++)
 	{
-	  if (isym->st_shndx == sec_shndx
-	      && isym->st_value >= addr
-	      && isym->st_value < toaddr)
-	    isym->st_value += count;
+	  if (isym->st_shndx == sec_shndx)
+            {
+              if (isym->st_value <= addr
+                  && isym->st_value + isym->st_size > toaddr)
+                isym->st_size += count;
+
+              if (isym->st_value >= addr
+                  && isym->st_value < toaddr)
+                isym->st_value += count;
+            }
 	}
     }
 
@@ -1815,11 +1844,15 @@ mrk3_elf_relax_insert_bytes (bfd *abfd,
       struct elf_link_hash_entry *sym_hash = *sym_hashes;
       if ((sym_hash->root.type == bfd_link_hash_defined
            || sym_hash->root.type == bfd_link_hash_defweak)
-          && sym_hash->root.u.def.section == sec
-          && sym_hash->root.u.def.value >= addr
-          && sym_hash->root.u.def.value < toaddr)
+          && sym_hash->root.u.def.section == sec)
         {
-          sym_hash->root.u.def.value += count;
+          if (sym_hash->root.u.def.value <= addr
+              && sym_hash->root.u.def.value + sym_hash->size > toaddr)
+            sym_hash->size += count;
+
+          if (sym_hash->root.u.def.value >= addr
+              && sym_hash->root.u.def.value < toaddr)
+            sym_hash->root.u.def.value += count;
         }
     }
 
