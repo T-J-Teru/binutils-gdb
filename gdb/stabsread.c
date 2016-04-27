@@ -4039,7 +4039,8 @@ read_array_type (char **pp, struct type *type,
 /*     } */
 
   /* APB-TODO: Merge conflict in 33fe302.  Note sure what to do.  */
-  abort ();
+    fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+    abort ();
 
   range_type =
     create_static_range_type ((struct type *) NULL, index_type, lower, upper);

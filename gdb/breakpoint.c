@@ -5547,21 +5547,14 @@ bpstat_check_breakpoint_conditions (bpstat bs, ptid_t ptid)
       value_free_to_mark (mark);
     }
 
-  /* APB: While merging 489b0d8b8523f398bf8e93ffa472f960cf3b51b0 the second
-     else block here appeared.  I don't know if this is still correct or
-     not.  */
-  abort ();
-
   if (cond && value_is_zero)
     {
       bs->stop = 0;
     }
-#if 0
   else if (b->infnum && b->infnum != infnum)
     {
       bs->stop = 0;
     }
-#endif
   else if (b->ignore_count > 0)
     {
       b->ignore_count--;
@@ -5569,7 +5562,7 @@ bpstat_check_breakpoint_conditions (bpstat bs, ptid_t ptid)
       /* Increase the hit count even though we don't stop.  */
       ++(b->hit_count);
       observer_notify_breakpoint_modified (b);
-    }	
+    }
 }
 
 /* Returns true if we need to track moribund locations of LOC's type

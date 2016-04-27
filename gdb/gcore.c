@@ -316,6 +316,7 @@ call_target_sbrk (int sbrk_arg)
 					sbrk_arg);
   gdb_assert (target_sbrk_arg);
   /* This did not merge correctly, needs more work.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
   // ret = call_function_by_hand_ex (sbrk_fn, language_c, 1, &target_sbrk_arg);
   if (ret == NULL)

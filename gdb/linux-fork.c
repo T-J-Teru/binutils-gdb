@@ -469,6 +469,7 @@ inferior_call_waitpid (ptid_t pptid, int pid)
   argv[3] = 0;
 
   /* This did not merge correctly, needs more work.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
   // retv = call_function_by_hand_ex (waitpid_fn, language_c, 3, argv);
   if (value_as_long (retv) < 0)
@@ -686,6 +687,7 @@ checkpoint_command (char *args, int from_tty)
   checkpointing_pid = ptid_get_pid (inferior_ptid);
 
   /* This did not merge correctly, needs more work.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
   // ret = call_function_by_hand_ex (fork_fn, language_c, 0, &ret);
   do_cleanups (old_chain);

@@ -25,6 +25,8 @@
 #include "top.h"		/* for "execute_command" */
 #include "infrun.h"
 #include "observer.h"
+#include "upc-thread.h"
+#include "gdbthread.h"
 
 /* These are the ui_out and the interpreter for the console
    interpreter.  */
@@ -63,7 +65,7 @@ cli_on_end_stepping_range (void)
 static void
 cli_on_signal_exited (enum gdb_signal siggnal)
 {
-  if (!interp_quiet_p (cli_interp))
+  if (!interp_quiet_p (cli_interp) && !upc_exit_code)
     print_signal_exited_reason (cli_uiout, siggnal);
 }
 
@@ -72,8 +74,10 @@ cli_on_signal_exited (enum gdb_signal siggnal)
 static void
 cli_on_exited (int exitstatus)
 {
-  if (!interp_quiet_p (cli_interp))
+  if (!interp_quiet_p (cli_interp) && !upcmode)
     print_exited_reason (cli_uiout, exitstatus);
+  else if (!upc_exit_code)
+    upc_exit_code = exitstatus;
 }
 
 /* Observer for the no_history notification.  */

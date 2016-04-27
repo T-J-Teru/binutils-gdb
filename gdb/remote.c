@@ -2903,6 +2903,7 @@ remote_get_threads_with_qxfer (struct target_ops *ops,
 
 	  /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458
 	     this block appeared, not sure what to do with this.  */
+	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 	  abort ();
 #if 0
 	  struct threads_parsing_context context;
@@ -2975,6 +2976,7 @@ remote_get_threads_with_qthreadinfo (struct target_ops *ops,
 
 		  /* APB: While merging 5fec5648958f0a7698db7bd760378 this
 		     block appeared, not sure what to do with it.  */
+		  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 		  abort ();
 #if 0
 		  new_thread = read_ptid (bufp, &bufp);

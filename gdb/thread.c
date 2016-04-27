@@ -1570,6 +1570,7 @@ thread_apply_all_command (char *cmd, int from_tty)
 
   /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
      resolved.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
 
   /* Note this includes exited threads.  */

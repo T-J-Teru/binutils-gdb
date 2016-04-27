@@ -2100,6 +2100,7 @@ indirect_pieced_value (struct value *value)
 
   /* APB-TODO: Conflict while merging 1e257eb, not sure how these should be
      resolved.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
 
 #if 0
@@ -2545,6 +2546,7 @@ dwarf2_evaluate_property (const struct dynamic_prop *prop,
 	if (data != NULL)
 	  {
 	    /* APB-TODO: Conflict while merging, this needs further attention.  */
+	    fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 	    abort ();
 #if 0
 	    val = dwarf2_evaluate_loc_desc (baton->referenced_type, frame, data,

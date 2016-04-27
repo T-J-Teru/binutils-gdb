@@ -881,6 +881,7 @@ elf_gnu_ifunc_resolve_addr (struct gdbarch *gdbarch, CORE_ADDR pc)
      function entry address.  ADDRESS may be a function descriptor.  */
 
   /* This did not merge correctly, needs more work.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
   // address_val = call_function_by_hand_ex (function, language_c, 0, NULL);
   address = value_as_address (address_val);

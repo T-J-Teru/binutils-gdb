@@ -13129,6 +13129,7 @@ dwarf2_add_member_fn (struct field_info *fip, struct die_info *die,
 	      /* APB: While merging 5fcd8359eca5850f76950d58d45cd9 the
 		 extra if case appeared, I think this is a duplicate of the
 		 first error case, but really need to check this.  */
+	      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 	      abort ();
 	      /* If there is no `this' field and no DW_AT_containing_type,
 		 we cannot actually find a base class context for the
@@ -14429,6 +14430,7 @@ read_module (struct die_info *die, struct dwarf2_cu *cu)
 
   /* APB: While merging 232a53f63a850490bf5289e88059c25d463ef4e2 the
      following block was added, not sure if this is still needed.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
 #if 0
   struct objfile *objfile = cu->objfile;
@@ -14678,6 +14680,7 @@ read_upc_shared_qual_type (struct die_info *die, struct dwarf2_cu *cu)
 
   /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
      resolved.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
 
 #if 0
@@ -14723,34 +14726,11 @@ read_tag_qual_type (struct die_info *die, struct dwarf2_cu *cu, struct type_qual
   
   base_type = die_type (die, cu);
 
-  /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
-     resolved.  */
-  abort ();
-
-#if 0
   /* The die_type call above may have already set the type for this DIE.  */
-  cv_type = get_die_type (die, cu);
-  if (cv_type)
-    return cv_type;
-
-  /* In case the volatile qualifier is applied to an array type, the
-     element type is so qualified, not the array type (section 6.7.3
-     of C99).  */
-  if (TYPE_CODE (base_type) == TYPE_CODE_ARRAY)
-    return add_array_cv_type (die, cu, base_type, 0, 1);
-
-  cv_type = make_cv_type (TYPE_CONST (base_type), 1, base_type, 0);
-  return set_die_type (die, cv_type, cu);
-#endif
-
   qual_type = get_die_type (die, cu);
   if (qual_type)
     return qual_type;
 
-  /* APB: While merging 30b170426e610aad6597fe7c879477a59f07c318 the
-     following block appeared, not sure if this is still needed.  */
-  abort ();
-#if 0
   /* In case the const qualifier is applied to an array type, the element type
      is so qualified, not the array type (section 6.7.3 of C99).  */
   if (TYPE_CODE (base_type) == TYPE_CODE_ARRAY
@@ -14775,7 +14755,6 @@ read_tag_qual_type (struct die_info *die, struct dwarf2_cu *cu, struct type_qual
 
       return set_die_type (die, base_type, cu);
     }
-#endif
 
   type_quals = merge_type_quals (TYPE_QUALS (base_type), new_quals);
   qual_type = make_qual_variant_type (type_quals, base_type, 0);
@@ -14891,6 +14870,7 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
   index_type = objfile_type (objfile)->builtin_int;
 
   /* APB: This did not merge correctly, needs more work.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
   // range_type = create_range_type (NULL, index_type, 1, length, NULL, NULL, len_compute, (LONGEST (*)(void*, CORE_ADDR, void*)) dwarf2_evaluate_int);
   char_type = language_string_char_type (cu->language_defn, gdbarch);
@@ -15746,20 +15726,8 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
     }
 
   attr = dwarf2_attr (die, DW_AT_lower_bound, cu);
-
-  /* APB-TODO: Merge conflict in 1e257eb.  Note sure what to do.  */
-  abort ();
-
-#if 0
   if (attr)
     attr_to_dynamic_prop (attr, die, cu, &low);
-  if (attr) 
-    {
-      low_compute = create_bound_baton (die, attr, cu);
-
-      if (!low_compute)
-	low = dwarf2_get_attr_constant_value (attr, 0);
-    }
   else if (!low_default_is_valid)
     complaint (&symfile_complaints, _("Missing DW_AT_lower_bound "
 				      "- DIE at 0x%x [in module %s]"),
@@ -15768,28 +15736,8 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   attr = dwarf2_attr (die, DW_AT_upper_bound, cu);
   if (!attr_to_dynamic_prop (attr, die, cu, &high))
     {
-      high_compute = create_bound_baton (die, attr, cu);
-      if (high_compute)
-	high = low - 1;
-      else
-        high = dwarf2_get_attr_constant_value (attr, 1);
-    }
-  else
-    {
-      /* seen in F90 compilers from Pathscale and IBM */
       attr = dwarf2_attr (die, DW_AT_count, cu);
       if (attr_to_dynamic_prop (attr, die, cu, &high))
-	{
-	  count_compute = create_bound_baton(die, attr, cu);
-	  if (count_compute)
-	    high = low - 1;
-	  else
-	    {
-	      int count = dwarf2_get_attr_constant_value (attr, 1);
-	      high = low + count - 1;
-	    }
-	}
-      else
 	{
 	  /* If bounds are constant do the final calculation here.  */
 	  if (low.kind == PROP_CONST && high.kind == PROP_CONST)
@@ -15798,52 +15746,33 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 	    high_bound_is_count = 1;
 	}
     }
-  upper_bound_attr = attr;
 
-  /* PGI Fortran extensions */
   attr = dwarf2_attr (die, DW_AT_stride, cu);
   if (attr)
     {
-      stride_compute = create_bound_baton (die, attr, cu);
-      if (!stride_compute) 
-	stride = (int) dwarf2_get_attr_constant_value (attr, 1);
+      /* APB: This block needs to be filled in.  It's added in the 7.6.2
+	 version, but did not merge well.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+      abort ();
     }
 
   attr = dwarf2_attr (die, DW_AT_soffset, cu);
   if (attr)
     {
-      soffset_compute = create_bound_baton (die, attr, cu);
-      if (!soffset_compute) 
-	soffset = dwarf2_get_attr_constant_value (attr, 1);
+      /* APB: This block needs to be filled in.  It's added in the 7.6.2
+	 version, but did not merge well.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+      abort ();
     }
 
   attr = dwarf2_attr (die, DW_AT_lstride, cu);
   if (attr)
     {
-      lstride_compute = create_bound_baton (die, attr, cu);
-      if (!lstride_compute) 
-	lstride = dwarf2_get_attr_constant_value (attr, 1);
-     }
-
-  if (!low_compute && !high_compute && low > (high + 1))
-    {
-      if (cu->producer && strstr (cu->producer, "DBG_GEN"))
-	{
-	  /* Sun FORTE says 255 for -1; 254 for -2, etc.. yuk! */
-	  low |= (-1 ^ 0xff);
-	}
-      else if (cu->producer && strstr (cu->producer, "GNU Fortran"))
-	{
-	  /* GNU Fortran 4.6.3 32-bit says 0xfffffffe for -2, etc. */
-	  if (low >= 0x80000000 && low <= 0xffffffff)
-	      low |= (-1 ^ 0xffffffff);
-	}
-      else 
-	{
-	  low = high;
-	}
+      /* APB: This block needs to be filled in.  It's added in the 7.6.2
+	 version, but did not merge well.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+      abort ();
     }
-#endif
 
   /* Dwarf-2 specifications explicitly allows to create subrange types
      without specifying a base type.
@@ -15907,21 +15836,6 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   /* Ada expects an empty array on no boundary attributes.  */
   if (attr == NULL && cu->language != language_ada)
     TYPE_HIGH_BOUND_KIND (range_type) = PROP_UNDEFINED;
-
-  /* APB: When merging 30b170426e610aad6597fe7c879477a59f07c318 the
-     following block appeared.  Not sure where this should go exactly.  */
-  abort ();
-#if 0
-  /* Mark arrays with dynamic length at least as an array of unspecified
-     length.  GDB could check the boundary but before it gets implemented at
-     least allow accessing the array elements.  */
-  if (upper_bound_attr && attr_form_is_block (upper_bound_attr))
-    TYPE_HIGH_BOUND_UNDEFINED (range_type) = 1;
-
-  /* Ada expects an empty array on no boundary attributes.  */
-  if (upper_bound_attr == NULL && cu->language != language_ada)
-    TYPE_HIGH_BOUND_UNDEFINED (range_type) = 1;
-#endif
 
   name = dwarf2_name (die, cu);
   if (name)
@@ -19435,6 +19349,7 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	  if (!cu->decoded_lines)
 	    {
 	      /* APB: This failed to merge correctly.  */
+	      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 	      abort ();
 
 #if 0
@@ -19968,6 +19883,7 @@ wellformed:
 		}
 
 	      /* APB: This failed to merge correctly.  */
+	      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 	      abort ();
 
 #if 0
@@ -20337,17 +20253,17 @@ lookup_die_type (struct die_info *die, const struct attribute *attr,
 	 from an inter-CU reference and the type's CU got expanded before
 	 ours.  */
       this_type = read_type_die (type_die, type_cu);
-      /* APB: In commit 62c9cbae074a84503d2e08946e4004d98cf034a2 the
-	 following block of code was added, not sure if it is ever tested.  */
+
       if (cu->producer && strncmp (cu->producer, "PGCC", 4) == 0)
-        {
-          next_type = dwarf2_attr (type_die, DW_AT_type, cu);
-          if (next_type) 
-            {
-              struct die_info *next_type_die;
-              next_type_die = follow_die_ref (type_die, next_type, &cu);
-              if (next_type_die && next_type_die == die)
-	        {
+	{
+	  next_type = dwarf2_attr (type_die, DW_AT_type, cu);
+	  if (next_type != NULL)
+	    {
+	      struct die_info *next_type_die;
+
+	      next_type_die = follow_die_ref (type_die, next_type, &cu);
+	      if (next_type_die && next_type_die == die)
+		{
 		  char *message, *saved;
 
 		  message = xstrprintf (_("<recursive type in %s, CU 0x%x, DIE 0x%x>"),
@@ -20357,42 +20273,10 @@ lookup_die_type (struct die_info *die, const struct attribute *attr,
 		  saved = obstack_copy0 (&objfile->objfile_obstack,
 					 message, strlen (message));
 		  xfree (message);
-
 		  this_type = init_type (TYPE_CODE_ERROR, 0, 0, saved, objfile);
 		}
 	    }
 	}
-
-
-      /* APB: In 30b170426e610aad6597fe7c879477a59f07c318 the following
-	 block appeared, this seems to be at least a partial rewrite of the
-	 above, I need to get these merged.  */
-      abort ();
-#if 0
-      type_die = follow_die_ref_or_sig (die, attr, &type_cu);
-      if (type_die) 
-	{
-	  /* If we found the type now, it's probably because the type came
-	    from an inter-CU reference and the type's CU got expanded before
-	    ours.  */
-	  this_type = get_die_type (type_die, type_cu);
-	  if (this_type == NULL)
-	    this_type = read_type_die_1 (type_die, type_cu);
-	  if (cu->producer && strncmp (cu->producer, "PGCC", 4) == 0)
-	    {
-	      next_type = dwarf2_attr (type_die, DW_AT_type, cu);
-	      if (next_type) 
-		{
-		  struct die_info *next_type_die;
-		  next_type_die = follow_die_ref (type_die, next_type, &cu);
-		  if (next_type_die && next_type_die == die)
-		    {
-		      char *message, *saved;
-		    }
-		}
-	    }
-	}
-#endif
     }
 
   /* If we still don't have a type use an error marker.  */

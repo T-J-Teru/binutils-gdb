@@ -463,6 +463,7 @@ whatis_exp (char *exp, int show)
     {
       /* APB: While merging c27cd02778ad3689d666ca1d577caffc5e9eb8c9 there
 	 was a conflict here, but I'm not sure how to resolve it.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
       abort ();
 #if 0
       if ((TYPE_CODE (type) == TYPE_CODE_PTR)

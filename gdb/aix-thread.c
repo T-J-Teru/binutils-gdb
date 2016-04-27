@@ -812,6 +812,7 @@ sync_threadlists (void)
 	      /* APB: While merging 215e24af5fc318ad128eef71e there was a
 		 conflict here, not sure if this was resolved correctly
 		 though.  */
+	      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 	      abort ();
 	      if (!gbuf[gi]->priv)
 		gbuf[gi]->priv =

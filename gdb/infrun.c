@@ -2527,6 +2527,7 @@ resume (enum gdb_signal sig)
 
       /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 this
 	 block appeared, not sure what to do with it.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
       abort ();
 #if 0
       target_resume (resume_ptid, step, sig);
@@ -4224,6 +4225,7 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
     case TARGET_WAITKIND_THREAD_EXITED:
       /* APB: This block was added from some commit, and I don't think that
 	 it merged correctly.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
       abort ();
       if (debug_infrun)
         fprintf_unfiltered (gdb_stdlog, "infrun: TARGET_WAITKIND_THREAD_EXITED\n");
@@ -4251,11 +4253,6 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
 
       /* Clearing any previous state of convenience variables.  */
       clear_exit_convenience_vars ();
-
-      /* APB-TODO: Conflict while merging 1a122e0, not sure how these
-	 should be resolved.  The conflicts relate to upcmode and
-	 upc_exit_code.  */
-      abort ();
 
       if (ecs->ws.kind == TARGET_WAITKIND_EXITED)
 	{
@@ -4685,42 +4682,6 @@ handle_signal_stop (struct execution_control_state *ecs)
      GDB_SIGNAL_0, meaning: stopped for no particular reason
      other than GDB's request.  */
 
-  /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 the
-     following block appeared, not sure what to do with this.  */
-  abort ();
-#if 0
-	  /* If the arch can displace step, don't remove the
-	     breakpoints.  */
-	  thread_regcache = get_thread_regcache (ecs->ptid);
-	  if (!use_displaced_stepping (get_regcache_arch (thread_regcache)))
-            {
-              if (inferior_stop)
-                remove_status = remove_breakpoints_pid (ptid_get_pid (ecs->ptid));
-              else
-                remove_status = remove_breakpoints ();
-            }
-
-	  /* Did we fail to remove breakpoints?  If so, try
-	     to set the PC past the bp.  (There's at least
-	     one situation in which we can fail to remove
-	     the bp's: On HP-UX's that use ttrace, we can't
-	     change the address space of a vforking child
-	     process until the child exits (well, okay, not
-	     then either :-) or execs.  */
-	  if (remove_status != 0)
-	    error (_("Cannot step over breakpoint hit in wrong thread"));
-	  else
-	    {			/* Single step */
-	      if (!non_stop)
-		{
-		  /* Only need to require the next event from this
-		     thread in all-stop mode.  */
-		  waiton_ptid = ecs->ptid;
-		  infwait_state = infwait_thread_hop_state;
-		}
-	    }
-#endif
-
   if (stop_soon == STOP_QUIETLY_NO_SIGSTOP
       && (ecs->event_thread->suspend.stop_signal == GDB_SIGNAL_STOP
 	  || ecs->event_thread->suspend.stop_signal == GDB_SIGNAL_TRAP
@@ -4834,47 +4795,16 @@ handle_signal_stop (struct execution_control_state *ecs)
       ecs->event_thread->stepping_over_watchpoint = 1;
       keep_going (ecs);
 
-      /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 the
-	 following block appeared.  */
-      abort ();
-#if 0
-      int hw_step = 1;
-
-      if (!target_have_steppable_watchpoint)
-	{
-          if (inferior_stop)
-            remove_breakpoints_pid (ptid_get_pid (ecs->ptid));
-          else
-            remove_breakpoints ();
-	  /* See comment in resume why we need to stop bypassing signals
-	     while breakpoints have been removed.  */
-	  target_pass_signals (0, NULL);
-	}
-	/* Single step */
-      hw_step = maybe_software_singlestep (gdbarch, stop_pc);
-      target_resume (ecs->ptid, hw_step, GDB_SIGNAL_0);
-      waiton_ptid = ecs->ptid;
-      if (target_have_steppable_watchpoint)
-	infwait_state = infwait_step_watch_state;
-      else
-	infwait_state = infwait_nonstep_watch_state;
-      prepare_to_wait (ecs);
-#endif
       return;
     }
 
 
-  /* APB: While merging 3daecfce66b49770a13611fb5724e2b8e65dafe5 the
-     following block appeared, I'm not sure what to make of it.  */
-  abort ();
-#if 0
-  find_pc_partial_function (stop_pc, &ecs->stop_func_name, //added by kdavis@cray.com
+  /* Start of code added by kdavis@cray.com  */
+  find_pc_partial_function (stop_pc, &ecs->stop_func_name,
 			    &ecs->stop_func_start, &ecs->stop_func_end);
-
-   ecs->stop_func_start
-    += gdbarch_deprecated_function_start_offset (gdbarch);//added by
-							  //kdavis@cray.com
-#endif
+  ecs->stop_func_start
+    += gdbarch_deprecated_function_start_offset (gdbarch);
+  /* End of code added by kdavis@cray.com  */
 
   ecs->event_thread->stepping_over_breakpoint = 0;
   ecs->event_thread->stepping_over_watchpoint = 0;
@@ -5241,29 +5171,6 @@ process_event_stop_test (struct execution_control_state *ecs)
      hit an internal solib event).  Re-fetch it.  */
   frame = get_current_frame ();
   gdbarch = get_frame_arch (frame);
-
-
-  /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 the
-     following block appeared, not sure what to do with it.  */
-  abort ();
-#if 0
-  /* In all-stop mode, if we're currently stepping but have stopped in
-     some other thread, we need to switch back to the stepped thread.  */
-  if (!non_stop || inferior_stop)
-    {
-      struct thread_info *tp;
-
-      if (inferior_stop)
-        tp = iterate_over_inferior_threads (ptid_get_pid (ecs->ptid),
-                                            currently_stepping_or_nexting_callback,
-                                            ecs->event_thread);
-      else
-        tp = iterate_over_threads (currently_stepping_or_nexting_callback,
-                                   ecs->event_thread);
-      if (tp)
-	;
-    }
-#endif
 
   switch (what.main_action)
     {
@@ -5971,17 +5878,16 @@ process_event_stop_test (struct execution_control_state *ecs)
 	 fprintf_unfiltered (gdb_stdlog, "infrun: stepi/nexti\n");
       end_stepping_range (ecs);
 
-      /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
-	 resolved.  */
-      abort ();
-
-#if 0
-      ecs->event_thread->control.stop_step = 1;
-      print_end_stepping_range_reason ();
-      stop_stepping (ecs);
       /* If UPC collective mode, determine if we need to be silent. */
       if (is_collective_stepping ())
 	{
+
+	  /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
+	     resolved.  */
+	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+	  abort ();
+
+#if 0
 	  ecs->event_thread->collective_step = 0;
 	  if (!thread_check_collective_step ())
 	    stop_print_frame = 0;
@@ -6027,8 +5933,8 @@ process_event_stop_test (struct execution_control_state *ecs)
 		    }
 		}
 	    }
-	}
 #endif
+	}
       return;
     }
 
@@ -6850,21 +6756,13 @@ keep_going (struct execution_control_state *ecs)
       remove_wps = (ecs->event_thread->stepping_over_watchpoint
 		    && !target_have_steppable_watchpoint);
 
-      /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 the
-	 following block appeared, not sure what to do with it.  */
-      abort ();
-#if 0
-	  if (!use_displaced_stepping (get_regcache_arch (thread_regcache)))
-            {
-              /* Since we can't do a displaced step, we have to remove
-                 the breakpoint while we step it.  To keep things
-                 simple, we remove them all.  */
-              if (inferior_stop)
-                remove_breakpoints_pid (ptid_get_pid (ecs->ptid));
-              else
-                remove_breakpoints ();
-            }
-#endif
+      if (inferior_stop)
+	{
+	  /* APB: I suspect that this case is not properly handled as a
+	     result of incorrect merge.  */
+	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+	  abort ();
+	}
 
       /* We can't use displaced stepping if we need to step past a
 	 watchpoint.  The instruction copied to the scratch pad would

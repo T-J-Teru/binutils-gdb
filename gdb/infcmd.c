@@ -397,6 +397,7 @@ strip_bg_char (const char *args, int *bg_char_p)
   if (upcmode)
     {
       /* APB-TODO: Conflict while merging 1a122e0.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
       abort ();
     }
 
@@ -2729,23 +2730,17 @@ attach_command (char *args, int from_tty)
 
   attach_target = find_attach_target ();
 
-  /* APB: While merging 3478aeac427148b309c1fa804194bac8624f9d60 the
-      following block of code was added, not sure if this is in the right
-      place though.  */
-  abort ();
-#if 0
-  if (strncmp(args, "-s ", 3) == 0)
-    {
-      async_stop = 1;
-      args += 3;
-    }
-#endif
-
   prepare_execution_command (attach_target, async_exec);
 
   if (non_stop && !attach_target->to_supports_non_stop (attach_target))
     error (_("Cannot attach to this target in non-stop mode"));
 
+
+  if (strncmp(args, "-s ", 3) == 0)
+    {
+      async_stop = 1;
+      args += 3;
+    }
   attach_target->to_attach (attach_target, args, from_tty);
   /* to_attach should push the target, so after this point we
      shouldn't refer to attach_target again.  */

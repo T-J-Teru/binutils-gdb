@@ -190,6 +190,7 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 			TYPE_LOW_BOUND(range_type) = 1;
 			/* The following was added in commit 30b17042 but
 			   needs to be reworked.  */
+			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 			abort ();
 			// TYPE_LOW_BOUND_UNDEFINED (range_type) = 1;
 		      }
@@ -198,6 +199,7 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 			TYPE_LOW_BOUND(range_type) = r;
 			/* The following was added in commit 30b17042 but
 			   needs to be reworked.  */
+			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 			abort ();
 			// TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
 		      }
@@ -223,6 +225,7 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 			TYPE_HIGH_BOUND(range_type) = 1;
 			/* The following was added in commit 30b17042 but
 			   needs to be reworked.  */
+			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 			abort ();
 			// TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
 		      }
@@ -231,6 +234,7 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 			TYPE_HIGH_BOUND(range_type) = r;
 			/* The following was added in commit 30b17042 but
 			   needs to be reworked.  */
+			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 			abort ();
 			//TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
 		      }
@@ -257,6 +261,7 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 			TYPE_HIGH_BOUND(range_type) = 1;
 			/* The following was added in commit 30b17042 but
 			   needs to be reworked.  */
+			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 			abort ();
 			//TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
 		      }
@@ -268,6 +273,7 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 			  {
 			    /* The following was added in commit 30b17042 but
 			       needs to be reworked.  */
+			    fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 			    abort ();
 			    //TYPE_HIGH_BOUND_UNDEFINED(range_type) = 0;
 			  }
@@ -283,6 +289,7 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
 			  TYPE_LOW_BOUND(range_type) + 1;
 			/* The following was added in commit 30b17042 but
 			   needs to be reworked.  */
+			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
 			abort ();
 			//TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
 		      }

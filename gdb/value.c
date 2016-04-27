@@ -3643,6 +3643,7 @@ value_from_contents_and_address_unresolved (struct type *type,
      value_from_contents_and_address to add a length field.  I added a
      length field to this function too, but it's not used, I need to figure
      that out.  */
+  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
   abort ();
 
   if (valaddr == NULL)
@@ -3665,25 +3666,24 @@ value_from_contents_and_address (struct type *type,
 				 unsigned length,
 				 CORE_ADDR address)
 {
-  struct type *resolved_type = resolve_dynamic_type (type, valaddr, address);
-  struct type *resolved_type_no_typedef = check_typedef (resolved_type);
   struct value *v;
 
-  /* The merge of 4e8c023a07149e6a5ca784f45c4b0cd74c252e3e did not go well
-     here, need to figure out what should be done with length.  */
-  abort ();
-
   if (valaddr == NULL)
-    v = allocate_value_lazy (resolved_type);
+    v = allocate_value_lazy (type);
   else
     {
-      v = value_from_contents (resolved_type, valaddr);
-      /* APB: Is this still needed?  It's from 6acdb6370ae6f7b0c  */
-      set_value_lazy (v, 0);
+      /* APB: During the merge the length parameter was added, however, in
+	 order to make use of it in 7.10.1 I'll need to rewrite code in this
+	 area.  For now, add this abort, so I can identify a good test case the
+	 exercises this code.  */
+      if (TYPE_LENGTH (type) > length)
+	{
+	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+	  abort ();
+	}
+      v = value_from_contents (type, valaddr);
     }
-  if (TYPE_DATA_LOCATION (resolved_type_no_typedef) != NULL
-      && TYPE_DATA_LOCATION_KIND (resolved_type_no_typedef) == PROP_CONST)
-    address = TYPE_DATA_LOCATION_ADDR (resolved_type_no_typedef);
+
   set_value_address (v, address);
   VALUE_LVAL (v) = lval_memory;
   return v;
@@ -3936,14 +3936,6 @@ void
 value_fetch_lazy (struct value *val)
 {
   gdb_assert (value_lazy (val));
-  if (value_optimized_out (val)
-      || value_not_allocated (val)
-      || value_not_associated (val))
-    {
-      /* Keep it optimized out.  */;
-      set_value_lazy (val, 0);
-      return;
-    }
   allocate_value_contents_limited (val);
   /* A value is either lazy, or fully fetched.  The
      availability/validity is only established as we try to fetch a

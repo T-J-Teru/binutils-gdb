@@ -102,6 +102,7 @@ load_uda_plugin (char *dl_path)
                 dl_path);
        if (!err_msg)
          fprintf (stderr, "reason: %s\n", err_msg);
+       fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
        abort ();
      }
    for (i = 0; i < n_uda_plugin_syms; ++i)
