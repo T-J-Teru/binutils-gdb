@@ -15689,47 +15689,30 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 
   attr = dwarf2_attr (die, DW_AT_stride, cu);
   if (attr)
+    attr_to_dynamic_prop (attr, die, cu, &stride);
+  else
     {
-      stride_compute = create_bound_baton (die, attr, cu);
-      if (!stride_compute) 
-	stride = (int) dwarf2_get_attr_constant_value (attr, 1);
+      stride.kind = PROP_CONST;
+      stride.data.const_val = 1;
     }
 
   attr = dwarf2_attr (die, DW_AT_soffset, cu);
   if (attr)
+    attr_to_dynamic_prop (attr, die, cu, &soffset);
+  else
     {
-      soffset_compute = create_bound_baton (die, attr, cu);
-      if (!soffset_compute) 
-	soffset = dwarf2_get_attr_constant_value (attr, 1);
+      soffset.kind = PROP_CONST;
+      soffset.data.const_val = 0;
     }
 
   attr = dwarf2_attr (die, DW_AT_lstride, cu);
   if (attr)
+    attr_to_dynamic_prop (attr, die, cu, &lstride);
+  else
     {
-      lstride_compute = create_bound_baton (die, attr, cu);
-      if (!lstride_compute) 
-	lstride = dwarf2_get_attr_constant_value (attr, 1);
-     }
-
-  if (!low_compute && !high_compute && low > (high + 1))
-    {
-      if (cu->producer && strstr (cu->producer, "DBG_GEN"))
-	{
-	  /* Sun FORTE says 255 for -1; 254 for -2, etc.. yuk! */
-	  low |= (-1 ^ 0xff);
-	}
-      else if (cu->producer && strstr (cu->producer, "GNU Fortran"))
-	{
-	  /* GNU Fortran 4.6.3 32-bit says 0xfffffffe for -2, etc. */
-	  if (low >= 0x80000000 && low <= 0xffffffff)
-	      low |= (-1 ^ 0xffffffff);
-	}
-      else 
-	{
-	  low = high;
-	}
+      lstride.kind = PROP_CONST;
+      lstride.data.const_val = 0;
     }
-#endif
 
   /* Dwarf-2 specifications explicitly allows to create subrange types
      without specifying a base type.

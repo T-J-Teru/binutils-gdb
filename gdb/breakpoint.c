@@ -5562,7 +5562,7 @@ bpstat_check_breakpoint_conditions (bpstat bs, ptid_t ptid)
       /* Increase the hit count even though we don't stop.  */
       ++(b->hit_count);
       observer_notify_breakpoint_modified (b);
-    }	
+    }
 }
 
 /* Returns true if we need to track moribund locations of LOC's type

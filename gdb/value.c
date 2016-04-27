@@ -3934,14 +3934,6 @@ void
 value_fetch_lazy (struct value *val)
 {
   gdb_assert (value_lazy (val));
-  if (value_optimized_out (val)
-      || value_not_allocated (val)
-      || value_not_associated (val))
-    {
-      /* Keep it optimized out.  */;
-      set_value_lazy (val, 0);
-      return;
-    }
   allocate_value_contents_limited (val);
   /* A value is either lazy, or fully fetched.  The
      availability/validity is only established as we try to fetch a
