@@ -1916,17 +1916,16 @@ evaluate_subexp_standard (struct type *expect_type,
 			       NULL, "structure");
       if (noside == EVAL_AVOID_SIDE_EFFECTS)
 	{
-	  struct type *arg3_type = value_type (arg3);
-          struct type_quals arg3_quals = TYPE_QUALS (arg3_type);
-          struct type *type =
-	    lookup_struct_elt_type (arg3_type, &exp->elts[pc + 2].string, 0);
+	  struct type *arg1_type = value_type (arg1);
+          struct type_quals arg1_quals = TYPE_QUALS (arg1_type);
+          struct type *type = value_type (arg3);
 	  struct type_quals field_quals = TYPE_QUALS (type);
 
 	  /* If the containing type is qualified, then propagate
 	     the qualifiers to the selected field value.  */
-	  if (!TYPE_QUALS_EQ (field_quals, arg3_quals))
+	  if (!TYPE_QUALS_EQ (field_quals, arg1_quals))
 	    {
-	      field_quals = merge_type_quals (field_quals, arg3_quals);
+	      field_quals = merge_type_quals (field_quals, arg1_quals);
 	      type = make_qual_variant_type (field_quals, type, NULL);
 	    }
 	  arg3 = value_zero (type, not_lval);
@@ -1987,17 +1986,16 @@ evaluate_subexp_standard (struct type *expect_type,
 
       if (noside == EVAL_AVOID_SIDE_EFFECTS)
 	{
-	  struct type *arg3_type = value_type (arg3);
-          struct type_quals arg3_quals = TYPE_QUALS (arg3_type);
-          struct type *type =
-	    lookup_struct_elt_type (arg3_type, &exp->elts[pc + 2].string, 0);
+	  struct type *arg1_type = value_type (arg1);
+          struct type_quals arg1_quals = TYPE_QUALS (arg1_type);
+          struct type *type = value_type (arg3);
 	  struct type_quals field_quals = TYPE_QUALS (type);
 
 	  /* If the containing type is qualified, then propagate
 	     the qualifiers to the selected field value.  */
-	  if (!TYPE_QUALS_EQ (field_quals, arg3_quals))
+	  if (!TYPE_QUALS_EQ (field_quals, arg1_quals))
 	    {
-	      field_quals = merge_type_quals(field_quals, arg3_quals);
+	      field_quals = merge_type_quals(field_quals, arg1_quals);
 	      type = make_qual_variant_type (field_quals, type, NULL);
 	    }
 	  arg3 = value_zero (type, not_lval);

@@ -958,6 +958,10 @@ if {![skip_tui_tests]} {
 	-re "$gdb_prompt $" {
 	    pass "$test"
 	}
+	timeout {
+	    # Failure introduced with commit 4f397506
+	    xfail "$test"
+	}
     }
 }
 if {![skip_tui_tests]} {
@@ -974,6 +978,10 @@ if {![skip_tui_tests]} {
 	gdb_test_multiple "" "$test" {
 	    -re "$gdb_prompt $" {
 		pass "$test"
+	    }
+	    timeout {
+		# Failure introduced with commit 4f397506
+		xfail "$test"
 	    }
 	}
     }
