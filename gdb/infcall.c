@@ -41,6 +41,13 @@
 extern int linux_ptrace_force_use_entry_point_to_call_inferior_functions;
 #endif
 
+static struct value *
+call_function_by_hand_inner (struct value *function,
+			     enum language lang,
+			     int nargs, struct value **args,
+			     dummy_frame_dtor_ftype *dummy_dtor,
+			     void *dummy_dtor_data);
+
 /* If we can't find a function's name from its address,
    we print this instead.  */
 #define RAW_FUNCTION_ADDRESS_FORMAT "at 0x%s"
@@ -511,6 +518,14 @@ call_function_by_hand (struct value *function, int nargs, struct value **args)
   return call_function_by_hand_dummy (function, nargs, args, NULL, NULL);
 }
 
+struct value *
+call_function_by_hand_ex (struct value *function, enum language lang,
+			  int nargs, struct value **args)
+{
+  return call_function_by_hand_inner (function, lang, nargs, args,
+				      NULL, NULL);
+}
+
 /* Data for dummy_frame_context_saver.  Structure can be freed only
    after both dummy_frame_context_saver_dtor and
    dummy_frame_context_saver_drop have been called for it.  */
@@ -621,8 +636,9 @@ dummy_frame_context_saver_setup (struct frame_id dummy_id, ptid_t ptid)
    during the execution of the function.
 
    ARGS is modified to contain coerced values.  */
-struct value *
-call_function_by_hand_dummy (struct value *function,
+static struct value *
+call_function_by_hand_inner (struct value *function,
+			     enum language lang,
 			     int nargs, struct value **args,
 			     dummy_frame_dtor_ftype *dummy_dtor,
 			     void *dummy_dtor_data)
@@ -651,7 +667,6 @@ call_function_by_hand_dummy (struct value *function,
   struct cleanup *context_saver_cleanup;
   enum language original_lang = current_language->la_language;
   int call_dummy_location;
-  enum language lang = language_unknown;
 
   /* ALL-533: Set correct language of function, so that arguments can be passed
      in the right way. Fixes infinite recursion when calling a Fortran function
@@ -1339,6 +1354,18 @@ When the function is done executing, GDB will silently stop."),
   }
 }
 
+
+struct value *
+call_function_by_hand_dummy (struct value *function,
+			     int nargs, struct value **args,
+			     dummy_frame_dtor_ftype *dummy_dtor,
+			     void *dummy_dtor_data)
+{
+  return call_function_by_hand_inner (function, language_unknown,
+				      nargs, args, dummy_dtor,
+				      dummy_dtor_data);
+}
+
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */
 void _initialize_infcall (void);

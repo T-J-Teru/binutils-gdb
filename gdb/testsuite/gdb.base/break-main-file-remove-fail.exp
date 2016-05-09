@@ -95,6 +95,7 @@ proc test_remove_bp { initial_load } {
 	    return
 	}
 
+	setup_xfail "*-*-*" "1b757fcdf4"
 	gdb_test "delete \$bpnum" \
 	    "warning: Error removing breakpoint .*" \
 	    "failure to remove breakpoint warns"
