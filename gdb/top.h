@@ -34,7 +34,7 @@ extern void print_gdb_version (struct ui_file *);
 extern void print_gdb_configuration (struct ui_file *);
 
 extern void read_command_file (FILE *);
-extern void init_history (void);
+extern void init_history (int);
 extern void command_loop (void);
 extern int quit_confirm (void);
 extern void quit_force (char *, int);

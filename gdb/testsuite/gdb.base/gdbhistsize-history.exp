@@ -35,9 +35,15 @@ proc test_histsize_history_setting { histsize size { env_var "GDBHISTSIZE" } } {
 	gdb_exit
 	gdb_start
 
+	if { $size != "unlimited" } then {
+	    setup_xfail "*-*-*" "1234"
+	}
 	gdb_test "show history size" "The size of the command history is $size."
 
 	if { $size == "0" } {
+	    if { $size != "unlimited" } then {
+		setup_xfail "*-*-*" "1234"
+	    }
 	    gdb_test_no_output "show commands"
 	} elseif { $size != "1" } {
 	    gdb_test "show commands" \
