@@ -1762,9 +1762,15 @@ set_verbose (char *args, int from_tty, struct cmd_list_element *c)
    overrides all of this.  */
 
 void
-init_history (void)
+init_history (int no_init)
 {
   char *tmpenv;
+
+  if (no_init)
+    {
+      history_size_setshow_var = -1;
+      return;
+    }
 
   tmpenv = getenv ("GDBHISTSIZE");
   if (tmpenv)
