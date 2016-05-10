@@ -3666,24 +3666,23 @@ value_from_contents_and_address (struct type *type,
 				 unsigned length,
 				 CORE_ADDR address)
 {
+  struct type *resolved_type = resolve_dynamic_type (type, valaddr, address);
+  struct type *resolved_type_no_typedef = check_typedef (resolved_type);
   struct value *v;
 
   if (valaddr == NULL)
-    v = allocate_value_lazy (type);
+    v = allocate_value_lazy (resolved_type);
   else
     {
-      /* APB: During the merge the length parameter was added, however, in
-	 order to make use of it in 7.10.1 I'll need to rewrite code in this
-	 area.  For now, add this abort, so I can identify a good test case the
-	 exercises this code.  */
-      if (TYPE_LENGTH (type) > length)
-	{
-	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-	  abort ();
-	}
-      v = value_from_contents (type, valaddr);
+      v = allocate_value_lazy (resolved_type);
+      v->length = min (TYPE_LENGTH (type), length);
+      v->contents = (gdb_byte *) xzalloc (v->length);
+      set_value_lazy (v, 0);
+      memcpy (value_contents_raw (v), valaddr, value_length (v));
     }
-
+  if (TYPE_DATA_LOCATION (resolved_type_no_typedef) != NULL
+      && TYPE_DATA_LOCATION_KIND (resolved_type_no_typedef) == PROP_CONST)
+    address = TYPE_DATA_LOCATION_ADDR (resolved_type_no_typedef);
   set_value_address (v, address);
   VALUE_LVAL (v) = lval_memory;
   return v;
