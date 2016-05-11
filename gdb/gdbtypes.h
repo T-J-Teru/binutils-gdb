@@ -609,21 +609,10 @@ struct range_bounds
 
   struct dynamic_prop high;
 
-      char low_undefined;
-      char high_undefined;
-
-      void* low_baton;
-      void* high_baton;
-      void* count_baton;
-      void* baton_function;
-
-      void* lstride_baton;
-      void* stride_baton;
-      void* soffset_baton;
-
-      LONGEST lstride_value;
-      LONGEST stride_value;
-      LONGEST soffset_value;
+  /* PGI extension properties of a range.  */
+  struct dynamic_prop lstride;
+  struct dynamic_prop stride;
+  struct dynamic_prop soffset;
 
   /* True if HIGH range bound contains the number of elements in the
      subrange. This affects how the final hight bound is computed.  */

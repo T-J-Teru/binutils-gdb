@@ -1402,6 +1402,11 @@ show_dwarf_max_cache_age (struct ui_file *file, int from_tty,
 
 /* local function prototypes */
 
+static int attr_to_dynamic_prop (const struct attribute *attr,
+				 struct die_info *die,
+				 struct dwarf2_cu *cu,
+				 struct dynamic_prop *prop);
+
 static const char *get_section_name (const struct dwarf2_section_info *);
 
 static const char *get_section_file_name (const struct dwarf2_section_info *);
@@ -14760,48 +14765,39 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
   struct gdbarch *gdbarch = get_objfile_arch (objfile);
   struct type *type, *range_type, *index_type, *char_type;
   struct attribute *attr;
-  struct dwarf2_loclist_baton *len_compute = 0;
-  unsigned int length;
+  struct dynamic_prop base, length;
+
+  base.kind = PROP_CONST;
+  base.data.const_val = 1;
 
   attr = dwarf2_attr (die, DW_AT_string_length, cu);
   if (attr)
     {
-       if (attr->form == DW_FORM_block1) 
- 	{
-	  int size;
+       if (attr->form == DW_FORM_block1)
+	 {
+	   attr_to_dynamic_prop (attr, die, cu, &length);
 
- 	  struct dwarf2_loclist_baton *baton;
- 	  baton = obstack_alloc (&cu->objfile->objfile_obstack,
- 				 sizeof (struct dwarf2_loclist_baton));
+	   /* Fix a bug in the Intel compiler (up to version 16) where the
+	      string length is not correctly taken.  */
+	   if (producer_is_icc (cu))
+	     {
+	       gdb_byte *tmp;
+	       struct dwarf2_property_baton *baton;
 
-	  size = DW_BLOCK(attr)->size; 
-
- 	  baton->per_cu = cu->per_cu;
- 	  baton->base_address = cu->base_address;
-
-      // Fix a bug in the Intel compiler (up to version 16)
-      // where the string length is not correctly taken
-	  if(cu->producer && strstr(cu->producer, "Intel"))
-	  	baton->size = size + 1;
-	  else
-		baton->size = size;
-
- 	  baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
-				       baton->size);
-	  
- 	  memcpy ((gdb_byte *) baton->data, DW_BLOCK(attr)->data, size);
-
-	  if(cu->producer && strstr(cu->producer, "Intel"))
-	    ((gdb_byte *)baton->data)[size] = DW_OP_deref;
-	  
- 
- 	  len_compute = baton;
- 	  length = 1;
- 	  
- 	}
-       else 
- 	{
- 	  length = DW_UNSND (attr);
+	       gdb_assert (length.kind == PROP_LOCEXPR);
+	       baton = length.data.baton;
+	       tmp = obstack_alloc (&cu->objfile->objfile_obstack,
+				    baton->locexpr.size + 1);
+	       memcpy (tmp, baton->locexpr.data, baton->locexpr.size);
+	       tmp[baton->locexpr.size] = DW_OP_deref;
+	       baton->locexpr.data = tmp;
+	       baton->locexpr.size += 1;
+	     }
+	 }
+       else
+	 {
+	   length.kind = PROP_CONST;
+	   length.data.const_val = DW_UNSND (attr);
  	}
     }
   else
@@ -14810,16 +14806,19 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
       attr = dwarf2_attr (die, DW_AT_byte_size, cu);
       if (attr)
         {
-          length = DW_UNSND (attr);
+	  length.kind = PROP_CONST;
+	  length.data.const_val = DW_UNSND (attr);
         }
       else
         {
-          length = 1;
+	  length.kind = PROP_CONST;
+	  length.data.const_val = 1;
         }
     }
 
   index_type = objfile_type (objfile)->builtin_int;
 
+  range_type = create_range_type (NULL, index_type, &base, &length);
   char_type = language_string_char_type (cu->language_defn, gdbarch);
   type = create_string_type (NULL, char_type, range_type);
 

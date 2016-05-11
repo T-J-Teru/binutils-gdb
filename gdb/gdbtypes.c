@@ -918,6 +918,10 @@ create_range_type_pgi (struct type *result_type, struct type *index_type,
   TYPE_RANGE_DATA (result_type)->low = *low_bound;
   TYPE_RANGE_DATA (result_type)->high = *high_bound;
 
+  TYPE_RANGE_DATA (result_type)->lstride = *lstride;
+  TYPE_RANGE_DATA (result_type)->stride = *stride;
+  TYPE_RANGE_DATA (result_type)->soffset = *soffset;
+
   if (low_bound->kind == PROP_CONST && low_bound->data.const_val >= 0)
     TYPE_UNSIGNED (result_type) = 1;
 
@@ -930,6 +934,7 @@ create_range_type_pgi (struct type *result_type, struct type *index_type,
 
   return result_type;
 }
+
 
 /* Create a range type using either a blank type supplied in
    RESULT_TYPE, or creating a new type, inheriting the objfile from

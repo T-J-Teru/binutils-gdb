@@ -38,7 +38,10 @@ set int4 "(int4|integer\\(kind=4\\))"
 gdb_breakpoint [gdb_get_line_number "BP1"]
 gdb_continue_to_breakpoint "BP1"
 
-# Check the indentation when using ptype on pointers in user-defined types.
+# Check the indentation when using ptype on pointers in user-defined
+# types.  This test fails on allinea-7.6.2, and continues to fail, in
+# the same way, on allinea-7.10.1
+setup_xfail "*-*-*"
 gdb_test "ptype tinsta" \
          ".*${int4} :: i\r\n    PTR TO.*" \
          "Test indentation of scalar and pointer inside a type."
