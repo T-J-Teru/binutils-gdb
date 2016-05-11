@@ -2900,46 +2900,6 @@ remote_get_threads_with_qxfer (struct target_ops *ops,
 	{
 	  gdb_xml_parse_quick (_("threads"), "threads.dtd",
 			       threads_elements, xml, context);
-
-	  /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458
-	     this block appeared, not sure what to do with this.  */
-	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-	  abort ();
-#if 0
-	  struct threads_parsing_context context;
-
-	  context.items = NULL;
-	  make_cleanup (clear_threads_parsing_context, &context);
-
-	  if (gdb_xml_parse_quick (_("threads"), "threads.dtd",
-				   threads_elements, xml, &context) == 0)
-	    {
-	      int i;
-	      struct thread_item *item;
-
-	      for (i = 0;
-		   VEC_iterate (thread_item_t, context.items, i, item);
-		   ++i)
-		{
-		  if (!ptid_equal (item->ptid, null_ptid))
-		    {
-		      struct private_thread_info *info;
-		      /* In non-stop mode, we assume new found threads
-			 are running until proven otherwise with a
-			 stop reply.  In all-stop, we can only get
-			 here if all threads are stopped.  */
-		      int running = (non_stop && !inferior_stop) ? 1 : 0;
-
-		      remote_notice_new_inferior (item->ptid, running);
-
-		      info = demand_private_info (item->ptid);
-		      info->core = item->core;
-		      info->extra = item->extra;
-		      item->extra = NULL;
-		    }
-		}
-	    }
-#endif
 	}
 
       do_cleanups (back_to);
@@ -2972,23 +2932,6 @@ remote_get_threads_with_qthreadinfo (struct target_ops *ops,
 	      do
 		{
 		  struct thread_item item;
-
-
-		  /* APB: While merging 5fec5648958f0a7698db7bd760378 this
-		     block appeared, not sure what to do with it.  */
-		  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-		  abort ();
-#if 0
-		  new_thread = read_ptid (bufp, &bufp);
-		  if (!ptid_equal (new_thread, null_ptid))
-		    {
-		      /* In non-stop mode, we assume new found threads
-			 are running until proven otherwise with a
-			 stop reply.  In all-stop, we can only get
-			 here if all threads are stopped.  */
-		      int running = (non_stop && !inferior_stop) ? 1 : 0;
-		    }
-#endif
 
 		  item.ptid = read_ptid (bufp, &bufp);
 		  item.core = -1;
@@ -3089,7 +3032,7 @@ remote_update_thread_list (struct target_ops *ops)
 		 running until proven otherwise with a stop reply.  In
 		 all-stop, we can only get here if all threads are
 		 stopped.  */
-	      int running = non_stop ? 1 : 0;
+	      int running = (non_stop && !inferior_stop) ? 1 : 0;
 
 	      remote_notice_new_inferior (item->ptid, running);
 
