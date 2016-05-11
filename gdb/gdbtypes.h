@@ -609,21 +609,10 @@ struct range_bounds
 
   struct dynamic_prop high;
 
-      char low_undefined;
-      char high_undefined;
-
-      void* low_baton;
-      void* high_baton;
-      void* count_baton;
-      void* baton_function;
-
-      void* lstride_baton;
-      void* stride_baton;
-      void* soffset_baton;
-
-      LONGEST lstride_value;
-      LONGEST stride_value;
-      LONGEST soffset_value;
+  /* PGI extension properties of a range.  */
+  struct dynamic_prop lstride;
+  struct dynamic_prop stride;
+  struct dynamic_prop soffset;
 
   /* True if HIGH range bound contains the number of elements in the
      subrange. This affects how the final hight bound is computed.  */
@@ -1334,7 +1323,7 @@ extern void allocate_gnat_aux_type (struct type *);
 #define TYPE_STRIDE_VALUE(range_type) TYPE_RANGE_DATA(range_type)->stride_value
 #define TYPE_SOFFSET_BATON(range_type) TYPE_RANGE_DATA(range_type)->soffset_baton
 #define TYPE_SOFFSET_VALUE(range_type) TYPE_RANGE_DATA(range_type)->soffset_value
-#define TYPE_BOUND_BATON_FUNCTION(range_type) TYPE_RANGE_DATA(range_type)->baton_function
+//#define TYPE_BOUND_BATON_FUNCTION(range_type) TYPE_RANGE_DATA(range_type)->baton_function
 
 #define TYPE_LOW_BOUND_UNDEFINED(range_type) \
   (TYPE_RANGE_DATA(range_type)->low.kind == PROP_UNDEFINED)
@@ -1858,17 +1847,13 @@ extern struct type *create_array_type_with_stride
 extern struct type *create_range_type (struct type *, struct type *,
 				       const struct dynamic_prop *,
 				       const struct dynamic_prop *);
- 
-extern struct type *create_range_type_d (struct type *, struct type *,
-					LONGEST, LONGEST, void *, void *,  void*,
-					LONGEST (*)(void*, CORE_ADDR, void*));
 
-extern struct type * create_range_type_d_pgi (struct type *result_type, struct type *index_type,
-					    LONGEST low_bound, LONGEST high_bound,
-					    LONGEST stride, LONGEST soffset, LONGEST lstride,
-					    void *dwarf_low, void *dwarf_high, void *dwarf_count,
-					    void *dwarf_stride, void *dwarf_soffset, void *dwarf_lstride,
-					    LONGEST (*expr_evaluate)(void*, CORE_ADDR, void*));
+extern struct type *create_range_type_pgi (struct type *, struct type *,
+					   const struct dynamic_prop *,
+					   const struct dynamic_prop *,
+					   const struct dynamic_prop *,
+					   const struct dynamic_prop *,
+					   const struct dynamic_prop *);
 
 extern struct type *create_array_type (struct type *, struct type *,
 				       struct type *);

@@ -117,6 +117,7 @@ f_printstr (struct ui_file *stream, struct type *type, const gdb_byte *string,
 		    force_ellipses, '\'', 0, options);
 }
 
+#if 0
 static void
 reset_lengths(struct type* type) 
 {
@@ -132,7 +133,10 @@ reset_lengths(struct type* type)
   TYPE_LENGTH(type) = 
     TYPE_LENGTH (TYPE_TARGET_TYPE(type)) * (high_bound - low_bound + 1);
 }
+#endif
 
+
+#if 0
 static int
 invalid_bound (LONGEST r)
 {
@@ -140,186 +144,189 @@ invalid_bound (LONGEST r)
      bounds from exhausting memory.  */
   return r > 1000L * 1000L* 1000L || r < -100000L;
 }
+#endif
 
-static void 
+static void
 setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *frame)
 {
+  return;
+
+#if 0
   struct type *tmp_type = value_type (v);
 
   if (!value_address (objptr))
     return;
-  
+
   if (frame == NULL)
     frame = deprecated_safe_get_selected_frame ();
 
-  while (TYPE_CODE(tmp_type)== TYPE_CODE_ARRAY
-	 || TYPE_CODE(tmp_type)== TYPE_CODE_STRING) 
+  while (TYPE_CODE(tmp_type) == TYPE_CODE_ARRAY
+	 || TYPE_CODE(tmp_type) == TYPE_CODE_STRING)
    {
       /* check the array bounds -- could be dynamic */
       struct type* range_type = TYPE_FIELD_TYPE(tmp_type, 0);
 
       if (TYPE_CODE(range_type) == TYPE_CODE_RANGE)
 	{
-	  if (TYPE_BOUND_BATON_FUNCTION(range_type)) 
+	  if (frame)
 	    {
-	      if (frame) {
-		/* one of DL's hacked types */
-		LONGEST high_bound;
-		LONGEST low_bound;
-		struct type *target_type = TYPE_TARGET_TYPE (range_type);
-		
-		if (TYPE_LOW_BOUND_BATON(range_type)) 
-		  {
-		    void *baton;
-		    LONGEST r;
-		    struct value *rval;
+	      /* one of DL's hacked types */
+	      LONGEST high_bound;
+	      LONGEST low_bound;
+	      struct type *target_type = TYPE_TARGET_TYPE (range_type);
 
-		    /* recalculate */
-		    struct value *(*f)(struct type *, void*, struct value *, void*);
-		    f = (struct value *(*)(struct type *, void*, struct value *, void*))
-		      TYPE_BOUND_BATON_FUNCTION(range_type);
+	      if (TYPE_LOW_BOUND_BATON(range_type))
+		{
+		  void *baton;
+		  LONGEST r;
+		  struct value *rval;
 
-		    baton = TYPE_LOW_BOUND_BATON(range_type);
+		  /* recalculate */
+		  struct value *(*f)(struct type *, void*, struct value *, void*);
+		  f = (struct value *(*)(struct type *, void*, struct value *, void*))
+		    TYPE_BOUND_BATON_FUNCTION(range_type);
 
-		    rval = f(target_type, baton, objptr, frame);
-		    if (rval)
-		        r = value_as_long (rval);
+		  baton = TYPE_LOW_BOUND_BATON(range_type);
 
- 		    if (!rval || invalid_bound (r))
-		      {
-			TYPE_LOW_BOUND(range_type) = 1;
-			/* The following was added in commit 30b17042 but
-			   needs to be reworked.  */
-			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-			abort ();
-			// TYPE_LOW_BOUND_UNDEFINED (range_type) = 1;
-		      }
-		    else
-		      {
-			TYPE_LOW_BOUND(range_type) = r;
-			/* The following was added in commit 30b17042 but
-			   needs to be reworked.  */
-			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-			abort ();
-			// TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
-		      }
-		  }
-		if (TYPE_HIGH_BOUND_BATON(range_type)) 
-		  {
-		    /* recalculate */
-		    void *baton;
-		    LONGEST r;
-		    struct value *rval;
-		    struct value *(*f)(struct type *, void*, struct value *, void*);
-		    f = (struct value *(*)(struct type *, void*, struct value *, void*))
-		      TYPE_BOUND_BATON_FUNCTION(range_type);
+		  rval = f(target_type, baton, objptr, frame);
+		  if (rval)
+		    r = value_as_long (rval);
 
-		    baton = TYPE_HIGH_BOUND_BATON(range_type);
+		  if (!rval || invalid_bound (r))
+		    {
+		      TYPE_LOW_BOUND(range_type) = 1;
+		      /* The following was added in commit 30b17042 but
+			 needs to be reworked.  */
+		      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+		      abort ();
+		      // TYPE_LOW_BOUND_UNDEFINED (range_type) = 1;
+		    }
+		  else
+		    {
+		      TYPE_LOW_BOUND(range_type) = r;
+		      /* The following was added in commit 30b17042 but
+			 needs to be reworked.  */
+		      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+		      abort ();
+		      // TYPE_LOW_BOUND_UNDEFINED (range_type) = 0;
+		    }
+		}
+	      if (TYPE_HIGH_BOUND_BATON(range_type)) 
+		{
+		  /* recalculate */
+		  void *baton;
+		  LONGEST r;
+		  struct value *rval;
+		  struct value *(*f)(struct type *, void*, struct value *, void*);
+		  f = (struct value *(*)(struct type *, void*, struct value *, void*))
+		    TYPE_BOUND_BATON_FUNCTION(range_type);
 
-		    rval = f(target_type, baton, objptr, frame);
-		    if (rval)
-		      r = value_as_long (rval);
+		  baton = TYPE_HIGH_BOUND_BATON(range_type);
 
- 		    if (!rval || invalid_bound (r))
-		      {
-			TYPE_HIGH_BOUND(range_type) = 1;
-			/* The following was added in commit 30b17042 but
-			   needs to be reworked.  */
-			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-			abort ();
-			// TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
-		      }
-		    else
-		      {
-			TYPE_HIGH_BOUND(range_type) = r;
-			/* The following was added in commit 30b17042 but
-			   needs to be reworked.  */
-			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-			abort ();
-			//TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
-		      }
-		  }
-		if (TYPE_COUNT_BOUND_BATON(range_type)) 
-		  { 
-		    /* the DW_AT_count field */
-		    void *baton;
-		    LONGEST r;
-		    struct value *rval;
-		    /* recalculate */
-		    struct value *(*f)(struct type *, void*, struct value *, void*);
-		    f = (struct value *(*)(struct type *, void*, struct value *, void*))
-		      TYPE_BOUND_BATON_FUNCTION(range_type);
+		  rval = f(target_type, baton, objptr, frame);
+		  if (rval)
+		    r = value_as_long (rval);
 
-		    baton = TYPE_COUNT_BOUND_BATON(range_type);
+		  if (!rval || invalid_bound (r))
+		    {
+		      TYPE_HIGH_BOUND(range_type) = 1;
+		      /* The following was added in commit 30b17042 but
+			 needs to be reworked.  */
+		      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+		      abort ();
+		      // TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+		    }
+		  else
+		    {
+		      TYPE_HIGH_BOUND(range_type) = r;
+		      /* The following was added in commit 30b17042 but
+			 needs to be reworked.  */
+		      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+		      abort ();
+		      //TYPE_HIGH_BOUND_UNDEFINED (range_type) = 0;
+		    }
+		}
+	      if (TYPE_COUNT_BOUND_BATON(range_type)) 
+		{ 
+		  /* the DW_AT_count field */
+		  void *baton;
+		  LONGEST r;
+		  struct value *rval;
+		  /* recalculate */
+		  struct value *(*f)(struct type *, void*, struct value *, void*);
+		  f = (struct value *(*)(struct type *, void*, struct value *, void*))
+		    TYPE_BOUND_BATON_FUNCTION(range_type);
 
-		    rval = f(target_type, baton, objptr, frame);
-		    if (rval)
-		      r = value_as_long (rval);
+		  baton = TYPE_COUNT_BOUND_BATON(range_type);
 
- 		    if (!rval || invalid_bound (r))
-		      {
-			TYPE_HIGH_BOUND(range_type) = 1;
-			/* The following was added in commit 30b17042 but
-			   needs to be reworked.  */
-			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-			abort ();
-			//TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
-		      }
-		    else
-		      {
-			/* note.. upper bound is inclusive */
-			TYPE_HIGH_BOUND(range_type) = r + TYPE_LOW_BOUND(range_type) - 1;
-			if (!TYPE_LOW_BOUND_UNDEFINED(range_type))
-			  {
-			    /* The following was added in commit 30b17042 but
-			       needs to be reworked.  */
-			    fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-			    abort ();
-			    //TYPE_HIGH_BOUND_UNDEFINED(range_type) = 0;
-			  }
-		      }
-		  }
-		/* Check the bounds are sane. */
-		if (TYPE_LOW_BOUND(range_type) > TYPE_HIGH_BOUND(range_type))
-		  {
-		    if (!TYPE_LOW_BOUND_UNDEFINED(range_type)
-			&& !TYPE_HIGH_BOUND_UNDEFINED(range_type))
-		      {
-			TYPE_HIGH_BOUND(range_type) = 
-			  TYPE_LOW_BOUND(range_type) + 1;
-			/* The following was added in commit 30b17042 but
-			   needs to be reworked.  */
-			fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-			abort ();
-			//TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
-		      }
-		    else
-		      {
-			if (TYPE_LOW_BOUND_UNDEFINED(range_type)
-			    && !TYPE_HIGH_BOUND_UNDEFINED(range_type))
-			  {
-			    TYPE_LOW_BOUND(range_type) =
-			      TYPE_HIGH_BOUND(range_type) - 1;
-			  }
-			else
-			  {
-			    TYPE_HIGH_BOUND(range_type) = 
-			      TYPE_LOW_BOUND(range_type) + 1;
-			  }
-		      }
-		  }
-	      }
+		  rval = f(target_type, baton, objptr, frame);
+		  if (rval)
+		    r = value_as_long (rval);
+
+		  if (!rval || invalid_bound (r))
+		    {
+		      TYPE_HIGH_BOUND(range_type) = 1;
+		      /* The following was added in commit 30b17042 but
+			 needs to be reworked.  */
+		      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+		      abort ();
+		      //TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+		    }
+		  else
+		    {
+		      /* note.. upper bound is inclusive */
+		      TYPE_HIGH_BOUND(range_type) = r + TYPE_LOW_BOUND(range_type) - 1;
+		      if (!TYPE_LOW_BOUND_UNDEFINED(range_type))
+			{
+			  /* The following was added in commit 30b17042 but
+			     needs to be reworked.  */
+			  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+			  abort ();
+			  //TYPE_HIGH_BOUND_UNDEFINED(range_type) = 0;
+			}
+		    }
+		}
+	      /* Check the bounds are sane. */
+	      if (TYPE_LOW_BOUND(range_type) > TYPE_HIGH_BOUND(range_type))
+		{
+		  if (!TYPE_LOW_BOUND_UNDEFINED(range_type)
+		      && !TYPE_HIGH_BOUND_UNDEFINED(range_type))
+		    {
+		      TYPE_HIGH_BOUND(range_type) = 
+			TYPE_LOW_BOUND(range_type) + 1;
+		      /* The following was added in commit 30b17042 but
+			 needs to be reworked.  */
+		      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+		      abort ();
+		      //TYPE_HIGH_BOUND_UNDEFINED(range_type) = 1;
+		    }
+		  else
+		    {
+		      if (TYPE_LOW_BOUND_UNDEFINED(range_type)
+			  && !TYPE_HIGH_BOUND_UNDEFINED(range_type))
+			{
+			  TYPE_LOW_BOUND(range_type) =
+			    TYPE_HIGH_BOUND(range_type) - 1;
+			}
+		      else
+			{
+			  TYPE_HIGH_BOUND(range_type) =
+			    TYPE_LOW_BOUND(range_type) + 1;
+			}
+		    }
+		}
 	    }
 	}
-      tmp_type = TYPE_TARGET_TYPE(tmp_type);  
+      tmp_type = TYPE_TARGET_TYPE(tmp_type);
     }
   tmp_type = value_type (v);
-  
+
   if (TYPE_CODE(tmp_type) == TYPE_CODE_ARRAY
       || TYPE_CODE(tmp_type) == TYPE_CODE_STRING)
     {
       reset_lengths(tmp_type);
     }
+#endif
 }
 
 static int
@@ -435,6 +442,9 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
 	      if (TYPE_CODE (range_type) == TYPE_CODE_RANGE && r)
 		{
+		  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+		  abort ();
+#if 0
 		  if (TYPE_BOUND_BATON_FUNCTION (range_type))
 		    {
 		      if (frame)
@@ -493,6 +503,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 			  r += (low * stride + soffset) * lstride * elem_skip;
 			}
 		    }
+#endif
 		}
 	      tmp_type = TYPE_TARGET_TYPE (tmp_type);
 	    }
@@ -537,8 +548,8 @@ f_fixup_value (struct value *v, struct frame_info *frame)
     {
       /* refresh the calculated array bounds DL */
       if (value_lazy (v))
-	setup_array_bounds(v, objptr, frame);	
-  
+	setup_array_bounds(v, objptr, frame);
+
       /* Handle the situation where it is dynamic */
       if (TYPE_CODE (type) == TYPE_CODE_ARRAY)
 	{

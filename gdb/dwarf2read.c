@@ -1402,6 +1402,11 @@ show_dwarf_max_cache_age (struct ui_file *file, int from_tty,
 
 /* local function prototypes */
 
+static int attr_to_dynamic_prop (const struct attribute *attr,
+				 struct die_info *die,
+				 struct dwarf2_cu *cu,
+				 struct dynamic_prop *prop);
+
 static const char *get_section_name (const struct dwarf2_section_info *);
 
 static const char *get_section_file_name (const struct dwarf2_section_info *);
@@ -14428,24 +14433,13 @@ read_module (struct die_info *die, struct dwarf2_cu *cu)
   new_symbol (die, type, cu);
 
 
-  /* APB: While merging 232a53f63a850490bf5289e88059c25d463ef4e2 the
-     following block was added, not sure if this is still needed.  */
-  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-  abort ();
-#if 0
-  struct objfile *objfile = cu->objfile;
-  int is_anonymous;
 
-  /* Add a symbol associated to this if we haven't seen the namespace
-     before.  Also, add a using directive if it's an anonymous
-     namespace.  */
+  /* Add a using directive if it's an anonymous namespace.  */
 
   if (dwarf2_attr (die, DW_AT_extension, cu) == NULL)
     {
-      struct type *type;
-
-      type = read_type_die (die, cu);
-      new_symbol (die, type, cu);
+      struct objfile *objfile = cu->objfile;
+      int is_anonymous;
 
       namespace_name (die, &is_anonymous, cu);
       if (is_anonymous)
@@ -14458,7 +14452,6 @@ read_module (struct die_info *die, struct dwarf2_cu *cu)
 				    NULL, NULL, 0, &objfile->objfile_obstack);
 	}
     }
-#endif
 
   while (child_die && child_die->tag)
     {
@@ -14809,48 +14802,39 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
   struct gdbarch *gdbarch = get_objfile_arch (objfile);
   struct type *type, *range_type, *index_type, *char_type;
   struct attribute *attr;
-  struct dwarf2_loclist_baton *len_compute = 0;
-  unsigned int length;
+  struct dynamic_prop base, length;
+
+  base.kind = PROP_CONST;
+  base.data.const_val = 1;
 
   attr = dwarf2_attr (die, DW_AT_string_length, cu);
   if (attr)
     {
-       if (attr->form == DW_FORM_block1) 
- 	{
-	  int size;
+       if (attr->form == DW_FORM_block1)
+	 {
+	   attr_to_dynamic_prop (attr, die, cu, &length);
 
- 	  struct dwarf2_loclist_baton *baton;
- 	  baton = obstack_alloc (&cu->objfile->objfile_obstack,
- 				 sizeof (struct dwarf2_loclist_baton));
+	   /* Fix a bug in the Intel compiler (up to version 16) where the
+	      string length is not correctly taken.  */
+	   if (producer_is_icc (cu))
+	     {
+	       gdb_byte *tmp;
+	       struct dwarf2_property_baton *baton;
 
-	  size = DW_BLOCK(attr)->size; 
-
- 	  baton->per_cu = cu->per_cu;
- 	  baton->base_address = cu->base_address;
-
-      // Fix a bug in the Intel compiler (up to version 16)
-      // where the string length is not correctly taken
-	  if(cu->producer && strstr(cu->producer, "Intel"))
-	  	baton->size = size + 1;
-	  else
-		baton->size = size;
-
- 	  baton->data = obstack_alloc (&cu->objfile->objfile_obstack,
-				       baton->size);
-	  
- 	  memcpy ((gdb_byte *) baton->data, DW_BLOCK(attr)->data, size);
-
-	  if(cu->producer && strstr(cu->producer, "Intel"))
-	    ((gdb_byte *)baton->data)[size] = DW_OP_deref;
-	  
- 
- 	  len_compute = baton;
- 	  length = 1;
- 	  
- 	}
-       else 
- 	{
- 	  length = DW_UNSND (attr);
+	       gdb_assert (length.kind == PROP_LOCEXPR);
+	       baton = length.data.baton;
+	       tmp = obstack_alloc (&cu->objfile->objfile_obstack,
+				    baton->locexpr.size + 1);
+	       memcpy (tmp, baton->locexpr.data, baton->locexpr.size);
+	       tmp[baton->locexpr.size] = DW_OP_deref;
+	       baton->locexpr.data = tmp;
+	       baton->locexpr.size += 1;
+	     }
+	 }
+       else
+	 {
+	   length.kind = PROP_CONST;
+	   length.data.const_val = DW_UNSND (attr);
  	}
     }
   else
@@ -14859,20 +14843,18 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
       attr = dwarf2_attr (die, DW_AT_byte_size, cu);
       if (attr)
         {
-          length = DW_UNSND (attr);
+	  length.kind = PROP_CONST;
+	  length.data.const_val = DW_UNSND (attr);
         }
       else
         {
-          length = 1;
+	  length.kind = PROP_CONST;
+	  length.data.const_val = 1;
         }
     }
 
   index_type = objfile_type (objfile)->builtin_int;
-
-  /* APB: This did not merge correctly, needs more work.  */
-  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-  abort ();
-  // range_type = create_range_type (NULL, index_type, 1, length, NULL, NULL, len_compute, (LONGEST (*)(void*, CORE_ADDR, void*)) dwarf2_evaluate_int);
+  range_type = create_range_type (NULL, index_type, &base, &length);
   char_type = language_string_char_type (cu->language_defn, gdbarch);
   type = create_string_type (NULL, char_type, range_type);
 
@@ -15660,17 +15642,8 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   struct type *base_type, *orig_base_type;
   struct type *range_type;
   struct attribute *attr, *ada_attr;
-  struct dynamic_prop low, high;
+  struct dynamic_prop low, high, stride, soffset, lstride;
   struct attribute *upper_bound_attr;
-  struct dwarf2_loclist_baton *low_compute = 0;
-  struct dwarf2_loclist_baton *high_compute = 0;
-  struct dwarf2_loclist_baton *count_compute = 0;
-  struct dwarf2_loclist_baton *stride_compute = 0;
-  struct dwarf2_loclist_baton *soffset_compute = 0;
-  struct dwarf2_loclist_baton *lstride_compute = 0;
-  int stride = 1;
-  int soffset = 0;
-  int lstride = 0;
   int is_upc_threads_scaled = 0;
   int is_coshape = 0;
   int low_default_is_valid;
@@ -15751,29 +15724,29 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 
   attr = dwarf2_attr (die, DW_AT_stride, cu);
   if (attr)
+    attr_to_dynamic_prop (attr, die, cu, &stride);
+  else
     {
-      /* APB: This block needs to be filled in.  It's added in the 7.6.2
-	 version, but did not merge well.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
+      stride.kind = PROP_CONST;
+      stride.data.const_val = 1;
     }
 
   attr = dwarf2_attr (die, DW_AT_soffset, cu);
   if (attr)
+    attr_to_dynamic_prop (attr, die, cu, &soffset);
+  else
     {
-      /* APB: This block needs to be filled in.  It's added in the 7.6.2
-	 version, but did not merge well.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
+      soffset.kind = PROP_CONST;
+      soffset.data.const_val = 0;
     }
 
   attr = dwarf2_attr (die, DW_AT_lstride, cu);
   if (attr)
+    attr_to_dynamic_prop (attr, die, cu, &lstride);
+  else
     {
-      /* APB: This block needs to be filled in.  It's added in the 7.6.2
-	 version, but did not merge well.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
+      lstride.kind = PROP_CONST;
+      lstride.data.const_val = 0;
     }
 
   /* Dwarf-2 specifications explicitly allows to create subrange types
@@ -15830,7 +15803,8 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
       && !TYPE_UNSIGNED (base_type) && (high.data.const_val & negative_mask))
     high.data.const_val |= negative_mask;
 
-  range_type = create_range_type (NULL, orig_base_type, &low, &high);
+  range_type = create_range_type_pgi (NULL, orig_base_type, &low, &high,
+				      &lstride, &stride, &soffset);
 
   if (high_bound_is_count)
     TYPE_RANGE_DATA (range_type)->flag_upper_bound_is_count = 1;
