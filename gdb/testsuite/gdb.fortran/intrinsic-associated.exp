@@ -29,22 +29,22 @@ gdb_breakpoint [gdb_get_line_number "value associated"]
 gdb_continue_to_breakpoint "value associated"
 
 gdb_test "print associated (value)" " = \\.TRUE\\." \
-  "print value associated status"
+  "print value associated status (TRUE)"
 
 gdb_test "print l" " = \\.TRUE\\." \
-  "print value desassociated status"
+  "print value desassociated status (TRUE)"
 
 gdb_breakpoint [gdb_get_line_number "value desassociated"]
 gdb_continue_to_breakpoint "value deassociated"
 
 gdb_test "print associated (value)" " = \\.FALSE\\." \
-  "print value desassociated status"
+  "print value desassociated status (FALSE)"
 
 gdb_test "print l" " = \\.FALSE\\." \
-  "print value associated status"
+  "print value associated status (FALSE)"
 
 gdb_breakpoint [gdb_get_line_number "pvla-vla associated"]
-gdb_continue_to_breakpoint "pvla-vla associated"
+gdb_continue_to_breakpoint "pvla-vla associated (1)"
 
 gdb_test "print associated (pvla, vla)" " = \\.TRUE\\." \
   "print pvla-vla associated"
@@ -56,7 +56,7 @@ gdb_test "print l" " = \\.TRUE\\." \
   "print pvla-vla associated compiler"
 
 gdb_breakpoint [gdb_get_line_number "pvla-vla desassociated"]
-gdb_continue_to_breakpoint "pvla-vla associated"
+gdb_continue_to_breakpoint "pvla-vla associated (2)"
 
 gdb_test "print associated (pvla, vla)" " = \\.FALSE\\." \
   "print pvla-vla deassociated"
@@ -65,7 +65,7 @@ gdb_test "print l" " = \\.FALSE\\." \
   "print pvla-vla deassociated compiler"
 
 gdb_breakpoint [gdb_get_line_number "associated pvla2-pvla"]
-gdb_continue_to_breakpoint "pvla-vla associated"
+gdb_continue_to_breakpoint "pvla-vla associated (3)"
 
 gdb_test "print associated (pvla2, pvla)" " = \\.TRUE\\." \
   "print associated pvla2-pvla"

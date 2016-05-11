@@ -105,7 +105,7 @@ gdb_test "ptype fivev" \
 gdb_breakpoint [gdb_get_line_number "onep-associated"]
 gdb_continue_to_breakpoint "onep-associated"
 gdb_test "ptype onev" ".*real\\\(kind=4\\\) :: ivla\\\(11,22,33\\\).*" \
-  "ptype onev"
+  "ptype onev (again)"
 gdb_test "ptype onep" ".*real\\\(kind=4\\\) :: ivla\\\(11,22,33\\\).*" \
   "ptype onep"
 

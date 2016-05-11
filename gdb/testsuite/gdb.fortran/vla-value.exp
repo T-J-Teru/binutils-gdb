@@ -42,7 +42,7 @@ gdb_test "print vla1(5,2,18)=1" "no such vector element because not allocated" \
 
 # Try to access value in allocated VLA
 gdb_breakpoint [gdb_get_line_number "vla2-allocated"]
-gdb_continue_to_breakpoint "vla2-allocated"
+gdb_continue_to_breakpoint "vla2-allocated <1>"
 gdb_test "next" "\\d+(\\t|\\s)+vla1\\\(3, 6, 9\\\) = 42" \
   "step over value assignment of vla1"
 gdb_test "print &vla1" \
@@ -73,7 +73,7 @@ gdb_test "print pvla(1, 3, 8)" "no such vector element because not associated" \
 
 # Try to access values in pointer to VLA and compare them
 gdb_breakpoint [gdb_get_line_number "pvla-associated"]
-gdb_continue_to_breakpoint "pvla-associated"
+gdb_continue_to_breakpoint "pvla-associated <1>"
 gdb_test "print &pvla" \
   " = \\\(PTR TO -> \\\( real\\\(kind=4\\\) \\\(10,10,10\\\)\\\)\\\) $hex" \
   "print associated &pvla"
@@ -95,7 +95,7 @@ gdb_test "print vla2(7, 45, 14)" " = 2" \
 
 # Try to access values of deassociated VLA pointer
 gdb_breakpoint [gdb_get_line_number "pvla-deassociated"]
-gdb_continue_to_breakpoint "pvla-deassociated"
+gdb_continue_to_breakpoint "pvla-deassociated <1>"
 gdb_test "print pvla(5, 45, 20)" \
   "no such vector element because not associated" \
   "print pvla(5, 45, 20) after deassociated"
@@ -124,7 +124,7 @@ if ![runto MAIN__] then {
     continue
 }
 gdb_breakpoint [gdb_get_line_number "vla2-allocated"]
-gdb_continue_to_breakpoint "vla2-allocated"
+gdb_continue_to_breakpoint "vla2-allocated <2>"
 gdb_test "next" "\\d+.*vla1\\(3, 6, 9\\) = 42" "next (1)"
 
 gdb_test_no_output "set \$myvar = vla1" "set \$myvar = vla1"
@@ -136,13 +136,13 @@ gdb_test "next" "\\d+.*vla1\\(1, 3, 8\\) = 1001" "next (2)"
 gdb_test "print \$myvar(3,6,9)" " = 1311" "print \$myvar(3,6,9)"
 
 gdb_breakpoint [gdb_get_line_number "pvla-associated"]
-gdb_continue_to_breakpoint "pvla-associated"
+gdb_continue_to_breakpoint "pvla-associated <2>"
 gdb_test_no_output "set \$mypvar = pvla" "set \$mypvar = pvla"
 gdb_test "print \$mypvar(1,3,8)" " = 1001" "print \$mypvar(1,3,8)"
 
 # deallocate pointer and make sure user defined variable still has the
 # right value.
 gdb_breakpoint [gdb_get_line_number "pvla-deassociated"]
-gdb_continue_to_breakpoint "pvla-deassociated"
+gdb_continue_to_breakpoint "pvla-deassociated <2>"
 gdb_test "print \$mypvar(1,3,8)" " = 1001" \
   "print \$mypvar(1,3,8) after deallocated"

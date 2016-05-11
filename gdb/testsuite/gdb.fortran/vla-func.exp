@@ -36,7 +36,7 @@ gdb_test "ptype vla" "type = integer\\\(kind=4\\\) \\\(10,10\\\)" \
 gdb_breakpoint [gdb_get_line_number "func1-vla-modified"]
 gdb_continue_to_breakpoint "func1-vla-modified"
 gdb_test "print vla(5,5)" " = 55" "print vla(5,5) (func1)"
-gdb_test "print vla(7,7)" " = 77" "print vla(5,5) (func1)"
+gdb_test "print vla(7,7)" " = 77" "print vla(7,7) (func1)"
 
 # Check if the values are correct after returning from func1
 gdb_breakpoint [gdb_get_line_number "func1-returned"]

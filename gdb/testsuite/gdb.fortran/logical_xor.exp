@@ -29,9 +29,9 @@ if ![runto MAIN__] then {
 gdb_breakpoint [gdb_get_line_number "stop_here"]
 gdb_continue_to_breakpoint "stop_here"
 
-gdb_test "print val_a" "\\$\[0-9\]+ = \.TRUE\." "print val_a value TRUE"
+gdb_test "print val_a" "\\$\[0-9\]+ = \.TRUE\." "print val_a value TRUE (1)"
 gdb_test "print val_b" "\\$\[0-9\]+ = \.FALSE\." "print val_b value FALSE"
-gdb_test "print val_a \.or\. val_b" "\\$\[0-9\]+ = \.TRUE\." "print val_a value TRUE"
-gdb_test "print val_a \.xor\. val_b" "\\$\[0-9\]+ = \.TRUE\." "print val_a value TRUE"
-gdb_test "print val_a \.xor\. \.true\." "\\$\[0-9\]+ = \.FALSE\." "print val_a value FALSE"
-gdb_test "print val_b \.xor\. \.false\." "\\$\[0-9\]+ = \.FALSE\." "print val_a value FALSE"
+gdb_test "print val_a \.or\. val_b" "\\$\[0-9\]+ = \.TRUE\." "print val_a value TRUE (2)"
+gdb_test "print val_a \.xor\. val_b" "\\$\[0-9\]+ = \.TRUE\." "print val_a value TRUE (3)"
+gdb_test "print val_a \.xor\. \.true\." "\\$\[0-9\]+ = \.FALSE\." "print val_a value FALSE (1)"
+gdb_test "print val_b \.xor\. \.false\." "\\$\[0-9\]+ = \.FALSE\." "print val_a value FALSE (2)"
