@@ -3032,7 +3032,7 @@ remote_update_thread_list (struct target_ops *ops)
 		 running until proven otherwise with a stop reply.  In
 		 all-stop, we can only get here if all threads are
 		 stopped.  */
-	      int running = non_stop ? 1 : 0;
+	      int running = (non_stop && !inferior_stop) ? 1 : 0;
 
 	      remote_notice_new_inferior (item->ptid, running);
 
