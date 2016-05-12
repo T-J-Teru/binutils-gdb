@@ -4223,14 +4223,12 @@ handle_inferior_event_1 (struct execution_control_state *ecs)
       return;
 
     case TARGET_WAITKIND_THREAD_EXITED:
-      /* APB: This block was added from some commit, and I don't think that
-	 it merged correctly.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
       if (debug_infrun)
         fprintf_unfiltered (gdb_stdlog, "infrun: TARGET_WAITKIND_THREAD_EXITED\n");
       target_terminal_ours ();
       stop_print_frame = 0;
+      stop_waiting (ecs);
+      return;
       return;
 
     case TARGET_WAITKIND_EXITED:
