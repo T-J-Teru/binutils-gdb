@@ -2735,8 +2735,7 @@ attach_command (char *args, int from_tty)
   if (non_stop && !attach_target->to_supports_non_stop (attach_target))
     error (_("Cannot attach to this target in non-stop mode"));
 
-
-  if (strncmp(args, "-s ", 3) == 0)
+  if (args && strncmp(args, "-s ", 3) == 0)
     {
       async_stop = 1;
       args += 3;

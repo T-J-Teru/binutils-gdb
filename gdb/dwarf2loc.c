@@ -2098,23 +2098,11 @@ indirect_pieced_value (struct value *value)
 				     get_frame_address_in_block_wrapper,
 				     frame);
 
-  /* APB-TODO: Conflict while merging 1e257eb, not sure how these should be
-     resolved.  */
-  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-  abort ();
-
-#if 0
-
   if (baton.data != NULL)
     return dwarf2_evaluate_loc_desc_full (TYPE_TARGET_TYPE (type), frame,
 					  baton.data, baton.size, baton.per_cu,
-					  byte_offset);
-
-  return dwarf2_evaluate_loc_desc_full (TYPE_TARGET_TYPE (type), frame,
-					baton.data, baton.size, baton.per_cu,
-					piece->v.ptr.offset + byte_offset,
-					/* FIXME: What should be passed for object address here? */ 0);
-#endif
+					  byte_offset,
+					  /* FIXME: What should be passed for object address here? */ 0);
 
   {
     struct obstack temp_obstack;
