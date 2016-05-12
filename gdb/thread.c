@@ -1599,47 +1599,32 @@ thread_apply_all_command (char *cmd, int from_tty)
       make_cleanup (set_thread_refcount, &ta_cleanup);
 
       for (k = 0; k != i; k++)
+	if (upcmode && !is_upc_thread(tp_array[k]))
+	  continue;
         if (thread_alive (tp_array[k]))
           {
+	    volatile struct gdb_exception ex;
             switch_to_thread (tp_array[k]->ptid);
-            printf_filtered (_("\nThread %d (%s):\n"), 
-			     tp_array[k]->num,
-			     target_pid_to_str (inferior_ptid));
-            execute_command (cmd, from_tty);
+	    if (upcmode)
+	      printf_filtered (_("\nUPC thread %d:\n"), tp->unum);
+	    else
+	      printf_filtered (_("\nThread %d (%s):\n"),
+			       tp_array[k]->num,
+			       target_pid_to_str (inferior_ptid));
+	    TRY
+	      {
+		execute_command (cmd, from_tty);
+	      }
+	    CATCH (ex, RETURN_MASK_ALL)
+	      {
+		printf_filtered("<%s>\n", ex.message);
+	      }
+	    END_CATCH
 
             /* Restore exact command used previously.  */
             strcpy (cmd, saved_cmd);
 	  }
     }
-
-#if 0
-  for (tp = thread_list; tp; tp = tp->next)
-   {
-      if (upcmode && !is_upc_thread(tp)) continue;
-      if (thread_alive (tp))
-        {
-		  volatile struct gdb_exception ex;
-	  switch_to_thread (tp->ptid);
-
-          if (upcmode)
-	    printf_filtered (_("\nUPC thread %d:\n"), tp->unum);
-          else
-	    printf_filtered (_("\nThread %d (%s):\n"),
-			 tp->num, target_pid_to_str (inferior_ptid));
-		  TRY
-		    {
-		      execute_command (cmd, from_tty);
-		    }
-		  CATCH (ex, RETURN_MASK_ALL)
-		    {
-		      printf_filtered("<%s>\n", ex.message);
-		    }
-		  END_CATCH
-	  strcpy (cmd, saved_cmd);	/* Restore exact command used
-					   previously.  */
-	}
-   }
-#endif
 
   do_cleanups (old_chain);
 }
