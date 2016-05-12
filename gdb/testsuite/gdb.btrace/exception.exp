@@ -62,11 +62,11 @@ gdb_expect_list "flat" "\r\n$gdb_prompt $" [list \
 send_gdb "record function-call-history /c 1\n"
 gdb_expect_list "indented" "\r\n$gdb_prompt $" [list \
   [multi_line \
-    "1\tmain\\(\\)" \
-  "2\t  test\\(\\)" \
-  "3\t    foo\\(\\)" \
-  "4\t      bar\\(\\)" \
-  "5\t        bad\\(\\)\r" \
+    "1\t  main\\(\\)" \
+  "2\t    test\\(\\)" \
+  "3\t      foo\\(\\)" \
+  "4\t        bar\\(\\)" \
+  "5\t          bad\\(\\)\r" \
   ] \
   "" \
-  "\[0-9\]*\t  test\\(\\)"]
+  "\[0-9\]*\ttest\\(\\)"]

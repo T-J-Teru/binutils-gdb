@@ -41,7 +41,7 @@ program vla_func
   implicit none
   interface
     logical function func1 (vla)
-      integer :: vla (:, :)
+      integer, allocatable :: vla (:, :)
     end function
   end interface
   interface
