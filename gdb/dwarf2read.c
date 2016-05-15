@@ -1407,6 +1407,13 @@ static int attr_to_dynamic_prop (const struct attribute *attr,
 				 struct dwarf2_cu *cu,
 				 struct dynamic_prop *prop);
 
+static int attr_to_dynamic_prop_and_append (const struct attribute *attr,
+					    struct die_info *die,
+					    struct dwarf2_cu *cu,
+					    struct dynamic_prop *prop,
+					    const gdb_byte *additional_data,
+					    int additional_data_size);
+
 static const char *get_section_name (const struct dwarf2_section_info *);
 
 static const char *get_section_file_name (const struct dwarf2_section_info *);
@@ -14765,60 +14772,92 @@ read_tag_string_type (struct die_info *die, struct dwarf2_cu *cu)
   struct gdbarch *gdbarch = get_objfile_arch (objfile);
   struct type *type, *range_type, *index_type, *char_type;
   struct attribute *attr;
-  struct dynamic_prop base, length;
+  unsigned int length = UINT_MAX;
 
-  base.kind = PROP_CONST;
-  base.data.const_val = 1;
+  index_type = objfile_type (objfile)->builtin_int;
+  range_type = create_static_range_type (NULL, index_type, 1, length);
 
+  /* If DW_AT_string_length is defined, the length is stored at some location
+   * in memory. */
   attr = dwarf2_attr (die, DW_AT_string_length, cu);
   if (attr)
     {
-       if (attr->form == DW_FORM_block1)
-	 {
-	   attr_to_dynamic_prop (attr, die, cu, &length);
+      if (attr_form_is_block (attr))
+        {
+          struct attribute *byte_size, *bit_size;
+          struct dynamic_prop high;
 
-	   /* Fix a bug in the Intel compiler (up to version 16) where the
-	      string length is not correctly taken.  */
-	   if (producer_is_icc (cu))
-	     {
-	       gdb_byte *tmp;
-	       struct dwarf2_property_baton *baton;
+          byte_size = dwarf2_attr (die, DW_AT_byte_size, cu);
+          bit_size = dwarf2_attr (die, DW_AT_bit_size, cu);
 
-	       gdb_assert (length.kind == PROP_LOCEXPR);
-	       baton = length.data.baton;
-	       tmp = obstack_alloc (&cu->objfile->objfile_obstack,
-				    baton->locexpr.size + 1);
-	       memcpy (tmp, baton->locexpr.data, baton->locexpr.size);
-	       tmp[baton->locexpr.size] = DW_OP_deref;
-	       baton->locexpr.data = tmp;
-	       baton->locexpr.size += 1;
-	     }
-	 }
-       else
-	 {
-	   length.kind = PROP_CONST;
-	   length.data.const_val = DW_UNSND (attr);
- 	}
+          /* DW_AT_byte_size should never occur together in combination with
+             DW_AT_string_length.  */
+          if ((byte_size == NULL && bit_size != NULL) ||
+                  (byte_size != NULL && bit_size == NULL))
+            complaint (&symfile_complaints, _("DW_AT_byte_size AND "
+                      "DW_AT_bit_size found together at the same time."));
+
+          /* If DW_AT_string_length AND DW_AT_byte_size exist together, it
+             describes the number of bytes that should be read from the length
+             memory location.  */
+          if (byte_size != NULL && bit_size == NULL)
+            {
+              /* Build new dwarf2_locexpr_baton structure with additions to the
+                 data attribute, to reflect DWARF specialities to get address
+                 sizes.  */
+              const gdb_byte append_ops[] = {
+                /* DW_OP_deref_size: size of an address on the target machine
+                   (bytes), where the size will be specified by the next
+                   operand.  */
+                DW_OP_deref_size,
+                /* Operand for DW_OP_deref_size.  */
+                DW_UNSND (byte_size) };
+
+              if (!attr_to_dynamic_prop_and_append (attr, die, cu, &high,
+                      append_ops, ARRAY_SIZE (append_ops)))
+                complaint (&symfile_complaints,
+                        _("Could not parse DW_AT_byte_size"));
     }
+          else if (bit_size != NULL && byte_size == NULL)
+            complaint (&symfile_complaints, _("DW_AT_string_length AND "
+                      "DW_AT_bit_size found but not supported yet."));
+          /* If DW_AT_string_length WITHOUT DW_AT_byte_size exist, the default
+             is the address size of the target machine.  */
   else
     {
-      /* Check for the DW_AT_byte_size attribute.  */
-      attr = dwarf2_attr (die, DW_AT_byte_size, cu);
-      if (attr)
-        {
-	  length.kind = PROP_CONST;
-	  length.data.const_val = DW_UNSND (attr);
+              const gdb_byte append_ops[] = { DW_OP_deref };
+
+              if (!attr_to_dynamic_prop_and_append (attr, die, cu, &high, append_ops,
+                      ARRAY_SIZE (append_ops)))
+                complaint (&symfile_complaints,
+                        _("Could not parse DW_AT_string_length"));
+            }
+
+          TYPE_RANGE_DATA (range_type)->high = high;
         }
       else
         {
-	  length.kind = PROP_CONST;
-	  length.data.const_val = 1;
+          TYPE_HIGH_BOUND (range_type) = DW_UNSND (attr);
+          TYPE_HIGH_BOUND_KIND (range_type) = PROP_CONST;
+        }
+    }
+  else
+    {
+      /* Check for the DW_AT_byte_size attribute, which represents the length
+         in this case.  */
+      attr = dwarf2_attr (die, DW_AT_byte_size, cu);
+      if (attr)
+        {
+          TYPE_HIGH_BOUND (range_type) = DW_UNSND (attr);
+          TYPE_HIGH_BOUND_KIND (range_type) = PROP_CONST;
+        }
+      else
+        {
+          TYPE_HIGH_BOUND (range_type) = 1;
+          TYPE_HIGH_BOUND_KIND (range_type) = PROP_CONST;
         }
     }
 
-  index_type = objfile_type (objfile)->builtin_int;
-
-  range_type = create_range_type (NULL, index_type, &base, &length);
   char_type = language_string_char_type (cu->language_defn, gdbarch);
   type = create_string_type (NULL, char_type, range_type);
 
@@ -15356,13 +15395,15 @@ read_base_type (struct die_info *die, struct dwarf2_cu *cu)
   return set_die_type (die, type, cu);
 }
 
+
 /* Parse dwarf attribute if it's a block, reference or constant and put the
    resulting value of the attribute into struct bound_prop.
    Returns 1 if ATTR could be resolved into PROP, 0 otherwise.  */
 
 static int
-attr_to_dynamic_prop (const struct attribute *attr, struct die_info *die,
-		      struct dwarf2_cu *cu, struct dynamic_prop *prop)
+attr_to_dynamic_prop_and_append (const struct attribute *attr, struct die_info *die,
+				 struct dwarf2_cu *cu, struct dynamic_prop *prop,
+				 const gdb_byte *additional_data, int additional_data_size)
 {
   struct dwarf2_property_baton *baton;
   struct obstack *obstack = &cu->objfile->objfile_obstack;
@@ -15375,8 +15416,26 @@ attr_to_dynamic_prop (const struct attribute *attr, struct die_info *die,
       baton = obstack_alloc (obstack, sizeof (*baton));
       baton->referenced_type = NULL;
       baton->locexpr.per_cu = cu->per_cu;
-      baton->locexpr.size = DW_BLOCK (attr)->size;
+
+      if (additional_data != NULL && additional_data_size > 0)
+        {
+          gdb_byte *data;
+
+          data = obstack_alloc (&cu->objfile->objfile_obstack,
+                  DW_BLOCK (attr)->size + additional_data_size);
+          memcpy (data, DW_BLOCK (attr)->data, DW_BLOCK (attr)->size);
+          memcpy (data + DW_BLOCK (attr)->size,
+                  additional_data, additional_data_size);
+
+          baton->locexpr.data = data;
+          baton->locexpr.size = DW_BLOCK (attr)->size + additional_data_size;
+        }
+      else
+        {
       baton->locexpr.data = DW_BLOCK (attr)->data;
+          baton->locexpr.size = DW_BLOCK (attr)->size;
+        }
+
       prop->data.baton = baton;
       prop->kind = PROP_LOCEXPR;
       gdb_assert (prop->data.baton != NULL);
@@ -15412,8 +15471,28 @@ attr_to_dynamic_prop (const struct attribute *attr, struct die_info *die,
 		baton = obstack_alloc (obstack, sizeof (*baton));
 		baton->referenced_type = die_type (target_die, target_cu);
 		baton->locexpr.per_cu = cu->per_cu;
-		baton->locexpr.size = DW_BLOCK (target_attr)->size;
+
+	  if (additional_data != NULL && additional_data_size > 0)
+	    {
+	      gdb_byte *data;
+
+	      data = obstack_alloc (&cu->objfile->objfile_obstack,
+	              DW_BLOCK (target_attr)->size + additional_data_size);
+	      memcpy (data, DW_BLOCK (target_attr)->data,
+	              DW_BLOCK (target_attr)->size);
+	      memcpy (data + DW_BLOCK (target_attr)->size,
+	              additional_data, additional_data_size);
+
+	      baton->locexpr.data = data;
+	      baton->locexpr.size = (DW_BLOCK (target_attr)->size
+	                             + additional_data_size);
+	    }
+	  else
+	    {
 		baton->locexpr.data = DW_BLOCK (target_attr)->data;
+	      baton->locexpr.size = DW_BLOCK (target_attr)->size;
+	    }
+
 		prop->data.baton = baton;
 		prop->kind = PROP_LOCEXPR;
 		gdb_assert (prop->data.baton != NULL);
@@ -15457,6 +15536,17 @@ attr_to_dynamic_prop (const struct attribute *attr, struct die_info *die,
     }
 
   return 1;
+}
+
+/* Parse dwarf attribute if it's a block, reference or constant and put the
+   resulting value of the attribute into struct bound_prop.
+   Returns 1 if ATTR could be resolved into PROP, 0 otherwise.  */
+
+static int
+attr_to_dynamic_prop (const struct attribute *attr, struct die_info *die,
+		      struct dwarf2_cu *cu, struct dynamic_prop *prop)
+{
+  return attr_to_dynamic_prop_and_append (attr, die, cu, prop, NULL, 0);
 }
 
 #if 0
