@@ -323,6 +323,11 @@ gdb_test "restart 10" "Not found.*" "no more checkpoint 10"
 #
 
 gdb_exit
+
+unsupported "Following test fails on Allinea GDB"
+return -1
+
+
 gdb_start
 gdb_reinitialize_dir $srcdir/$subdir
 gdb_load ${binfile}
