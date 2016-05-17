@@ -687,7 +687,7 @@ find_subfile (const char *name, const char *dirname)
 	subfile_name = xstrdup (subfile->name);
       simplify_path (subfile_name);
 
-      if (FILENAME_CMP (subfile_name, name) == 0)
+      if (FILENAME_CMP (subfile_name, abs_name) == 0)
 	{
 	  xfree (subfile_name);
 	  xfree (abs_name);
