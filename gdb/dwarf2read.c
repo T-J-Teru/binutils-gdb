@@ -8729,6 +8729,7 @@ dwarf2_compute_name (const char *name,
 	  xfree (intermediate_name);
 	}
     }
+
   return name;
 }
 
@@ -24884,5 +24885,3 @@ Usage: save gdb-index DIRECTORY"),
   dwarf2_loclist_block_index = register_symbol_block_impl (LOC_BLOCK,
 					&dwarf2_block_frame_base_loclist_funcs);
 }
-
-
