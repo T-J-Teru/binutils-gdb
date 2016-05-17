@@ -4548,7 +4548,7 @@ dwarf2_create_include_psymtab (const char *name, struct partial_symtab *pst,
   /* No private part is necessary for include psymtabs.  This property
      can be used to differentiate between such include psymtabs and
      the regular ones.  */
-  subpst->read_symtab_private = NULL; 
+  subpst->read_symtab_private = NULL;
 }
 
 /* Read the Line Number Program data and extract the list of files
