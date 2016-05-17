@@ -664,6 +664,10 @@ find_subfile (const char *name, const char *dirname)
   struct subfile *subfile;
   char *abs_name;
 
+  /* APB: In allinea-7.6.2 there's a cache mechanism introduced in this
+     area to speed up finding subfiles.  This still needs to be added back
+     in to the 7.10.1 version of GDB.  */
+
   if (!IS_ABSOLUTE_PATH (name) && dirname != NULL)
     abs_name = concat (dirname, SLASH_STRING, name, (char *) NULL);
   else
