@@ -2406,12 +2406,6 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile, int block_index,
 	  block_found = block;
 	  return fixup_symbol_section (sym, objfile);
 	}
-
-      /* If 'quick' symbol lookup fails but minimal symbol works then don't search
-	 any more objfiles (weak aliases don't appear in DWARF debug symbols, only
-	 in the minimal symbols, but should trump later objfiles).  */
-      if (lookup_minimal_symbol (name, NULL, objfile).minsym != NULL)
-	break;
     }
 
   if (symbol_lookup_debug > 1)
