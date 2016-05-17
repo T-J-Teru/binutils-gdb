@@ -733,7 +733,6 @@ make_cv_type (int cnst, int voltl,
 {
   struct type_quals type_quals;
 
-  gdb_assert (cnst || voltl);
   type_quals = TYPE_QUALS (type);
   if (cnst)
     TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_CONST;
