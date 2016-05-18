@@ -19582,27 +19582,6 @@ wellformed:
 	  SYMBOL_INLINED (sym) = 1;
 	  list_to_add = cu->list_in_scope;
 	  break;
-	case DW_TAG_imported_declaration:
-	  attr = dwarf2_attr(die, DW_AT_import, cu);
-	  if (attr) 
-	    die = follow_die_ref (die, attr, &cu);
-	  else 
-	    {
-	      complaint (&symfile_complaints, _("cannot find DW_TAG_import in DW_TAG_imported_declaration: '%s'"),
-			name);
-	    }
-	  if (!die) 
-	    {
-	      complaint (&symfile_complaints, _("cannot follow die ref for DW_TAG_imported_declaration '%s'"),
-			name);
-	      /* Rather broken just add name anyway, it is likely to be
-		local to this block if imported.  Observed for
-		non-existant references with Pathscale 3.0, ticket #7903.
-	      */
-	      add_symbol_to_list (sym, cu->list_in_scope);
-	      return sym;
-	    }
-	  /* carry on through with the new die. */
 	case DW_TAG_template_value_param:
 	  if (die->tag == DW_TAG_template_value_param)
 	    suppress_add = 1;
@@ -19838,6 +19817,7 @@ wellformed:
 			   ? &global_symbols : cu->list_in_scope);
 	  }
 	  break;
+	case DW_TAG_imported_declaration:
 	case DW_TAG_namespace:
 	  SYMBOL_ACLASS_INDEX (sym) = LOC_TYPEDEF;
 	  list_to_add = &global_symbols;
