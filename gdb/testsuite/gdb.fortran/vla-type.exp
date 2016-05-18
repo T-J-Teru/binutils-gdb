@@ -41,7 +41,7 @@ gdb_test "print onev%ivla(5, 11, 23)" "\\$\\d+ = 1" "print onev%ivla(5, 11, 23)"
 gdb_test "print onev%ivla(1, 2, 3)" "\\$\\d+ = 123" "print onev%ivla(1, 2, 3)"
 gdb_test "print onev%ivla(3, 2, 1)" "\\$\\d+ = 321" "print onev%ivla(3, 2, 1)"
 gdb_test "ptype onev" \
-  "type = Type one\r\n\\s+real\\\(kind=4\\\) :: ivla\\\(11,22,33\\\)\r\nEnd Type one" \
+  "type = TYPE one\r\n\\s+real\\\(kind=4\\\), ALLOCATABLE :: ivla\\\(11,22,33\\\)\r\nEND TYPE one" \
   "ptype onev"
 
 # Check type with two VLA's inside
@@ -54,7 +54,7 @@ gdb_test "print twov%ivla1(1, 2, 3)" "\\$\\d+ = 123" \
 gdb_test "print twov%ivla1(3, 2, 1)" "\\$\\d+ = 321" \
   "print twov%ivla1(3, 2, 1)"
 gdb_test "ptype twov" \
-  "type = Type two\r\n\\s+real\\\(kind=4\\\) :: ivla1\\\(5,12,99\\\)\r\n\\s+real\\\(kind=4\\\) :: ivla2\\\(9,12\\\)\r\nEnd Type two" \
+  "type = TYPE two\r\n\\s+real\\\(kind=4\\\), ALLOCATABLE :: ivla1\\\(5,12,99\\\)\r\n\\s+real\\\(kind=4\\\), ALLOCATABLE :: ivla2\\\(9,12\\\)\r\nEND TYPE two" \
   "ptype twov"
 
 # Check type with attribute at beginn of type
@@ -65,7 +65,7 @@ gdb_test "print threev%ivla(5)" "\\$\\d+ = 42" "print threev%ivla(5)"
 gdb_test "print threev%ivla(14)" "\\$\\d+ = 24" "print threev%ivla(14)"
 gdb_test "print threev%ivar" "\\$\\d+ = 3.14\\d+?" "print threev%ivar"
 gdb_test "ptype threev" \
-  "type = Type three\r\n\\s+real\\\(kind=4\\\) :: ivar\r\n\\s+real\\\(kind=4\\\) :: ivla\\\(20\\\)\r\nEnd Type three" \
+  "type = TYPE three\r\n\\s+real\\\(kind=4\\\) :: ivar\r\n\\s+real\\\(kind=4\\\), ALLOCATABLE :: ivla\\\(20\\\)\r\nEND TYPE three" \
   "ptype threev"
 
 # Check type with attribute at end of type
@@ -77,7 +77,7 @@ gdb_test "print fourv%ivla(7)" "\\$\\d+ = 7" "print fourv%ivla(7)"
 gdb_test "print fourv%ivla(12)" "no such vector element" "print fourv%ivla(12)"
 gdb_test "print fourv%ivar" "\\$\\d+ = 3.14\\d+?" "print fourv%ivar"
 gdb_test "ptype fourv" \
-  "type = Type four\r\n\\s+real\\\(kind=4\\\) :: ivla\\\(10\\\)\r\n\\s+real\\\(kind=4\\\) :: ivar\r\nEnd Type four" \
+  "type = TYPE four\r\n\\s+real\\\(kind=4\\\), ALLOCATABLE :: ivla\\\(10\\\)\r\n\\s+real\\\(kind=4\\\) :: ivar\r\nEND TYPE four" \
   "ptype fourv"
 
 # Check VLA of types
@@ -98,27 +98,27 @@ gdb_test "print fivev%tone%ivla(1, 2, 3)" "\\$\\d+ = 123" \
 gdb_test "print fivev%tone%ivla(3, 2, 1)" "\\$\\d+ = 321" \
   "print fivev%tone%ivla(3, 2, 1)"
 gdb_test "ptype fivev" \
-  "type = Type five\r\n\\s+Type one\r\n\\s+real\\\(kind=4\\\) :: ivla\\\(10,10,10\\\)\r\n\\s+End Type one :: tone\r\nEnd Type five" \
+  "type = TYPE five\r\n\\s+Type one\r\n\\s+real\\\(kind=4\\\) :: ivla\\\(10,10,10\\\)\r\n\\s+END TYPE one :: tone\r\nEND TYPE five" \
   "ptype fivev"
 
 # Check pointer to type, containing a VLA
 gdb_breakpoint [gdb_get_line_number "onep-associated"]
 gdb_continue_to_breakpoint "onep-associated"
-gdb_test "ptype onev" ".*real\\\(kind=4\\\) :: ivla\\\(11,22,33\\\).*" \
+gdb_test "ptype onev" ".*real\\\(kind=4\\\), ALLOCATABLE :: ivla\\\(11,22,33\\\).*" \
   "ptype onev (again)"
-gdb_test "ptype onep" ".*real\\\(kind=4\\\) :: ivla\\\(11,22,33\\\).*" \
+gdb_test "ptype onep" ".*real\\\(kind=4\\\), ALLOCATABLE :: ivla\\\(11,22,33\\\).*" \
   "ptype onep"
 
 gdb_test "print onev%ivla" "\\$\\d+ = \\( *\\( *\\( *2, *2, *2,\[()2, .\]*\\)" \
   "print onev%ivla"
 gdb_test "print onev" "\\$\\d+ = \\( ivla = *\\( *\\( *\\( *2, *2, *2,\[()2, .\]*\\)" \
   "print onev"
-gdb_test "ptype onep" ".*real\\\(kind=4\\\) :: ivla\\\(11,22,33\\\).*" \
+gdb_test "ptype onep" ".*real\\\(kind=4\\\), ALLOCATABLE :: ivla\\\(11,22,33\\\).*" \
   "print onep"
 
-gdb_test "ptype onev%ivla" "type = real\\\(kind=4\\\) \\\(11,22,33\\\)" \
+gdb_test "ptype onev%ivla" "type = real\\\(kind=4\\\), ALLOCATABLE \\\(11,22,33\\\)" \
   "ptype onev%ivla"
-gdb_test "ptype onep%ivla" "type = real\\\(kind=4\\\) \\\(11,22,33\\\)" \
+gdb_test "ptype onep%ivla" "type = real\\\(kind=4\\\), ALLOCATABLE \\\(11,22,33\\\)" \
   "ptype onep%ivla"
 
 gdb_test "ptype onev%ivla(1,1,1)" "type = real\\\(kind=4\\\)" \
