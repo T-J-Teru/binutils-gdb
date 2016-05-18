@@ -19612,6 +19612,11 @@ wellformed:
 	  SYMBOL_INLINED (sym) = 1;
 	  list_to_add = cu->list_in_scope;
 	  break;
+#if 0
+	  /* APB: The old allinea code added the following block, however,
+	     upstream GDB added an alternative block to handle imported
+	     declarations.   For now I'm selecting the upstream mechanism,
+	     this seems to result in fewer test failures.  */
 	case DW_TAG_imported_declaration:
 	  attr = dwarf2_attr(die, DW_AT_import, cu);
 	  if (attr) 
@@ -19633,6 +19638,7 @@ wellformed:
 	      return sym;
 	    }
 	  /* carry on through with the new die. */
+#endif
 	case DW_TAG_template_value_param:
 	  if (die->tag == DW_TAG_template_value_param)
 	    suppress_add = 1;
@@ -19868,6 +19874,7 @@ wellformed:
 			   ? &global_symbols : cu->list_in_scope);
 	  }
 	  break;
+	case DW_TAG_imported_declaration:
 	case DW_TAG_namespace:
 	  SYMBOL_ACLASS_INDEX (sym) = LOC_TYPEDEF;
 	  list_to_add = &global_symbols;
