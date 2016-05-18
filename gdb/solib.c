@@ -257,7 +257,7 @@ solib_find_1 (char *in_pathname, int *fd, int is_solib)
       return temp_pathname;
     }
 
-  if (sysroot == NULL)
+  if (sysroot != NULL)
     {
       char buf[PATH_MAX + 1];
       ssize_t s;
