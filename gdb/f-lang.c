@@ -524,6 +524,7 @@ f_fixup_value (struct value *v, struct frame_info *frame)
   if (!v)
     return v;
 
+#if 0
   type = value_type (v);
   
   /* Automatically follow pointers.  */
@@ -561,6 +562,7 @@ f_fixup_value (struct value *v, struct frame_info *frame)
 	    }
 	}
     }
+#endif
 
   if (current_language->la_language == language_fortran)
     {

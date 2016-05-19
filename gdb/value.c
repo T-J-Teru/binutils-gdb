@@ -1878,6 +1878,8 @@ void
 set_value_component_location (struct value *component,
 			      const struct value *whole)
 {
+  struct type *type, *whole_type;
+
   gdb_assert (whole->lval != lval_xcallable);
 
   if (whole->lval == lval_internalvar)
@@ -1892,6 +1894,20 @@ set_value_component_location (struct value *component,
 
       if (funcs->copy_closure)
         component->location.computed.closure = funcs->copy_closure (whole);
+    }
+
+  /* If type has a dynamic resolved location property
+     update it's value address.  */
+  type = value_type (component);
+  if (NULL != TYPE_DATA_LOCATION (type)
+      && TYPE_DATA_LOCATION_KIND (type) == PROP_CONST)
+    set_value_address (component, TYPE_DATA_LOCATION_ADDR (type));
+  else
+    {
+      whole_type = value_type (whole);
+      if (NULL != TYPE_DATA_LOCATION (whole_type)
+	  && TYPE_DATA_LOCATION_KIND (whole_type) == PROP_CONST)
+	set_value_address (component, TYPE_DATA_LOCATION_ADDR (whole_type));
     }
 }
 
@@ -3190,6 +3206,16 @@ value_primitive_field (struct value *arg1, int offset,
       v->offset = value_offset (arg1);
       v->embedded_offset = offset + value_embedded_offset (arg1) + boffset;
     }
+  else if (NULL != TYPE_DATA_LOCATION (type))
+    {
+      /* Field is a dynamic data member.  */
+      gdb_assert (0 == offset);
+      /* We expect an already resolved data location.  */
+      gdb_assert (PROP_CONST == TYPE_DATA_LOCATION_KIND (type));
+      /* For dynamic data types defer memory allocation
+         until we actual access the value.  */
+      v = allocate_value_lazy (type);
+    }
   else
     {
       /* Plain old data member */
@@ -3215,6 +3241,7 @@ value_primitive_field (struct value *arg1, int offset,
   VALUE_REGNUM (v) = VALUE_REGNUM (arg1);
   VALUE_FRAME_ID (v) = VALUE_FRAME_ID (arg1);
   return f_fixup_value (v, NULL);
+  //return v;
 }
 
 /* Given a value ARG1 of a struct or union type,
@@ -3673,6 +3700,8 @@ value_from_contents_and_address (struct type *type,
   if (valaddr == NULL)
     v = allocate_value_lazy (resolved_type);
   else
+    v = value_from_contents (resolved_type, valaddr);
+#if 0
     {
       v = allocate_value_lazy (resolved_type);
       v->length = min (TYPE_LENGTH (type), length);
@@ -3680,6 +3709,7 @@ value_from_contents_and_address (struct type *type,
       set_value_lazy (v, 0);
       memcpy (value_contents_raw (v), valaddr, value_length (v));
     }
+#endif
   if (TYPE_DATA_LOCATION (resolved_type_no_typedef) != NULL
       && TYPE_DATA_LOCATION_KIND (resolved_type_no_typedef) == PROP_CONST)
     address = TYPE_DATA_LOCATION_ADDR (resolved_type_no_typedef);
