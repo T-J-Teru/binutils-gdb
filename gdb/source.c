@@ -1327,17 +1327,18 @@ identify_source_line (struct symtab *s, int line, int mid_statement,
   if (s->line_charpos == 0)
     get_filename_and_charpos (s, (char **) NULL);
   fullname = s->fullname;
-  
+
   if (fullname == 0)
     fullname = s->filename;
-  
+
   if (fullname == 0)
     return 0;
-  
+
   if (line > 0 && line <= s->nlines && s->line_charpos != 0)
     charpos = s->line_charpos[line - 1];
-  annotate_source (s->fullname, line, s->line_charpos[line - 1],
-		   mid_statement, get_objfile_arch (SYMTAB_OBJFILE (s)), pc);
+  annotate_source (fullname, line, charpos,
+		   mid_statement,
+		   get_objfile_arch (SYMTAB_OBJFILE (s)), pc);
 
   current_source_line = line;
   current_source_symtab = s;
