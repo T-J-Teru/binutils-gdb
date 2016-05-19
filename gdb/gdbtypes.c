@@ -4674,17 +4674,18 @@ copy_type (const struct type *type)
 {
   struct type *new_type;
 
-  gdb_assert (TYPE_OBJFILE_OWNED (type));
-
   new_type = alloc_type_copy (type);
   TYPE_INSTANCE_FLAGS (new_type) = TYPE_INSTANCE_FLAGS (type);
   TYPE_LENGTH (new_type) = TYPE_LENGTH (type);
   memcpy (TYPE_MAIN_TYPE (new_type), TYPE_MAIN_TYPE (type),
 	  sizeof (struct main_type));
   if (TYPE_DYN_PROP_LIST (type) != NULL)
-    TYPE_DYN_PROP_LIST (new_type)
-      = copy_dynamic_prop_list (&TYPE_OBJFILE (type) -> objfile_obstack,
-				TYPE_DYN_PROP_LIST (type));
+    {
+      gdb_assert (TYPE_OBJFILE_OWNED (type));
+      TYPE_DYN_PROP_LIST (new_type)
+	= copy_dynamic_prop_list (&TYPE_OBJFILE (type) -> objfile_obstack,
+				  TYPE_DYN_PROP_LIST (type));
+    }
 
   return new_type;
 }
