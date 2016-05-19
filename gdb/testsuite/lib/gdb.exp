@@ -114,7 +114,7 @@ if ![info exists env(EXEEXT)] {
 }
 
 set octal "\[0-7\]+"
-set address "$hex\( <\[^>\]+>\)?"
+set address_pattern "$hex\( <\[^>\]+>\)?"
 set symbol "<\[^>\]+>"
 
 set inferior_exited_re "(\\\[Inferior \[0-9\]+ \\(.*\\) exited)"
