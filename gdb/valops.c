@@ -1634,7 +1634,7 @@ value_ind (struct value *arg1)
 	  arg2 = value_at_lazy (enc_type, 
 				(value_as_address (arg1)
 				 - value_pointed_to_offset (arg1)));
-	  tmp = value_at_lazy (tt,
+	  tmp = value_at_lazy (TYPE_TARGET_TYPE (base_type),
 			       value_as_address (arg1));
 	  ptrt = copy_type (base_type);
 	  TYPE_TARGET_TYPE (ptrt) = value_type (tmp);
