@@ -1910,6 +1910,7 @@ is_dynamic_type_internal (struct type *type, int top_level)
 		|| is_dynamic_type_internal (TYPE_TARGET_TYPE (type), 0));
       }
 
+    case TYPE_CODE_STRING:
     case TYPE_CODE_ARRAY:
       {
 	gdb_assert (TYPE_NFIELDS (type) == 1);
@@ -2200,6 +2201,16 @@ resolve_dynamic_type_internal (struct type *type,
 					       &pinfo, top_level);
 	    break;
 	  }
+
+	case TYPE_CODE_STRING:
+	  {
+	    struct type *range_type = TYPE_FIELD_TYPE (type, 0);
+	    struct type *rrt = resolve_dynamic_range (range_type, addr_stack);
+
+	    return
+	      create_string_type (type, TYPE_TARGET_TYPE (type), rrt);
+	  }
+	  break;
 
 	case TYPE_CODE_ARRAY:
 	  resolved_type = resolve_dynamic_array (type, addr_stack);
