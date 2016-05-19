@@ -144,14 +144,12 @@ invalid_bound (LONGEST r)
      bounds from exhausting memory.  */
   return r > 1000L * 1000L* 1000L || r < -100000L;
 }
-#endif
 
 static void
 setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *frame)
 {
   return;
 
-#if 0
   struct type *tmp_type = value_type (v);
 
   if (!value_address (objptr))
@@ -326,8 +324,8 @@ setup_array_bounds (struct value *v, struct value *objptr, struct frame_info *fr
     {
       reset_lengths(tmp_type);
     }
-#endif
 }
+#endif
 
 static int
 is_associated_address (CORE_ADDR addr)
@@ -341,6 +339,7 @@ is_allocated_address (CORE_ADDR addr)
   return addr != 0;
 }
 
+#if 0
 static CORE_ADDR
 get_new_address (struct value *v, struct value *objptr, struct frame_info *frame)
 {
@@ -513,6 +512,7 @@ get_new_address (struct value *v, struct value *objptr, struct frame_info *frame
 
   return r;
 }
+#endif
 
 struct value *
 f_fixup_value (struct value *v, struct frame_info *frame)
