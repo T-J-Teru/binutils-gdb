@@ -461,31 +461,19 @@ whatis_exp (char *exp, int show)
   get_user_print_options (&opts);
   if (opts.objectprint)
     {
-      /* APB: While merging c27cd02778ad3689d666ca1d577caffc5e9eb8c9 there
-	 was a conflict here, but I'm not sure how to resolve it.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
-#if 0
       if ((TYPE_CODE (type) == TYPE_CODE_PTR)
-	  && (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_CLASS))
+	  && (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_STRUCT))
         {
           real_type = value_rtti_indirect_type (val, &full, &top, &using_enc);
         }
       else if ((TYPE_CODE (type) == TYPE_CODE_REF)
-	  && (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_CLASS))
+	  && (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_STRUCT))
 	{
 	  val = coerce_ref (val);
 	  real_type = value_rtti_type (val, &full, &top, &using_enc);
 	  if (real_type)
 	    real_type = lookup_reference_type (real_type);
 	}
-#endif
-      if (((TYPE_CODE (type) == TYPE_CODE_PTR)
-	   || (TYPE_CODE (type) == TYPE_CODE_REF))
-	  && (TYPE_CODE (TYPE_TARGET_TYPE (type)) == TYPE_CODE_STRUCT))
-        real_type = value_rtti_indirect_type (val, &full, &top, &using_enc);
-      else if (TYPE_CODE (type) == TYPE_CODE_STRUCT)
-	real_type = value_rtti_type (val, &full, &top, &using_enc);
     }
 
   printf_filtered ("type = ");
@@ -499,7 +487,7 @@ whatis_exp (char *exp, int show)
       type_print (real_type, "", gdb_stdout, -1);
       if (! full)
         printf_filtered (" (incomplete object)");
-      printf_filtered (" */\n");    
+      printf_filtered (" */\n");
     }
 
   LA_PRINT_TYPE (type, "", gdb_stdout, show, 0, &flags);
