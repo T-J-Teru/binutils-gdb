@@ -2115,7 +2115,9 @@ resolve_dynamic_struct (struct type *type,
 
       pinfo.type = check_typedef (TYPE_FIELD_TYPE (type, i));
       pinfo.valaddr = addr_stack->valaddr;
-      pinfo.addr = addr_stack->addr;
+      pinfo.addr
+	= (addr_stack->addr
+	   + (TYPE_FIELD_BITPOS (resolved_type, i) / TARGET_CHAR_BIT));
       pinfo.next = addr_stack;
 
       TYPE_FIELD_TYPE (resolved_type, i)
