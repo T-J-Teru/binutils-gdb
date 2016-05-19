@@ -437,7 +437,7 @@ annotate_arg_end (void)
 }
 
 void
-annotate_source (char *filename, int line, int character, int mid,
+annotate_source (const char *filename, int line, int character, int mid,
 		 struct gdbarch *gdbarch, CORE_ADDR pc)
 {
   if (annotation_level > 1)
