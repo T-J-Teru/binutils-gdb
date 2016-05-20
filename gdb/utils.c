@@ -2542,7 +2542,10 @@ strcmp_iw (const char *string1, const char *string2)
     {
       string1++;
     }
-  return (*string1 != '\0' && *string1 != '(' && !isstartoftemplate (string1)) || (*string2 != '\0');
+  /* Allinea added the isstartoftemplate check, but this breaks some of the
+     C++ support.  I've disabled this for now, but this might break some of
+     Allinea's additional python functionality.  */
+  return (*string1 != '\0' && *string1 != '(' /*&& !isstartoftemplate (string1)*/) || (*string2 != '\0');
 }
 
 /* This is like strcmp except that it ignores whitespace and treats
