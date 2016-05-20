@@ -1757,6 +1757,7 @@ val_print_array_elements (struct type *type,
 	  len = val
 	    ? min (high_pos - low_pos + 1, value_length (val) / eltlen)
 	    : (high_pos - low_pos + 1);
+      typelen = len;
     }
   else
     {
@@ -1833,7 +1834,7 @@ val_print_array_elements (struct type *type,
   annotate_array_section_end ();
   if (i < typelen)
     {
-      fprintf_filtered (stream, "...");
+      fprintf_filtered (stream, "... typelen = %d, i = %d ...", typelen, i);
     }
 }
 
