@@ -1752,12 +1752,14 @@ val_print_array_elements (struct type *type,
 	 empty arrays.  In that situation, the array length is just zero,
 	 not negative!  */
       if (low_pos > high_pos)
-	len = 0;
+	typelen = len = 0;
       else
+	{
+	  typelen = high_pos - low_pos + 1;
 	  len = val
-	    ? min (high_pos - low_pos + 1, value_length (val) / eltlen)
-	    : (high_pos - low_pos + 1);
-      typelen = len;
+	    ? min (typelen, value_length (val) / eltlen)
+	    : typelen;
+	}
     }
   else
     {
@@ -1834,7 +1836,7 @@ val_print_array_elements (struct type *type,
   annotate_array_section_end ();
   if (i < typelen)
     {
-      fprintf_filtered (stream, "... typelen = %d, i = %d ...", typelen, i);
+      fprintf_filtered (stream, "...");
     }
 }
 
