@@ -1,0 +1,184 @@
+
+if { [skip_fortran_tests] } { return -1 }
+
+standard_testfile .f90
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} {debug f90}] } {
+    return -1
+}
+
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+gdb_load ${binfile}
+
+gdb_breakpoint [gdb_get_line_number "BP_01"]
+gdb_breakpoint [gdb_get_line_number "BP_02"]
+gdb_breakpoint [gdb_get_line_number "BP_03"]
+gdb_breakpoint [gdb_get_line_number "BP_04"]
+gdb_breakpoint [gdb_get_line_number "BP_05"]
+gdb_breakpoint [gdb_get_line_number "BP_06"]
+gdb_breakpoint [gdb_get_line_number "BP_07"]
+gdb_breakpoint [gdb_get_line_number "BP_08"]
+gdb_breakpoint [gdb_get_line_number "BP_09"]
+gdb_breakpoint [gdb_get_line_number "BP_10"]
+
+gdb_start_cmd
+
+gdb_continue_to_breakpoint "BP 1"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-2, -1, -8, -7, -7, -7, -7, -9, -1, -3\\\)"
+gdb_continue_to_breakpoint "BP 2"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-5, -4, -11, -10, -10, -10, -10, -12, -4, -6\\\)"
+gdb_continue_to_breakpoint "BP 3"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-14, -13, -13, -13, -13, -13, -13, -13, -13, -15\\\)"
+gdb_continue_to_breakpoint "BP 4"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(6\\\)"
+gdb_test "print arr" "\\\(-8, -7, -7, -7, -7, -9\\\)"
+gdb_continue_to_breakpoint "BP 5"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(6\\\)"
+gdb_test "print arr" "\\\(-11, -10, -10, -10, -10, -12\\\)"
+gdb_continue_to_breakpoint "BP 6"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-2, -1, -8, -7, -7, -7, -7, -9, -1, -3\\\)"
+gdb_continue_to_breakpoint "BP 7"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-5, -4, -11, -10, -10, -10, -10, -12, -4, -6\\\)"
+gdb_continue_to_breakpoint "BP 8"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-14, -13, -13, -13, -13, -13, -13, -13, -13, -15\\\)"
+gdb_continue_to_breakpoint "BP 9"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(6\\\)"
+gdb_test "print arr" "\\\(-8, -7, -7, -7, -7, -9\\\)"
+gdb_continue_to_breakpoint "BP 10"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(6\\\)"
+gdb_test "print arr" "\\\(-11, -10, -10, -10, -10, -12\\\)"
+gdb_continue_to_breakpoint "BP 11"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-2, -1, -8, -7, -7, -7, -7, -9, -1, -3\\\)"
+gdb_continue_to_breakpoint "BP 12"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-5, -4, -11, -10, -10, -10, -10, -12, -4, -6\\\)"
+gdb_continue_to_breakpoint "BP 13"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10\\\)"
+gdb_test "print arr" "\\\(-14, -13, -13, -13, -13, -13, -13, -13, -13, -15\\\)"
+gdb_continue_to_breakpoint "BP 14"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(6\\\)"
+gdb_test "print arr" "\\\(-8, -7, -7, -7, -7, -9\\\)"
+gdb_continue_to_breakpoint "BP 15"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(6\\\)"
+gdb_test "print arr" "\\\(-11, -10, -10, -10, -10, -12\\\)"
+gdb_continue_to_breakpoint "BP 16"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -2, -1, -1, -1, -1\\\) \\\( -1, -8, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -9, -1\\\) \\\( -1, -1, -1, -1, -3\\\) \\\)"
+gdb_continue_to_breakpoint "BP 17"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -5, -4, -4, -4, -4\\\) \\\( -4, -11, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -12, -4\\\) \\\( -4, -4, -4, -4, -6\\\) \\\)"
+gdb_continue_to_breakpoint "BP 18"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -14, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -15\\\) \\\)"
+gdb_continue_to_breakpoint "BP 19"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(3,5\\\)"
+gdb_test "print arr" "\\\(\\\( -8, -7, -7\\\) \\\( -7, -7, -7\\\) \\\( -7, -7, -7\\\) \\\( -7, -7, -7\\\) \\\( -7, -7, -9\\\) \\\)"
+gdb_continue_to_breakpoint "BP 20"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(3,5\\\)"
+gdb_test "print arr" "\\\(\\\( -11, -10, -10\\\) \\\( -10, -10, -10\\\) \\\( -10, -10, -10\\\) \\\( -10, -10, -10\\\) \\\( -10, -10, -12\\\) \\\)"
+gdb_continue_to_breakpoint "BP 21"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -2, -1, -1, -1, -1\\\) \\\( -1, -8, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -9, -1\\\) \\\( -1, -1, -1, -1, -3\\\) \\\)"
+gdb_continue_to_breakpoint "BP 22"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -5, -4, -4, -4, -4\\\) \\\( -4, -11, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -12, -4\\\) \\\( -4, -4, -4, -4, -6\\\) \\\)"
+gdb_continue_to_breakpoint "BP 23"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -14, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -15\\\) \\\)"
+gdb_continue_to_breakpoint "BP 24"
+
+#echo EXPECTED FAIL in GDB 7.6.2 / gfortran 5.3.1\n
+#echo Exp:integer(kind=4) (3,5)\n
+#whatis arr
+#echo Exp: (( -8, -7, -7) ( -7, -7, -7) ( -7, -7, -7) ( -7, -7, -7) ( -7, -7, -9) )\n
+#print arr
+
+gdb_continue_to_breakpoint "BP 25"
+
+#echo EXPECTED FAIL in GDB 7.6.2 / gfortran 5.3.1\n
+#echo Exp:integer(kind=4) (3,5)\n
+#whatis arr
+#echo Exp: (( -11, -10, -10) ( -10, -10, -10) ( -10, -10, -10) ( -10, -10, -10) ( -10, -10, -12) )\n
+#print arr
+
+gdb_continue_to_breakpoint "BP 26"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10,\\\*\\\)"
+gdb_test "print arr" "\\\(\\\( -2, -1, -1, -1, -1, -1, -8, -7, -7, -1\\\) \\\)"
+gdb_continue_to_breakpoint "BP 27"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10,\\\*\\\)"
+gdb_test "print arr" "\\\(\\\( -5, -4, -4, -4, -4, -4, -11, -10, -10, -4\\\) \\\)"
+gdb_continue_to_breakpoint "BP 28"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10,\\\*\\\)"
+gdb_test "print arr" "\\\(\\\( -14, -13, -13, -13, -13, -13, -13, -13, -13, -13\\\) \\\)"
+gdb_continue_to_breakpoint "BP 29"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10,\\\*\\\)"
+gdb_test "print arr" "\\\(\\\( -8, -7, -7, -7, -7, -7, -7, -7, -7, -7\\\) \\\)"
+gdb_continue_to_breakpoint "BP 30"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(10,\\\*\\\)"
+gdb_test "print arr" "\\\(\\\( -11, -10, -10, -10, -10, -10, -10, -10, -10, -10\\\) \\\)"
+gdb_continue_to_breakpoint "BP 31"
+
+#echo EXPECTED FAIL in GDB 7.6.2 / gfortran 5.3.1\n
+#echo Exp:integer(kind=4) (*) or integer*4 (*) or integer (*)\n
+#whatis arr
+#echo Exp: (-1)\n
+#print arr
+
+gdb_continue_to_breakpoint "BP 32"
+
+#echo EXPECTED FAIL in GDB 7.6.2 / gfortran 5.3.1\n
+#echo Exp:integer(kind=4) (*) or integer*4 (*) or integer (*)\n
+#whatis arr
+#echo Exp: (-4)\n
+#print arr
+
+gdb_continue_to_breakpoint "BP 33"
+
+#echo EXPECTED FAIL in GDB 7.6.2 / gfortran 5.3.1\n
+#echo Exp:integer(kind=4) (*) or integer*4 (*) or integer (*)\n
+#whatis arr
+#echo Exp: (-13)\n
+#print arr
+
+gdb_continue_to_breakpoint "BP 34"
+
+#echo EXPECTED FAIL in GDB 7.6.2 / gfortran 5.3.1\n
+#echo Exp:integer(kind=4) (*) or integer*4 (*) or integer (*)\n
+#whatis arr
+#echo Exp: (-7)\n
+#print arr
+
+gdb_continue_to_breakpoint "BP 35"
+
+#echo EXPECTED FAIL in GDB 7.6.2 / gfortran 5.3.1\n
+#echo Exp:integer(kind=4) (*) or integer*4 (*) or integer (*)\n
+#whatis arr
+#echo Exp: (10)\n
+#print arr
+
+gdb_continue_to_breakpoint "BP 36"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -2, -1, -1, -1, -1\\\) \\\( -1, -8, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -7, -1\\\) \\\( -1, -7, -7, -9, -1\\\) \\\( -1, -1, -1, -1, -3\\\) \\\)"
+gdb_continue_to_breakpoint "BP 37"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -5, -4, -4, -4, -4\\\) \\\( -4, -11, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -10, -4\\\) \\\( -4, -10, -10, -12, -4\\\) \\\( -4, -4, -4, -4, -6\\\) \\\)"
+gdb_continue_to_breakpoint "BP 38"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(5,7\\\)"
+gdb_test "print arr" "\\\(\\\( -14, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -13\\\) \\\( -13, -13, -13, -13, -15\\\) \\\)"
+gdb_continue_to_breakpoint "BP 39"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(3,5\\\)"
+gdb_test "print arr" "\\\(\\\( -8, -7, -7\\\) \\\( -7, -7, -7\\\) \\\( -7, -7, -7\\\) \\\( -7, -7, -7\\\) \\\( -7, -7, -9\\\) \\\)"
+gdb_continue_to_breakpoint "BP 40"
+gdb_test "whatis arr" "integer\\\(kind=4\\\) \\\(3,5\\\)"
+gdb_test "print arr" "\\\(\\\( -11, -10, -10\\\) \\\( -10, -10, -10\\\) \\\( -10, -10, -10\\\) \\\( -10, -10, -10\\\) \\\( -10, -10, -12\\\) \\\)"
+
+
