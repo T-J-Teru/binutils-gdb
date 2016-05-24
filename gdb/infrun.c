@@ -2537,6 +2537,21 @@ resume (enum gdb_signal sig)
     }
 
   do_target_resume (resume_ptid, step, sig);
+
+  /* Although we may only be stepping a single thread the other threads
+     in the process are still 'busy' and we can't, e.g. request
+     registers from them.  */
+  if (inferior_stop && !ptid_is_pid (resume_ptid))
+    {
+      if (debug_infrun)
+	fprintf_unfiltered (gdb_stdlog, "infrun: set_executing pid %d", ptid_get_pid (resume_ptid));
+      resume_ptid = pid_to_ptid (ptid_get_pid (resume_ptid));
+      registers_changed_ptid (resume_ptid);
+      set_executing (resume_ptid, 1);
+      /*set_running (ptid, 1);*/
+      clear_inline_frame_state (resume_ptid);
+    }
+
   discard_cleanups (old_cleanups);
 }
 
