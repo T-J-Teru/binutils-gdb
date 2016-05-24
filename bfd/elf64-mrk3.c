@@ -1149,7 +1149,16 @@ mrk3_elf_relocate_section (bfd *output_bfd,
              We check whether the input BFD is executable to determine whether
              we are relinking a full executable.   */
           if (input_bfd && elf_elfheader (input_bfd)->e_type == ET_EXEC)
-            relocation = BASEADDR (sec);
+            {
+              /* SPC 24-May-2016: We use the symbol value as this includes
+                 offsets when relocations are to a localized symbol rather than
+                 to a section, as the offset is not the relocation and would
+                 otherwise be discarded. Addtionally I don't see why the
+                 address space bits would ever differ between the two.  */
+              BFD_ASSERT(MRK3_GET_MEMORY_SPACE_ID(BASEADDR (sec)) ==
+                         MRK3_GET_MEMORY_SPACE_ID(sym->st_value));
+              relocation = sym->st_value;
+            }
           else
             relocation = BASEADDR (sec) +
                          MRK3_GET_ADDRESS_LOCATION(sym->st_value);
