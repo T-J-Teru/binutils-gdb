@@ -1170,16 +1170,30 @@ create_array_type_with_stride (struct type *result_type,
 	TYPE_LENGTH (result_type) =
 	  TYPE_LENGTH (element_type) * (high_bound - low_bound + 1);
     }
-  else
+  else if (!TYPE_LOW_BOUND_UNDEFINED (range_type)
+	   && TYPE_HIGH_BOUND_UNDEFINED (range_type))
     {
-      /* This type is dynamic and its length needs to be computed
-         on demand.  In the meantime, avoid leaving the TYPE_LENGTH
-         undefined by setting it to zero.  Although we are not expected
-         to trust TYPE_LENGTH in this case, setting the size to zero
-         allows us to avoid allocating objects of random sizes in case
-         we accidently do.  */
-      TYPE_LENGTH (result_type) = 0;
+      LONGEST low_bound, high_bound;
+
+      gdb_assert (TYPE_CODE (range_type) == TYPE_CODE_RANGE);
+      if (get_discrete_bounds (range_type, &low_bound, &high_bound) < 0)
+	low_bound = high_bound = 0;
+      high_bound = low_bound + 1;
+      CHECK_TYPEDEF (element_type);
+      /* Be careful when setting the array length.  Ada arrays can be
+	 empty arrays with the high_bound being smaller than the low_bound.
+	 In such cases, the array length should be zero.  */
+      if (high_bound < low_bound)
+	TYPE_LENGTH (result_type) = 0;
+      else if (bit_stride > 0)
+	TYPE_LENGTH (result_type) =
+	  (bit_stride * (high_bound - low_bound + 1) + 7) / 8;
+      else
+	TYPE_LENGTH (result_type) =
+	  TYPE_LENGTH (element_type) * (high_bound - low_bound + 1);
     }
+  else
+    TYPE_LENGTH (result_type) = 0;
 
   TYPE_NFIELDS (result_type) = 1;
   TYPE_FIELDS (result_type) =
