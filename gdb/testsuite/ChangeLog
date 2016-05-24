@@ -1,3 +1,8 @@
+2016-05-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/whatis.c: Extend the test case.
+	* gdb.base/whatis.exp: Add additional tests.
+
 2016-05-23  Tom Tromey  <tom@tromey.com>
 
 	PR python/19438, PR python/18393:
