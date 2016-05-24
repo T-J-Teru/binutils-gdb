@@ -1,5 +1,11 @@
 2016-05-24  Edward Jones  <ed.jones@embecosm.com>
 
+	* elf64-mrk3.c (mrk3_elf_relax_delete_bytes): Selectively disable an
+	assertion which check if a symbol ended in the middle of a sequence
+	of deleted bytes.
+
+2016-05-24  Edward Jones  <ed.jones@embecosm.com>
+
 	* elf64-mrk3.c: Use BFD_FMT macro in calls to relax_log
 
 2016-05-24  Simon Cook  <simon.cook@embecosm.com>

@@ -1670,10 +1670,18 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
               if (isym->st_value <= addr
                   && isym->st_value + isym->st_size > addr)
                 {
-                  /* If this assert fires then we have a symbol that ends
-                     part way through an instruction.  Does that make
-                     sense?  */
-                  BFD_ASSERT (isym->st_value + isym->st_size >= addr + count);
+		  if (prop_record != NULL &&
+		      prop_record->type != RECORD_ALIGN &&
+		      prop_record->type != RECORD_ALIGN_AND_FILL)
+		    {
+		      /* If this assertion fires, then we have a symbol which
+		         ends part way through the deleted bytes. If we are
+		         deleting bytes for alignment, then this is fine, but
+		         if we are relaxing an instruction then this means we
+		         have a symbol which ends midway through an
+		         instruction. */
+		      BFD_ASSERT (isym->st_value + isym->st_size >= addr + count);
+		    }
                   isym->st_size -= count;
                 }
             }
@@ -1699,11 +1707,19 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
           if (sym_hash->root.u.def.value <= addr
               && (sym_hash->root.u.def.value + sym_hash->size > addr))
             {
-              /* If this assert fires then we have a symbol that ends
-                 part way through an instruction.  Does that make
-                 sense?  */
-              BFD_ASSERT (sym_hash->root.u.def.value + sym_hash->size
-                          >= addr + count);
+	      if (prop_record != NULL &&
+	          prop_record->type != RECORD_ALIGN &&
+	          prop_record->type != RECORD_ALIGN_AND_FILL)
+		{
+		  /* If this assertion fires, then we have a symbol which
+		     ends part way through the deleted bytes. If we are
+		     deleting bytes for alignment, then this is fine, but
+		     if we are relaxing an instruction then this means we
+		     have a symbol which ends midway through an
+		     instruction. */
+		  BFD_ASSERT (sym_hash->root.u.def.value + sym_hash->size
+                              >= addr + count);
+		}
               sym_hash->size -= count;
             }
         }
