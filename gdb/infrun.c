@@ -2524,28 +2524,6 @@ resume (enum gdb_signal sig)
 			  paddress (resume_gdbarch, actual_pc));
       read_memory (actual_pc, buf, sizeof (buf));
       displaced_step_dump_bytes (gdb_stdlog, buf, sizeof (buf));
-
-      /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 this
-	 block appeared, not sure what to do with it.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
-#if 0
-      target_resume (resume_ptid, step, sig);
-
-      /* Although we may only be stepping a single thread the other threads
-         in the process are still 'busy' and we can't, e.g. request
-         registers from them.  */
-      if (inferior_stop && !ptid_is_pid (resume_ptid))
-        {
-	  if (debug_infrun)
-	    fprintf_unfiltered (gdb_stdlog, "infrun: set_executing pid %d", ptid_get_pid (resume_ptid));
-	  resume_ptid = pid_to_ptid (ptid_get_pid (resume_ptid));
-	  registers_changed_ptid (resume_ptid);
-	  set_executing (resume_ptid, 1);
-	  /*set_running (ptid, 1);*/
-	  clear_inline_frame_state (resume_ptid);
-        }
-#endif
     }
 
   if (tp->control.may_range_step)
@@ -2559,6 +2537,27 @@ resume (enum gdb_signal sig)
     }
 
   do_target_resume (resume_ptid, step, sig);
+
+  /* Although we may only be stepping a single thread the other threads
+     in the process are still 'busy' and we can't, e.g. request
+     registers from them.  */
+  if (inferior_stop && !ptid_is_pid (resume_ptid))
+    {
+      /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 this
+	 block appeared, not sure what to do with it.  */
+      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
+      abort ();
+#if 0
+      if (debug_infrun)
+	fprintf_unfiltered (gdb_stdlog, "infrun: set_executing pid %d", ptid_get_pid (resume_ptid));
+      resume_ptid = pid_to_ptid (ptid_get_pid (resume_ptid));
+      registers_changed_ptid (resume_ptid);
+      set_executing (resume_ptid, 1);
+      /*set_running (ptid, 1);*/
+      clear_inline_frame_state (resume_ptid);
+#endif
+    }
+
   discard_cleanups (old_cleanups);
 }
 
@@ -5878,61 +5877,11 @@ process_event_stop_test (struct execution_control_state *ecs)
 
       /* If UPC collective mode, determine if we need to be silent. */
       if (is_collective_stepping ())
-	{
-
-	  /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
-	     resolved.  */
-	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-	  abort ();
-
-#if 0
-	  ecs->event_thread->collective_step = 0;
-	  if (!thread_check_collective_step ())
-	    stop_print_frame = 0;
-	  /* Did we hit a collective breakpoint? */
-	  /*   If yes thread will not step any more, make sure
-	     BP is announced */
-	  if (is_collective_breakpoints ())
-	    {
-	      /* See if there is a breakpoint at the current PC.  */
-	      struct bpstats *bs =
-		bpstat_stop_status (get_regcache_aspace
-				    (get_current_regcache ()), stop_pc,
-				    ecs->ptid, &ecs->ws);
-	      if (bs)
-		{
-		  const struct bp_location *bl = bs->bp_location_at;
-		  struct breakpoint *b = bl ? bl->owner : NULL;
-		  if (b && (b->thread == -1))
-		    {
-		      stop_print_frame = 0;
-		      /* Check all threads for collective bp missmatch */
-		      if (thread_check_collective_bp (b->number))
-			{
-			  /* Collective BPs missmatch - at least one other thread is 
-			     waiting on some other collective breakpoint */
-			  printf_unfiltered
-			    ("WARNING: Collective breakpoint missmatch: thread %d\n",
-			     upc_thread_num (ecs->event_thread));
-			  stop_print_frame = 1;
-			}
-		      /* Label thread as on collective wait */
-		      b->threads_hit++;
-		      ecs->event_thread->collective_bp_num = b->number;
-		      /* Make sure collective stepping is canceled for this thread */
-		      ecs->event_thread->collective_step = 0;
-		      /* Is this the last thread to reach the BP */
-		      if (b->threads_hit >= b->max_threads_hit)
-			{
-			  stop_print_frame = 1;
-			  b->threads_hit = 0;
-                          thread_clear_collective_bp (CLEAR_ALL_COLLECTIVE_BPS);
-			}
-		    }
-		}
-	    }
-#endif
-	}
+	/* Allinea: During the update from 7.6.2 to 7.10.1 there was a
+	   merged conflict in the collective stepping code in this area.
+	   As Allinea do not currently support collective stepping mode,
+	   this merge conflict has been replaced with this error.  */
+	error (_("collective stepping mode unsupported"));
       return;
     }
 
@@ -6753,14 +6702,6 @@ keep_going (struct execution_control_state *ecs)
 		   || thread_still_needs_step_over (ecs->event_thread));
       remove_wps = (ecs->event_thread->stepping_over_watchpoint
 		    && !target_have_steppable_watchpoint);
-
-      if (inferior_stop)
-	{
-	  /* APB: I suspect that this case is not properly handled as a
-	     result of incorrect merge.  */
-	  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-	  abort ();
-	}
 
       /* We can't use displaced stepping if we need to step past a
 	 watchpoint.  The instruction copied to the scratch pad would

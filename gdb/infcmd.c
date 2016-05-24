@@ -394,12 +394,8 @@ strip_bg_char (const char *args, int *bg_char_p)
 	return NULL;
     }
 
-  if (upcmode)
-    {
-      /* APB-TODO: Conflict while merging 1a122e0.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
-    }
+  /* In upcmode we used to force background execution on, but with the
+     update from 7.6.2 to 7.10.1 this was dropped.  */
 
   *bg_char_p = 0;
   return xstrdup (args);
