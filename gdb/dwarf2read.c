@@ -15719,7 +15719,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 {
   struct type *base_type, *orig_base_type;
   struct type *range_type;
-  struct attribute *attr, *ada_attr;
+  struct attribute *attr, *high_attr;
   struct dynamic_prop low, high, stride, soffset, lstride;
   struct attribute *upper_bound_attr;
   int is_upc_threads_scaled = 0;
@@ -15798,7 +15798,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 	}
     }
   /* Backup current value of attr for later use.  */
-  ada_attr = attr;
+  high_attr = attr;
 
   attr = dwarf2_attr (die, DW_AT_stride, cu);
   if (attr)
@@ -15888,7 +15888,7 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
     TYPE_RANGE_DATA (range_type)->flag_upper_bound_is_count = 1;
 
   /* Ada expects an empty array on no boundary attributes.  */
-  if (ada_attr == NULL && cu->language != language_ada)
+  if (high_attr == NULL && cu->language != language_ada)
     TYPE_HIGH_BOUND_KIND (range_type) = PROP_UNDEFINED;
 
   name = dwarf2_name (die, cu);
