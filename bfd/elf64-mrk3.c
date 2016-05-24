@@ -1481,7 +1481,8 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
      the contents here.  */
   if (toaddr - addr - count > 0)
     {
-      relax_log ("Moving %d bytes from %#lx to %#lx\n",
+      relax_log ("Moving %d bytes from %#" BFD_VMA_FMT "x to "
+                 "%#" BFD_VMA_FMT "x\n",
                  ((size_t) (toaddr - addr - count)),
                  (addr+count), addr);
       memmove (contents + addr, contents + addr + count,
@@ -1514,7 +1515,7 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
           prop_record->data.align.preceding_deleted += count;
           break;
         };
-      relax_log ("Filling %d bytes at %#lx with %#x\n",
+      relax_log ("Filling %d bytes at %#" BFD_VMA_FMT "x with %#x\n",
                  count, (toaddr - count), fill);
       BFD_ASSERT (fill_length > 0 && fill_length <= 2);
       if (fill_length == 1)
@@ -1537,7 +1538,8 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
      already cached, so there's no need to call pin_internal_relocs.  */
   internal_relocs = retrieve_internal_relocs (abfd, sec, TRUE);
   irelend = internal_relocs + sec->reloc_count;
-  relax_log ("Checking relocations between %#lx and %#lx\n",
+  relax_log ("Checking relocations between %#" BFD_VMA_FMT "x and "
+             "%#" BFD_VMA_FMT "x\n",
              addr, toaddr);
   relax_log_nesting (+2);
   for (irel = internal_relocs; irel < irelend; irel++)
@@ -1545,7 +1547,8 @@ mrk3_elf_relax_delete_bytes (bfd *abfd,
       /* Get the new reloc address.  */
       if (irel->r_offset >= addr && irel->r_offset < toaddr)
         {
-          relax_log ("Moving relocation from %#lx to %#lx\n",
+          relax_log ("Moving relocation from %#" BFD_VMA_FMT "x to "
+                     "%#" BFD_VMA_FMT "x\n",
                      irel->r_offset, (irel->r_offset - count));
           irel->r_offset -= count;
         }
@@ -2054,8 +2057,8 @@ mrk3_relax_handle_relocation (bfd *abfd, asection *sec,
         if ((reloc_addr & ~0x7fff) != (dest_addr & ~0x7fff))
           return TRUE;
 
-        relax_log ("Relocation at: %#08lx\n", reloc_addr);
-        relax_log ("Destination at %#08lx\n", dest_addr);
+        relax_log ("Relocation at: %#08" BFD_VMA_FMT "x\n", reloc_addr);
+        relax_log ("Destination at %#08" BFD_VMA_FMT "x\n", dest_addr);
 
         /* Convert to a 14-bit CALL instruction.  */
         contents = retrieve_contents (abfd, sec, link_info->keep_memory);
@@ -2306,8 +2309,8 @@ mrk3_check_handle_relocation (bfd *abfd, asection *sec,
            RELOC_ADDR to DEST_ADDR (both of which are byte
            addresses) will fit we check that everything other than
            the lower 15-bits match.  */
-        relax_log ("Relocation at: %#08lx\n", reloc_addr);
-        relax_log ("Destination at %#08lx\n", dest_addr);
+        relax_log ("Relocation at: %#08" BFD_VMA_FMT "x\n", reloc_addr);
+        relax_log ("Destination at %#08" BFD_VMA_FMT "x\n", dest_addr);
         if ((reloc_addr & ~0x7fff) == (dest_addr & ~0x7fff))
           {
             relax_log ("Does not need reverting.\n");
@@ -2462,7 +2465,8 @@ mrk3_elf_relax_section_worker (bfd *abfd,
 
       BFD_ASSERT (ELF64_R_TYPE (irel->r_info) < (unsigned int) R_MRK3_max);
       howto = &elf_mrk3_howto_table[ELF64_R_TYPE (irel->r_info)];
-      relax_log ("Relocation #%d type: %s at section Offset %#08lx\n",
+      relax_log ("Relocation #%d type: %s at section Offset "
+                 "%#08" BFD_VMA_FMT "x\n",
                  reloc_num, howto->name, irel->r_offset);
 
       /* Read this BFD's local symbols if we haven't done so already.  */
@@ -3225,7 +3229,7 @@ mrk3_check_align_records (bfd *abfd,
                     record = &relax_info->records.items [i];
                     bytes_to_align
                       = (unsigned long) (record->data.align.bytes);
-                    relax_log ("Offset %#llx, has %d bytes space, "
+                    relax_log ("Offset %#" BFD_VMA_FMT "x, has %d bytes space, "
                                "and wants %d byte alignment.\n",
                                record->offset,
                                record->data.align.preceding_deleted,
@@ -3244,7 +3248,7 @@ mrk3_check_align_records (bfd *abfd,
 
                         relax_log_nesting (+2);
                         relax_log ("We can delete %d bytes before the "
-                                   "'.align' at offset %#08lx\n",
+                                   "'.align' at offset %#08" BFD_VMA_FMT "x\n",
                                    count, record->offset);
 
                         /* We can delete COUNT bytes and this alignment
