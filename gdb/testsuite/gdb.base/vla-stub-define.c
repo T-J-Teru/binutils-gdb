@@ -19,3 +19,10 @@ struct dynamic_struct
 {
   int dynamic_field[0];
 } use_dynamic_struct;
+
+void
+setup_dynamic_struct (struct dynamic_struct **p)
+{
+  *p = &use_dynamic_struct;
+}
+

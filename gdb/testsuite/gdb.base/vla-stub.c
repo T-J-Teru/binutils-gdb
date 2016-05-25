@@ -24,6 +24,8 @@ struct static_struct
 };
 typedef struct static_struct static_struct_t;
 
+extern void setup_dynamic_struct (struct dynamic_struct **);
+
 struct local_struct
 {
   static_struct_t here;
@@ -33,5 +35,6 @@ struct local_struct
 int
 main (void)
 {
-  return 0;
+  setup_dynamic_struct (&local_struct.ptr);
+  return 0; /* Break Here */
 }

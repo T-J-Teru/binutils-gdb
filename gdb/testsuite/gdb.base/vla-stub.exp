@@ -19,7 +19,23 @@ if { [prepare_for_testing "failed to prepare for vla-stub.exp" \
     return -1
 }
 
-gdb_test "p *local_struct.ptr" { = {dynamic_field = 0x0}}
-
+# This should complain about being unable to access memory at address
+# 0.  Take a look at the contents of local_struct.ptr, it's NULL, so
+# how can we possibly be displaying the contents of the struct pointer
+# too?
+gdb_test "p *local_struct.ptr" "Cannot access memory at address 0x0" \
+    "Check dynamic structure before program starts"
 gdb_test "whatis local_struct.here" "type = static_struct_t"
+gdb_test "whatis local_struct.ptr" "type = dynamic_struct_t \\*"
 gdb_test "whatis *local_struct.ptr" "type = dynamic_struct_t"
+
+runto_main
+
+gdb_test "p *local_struct.ptr" "Cannot access memory at address 0x0" \
+    "Check dynamic structure before pointer is setup"
+
+gdb_breakpoint [gdb_get_line_number "Break Here"]
+gdb_continue_to_breakpoint "run to breakpoint"
+
+gdb_test "p *local_struct.ptr" "= {dynamic_field = $hex}" \
+    "Check dynamic structure once pointer is setup"
