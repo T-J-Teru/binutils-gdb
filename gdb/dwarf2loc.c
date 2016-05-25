@@ -2197,11 +2197,11 @@ const struct dwarf_expr_context_funcs dwarf_expr_ctx_funcs =
    computed.  */
 
 static struct value *
-dwarf2_evaluate_loc_desc_full (struct type *type, struct frame_info *frame,
-			       const gdb_byte *data, size_t size,
-			       struct dwarf2_per_cu_data *per_cu,
-			       LONGEST byte_offset,
-			       CORE_ADDR push_obj)
+dwarf2_evaluate_loc_desc_full_1 (struct type *type, struct frame_info *frame,
+				 const gdb_byte *data, size_t size,
+				 struct dwarf2_per_cu_data *per_cu,
+				 LONGEST byte_offset,
+				 CORE_ADDR push_obj)
 {
   struct value *retval;
   struct dwarf_expr_baton baton;
@@ -2415,6 +2415,36 @@ dwarf2_evaluate_loc_desc_full (struct type *type, struct frame_info *frame,
   do_cleanups (old_chain);
 
   return retval;
+}
+
+static struct value *
+dwarf2_evaluate_loc_desc_full (struct type *type, struct frame_info *frame,
+			       const gdb_byte *data, size_t size,
+			       struct dwarf2_per_cu_data *per_cu,
+			       LONGEST byte_offset,
+			       CORE_ADDR push_obj)
+{
+  struct frame_info *old_frame;
+  struct value *answer;
+
+  answer = NULL;
+  old_frame = deprecated_safe_get_selected_frame ();
+  TRY
+    {
+      select_frame (frame);
+      answer = dwarf2_evaluate_loc_desc_full_1 (type, frame, data, size,
+						per_cu, byte_offset,
+						push_obj);
+    }
+  CATCH (e, RETURN_MASK_ERROR)
+    {
+      select_frame (old_frame);
+      throw_exception (e);
+    }
+  END_CATCH
+
+  select_frame (old_frame);
+  return answer;
 }
 
 /* The exported interface to dwarf2_evaluate_loc_desc_full; it always
