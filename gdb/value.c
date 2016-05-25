@@ -1898,16 +1898,19 @@ set_value_component_location (struct value *component,
 
   /* If type has a dynamic resolved location property
      update it's value address.  */
-  type = value_type (component);
-  if (NULL != TYPE_DATA_LOCATION (type)
-      && TYPE_DATA_LOCATION_KIND (type) == PROP_CONST)
-    set_value_address (component, TYPE_DATA_LOCATION_ADDR (type));
-  else
+  if (VALUE_LVAL (component) != lval_internalvar_component)
     {
-      whole_type = value_type (whole);
-      if (NULL != TYPE_DATA_LOCATION (whole_type)
-	  && TYPE_DATA_LOCATION_KIND (whole_type) == PROP_CONST)
-	set_value_address (component, TYPE_DATA_LOCATION_ADDR (whole_type));
+      type = value_type (component);
+      if (NULL != TYPE_DATA_LOCATION (type)
+	  && TYPE_DATA_LOCATION_KIND (type) == PROP_CONST)
+	set_value_address (component, TYPE_DATA_LOCATION_ADDR (type));
+      else
+	{
+	  whole_type = value_type (whole);
+	  if (NULL != TYPE_DATA_LOCATION (whole_type)
+	      && TYPE_DATA_LOCATION_KIND (whole_type) == PROP_CONST)
+	    set_value_address (component, TYPE_DATA_LOCATION_ADDR (whole_type));
+	}
     }
 }
 

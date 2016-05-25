@@ -1,0 +1,24 @@
+load_lib "fortran.exp"
+
+standard_testfile "internalvar.f90"
+
+if { [skip_fortran_tests] } { continue }
+
+if { [prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} \
+     {debug f90 quiet}] } {
+    return -1
+}
+
+if ![runto_main] {
+    untested "could not run to main"
+    return -1
+}
+
+gdb_breakpoint [gdb_get_line_number "Breakpoint 1"]
+gdb_continue_to_breakpoint "Breakpoint 1"
+
+gdb_test_no_output "set \$internal_var = arrayvar"
+gdb_test "print \$internal_var" \
+    " = \\(3, 3, 3, 3, 3, 3, 3, 3, 3, 3\\)" \
+    "Print internal variable"
+
