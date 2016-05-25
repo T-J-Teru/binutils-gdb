@@ -1928,7 +1928,7 @@ evaluate_subexp_standard (struct type *expect_type,
 	      field_quals = merge_type_quals (field_quals, arg1_quals);
 	      type = make_qual_variant_type (field_quals, type, NULL);
 	    }
-	  arg3 = value_zero (type, not_lval);
+	  arg3 = value_zero (type, VALUE_LVAL (arg3));
 	}
       return arg3;
 
@@ -1998,7 +1998,7 @@ evaluate_subexp_standard (struct type *expect_type,
 	      field_quals = merge_type_quals(field_quals, arg1_quals);
 	      type = make_qual_variant_type (field_quals, type, NULL);
 	    }
-	  arg3 = value_zero (type, not_lval);
+	  arg3 = value_zero (type, VALUE_LVAL (arg3));
 	}
       return arg3;
 
