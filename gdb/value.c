@@ -3669,17 +3669,22 @@ value_from_contents_and_address_unresolved (struct type *type,
 {
   struct value *v;
 
-  /* The merge of 4e8c023a07149e6a5ca784f45c4b0cd74c252e3e changed
-     value_from_contents_and_address to add a length field.  I added a
-     length field to this function too, but it's not used, I need to figure
-     that out.  */
-  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-  abort ();
-
   if (valaddr == NULL)
     v = allocate_value_lazy (type);
   else
-    v = value_from_contents (type, valaddr);
+    {
+#if 0
+      /* APB: This is the upstream version.  */
+      v = value_from_contents (type, valaddr);
+#endif
+
+      /* This is Allinea's version, with length override.  */
+      v = allocate_value_lazy (type);
+      v->length = min (TYPE_LENGTH (type), length);
+      v->contents = (gdb_byte *) xzalloc (v->length);
+      set_value_lazy (v, 0);
+      memcpy (value_contents_raw (v), valaddr, value_length (v));
+    }
   set_value_address (v, address);
   VALUE_LVAL (v) = lval_memory;
   return v;
