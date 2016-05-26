@@ -2543,11 +2543,6 @@ resume (enum gdb_signal sig)
      registers from them.  */
   if (inferior_stop && !ptid_is_pid (resume_ptid))
     {
-      /* APB: While merging 5fec5648958f0a7698db7bd7603781c119897458 this
-	 block appeared, not sure what to do with it.  */
-      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-      abort ();
-#if 0
       if (debug_infrun)
 	fprintf_unfiltered (gdb_stdlog, "infrun: set_executing pid %d", ptid_get_pid (resume_ptid));
       resume_ptid = pid_to_ptid (ptid_get_pid (resume_ptid));
@@ -2555,7 +2550,6 @@ resume (enum gdb_signal sig)
       set_executing (resume_ptid, 1);
       /*set_running (ptid, 1);*/
       clear_inline_frame_state (resume_ptid);
-#endif
     }
 
   discard_cleanups (old_cleanups);
