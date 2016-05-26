@@ -18432,7 +18432,6 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
   char *pst_filename;
   char *copied_name = NULL;
   int file_is_pst;
-  struct cleanup *old_chain = make_cleanup (null_cleanup, NULL);
 
   if (fe.dir_index && lh->include_dirs != NULL)
     dir_name = lh->include_dirs[fe.dir_index - 1];
@@ -18493,7 +18492,6 @@ psymtab_include_file_name (const struct line_header *lh, int file_index,
   simplify_path (pst_filename);
   file_is_pst = FILENAME_CMP (include_name_to_compare, pst_filename) == 0;
 
-  do_cleanups (old_chain);
   if (file_is_pst)
     return NULL;
   return include_name;
