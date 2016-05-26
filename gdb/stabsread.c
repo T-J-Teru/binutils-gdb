@@ -4032,16 +4032,6 @@ read_array_type (char **pp, struct type *type,
       }
     element_type = read_type (pp, objfile);
 
-/*   if (adjustable)		 */
-/*     { */
-/*       lower = 0; */
-/*       upper = -1; */
-/*     } */
-
-  /* APB-TODO: Merge conflict in 33fe302.  Note sure what to do.  */
-    fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-    abort ();
-
   range_type =
     create_static_range_type ((struct type *) NULL, index_type, lower, upper);
   /* XLF emits arrays with minor dimension first, but GDB expects major dimension first.  */
