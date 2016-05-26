@@ -2563,13 +2563,8 @@ dwarf2_evaluate_property (const struct dynamic_prop *prop,
 	data = dwarf2_find_location_expression (&baton->loclist, &size, pc);
 	if (data != NULL)
 	  {
-	    /* APB-TODO: Conflict while merging, this needs further attention.  */
-	    fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-	    abort ();
-#if 0
 	    val = dwarf2_evaluate_loc_desc (baton->referenced_type, frame, data,
-					    size, baton->loclist.per_cu);
-#endif
+					    size, baton->loclist.per_cu, 0);
 	    if (!value_optimized_out (val))
 	      {
 		*value = value_as_address (val);

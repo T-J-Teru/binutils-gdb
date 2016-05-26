@@ -14665,30 +14665,6 @@ read_upc_shared_qual_type (struct die_info *die, struct dwarf2_cu *cu)
   struct type_quals type_quals = null_type_quals;
   struct attribute *attr;
 
-  /* APB-TODO: Conflict while merging 1a122e0, not sure how these should be
-     resolved.  */
-  fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-  abort ();
-
-#if 0
-  struct type *base_type, *cv_type;
-
-  base_type = die_type (die, cu);
-
-  /* The die_type call above may have already set the type for this DIE.  */
-  cv_type = get_die_type (die, cu);
-  if (cv_type)
-    return cv_type;
-
-  /* In case the const qualifier is applied to an array type, the element type
-     is so qualified, not the array type (section 6.7.3 of C99).  */
-  if (TYPE_CODE (base_type) == TYPE_CODE_ARRAY)
-    return add_array_cv_type (die, cu, base_type, 1, 0);
-
-  cv_type = make_cv_type (1, TYPE_VOLATILE (base_type), base_type, 0);
-  return set_die_type (die, cv_type, cu);
-#endif
-
   TYPE_QUAL_FLAGS (type_quals) = TYPE_INSTANCE_FLAG_UPC_SHARED;
 
   /* The DWARF2 encoding is as follows:
@@ -19400,17 +19376,11 @@ new_symbol_full (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	 
 	  if (!cu->decoded_lines)
 	    {
-	      /* APB: This failed to merge correctly.  */
-	      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-	      abort ();
-
-#if 0
 	      /* dwarf_decode_lines changes current_subfile but we don't want that.  */
 	      old_subfile = current_subfile;
 	      cu->decoded_lines = 1;
-	      dwarf_decode_lines (cu->line_header, cu->comp_dir, cu, NULL, 1);
+	      dwarf_decode_lines (cu->line_header, cu->comp_dir, cu, NULL, 0, 1);
 	      current_subfile = old_subfile;
-#endif
 	    }
 
 	  attr = dwarf2_attr (die,
@@ -19941,15 +19911,9 @@ wellformed:
 		    }
 		}
 
-	      /* APB: This failed to merge correctly.  */
-	      fprintf (stderr, "APB: %s:%d\n", __FILE__, __LINE__);
-	      abort ();
-
-#if 0
 	      block
 		= finish_block (0, &local_symbols, bupc_context->old_blocks, bupc_context->start_addr,
-				bupc_highpc, objfile);
-#endif
+				bupc_highpc);
 	      if (pblock != context_stack->old_blocks)
 	        {
 		  /* The new block will be a child of pblock->block.  */
