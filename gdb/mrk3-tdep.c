@@ -1788,9 +1788,21 @@ mrk3_breakpoint_from_pc (struct gdbarch *gdbarch,
 static CORE_ADDR
 mrk3_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 {
+  CORE_ADDR start_prologue_pc;
   CORE_ADDR after_prologue_pc;
   struct mrk3_addr_info memspace = mrk3_get_memspace ();
 
+  /* Try using SAL first if we have symbolic information available. */
+  if (find_pc_partial_function (pc, NULL, &start_prologue_pc, NULL))
+    {
+      CORE_ADDR prologue_end = skip_prologue_using_sal ( gdbarch, pc );
+      if (prologue_end != 0)
+        {
+           return (prologue_end > pc) ? prologue_end : pc;
+        }
+    }
+
+  /* Otherwise look for the standard prologue code.  */
   if (mrk3_debug_frame ())
     fprintf_unfiltered (gdb_stdlog,
 			_("MRK3 skip_prologue: pc %s (initially).\n"),
