@@ -1,3 +1,8 @@
+2016-05-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* Makefile.in: Correct dependency on gdb_ptrace.h to
+	nat/gdb_ptrace.h for tags generation.
+
 2016-05-25  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_analyze_frame_type): Fix the encoding of RET -
