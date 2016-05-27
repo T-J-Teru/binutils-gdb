@@ -191,6 +191,8 @@ bits. */
 #include "safe-ctype.h"
 #include "completer.h"
 #include "readline/tilde.h"
+#include "remote.h"
+#include "target-descriptions.h"
 #include "user-regs.h"
 #include "stack.h"
 #include "dwarf2-frame.h"
@@ -2915,6 +2917,9 @@ static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   struct gdbarch *gdbarch;
+  struct tdesc_arch_data *tdesc_data = NULL;
+  const struct target_desc *tdesc = info.target_desc;
+  /* struct gdbarch_tdep *tdep; */
   int i;
 
   /* This is a horrible temporary kludge to deal with the problem that
@@ -2928,8 +2933,39 @@ mrk3_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   if (arches)
     return arches->gdbarch;
 
+  /* Record specific architecture details in our target dependences for
+     convenience. */
+  /* tdep = XCNEW (struct gdbarch_tdep); */
+
+  fprintf_unfiltered (gdb_stdlog, "Got here 1\n" );
+  if (tdesc_has_registers (tdesc))
+    {
+      const struct tdesc_feature *feature;
+      int valid_p;
+
+      fprintf_unfiltered (gdb_stdlog, "Got here 2\n" );
+      feature = tdesc_find_feature (tdesc, "com.embecosm.mrk3.regs");
+      if (feature == NULL)
+	return NULL;
+
+      fprintf_unfiltered (gdb_stdlog, "Got here 3\n" );
+      tdesc_data = tdesc_data_alloc ();
+
+      valid_p = 1;
+
+      if (tdesc_unnumbered_register (feature, "pc"))
+	{
+	  int regno = tdesc_register_number (feature, "pc");
+	  fprintf_unfiltered (gdb_stdlog, "PC reg is %d\n", regno );
+	}
+      fprintf_unfiltered (gdb_stdlog, "Got here 4\n" );
+    }
+  else
+    return NULL;
+
   /* Create a new architecture from the information provided. */
   gdbarch = gdbarch_alloc (&info, NULL);
+
   set_gdbarch_address_class_type_flags (gdbarch,
 					mrk3_address_class_type_flags);
   set_gdbarch_address_class_type_flags_to_name (gdbarch,
@@ -3620,4 +3656,6 @@ silence the warnings and have GDB just get on with it."),
 			   &set_mrk3_frame_type_list,
 			   &show_mrk3_frame_type_list);
 
+  /* Tell remote stub that we support XML target description.  */
+  register_remote_support_xml ("mrk3");
 }

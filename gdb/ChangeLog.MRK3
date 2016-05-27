@@ -1,3 +1,10 @@
+2016-05-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c: Include headers for remote target descriptions.
+	(mrk3_gdbarch_init): Add hooks for target descriptors.
+	* target-descriptions.c (tdesc_register_number): Created.
+	* target-descriptions.h: Added declaration of tdesc_register_number.
+
 2016-03-17  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* remote.c (PACKET enum): Remove PACKET_vKill.

@@ -907,6 +907,19 @@ tdesc_register_size (const struct tdesc_feature *feature,
   return reg->bitsize;
 }
 
+/* Search FEATURE for a register named NAME, and return its number.  The
+   register must exist.  */
+
+int
+tdesc_register_number (const struct tdesc_feature *feature,
+		       const char *name)
+{
+  struct tdesc_reg *reg = tdesc_find_register_early (feature, name);
+
+  gdb_assert (reg != NULL);
+  return reg->target_regnum;
+}
+
 /* Look up a register by its GDB internal register number.  */
 
 static struct tdesc_arch_reg *

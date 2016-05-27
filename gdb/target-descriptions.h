@@ -132,6 +132,12 @@ int tdesc_unnumbered_register (const struct tdesc_feature *feature,
 int tdesc_register_size (const struct tdesc_feature *feature,
 			 const char *name);
 
+/* Search FEATURE for a register named NAME, and return its register number.
+   The register must exist. */
+
+int tdesc_register_number (const struct tdesc_feature *feature,
+			   const char *name);
+
 /* Search FEATURE for a register with any of the names from NAMES
    (NULL-terminated).  Record REGNO and the register in DATA; when
    tdesc_use_registers is called, REGNO will be assigned to the
