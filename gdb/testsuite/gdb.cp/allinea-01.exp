@@ -1,0 +1,36 @@
+if { [skip_cplus_tests] } { continue }
+
+load_lib "cp-support.exp"
+
+standard_testfile .cc
+
+if {[prepare_for_testing $testfile.exp $testfile $srcfile {debug c++}]} {
+    return -1
+}
+
+if ![runto_main] then {
+    perror "couldn't run to breakpoint main"
+    continue
+}
+
+gdb_breakpoint [gdb_get_line_number "BP-1"]
+gdb_breakpoint [gdb_get_line_number "BP-2"]
+gdb_breakpoint [gdb_get_line_number "BP-3"]
+
+gdb_continue_to_breakpoint "BP-1"
+gdb_test "print (MyClass *) this" " = \\(MyClass \\*\\) $hex" \
+    "Print this pointer (with cast) in constructor"
+gdb_test "print this" " = \\(MyClass \\* const\\) $hex" \
+    "Print this pointer in constructor"
+
+gdb_continue_to_breakpoint "BP-2"
+gdb_test "print (MyClass *) &myClass" " = \\(MyClass \\*\\) $hex" \
+    "Print address of object (with cast) in main"
+gdb_test "print &myClass" " = \\(MyClass \\*\\) $hex" \
+    "Print address of object in main"
+
+gdb_continue_to_breakpoint "BP-3"
+gdb_test "print (MyClass *) this" " = \\(MyClass \\*\\) $hex" \
+    "Print this pointer (with cast) in method"
+gdb_test "print this" " = \\(MyClass \\* const\\) $hex" \
+    "Print this pointer in method"

@@ -2193,19 +2193,14 @@ lookup_symbol_aux (const char *name, const struct block *block,
 	    error (_("Internal error: `%s' is not an aggregate"),
 		   langdef->la_name_of_this);
 
-	  /* #18135: Ignore constructors in implicit search for members / methods.  */
-	  if (!TYPE_NAME (t)
-	      || strcmp (TYPE_NAME (t), name) != 0)
+	  if (check_field (t, name, is_a_field_of_this))
 	    {
-	      if (check_field (t, name, is_a_field_of_this))
+	      if (symbol_lookup_debug)
 		{
-		  if (symbol_lookup_debug)
-		    {
-		      fprintf_unfiltered (gdb_stdlog,
-					  "lookup_symbol_aux (...) = NULL\n");
-		    }
-		  return NULL;
+		  fprintf_unfiltered (gdb_stdlog,
+				      "lookup_symbol_aux (...) = NULL\n");
 		}
+	      return NULL;
 	    }
 	}
     }
