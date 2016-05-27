@@ -1627,18 +1627,20 @@ value_ind (struct value *arg1)
 			      find_function_addr (arg1, NULL));
       else
 	{
-	  struct value *tmp;
+	  struct value *tmp, *mark;
 	  struct type *ptrt;
 
 	  /* Retrieve the enclosing object pointed to.  */
 	  arg2 = value_at_lazy (enc_type, 
 				(value_as_address (arg1)
 				 - value_pointed_to_offset (arg1)));
+	  mark = value_mark ();
 	  tmp = value_at_lazy (TYPE_TARGET_TYPE (base_type),
 			       value_as_address (arg1));
 	  ptrt = copy_type (base_type);
 	  TYPE_TARGET_TYPE (ptrt) = value_type (tmp);
 	  base_type = ptrt;
+	  value_free_to_mark (mark);
 	}
 
       enc_type = value_type (arg2);
