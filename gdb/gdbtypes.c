@@ -734,6 +734,9 @@ make_cv_type (int cnst, int voltl,
   struct type_quals type_quals;
 
   type_quals = TYPE_QUALS (type);
+  TYPE_QUAL_FLAGS (type_quals) &= ~(TYPE_INSTANCE_FLAG_CONST
+				     | TYPE_INSTANCE_FLAG_VOLATILE);
+
   if (cnst)
     TYPE_QUAL_FLAGS (type_quals) |= TYPE_INSTANCE_FLAG_CONST;
   if (voltl)
