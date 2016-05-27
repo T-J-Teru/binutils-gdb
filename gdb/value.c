@@ -1399,7 +1399,6 @@ void
 value_contents_copy (struct value *dst, int dst_offset,
 		     struct value *src, int src_offset, int length)
 {
-  require_not_optimized_out (src);
   require_allocated (src);
   require_associated (src);
 
@@ -3139,7 +3138,6 @@ value_primitive_field (struct value *arg1, int offset,
 
   /* If the containing type is qualified, then propagate
      the qualifiers to the selected field value.  */
-
   field_quals = TYPE_QUALS (type);
   if (!TYPE_QUALS_EQ (field_quals, arg_quals))
     {
