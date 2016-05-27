@@ -947,7 +947,7 @@ common/gdb_wait.h common/gdb_assert.h solib.h ppc-tdep.h cp-support.h glibc-tdep
 interps.h auxv.h gdbcmd.h tramp-frame.h mipsnbsd-tdep.h	\
 amd64-linux-tdep.h linespec.h location.h i387-tdep.h mn10300-tdep.h \
 sparc64-tdep.h ppcobsd-tdep.h \
-coff-pe-read.h parser-defs.h gdb_ptrace.h mips-linux-tdep.h \
+coff-pe-read.h parser-defs.h nat/gdb_ptrace.h mips-linux-tdep.h \
 m68k-tdep.h spu-tdep.h jv-lang.h environ.h amd64-tdep.h \
 doublest.h regset.h hppa-tdep.h ppc-linux-tdep.h ppc64-tdep.h \
 rs6000-tdep.h rs6000-aix-tdep.h \

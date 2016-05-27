@@ -1963,7 +1963,7 @@ mrk3_analyze_frame_type (struct gdbarch *gdbarch,
 			     sizeof (insn16));
       if (insn16 == /* ERET */ 0x1bc7)
 	frame_type = frame_type_ecall;
-      else if (insn16 == /* RET */ 0xc41b)
+      else if (insn16 == /* RET */ 0x1bc4)
 	frame_type = frame_type_call;
     }
 

@@ -1,9 +1,19 @@
 2016-05-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
+	* Makefile.in: Correct dependency on gdb_ptrace.h to
+	nat/gdb_ptrace.h for tags generation.
+
+2016-05-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
 	* mrk3-tdep.c: Include headers for remote target descriptions.
 	(mrk3_gdbarch_init): Add hooks for target descriptors.
 	* target-descriptions.c (tdesc_register_number): Created.
 	* target-descriptions.h: Added declaration of tdesc_register_number.
+
+2016-05-25  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_analyze_frame_type): Fix the encoding of RET -
+	bytes were swapped.
 
 2016-03-17  Andrew Burgess  <andrew.burgess@embecosm.com>
 

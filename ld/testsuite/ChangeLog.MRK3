@@ -1,3 +1,8 @@
+2015-03-12  Simon Cook  <simon.cook@embecosm.com>
+
+	* ld-mrk3/localize-relink.d: New file.
+	* ld-mrk3/localize-relink.s: New file.
+
 2015-03-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* ld-mrk3/ld-relax.exp: New file.
