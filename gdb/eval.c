@@ -2381,12 +2381,13 @@ evaluate_subexp_standard (struct type *expect_type,
 	      lowerbound = low_bounds[i - 1];
 	    if (range_types[i - 1] != HIGH_BOUND_DEFAULT && range_types[i - 1] != BOTH_BOUND_DEFAULT)
 	      upperbound = high_bounds[i - 1];
-	    /* Note: for a single dimension array the index is allowed to be
-	       out of bounds in case we got the dimensions wrong.
-	       For multi-dimensional arrays it doesn't make sense to allow this
+
+	    /* Note: for a single dimension array the index is allowed to
+	       be out of bounds in case we got the dimensions wrong.  For
+	       multi-dimensional arrays it doesn't make sense to allow this
 	       since the offset will be wrong anyway.  */
-	    if (i != nargs
-	        && (lowerbound < oldlowerbound || 
+	    if (nargs > 1
+	        && (lowerbound < oldlowerbound ||
 		    lowerbound > oldupperbound ||
 		    upperbound < oldlowerbound ||
 		    upperbound > oldupperbound))
