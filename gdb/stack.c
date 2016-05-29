@@ -1958,6 +1958,8 @@ backtrace_command (char *arg, int from_tty)
 	{
 	  if (arglen > 0)
 	    {
+	      char *tmp;
+
 	      arg = xmalloc (arglen + 1);
 	      make_cleanup (xfree, arg);
 	      arg[0] = 0;
@@ -1971,6 +1973,23 @@ backtrace_command (char *arg, int from_tty)
 		      strcat (arg, " ");
 		    }
 		}
+
+	      /* Remove trailing whitespace.  */
+	      for (tmp = arg; *tmp; ++tmp)
+		;
+
+	      while (tmp > arg && *tmp == '\0')
+		{
+		  --tmp;
+		  if (isspace (*tmp))
+		    *tmp = '\0';
+		}
+
+	      /* Convert empty string to NULL.  */
+	      for (tmp = arg; isspace (*tmp); ++tmp)
+		;
+	      if (*tmp == '\0')
+		arg = NULL;
 	    }
 	  else
 	    arg = NULL;
