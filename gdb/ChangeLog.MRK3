@@ -1,3 +1,46 @@
+2016-05-30  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	Restructure GDB for MRK3 to use XML target descriptions with
+	dynamic register numbering. This will make it very flexible to
+	support Prime MRK3 and other variants.
+
+	* mrk3-tdep.c: Include reggroups.h, delete #defines of reg
+	numbers.
+	(struct pseudo_info): Created.
+	(typedef pseudo_info_p): Created as base for VEC.
+	(struct reg_todo): Created.
+	(struct gdbarch_tdep): Created.
+	(mrk3_register_aliases): Deleted.
+	(mrk3_pseudo_register_name): Renamed from mrk3_register_name.
+	(mrk3_pseudo_register_type): Renamed from mrk3_register_type.
+	(mrk3_pseudo_register_reggroup_p): Created.
+	(mrk3_pseudo_register_read): Rewritten to use XML target
+	description info.
+	(mrk3_pseudo_register_write): Likewise.
+	(mrk3_dwarf2_reg_to_regnum): Likewise.
+	(mrk3_read_pc): Likewise.
+	(mrk3_write_pc): Likewise.
+	(mrk3_analyze_prologue): Likewise.
+	(mrk3_frame_cache): Likewise.
+	(mrk3_frame_prev_register): Likewise.
+	(mrk3_unwind_pc): Likewise.
+	(mrk3_unwind_sp): Likewise.
+	(mrk3_convert_register_p): Likewise.
+	(mrk3_extract_return_value): Likewise.
+	(mrk3_store_return_value): Likewise.
+	(mrk3_return_value): Likewise.
+	(mrk3_dwarf2_frame_init_reg): Likewise.
+	(mrk3_setup_todo_ptr): Created.
+	(mrk3_add_pseudo): Created.
+	(mrk3_gdbarch_init): Rewritten to use XML target descriptions and
+	as a consequence completely dynamic register numbering.
+	(initialize_tdesc_mrk3_default): Created.
+	(_initialize_mrk3_tdep): Initialize default target description.
+	* target-descriptions.c (tdesc_register_number): Deleted -
+	i.e. revert to upstream.
+	* target-descriptions.h: Remove tdesc_register_number -
+	i.e. revert to upstream.
+
 2016-05-27  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* Makefile.in: Correct dependency on gdb_ptrace.h to
@@ -649,7 +692,7 @@
 
 2014-06-03  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
-	* gdb/mrk3-tdep.c (mrk3_pseudo_register_read): Add missing "else".
+	* mrk3-tdep.c (mrk3_pseudo_register_read): Add missing "else".
 	(mrk3_pseudo_register_write): Likewise.
 
 2014-05-28  Jeremy Bennett  <jeremy.bennett@embecosm.com>
