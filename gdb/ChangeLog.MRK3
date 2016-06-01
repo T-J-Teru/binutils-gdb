@@ -1,3 +1,8 @@
+2016-06-01  Simon Cook  <simon.cook@embecosm.com>
+
+       * gdb/mrk3-tdep.c (mrk3_dwarf2_frame_init_reg): Mark SP as saved via
+       DW_CFA_val_offset.
+
 2016-05-30  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	Restructure GDB for MRK3 to use XML target descriptions with

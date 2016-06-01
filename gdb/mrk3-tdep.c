@@ -3198,7 +3198,7 @@ mrk3_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
     }
 
   if (sp_regnum == regnum)
-    reg->how = DWARF2_FRAME_REG_CFA;
+    reg->how = DWARF2_FRAME_REG_SAVED_VAL_OFFSET;
 }
 
 
