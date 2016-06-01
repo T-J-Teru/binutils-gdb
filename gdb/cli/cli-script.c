@@ -356,13 +356,14 @@ execute_cmd_post_hook (struct cmd_list_element *c)
 /* Execute the command in CMD.  */
 static void
 do_restore_user_call_depth (void * call_depth)
-{
+{	
   int *depth = call_depth;
 
   (*depth)--;
   if ((*depth) == 0)
     in_user_command = 0;
 }
+
 
 void
 execute_user_command (struct cmd_list_element *c, char *args)

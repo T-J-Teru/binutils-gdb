@@ -1330,13 +1330,6 @@ execute_stack_op (struct dwarf_expr_context *ctx,
 	  }
 	  goto no_push;
 
-	case DW_OP_push_object_address:
-	  if (!ctx->funcs->get_object_address)
-	    error (_("DW_OP_push_object_address: no get_object_address function."));
-	  result = ctx->funcs->get_object_address(ctx->baton);
-	  result_val = value_from_ulongest (address_type, result);
-	  break;
-
 	case DW_OP_GNU_uninit:
 	  if (op_ptr != op_end)
 	    error (_("DWARF-2 expression error: DW_OP_GNU_uninit must always "
@@ -1482,6 +1475,14 @@ execute_stack_op (struct dwarf_expr_context *ctx,
 		= value_from_contents (type,
 				       value_contents_all (result_val));
 	  }
+	  break;
+
+	case DW_OP_push_object_address:
+	  /* Return the address of the object we are currently observing.  */
+	  if (ctx->funcs->get_object_address == NULL)
+	    error (_("DW_OP_push_object_address: no get_object_address function."));
+	  result = (ctx->funcs->get_object_address) (ctx->baton);
+	  result_val = value_from_ulongest (address_type, result);
 	  break;
 
 	default:

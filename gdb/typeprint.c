@@ -487,7 +487,7 @@ whatis_exp (char *exp, int show)
       type_print (real_type, "", gdb_stdout, -1);
       if (! full)
         printf_filtered (" (incomplete object)");
-      printf_filtered (" */\n");
+      printf_filtered (" */\n");    
     }
 
   LA_PRINT_TYPE (type, "", gdb_stdout, show, 0, &flags);

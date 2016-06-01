@@ -1097,7 +1097,7 @@ gnuv3_get_typeid (struct value *value)
   if (TYPE_CODE (type) == TYPE_CODE_REF)
     type = check_typedef (TYPE_TARGET_TYPE (type));
 
-  /* IgnoRe top-level cv-qualifiers.  */
+  /* Ignore top-level cv-qualifiers.  */
   type = make_cv_type (0, 0, type, NULL);
   gdbarch = get_type_arch (type);
 
