@@ -1323,7 +1323,7 @@ extern void allocate_gnat_aux_type (struct type *);
 #define TYPE_STRIDE_VALUE(range_type) TYPE_RANGE_DATA(range_type)->stride_value
 #define TYPE_SOFFSET_BATON(range_type) TYPE_RANGE_DATA(range_type)->soffset_baton
 #define TYPE_SOFFSET_VALUE(range_type) TYPE_RANGE_DATA(range_type)->soffset_value
-//#define TYPE_BOUND_BATON_FUNCTION(range_type) TYPE_RANGE_DATA(range_type)->baton_function
+#define TYPE_BOUND_BATON_FUNCTION(range_type) TYPE_RANGE_DATA(range_type)->baton_function
 
 #define TYPE_LOW_BOUND_UNDEFINED(range_type) \
   (TYPE_RANGE_DATA(range_type)->low.kind == PROP_UNDEFINED)

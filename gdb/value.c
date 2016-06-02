@@ -3671,12 +3671,6 @@ value_from_contents_and_address_unresolved (struct type *type,
     v = allocate_value_lazy (type);
   else
     {
-#if 0
-      /* APB: This is the upstream version.  */
-      v = value_from_contents (type, valaddr);
-#endif
-
-      /* This is Allinea's version, with length override.  */
       v = allocate_value_lazy (type);
       v->length = min (TYPE_LENGTH (type), length);
       v->contents = (gdb_byte *) xzalloc (v->length);
@@ -3707,12 +3701,6 @@ value_from_contents_and_address (struct type *type,
     v = allocate_value_lazy (resolved_type);
   else
     {
-#if 0
-      /* APB: This is the upstream version.  */
-      v = value_from_contents (resolved_type, valaddr);
-#endif
-
-      /* This is Allinea's version, with length override.  */
       v = allocate_value_lazy (resolved_type);
       v->length = min (TYPE_LENGTH (resolved_type), length);
       v->contents = (gdb_byte *) xzalloc (v->length);

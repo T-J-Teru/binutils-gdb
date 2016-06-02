@@ -117,24 +117,6 @@ f_printstr (struct ui_file *stream, struct type *type, const gdb_byte *string,
 		    force_ellipses, '\'', 0, options);
 }
 
-#if 0
-static void
-reset_lengths(struct type* type) 
-{
-  struct type* range_type;
-  int high_bound; 
-  int low_bound; 
-  if (TYPE_CODE(TYPE_TARGET_TYPE(type)) == TYPE_CODE_ARRAY || 
-     TYPE_CODE(TYPE_TARGET_TYPE(type)) == TYPE_CODE_STRING) 
-    reset_lengths(TYPE_TARGET_TYPE(type));
-  range_type = TYPE_FIELD_TYPE(type, 0);
-  high_bound = TYPE_HIGH_BOUND (range_type);
-  low_bound = TYPE_LOW_BOUND (range_type);
-  TYPE_LENGTH(type) = 
-    TYPE_LENGTH (TYPE_TARGET_TYPE(type)) * (high_bound - low_bound + 1);
-}
-#endif
-
 
 static int
 is_associated_address (CORE_ADDR addr)
@@ -152,10 +134,6 @@ is_allocated_address (CORE_ADDR addr)
 struct value *
 f_fixup_value (struct value *v, struct frame_info *frame)
 {
-  struct type *type;
-  CORE_ADDR address;
-  struct value *objptr = v;
- 
   if (!v)
     return v;
 

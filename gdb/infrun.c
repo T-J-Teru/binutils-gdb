@@ -4779,7 +4779,6 @@ handle_signal_stop (struct execution_control_state *ecs)
       return;
     }
 
-
   /* Start of code added by kdavis@cray.com  */
   find_pc_partial_function (stop_pc, &ecs->stop_func_name,
 			    &ecs->stop_func_start, &ecs->stop_func_end);

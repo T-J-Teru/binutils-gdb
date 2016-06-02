@@ -19580,33 +19580,6 @@ wellformed:
 	  SYMBOL_INLINED (sym) = 1;
 	  list_to_add = cu->list_in_scope;
 	  break;
-#if 0
-	  /* APB: The old allinea code added the following block, however,
-	     upstream GDB added an alternative block to handle imported
-	     declarations.   For now I'm selecting the upstream mechanism,
-	     this seems to result in fewer test failures.  */
-	case DW_TAG_imported_declaration:
-	  attr = dwarf2_attr(die, DW_AT_import, cu);
-	  if (attr) 
-	    die = follow_die_ref (die, attr, &cu);
-	  else 
-	    {
-	      complaint (&symfile_complaints, _("cannot find DW_TAG_import in DW_TAG_imported_declaration: '%s'"),
-			name);
-	    }
-	  if (!die) 
-	    {
-	      complaint (&symfile_complaints, _("cannot follow die ref for DW_TAG_imported_declaration '%s'"),
-			name);
-	      /* Rather broken just add name anyway, it is likely to be
-		local to this block if imported.  Observed for
-		non-existant references with Pathscale 3.0, ticket #7903.
-	      */
-	      add_symbol_to_list (sym, cu->list_in_scope);
-	      return sym;
-	    }
-	  /* carry on through with the new die. */
-#endif
 	case DW_TAG_template_value_param:
 	  if (die->tag == DW_TAG_template_value_param)
 	    suppress_add = 1;
