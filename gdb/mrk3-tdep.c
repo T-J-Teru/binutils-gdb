@@ -3277,6 +3277,8 @@ mrk3_gdbarch_init (struct gdbarch_info info,
 {
   static int r7_baton;		/* Static baton for R7 register alias */
   static int fp_baton;		/* Static baton for FP register alias */
+  static int *uc_batons;	/* Vector of batons for upper case versions of
+				   all registers */
 
   struct gdbarch *gdbarch;
   struct tdesc_arch_data *tdesc_data = NULL;
@@ -3555,16 +3557,8 @@ mrk3_gdbarch_init (struct gdbarch_info info,
 
   set_gdbarch_adjust_pc_for_disassembly (gdbarch, mrk3_adjust_pc_for_disassembly);
 
-  /* Alternative register names. Could do this via a table, but harder with
-     the dynamic number from target description XML.  Just do them by hand
-     here, since there are only a few. */
-
-  r7_baton = (-1 == tdep->sp_regnum)
-    ? tdep->pseudo_base_regnum + tdep->psoff_sp_regnum
-    : tdep->sp_regnum;
-  user_reg_add (gdbarch, "R7", value_of_mrk3_user_reg, &r7_baton);
-  fp_baton = tdep->fp_regnum;
-  user_reg_add (gdbarch, "FP", value_of_mrk3_user_reg, &fp_baton);
+  /* All registers are in the XML file as lower case. Allow their upper case
+     equivalents. */
 
   /* Now use the target description registers. This may adjust number of
      registers, which will be the base of the pseudo-regs. */
@@ -3575,6 +3569,38 @@ mrk3_gdbarch_init (struct gdbarch_info info,
   set_tdesc_pseudo_register_type (gdbarch, mrk3_pseudo_register_type);
   set_tdesc_pseudo_register_reggroup_p (gdbarch,
 					mrk3_pseudo_register_reggroup_p);
+
+  /* Alternative register names. Could do this via a table, but harder with
+     the dynamic number from target description XML.  Just do them by hand
+     here, since there are only a few. */
+
+  r7_baton = (-1 == tdep->sp_regnum)
+    ? tdep->pseudo_base_regnum + tdep->psoff_sp_regnum : tdep->sp_regnum;
+  user_reg_add (gdbarch, "r7", value_of_mrk3_user_reg, &r7_baton);
+  fp_baton = tdep->fp_regnum;
+  user_reg_add (gdbarch, "fp", value_of_mrk3_user_reg, &fp_baton);
+
+  /* Provide upper case of all real registers, pseudo registers, r7 and fp. */
+
+  uc_batons = XCNEWVEC (int, tdep->pseudo_base_regnum + tdep->num_pseudo_regs + 2);
+
+  for (i = 0; i < tdep->pseudo_base_regnum; i++)
+    {
+      int j;
+      char *ucname = xstrdup (gdbarch_register_name (gdbarch, i));
+
+      for (j = 0; ucname[j] != '\0'; j++)
+	ucname[j] = TOUPPER (ucname[j]);
+
+      uc_batons[i] = i;
+      user_reg_add (gdbarch, ucname, value_of_mrk3_user_reg, &(uc_batons[i]));
+    }
+
+  uc_batons[i] = (-1 == tdep->sp_regnum)
+    ? tdep->pseudo_base_regnum + tdep->psoff_sp_regnum : tdep->sp_regnum;
+  user_reg_add (gdbarch, "R7", value_of_mrk3_user_reg, &(uc_batons[i]));
+  uc_batons[i + 1] = tdep->fp_regnum;
+  user_reg_add (gdbarch, "FP", value_of_mrk3_user_reg, &(uc_batons[i + 1]));
 
   /* We can only set the SP once we know the pseudo regnum base */
 
