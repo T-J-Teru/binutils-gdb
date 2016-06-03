@@ -1155,9 +1155,11 @@ mrk3_elf_relocate_section (bfd *output_bfd,
                  to a section, as the offset is not the relocation and would
                  otherwise be discarded. We use the Space ID from the section
                  as relinking may redefine some SFRs.  */
-              relocation = MRK3_BUILD_ADDRESS(
-                             MRK3_GET_MEMORY_SPACE_ID(BASEADDR (sec)),
-                             MRK3_GET_ADDRESS_LOCATION(sym->st_value));
+              /* ERJ 02-Jun-2016: For now, just use the symbol value directly
+                 without the section Space ID, as it seems that the
+                 flag bits do not always correspond to the flag bits of the
+                 symbol. */
+              relocation = sym->st_value;
             }
           else
             relocation = BASEADDR (sec) +
