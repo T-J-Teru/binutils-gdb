@@ -3271,7 +3271,7 @@ static struct target_desc *tdesc_mrk3_default;
 /*! Initialize the gdbarch structure for the mrk3. */
 
 
-static struct gdbarch *  __attribute__ ((optimize ("-O0") ))
+static struct gdbarch *
 mrk3_gdbarch_init (struct gdbarch_info info,
 		   struct gdbarch_list *arches)
 {
