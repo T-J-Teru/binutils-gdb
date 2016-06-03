@@ -113,6 +113,10 @@ struct buildsym_compunit
      which iterate over previously added files.  */
   struct subfile *subfiles;
 
+  /* Hash table of all subfiles found in SUBFILES, used to speed up subfile
+     lookup.  */
+  htab_t subfiles_map;
+
   /* The subfile of the main source file.  */
   struct subfile *main_subfile;
 
@@ -191,6 +195,69 @@ static int compare_line_numbers (const void *ln1p, const void *ln2p);
 static void record_pending_block (struct objfile *objfile,
 				  struct block *block,
 				  struct pending_block *opblock);
+
+static void
+htab_free_ptr (PTR p)
+{
+  free(p);
+}
+
+static PTR
+htab_alloc_ptr (size_t t1, size_t t2)
+{
+  return xcalloc (t1, t2);
+}
+
+static char *
+subfile_fullname (const struct subfile *subfile)
+{
+  const char *dirname = subfile->buildsym_compunit->comp_dir;
+
+  if (!IS_ABSOLUTE_PATH (subfile->name) && dirname != NULL)
+    return concat (dirname,
+		   SLASH_STRING,
+		   subfile->name,
+		   (char *) NULL);
+  else
+    return xstrdup (subfile->name);
+}
+
+static int
+htab_eq_subfile(const void* s, const void* t)
+{
+  int ret;
+
+  /* emulate strcmp() return values extended to handle null values, so
+	 s, t both null => s == t => return 0
+	 s null, t not null => s < t => return -1
+	 s not null, t null => s > t => return +1 */
+  if (!s)
+      ret = t ? -1 : 0;
+  else if (!t)
+    ret = 1;
+  else
+    {
+      char *fullname1 = subfile_fullname ((const struct subfile *) s);
+      char *fullname2 = subfile_fullname ((const struct subfile *) t);
+      simplify_path (fullname1);
+      simplify_path (fullname2);
+      ret = !strcmp (fullname1, fullname2);
+      xfree (fullname1);
+      xfree (fullname2);
+    }
+  return ret;
+}
+
+static hashval_t
+htab_hash_subfile (const void *p)
+{
+  char *fullname = subfile_fullname ((const struct subfile *) p);
+  hashval_t ret;
+  simplify_path (fullname);
+  ret = htab_hash_string (fullname);
+  xfree (fullname);
+  return ret;
+}
 
 /* Initial sizes of data structures.  These are realloc'd larger if
    needed, and realloc'd down to the size actually used, when
@@ -661,43 +728,16 @@ make_blockvector (void)
 struct subfile *
 find_subfile (const char *name, const char *dirname)
 {
+  struct subfile dummy = {0};
   struct subfile *subfile;
-  char *abs_name;
 
-  /* APB: In allinea-7.6.2 there's a cache mechanism introduced in this
-     area to speed up finding subfiles.  This still needs to be added back
-     in to the 7.10.1 version of GDB.  */
+  if (buildsym_compunit->subfiles_map == NULL)
+    return NULL;
 
-  if (!IS_ABSOLUTE_PATH (name) && dirname != NULL)
-    abs_name = concat (dirname, SLASH_STRING, name, (char *) NULL);
-  else
-    abs_name = xstrdup (name);
-  simplify_path (abs_name);
-
-  for (subfile = buildsym_compunit->subfiles; subfile; subfile = subfile->next)
-    {
-      char *subfile_name;
-
-      /* If NAME is an absolute path, and this subfile is not, then
-	 attempt to create an absolute path to compare.  */
-      if (!IS_ABSOLUTE_PATH (subfile->name) && dirname != NULL)
-	subfile_name = concat (dirname, SLASH_STRING,
-			       subfile->name, (char *) NULL);
-      else
-	subfile_name = xstrdup (subfile->name);
-      simplify_path (subfile_name);
-
-      if (FILENAME_CMP (subfile_name, abs_name) == 0)
-	{
-	  xfree (subfile_name);
-	  xfree (abs_name);
-	  return subfile;
-	}
-
-      xfree (subfile_name);
-    }
-
-  xfree (abs_name);
+  dummy.name = (char*) name;
+  dummy.buildsym_compunit = buildsym_compunit;
+  if ((subfile = htab_find (buildsym_compunit->subfiles_map, &dummy)))
+    return subfile;
   return NULL;
 }
 
@@ -710,10 +750,16 @@ start_subfile (const char *name)
 {
   const char *subfile_dirname;
   struct subfile *subfile;
+  PTR *htab_slot;
 
   gdb_assert (buildsym_compunit != NULL);
 
   subfile_dirname = buildsym_compunit->comp_dir;
+
+  if (buildsym_compunit->subfiles_map == NULL)
+    buildsym_compunit->subfiles_map =
+      htab_create_alloc (100, htab_hash_subfile, htab_eq_subfile,
+			 NULL, htab_alloc_ptr, htab_free_ptr);
 
   /* See if this subfile is already registered.  */
   if ((subfile = find_subfile (name, subfile_dirname)) != NULL)
@@ -780,6 +826,10 @@ start_subfile (const char *name)
     {
       subfile->language = subfile->next->language;
     }
+
+  htab_slot =
+    htab_find_slot (buildsym_compunit->subfiles_map, subfile, INSERT);
+  *htab_slot = subfile;
 }
 
 /* Start recording information about a primary source file (IOW, not an
@@ -829,6 +879,8 @@ free_buildsym_compunit (void)
     }
   xfree (buildsym_compunit->comp_dir);
   xfree (buildsym_compunit);
+  if (buildsym_compunit->subfiles_map)
+    htab_delete (buildsym_compunit->subfiles_map);
   buildsym_compunit = NULL;
   current_subfile = NULL;
 }
@@ -1179,6 +1231,7 @@ watch_main_source_file_lossage (void)
 	    buildsym_compunit->subfiles = mainsub_alias->next;
 	  else
 	    prev_mainsub_alias->next = mainsub_alias->next;
+	  htab_remove_elt (buildsym_compunit->subfiles_map, mainsub_alias);
 	  xfree (mainsub_alias->name);
 	  xfree (mainsub_alias);
 	}
