@@ -3181,33 +3181,10 @@ linux_nat_filter_event (int lwpid, int status)
 
 	  if (num_lwps (ptid_get_pid (lp->ptid)) > 1)
 	    {
-	      ptid_t ptid = pid_to_ptid (ptid_get_pid (lp->ptid));
-
 	      /* If there is at least one more LWP, then the exit signal
 		 was not the end of the debugged application and should be
 		 ignored.  */
 	      exit_lwp (lp);
-
-	      /* Discard the event if there is at least one thread running. */
-	      if (iterate_over_lwps (ptid, running_callback, NULL))
-		{
-		  /* Discard the event.  */
-		  return NULL;
-		}
-	      else
-		{
-		  /* Generate a thread exit event. */
-		  if (debug_linux_nat)
-		    fprintf_unfiltered (gdb_stdlog,
-					"LLW: no more running threads\n");
-
-		  /* A thread exited and no more threads are running. This typically
-		     happens when a thread dies and scheduler-locking is on - in that
-		     case we don't want to start running another thread */
-		  lp = lwp_list;
-		  lp->waitstatus.kind = TARGET_WAITKIND_THREAD_EXITED;
-		}
-
 	      return NULL;
 	    }
 	}
@@ -3249,25 +3226,11 @@ linux_nat_filter_event (int lwpid, int status)
 
       exit_lwp (lp);
 
-      /* Discard the event if there is at least one thread running. */
-      if (iterate_over_lwps (ptid, running_callback, NULL))
-	{
-	  /* Discard the event.  */
-	  return NULL;
-	}
-      else
-	{
-	  /* Generate a thread exit event. */
-	  if (debug_linux_nat)
-	    fprintf_unfiltered (gdb_stdlog,
-				"LLW: no more running threads\n");
+      /* Make sure there is at least one thread running.  */
+      gdb_assert (iterate_over_lwps (ptid, running_callback, NULL));
 
-	  /* A thread exited and no more threads are running. This typically
-	    happens when a thread dies and scheduler-locking is on - in that
-	    case we don't want to start running another thread */
-	  lp = lwp_list;
-	  lp->waitstatus.kind = TARGET_WAITKIND_THREAD_EXITED;
-	}
+      /* Discard the event.  */
+      return NULL;
     }
 
   /* Make sure we don't report a SIGSTOP that we sent ourselves in
