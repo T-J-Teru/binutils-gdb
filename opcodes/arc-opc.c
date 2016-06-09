@@ -25,6 +25,7 @@
 #include "opcode/arc.h"
 #include "opintl.h"
 #include "libiberty.h"
+#include "mellanox-decoder.h"
 
 /* ARC NPS400 Support: The ARC NPS400 core is an ARC700 with some custom
    instructions.  Support for this target is available when binutils is
@@ -2349,3 +2350,39 @@ const struct arc_long_opcode arc_long_opcodes[] =
 };
 
 const unsigned arc_num_long_opcodes = ARRAY_SIZE (arc_long_opcodes);
+
+/* Mellanox Instruction Decoder Support */
+
+/* This is where the nasty detail lives.  We need to map from the OPERAND
+   to whether the operand is a source or destination, but this information
+   is not really held anywhere in the decode tables above.
+
+   To avoid trying to maintain the src/dst information in the above table,
+   something that could not be pushed upstream then this function exists
+   instead.
+
+   This function uses heuristics and special cases to establish the type of
+   each operand.  */
+
+enum operand_type
+get_operand_type (const struct arc_opcode *opcode,
+		  const int operand_index,
+		  const struct arc_operand *operand)
+{
+  if (operand_index == 0
+      && operand->flags & ARC_OPERAND_IR)
+    return operand_type_dst;
+
+  if (operand_index > 0
+      && operand->flags & ARC_OPERAND_IR)
+    return operand_type_src;
+
+  if (operand_index == 0)
+    return operand_type_dst;
+
+  if (operand_index > 0 && operand_index < 3)
+    return operand_type_src;
+
+  (void) opcode;
+  return operand_type_other;
+}

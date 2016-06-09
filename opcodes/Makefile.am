@@ -41,7 +41,7 @@ if INSTALL_LIBBFD
 bfdlibdir = @bfdlibdir@
 bfdincludedir = @bfdincludedir@
 bfdlib_LTLIBRARIES = libopcodes.la
-bfdinclude_DATA = $(INCDIR)/dis-asm.h
+bfdinclude_DATA = $(INCDIR)/dis-asm.h $(INCDIR)/mellanox-decoder.h
 else
 # Empty these so that the respective installation directories will not be created.
 bfdlibdir =

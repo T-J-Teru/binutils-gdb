@@ -32,6 +32,8 @@
 #define MAX_INSN_FLGS	     3
 #endif
 
+#include "mellanox-decoder.h"
+
 /* Instruction Class.  */
 typedef enum
   {
@@ -601,5 +603,19 @@ extern const unsigned char arg_32bit_limmlimm[MAX_INSN_ARGS + 1];
 extern const unsigned char arg_32bit_rc[MAX_INSN_ARGS + 1];
 extern const unsigned char arg_32bit_u6[MAX_INSN_ARGS + 1];
 extern const unsigned char arg_32bit_limm[MAX_INSN_ARGS + 1];
+
+/* Mellanox Instruction Decoder Support */
+
+enum operand_type
+  {
+    operand_type_other,
+    operand_type_src,
+    operand_type_dst
+  };
+
+extern enum operand_type
+get_operand_type (const struct arc_opcode *opcode,
+		  const int operand_index,
+		  const struct arc_operand *operand);
 
 #endif /* OPCODE_ARC_H */

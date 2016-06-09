@@ -22,11 +22,14 @@
 
 #include "sysdep.h"
 #include <stdio.h>
+#include <stdarg.h>
 #include <assert.h>
 #include "dis-asm.h"
 #include "opcode/arc.h"
 #include "arc-dis.h"
 #include "arc-ext.h"
+#include "mellanox-decoder.h"
+#include "safe-ctype.h"
 
 /* Structure used to iterate over, and extract the values for, operands of
    an opcode.  */
@@ -90,7 +93,7 @@ static const char * const regnames[64] =
 #endif
 
 #define ARRANGE_ENDIAN(info, buf)					\
-  (info->endian == BFD_ENDIAN_LITTLE ? bfd_getm32 (bfd_getl32 (buf))	\
+  ((info)->endian == BFD_ENDIAN_LITTLE ? bfd_getm32 (bfd_getl32 (buf))	\
    : bfd_getb32 (buf))
 
 #define BITS(word,s,e)  (((word) << (sizeof (word) * 8 - 1 - e)) >>	\
@@ -1040,6 +1043,234 @@ arcAnalyzeInstr (bfd_vma memaddr,
 #endif
 
   return ret;
+}
+
+/* Mellanox Instruction Decoder Support */
+
+static void
+ignore_memory_errors (int status ATTRIBUTE_UNUSED,
+		      bfd_vma memaddr ATTRIBUTE_UNUSED,
+		      struct disassemble_info *dinfo ATTRIBUTE_UNUSED)
+{
+  /* Nothing.  */
+}
+
+static int
+is_dest_operand (const struct arc_opcode *opcode,
+		 const int index,
+		 const struct arc_operand *operand)
+{
+  return get_operand_type (opcode, index, operand) == operand_type_dst;
+}
+
+static int
+is_src_operand (const struct arc_opcode *opcode,
+		const int index,
+		const struct arc_operand *operand)
+{
+  return get_operand_type (opcode, index, operand) == operand_type_src;
+}
+
+static int
+mellanox_print_func (void *stream, const char *fmt, ...)
+{
+  va_list ap;
+
+  char *out = (char *) stream;
+  while (*out != '\0')
+    /* TODO: There's no overflow check here! */
+    ++out;
+
+  va_start (ap, fmt);
+  vsprintf (out, fmt, ap);
+  va_end (ap);
+
+  return 0;
+}
+
+int
+mellanox_decode (struct mellanox_insn *insn,
+		 struct mellanox_insn_decode *result)
+{
+  bfd_byte buffer[4];
+  unsigned int insn_len;
+  struct disassemble_info info;
+  unsigned insn_data[2] = { 0, 0 };
+  unsigned isa_mask;
+  const struct arc_opcode *opcode;
+  struct arc_operand_iterator iter;
+  int status;
+  bfd_vma memaddr = 0;
+  unsigned int lowbyte, highbyte;
+  int seen_first_src;
+  const struct arc_operand *operand;
+  int value;
+  int operand_index;
+  char *tmp;
+
+  /* Setup fake DISASSEMBLE_INFO structure.  Only fill in the fields that
+     are required.  */
+  info.mach = bfd_mach_arc_nps400;
+  info.read_memory_func = buffer_read_memory;
+  info.buffer = insn->data;
+  info.buffer_length = insn->length;
+  info.memory_error_func = ignore_memory_errors;
+  info.buffer_vma = 0;
+  info.octets_per_byte = 1;
+  info.endian = BFD_ENDIAN_BIG;
+  info.section = NULL;
+  info.fprintf_func = mellanox_print_func;
+  info.stream = result->inst_disasm;
+
+  /* Some initialisation locals and result parameters.  */
+  switch (info.mach)
+    {
+    case bfd_mach_arc_nps400:
+      isa_mask = ARC_OPCODE_ARC700 | ARC_OPCODE_NPS400;
+      break;
+
+    case bfd_mach_arc_arc700:
+      isa_mask = ARC_OPCODE_ARC700;
+      break;
+
+    case bfd_mach_arc_arc600:
+      isa_mask = ARC_OPCODE_ARC600;
+      break;
+
+    case bfd_mach_arc_arcv2:
+    default:
+      isa_mask = ARC_OPCODE_ARCv2HS | ARC_OPCODE_ARCv2EM;
+      break;
+    }
+  memset (result, 0, sizeof (*result));
+  memset (&iter, 0, sizeof (iter));
+  lowbyte  = ((info.endian == BFD_ENDIAN_LITTLE) ? 1 : 0);
+  highbyte = ((info.endian == BFD_ENDIAN_LITTLE) ? 0 : 1);
+
+  /* Disassemble the complete instruction, then split into non-operands
+     and operands.  */
+  if (print_insn_arc (0, &info) < 0)
+    return 0;
+
+  /* Move TMP to the end of the mnemonic.  */
+  tmp = result->inst_disasm;
+  while (*tmp != '\0'
+	 && !ISSPACE (*tmp))
+    ++tmp;
+
+  /* If there's more then copy the operands over.  */
+  if (*tmp != '\0')
+    {
+      *tmp = '\0';
+      ++tmp;
+
+      while (ISSPACE (*tmp))
+	++tmp;
+
+      strcpy (result->inst_ops_disasm, tmp);
+    }
+
+  /* Load first two bytes into BUFFER.  */
+  if (insn->length < 2)
+    return 0;
+  status = (*info.read_memory_func) (memaddr, buffer, 2, &info);
+  if (status != 0)
+    {
+      (info.memory_error_func) (status, memaddr, &info);
+      fprintf (stderr, "%s:%d - Could not read memory at 0x%lx\n", __FILE__, __LINE__, memaddr);
+      return 0;
+    }
+
+  /* Figure out the base instruction length, and load more bytes of the
+     instruction if this is required.  */
+  insn_len = arc_insn_length (buffer[0], buffer[1], &info);
+  result->insn_length = insn_len;
+  switch (insn_len)
+    {
+    case 2:
+      insn_data[0] = (buffer[lowbyte] << 8) | buffer[highbyte];
+      break;
+
+    default:
+      /* An unknown instruction is treated as being length 4.  This is
+         possibly not the best solution, but matches the behaviour that was
+         in place before the table based instruction length look-up was
+         introduced.  */
+    case 4:
+      /* This is a long instruction: Read the remaning 2 bytes.  */
+      status = (*info.read_memory_func) (memaddr + 2, &buffer[2], 2, &info);
+      if (status != 0)
+	{
+	  (*info.memory_error_func) (status, memaddr + 2, &info);
+	  fprintf (stderr, "%s:%d - Could not read memory at 0x%lx\n", __FILE__, __LINE__, (memaddr + 2));
+	  return 0;
+	}
+      insn_data[0] = ARRANGE_ENDIAN (&info, buffer);
+      break;
+    }
+
+  /* Look in the opcode tables and find the instruction opcode.  Will fetch
+     more bytes if required.  The OPCODE and ITER are initialised by this
+     function if an opcode is found.  */
+  if (!find_format (memaddr, insn_data, &insn_len, isa_mask, &info, &opcode, &iter))
+    {
+      fprintf (stderr, "%s:%d - Could not find opcode\n", __FILE__, __LINE__);
+      return 0;
+    }
+
+  /* Figuring out the format might fetch more bytes.  This only happens
+     when the instruction makes use of a LIMM operand.  In this case the
+     length we previously wrote to RESULT is now wrong.  Use this fact to
+     figure out if there was a LIMM operand, and update RESULT length.  */
+  if (insn_len > result->insn_length)
+    {
+      result->limm_length = insn_len - result->insn_length;
+      result->insn_length = insn_len;
+    }
+
+  /* TODO: What is 'result->set_flags' for?  */
+
+  /* Now extract and print the operands.  */
+  seen_first_src = 0;
+  operand = NULL;
+  operand_index = 0;
+  while (operand_iterator_next (&iter, &operand, &value))
+    {
+      struct mellanox_operand *op_info;
+
+      /* Only take input from real operands.  */
+      if (operand->flags & ARC_OPERAND_FAKE)
+	continue;
+
+      /* TODO: This is from the disassembler loop, not sure what it's
+	 catching.   */
+      if ((operand->flags & ARC_OPERAND_IGNORE)
+	  && (operand->flags & ARC_OPERAND_IR)
+          && value == -1)
+	continue;
+
+      /* TODO: Do something with this operand.  */
+      if (is_dest_operand (opcode, operand_index, operand))
+	op_info = &result->dst;
+      else if (is_src_operand (opcode, operand_index, operand))
+	op_info = (seen_first_src ? &result->src2 : &result->src1);
+      else
+	/* Some other operand.  Ignore for now.  */
+	op_info = NULL;
+
+      if (op_info != NULL)
+	{
+	  if (operand->flags & ARC_OPERAND_IR)
+	    op_info->type = op_type_core_reg;
+	  else
+	    op_info->type = op_type_imm;
+	  op_info->operand = value;
+	}
+
+      ++operand_index;
+    }
+
+  return 1;
 }
 
 /* Local variables:
