@@ -1,5 +1,10 @@
 2016-06-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* mrk3-tdep.c (mrk3_fancy_print_insn): Avoid trailing whitespace
+	when there's no supplementary instruction information.
+
+2016-06-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* mrk3-tdep.c (mrk3_fancy_print_insn): Extend header comment,
 	don't print opcode bytes.
 	(mrk3_gdbarch_init): Set maximum instruction width.

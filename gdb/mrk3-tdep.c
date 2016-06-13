@@ -2903,9 +2903,12 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
     }
 
   sprintf (allargs, "%s%s%s", arg1, argsep, arg2);
-  (*info->fprintf_func) (info->stream, "%-8s  %-16s %s",
-			 opc, allargs, supstr);
-
+  if (strlen (supstr) > 0)
+    (*info->fprintf_func) (info->stream, "%-8s  %-16s %s",
+			   opc, allargs, supstr);
+  else
+    (*info->fprintf_func) (info->stream, "%-8s  %s",
+			   opc, allargs);
 }	/* mark3_fancy_print_insn () */
 
 
