@@ -288,6 +288,18 @@ gdb_pretty_print_insn (struct gdbarch *gdbarch, struct ui_out *uiout,
 	}
 
       ui_out_field_stream (uiout, "opcodes", opcode_stream);
+      if (gdbarch_max_insn_length_p (gdbarch))
+	{
+	  char *space_string = NULL;
+	  ULONGEST longest_insn_len = gdbarch_max_insn_length (gdbarch);
+	  ULONGEST fill_size = longest_insn_len - size;
+
+	  fill_size = (fill_size * 2) + (fill_size - 1);
+	  space_string = alloca (fill_size + 1);
+	  memset (space_string, ' ', fill_size);
+	  space_string [fill_size] = '\0';
+	  ui_out_text (uiout, space_string);
+	}
       ui_out_text (uiout, "\t");
 
       do_cleanups (cleanups);

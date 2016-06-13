@@ -2778,7 +2778,15 @@ parse_opcode_and_args (char **buf, char *opcode, size_t opcode_len,
    @param[in] addr  Address being disassembled
    @param[in] info  Details of the disassembly
    @param[in] size  Number of bytes in the instruction
-   @param[in] buf   The instruction string */
+   @param[in] buf   The instruction string
+
+   Notes:
+
+   (APB 13062016): This function is used for displaying the instructions
+   from the gdb disassembler, and so, should not include the opcode bytes
+   (as this function originally did).  I have for now left in place the
+   code that extracts the text of the opcode bytes as this might be useful
+   in the future.  */
 static void
 mrk3_fancy_print_insn (CORE_ADDR         addr,
 		       disassemble_info *info,
@@ -2895,8 +2903,8 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
     }
 
   sprintf (allargs, "%s%s%s", arg1, argsep, arg2);
-  (*info->fprintf_func) (info->stream, "%4s %4s %4s %-8s  %-16s %s", hw1, hw2,
-			 hw3, opc, allargs, supstr);
+  (*info->fprintf_func) (info->stream, "%-8s  %-16s %s",
+			 opc, allargs, supstr);
 
 }	/* mark3_fancy_print_insn () */
 
@@ -3521,6 +3529,7 @@ mrk3_gdbarch_init (struct gdbarch_info info,
      locally. The real one should be in opcodes/mrk3-dis.c (part of
      binutils). */
   set_gdbarch_print_insn (gdbarch, mrk3_print_insn);
+  set_gdbarch_max_insn_length (gdbarch, 6);
 
   /* set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call); */
   set_gdbarch_dwarf2_reg_to_regnum (gdbarch, mrk3_dwarf2_reg_to_regnum);

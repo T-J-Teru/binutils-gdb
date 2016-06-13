@@ -1,3 +1,11 @@
+2016-06-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (mrk3_fancy_print_insn): Extend header comment,
+	don't print opcode bytes.
+	(mrk3_gdbarch_init): Set maximum instruction width.
+	* disasm.c (gdb_pretty_print_insn): Space opcodes and instructions
+	based on maximum instruction width.
+
 2016-06-03  Jeremy Bennett  <jeremy.bennett@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_gdbarch_init): Remove attribute turning off
