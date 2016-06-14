@@ -155,6 +155,7 @@ handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBU
   struct wildcard_spec file_spec;
   struct wildcard_spec section_spec;
   struct wildcard_list *list;
+  etree_type *address_exp, *flags_exp;
 
   /* Only care about sections that start with ".mrk3.location.", but there must
      be some address characters after the initial string.  */
@@ -166,6 +167,7 @@ handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBU
   address = strtoull (asec->name + 15, &address_str, 16);
   if (*address_str != '\0')
     einfo(_("%P%F: Invalid name for location section '%s'\n"), asec->name);
+  address_exp = exp_intop (address);
 
   /* Create a new section to place this value into. This will result in a
      .mrk3.location section for each special section */
@@ -181,12 +183,14 @@ handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBU
 
   /* First try reading the default_address_flags option as an integer... */
   flagbits = strtoull (config.default_address_flags, &address_str, 0);
+  flags_exp = NULL;
   if (*address_str == '\0')
     {
       if ((flagbits & 0xffffffffULL) != flagbits)
         einfo(_("%P: warning: specified flag bits truncated\n"));
       flagbits &= 0xffffffffULL;
       flagbits <<= 32;
+      flags_exp = exp_intop (flagbits);
     }
   else
     {
@@ -194,9 +198,9 @@ handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBU
       os_data = lang_output_section_find (config.default_address_flags);
       if (os_data)
         {
-          flagbits = exp_get_vma (os_data->region->origin_exp, 0,
-                                  output_secname);
-          flagbits &= 0xffffffff00000000ULL;
+          flags_exp = exp_binop ('&',
+                                 os_data->region->origin_exp,
+                                 exp_intop (0xffffffff00000000ULL));
         }
       else
         {
@@ -204,11 +208,14 @@ handle_special_placement_sections (bfd *abfd, asection *asec, void *data ATTRIBU
           einfo(_("%P: warning: unable to determine flags for "
                   "'%s from '%s'\n"),
                 asec->name, config.default_address_flags);
+          flags_exp = exp_intop (flagbits);
         }
     }
 
   /* Set the address of this special section */
-  os->addr_tree = exp_intop (address | flagbits);
+  assert (flags_exp != NULL);
+  assert (address_exp != NULL);
+  os->addr_tree = exp_binop ('|', address_exp, flags_exp);
   push_stat_ptr (&os->children);
 
   if (abfd->my_archive != NULL)

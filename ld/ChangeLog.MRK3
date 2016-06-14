@@ -1,3 +1,9 @@
+2016-06-14  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* emultempl/mrk3.em (handle_special_placement_sections): Don't
+	attempt to convert output section origin expression to a VMA too
+	early.
+
 2016-03-21  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* emultempl/mrk3.em (OPTION_DEFAULT_ADDRESS_FLAGS): Define.
