@@ -1253,7 +1253,10 @@ mellanox_decode (struct mellanox_insn *insn,
       if (is_dest_operand (opcode, operand_index, operand))
 	op_info = &result->dst;
       else if (is_src_operand (opcode, operand_index, operand))
-	op_info = (seen_first_src ? &result->src2 : &result->src1);
+	{
+	  op_info = (seen_first_src ? &result->src2 : &result->src1);
+	  seen_first_src = 1;
+	}
       else
 	/* Some other operand.  Ignore for now.  */
 	op_info = NULL;
