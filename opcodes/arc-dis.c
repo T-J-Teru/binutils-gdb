@@ -1057,18 +1057,18 @@ ignore_memory_errors (int status ATTRIBUTE_UNUSED,
 
 static int
 is_dest_operand (const struct arc_opcode *opcode,
-		 const int index,
+		 const int idx,
 		 const struct arc_operand *operand)
 {
-  return get_operand_type (opcode, index, operand) == operand_type_dst;
+  return get_operand_type (opcode, idx, operand) == operand_type_dst;
 }
 
 static int
 is_src_operand (const struct arc_opcode *opcode,
-		const int index,
+		const int idx,
 		const struct arc_operand *operand)
 {
-  return get_operand_type (opcode, index, operand) == operand_type_src;
+  return get_operand_type (opcode, idx, operand) == operand_type_src;
 }
 
 static int
