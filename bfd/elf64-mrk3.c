@@ -1124,6 +1124,7 @@ mrk3_elf_relocate_section (bfd *output_bfd,
       if (r_symndx < symtab_hdr->sh_info)
 	{
 	  asection *osec;
+	  bfd_vma sym_st_value;
 
 	  sym = local_syms + r_symndx;
 	  sec = local_sections [r_symndx];
@@ -1139,35 +1140,28 @@ mrk3_elf_relocate_section (bfd *output_bfd,
 						      rel->r_addend);
 	    }
 
-          /* APB 20-Aug-2015: The following has been adjusted in an attempt
-             to better handle reprocessing of relocations, in the case
-             where relocations are preserved using --emit-relocs.  After a
-             non-relocatable link, the symbol value for a section symbol
-             becomes the VMA of the section.  As a result, adding the
-             symbol value to the section base address results in an
-             incorrect (double) value for the address being patched in.
-             We check whether the input BFD is executable to determine whether
-             we are relinking a full executable.   */
-          if (input_bfd && elf_elfheader (input_bfd)->e_type == ET_EXEC)
-            {
-              /* SPC 24-May-2016: We use the symbol value as this includes
-                 offsets when relocations are to a localized symbol rather than
-                 to a section, as the offset is not the relocation and would
-                 otherwise be discarded. We use the Space ID from the section
-                 as relinking may redefine some SFRs.  */
-              /* ERJ 02-Jun-2016: For now, just use the symbol value directly
-                 without the section Space ID, as it seems that the
-                 flag bits do not always correspond to the flag bits of the
-                 symbol. */
-              relocation = sym->st_value;
-            }
-          else
-            relocation = BASEADDR (sec) +
-                         MRK3_GET_ADDRESS_LOCATION(sym->st_value);
-
+	  /* Name of the symbol.  */
 	  name = bfd_elf_string_from_elf_section
 	    (input_bfd, symtab_hdr->sh_link, sym->st_name);
 	  name = (name == NULL) ? bfd_section_name (input_bfd, osec) : name;
+
+	  /* APB (27-June-2016): When linking fully linked executable
+	     objects as part as a second link, the symbol values will have
+	     been adjusted to be the absolute address of the symbol.
+
+	     In order to correctly relocate we reverse this process by
+	     subtracting the vma of the input section, giving the symbol
+	     offset within the input section.  */
+	  if (input_bfd && elf_elfheader (input_bfd)->e_type == ET_EXEC)
+	    {
+	      BFD_ASSERT (sym->st_value >= sec->vma);
+	      sym_st_value = sym->st_value - sec->vma;
+	    }
+	  else
+	    sym_st_value = sym->st_value;
+
+          relocation = BASEADDR (sec) +
+            MRK3_GET_ADDRESS_LOCATION(sym_st_value);
 	}
       else
 	{

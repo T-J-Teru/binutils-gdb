@@ -1,3 +1,8 @@
+2016-06-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elf64-mrk3.c (mrk3_elf_relocate_section): Calculate symbol
+	offset within input section.
+
 2016-06-03  Edward Jones  <ed.jones@embecosm.com>
 
   * elf64-mrk3.c (mrk3_elf_relocate_section): When relinking executables,
