@@ -1,3 +1,17 @@
+2016-05-23  Jeremy Bennett  <jeremy.bennett@embecosm.com>
+
+	* disasm.c (gdb_pretty_print_insn): Call gdbarch_addr_prettyprint
+	to determine how to print the address.
+	* gdbarch.c: Regenerated.
+	* gdbarch.h: Likewise.
+	* gdbarch.sh: Add addr_prettyprint method to gdbarch.
+	* mrk3-tdep.c: Add definitions for MRK3_MEM_MODE_NUM,
+	MRK3_MEM_CARD_NUM and MRK3_MEM_PROC_NUM.
+	(mrk3_addr_bits_remove): Created.
+	(mkr3_addr_prettyprint): Created.
+	(mrk3_gdbarch_init): Add setup of mrk3_addr_bits_remove and
+	mkr3_addr_prettyprint.
+
 2016-06-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_fancy_print_insn): Avoid trailing whitespace

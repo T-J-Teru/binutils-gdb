@@ -596,6 +596,12 @@ m:CORE_ADDR:convert_from_func_ptr_addr:CORE_ADDR addr, struct target_ops *targ:a
 # possible it should be in TARGET_READ_PC instead).
 m:CORE_ADDR:addr_bits_remove:CORE_ADDR addr:addr::core_addr_identity::0
 
+# On some machines with complex memory structures, an option to print the
+# address in arbitrarily complex ways is useful for disassembly. The only rule
+# is that the resulting string should always be the same size, so output stays
+# neatly aligned.
+m:char *:addr_prettyprint:CORE_ADDR addr:addr::print_core_address::0
+
 # FIXME/cagney/2001-01-18: This should be split in two.  A target method that
 # indicates if the target needs software single step.  An ISA method to
 # implement it.
