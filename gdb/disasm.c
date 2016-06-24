@@ -207,7 +207,6 @@ gdb_pretty_print_insn (struct gdbarch *gdbarch, struct ui_out *uiout,
   char *filename = NULL;
   char *name = NULL;
   CORE_ADDR pc;
-  char *pcstr;
 
   ui_out_chain = make_cleanup_ui_out_tuple_begin_end (uiout, NULL);
   pc = insn->addr;
@@ -239,9 +238,7 @@ gdb_pretty_print_insn (struct gdbarch *gdbarch, struct ui_out *uiout,
     }
   else if ((flags & DISASSEMBLY_OMIT_PC) == 0)
     ui_out_text (uiout, pc_prefix (pc));
-  /* ui_out_field_core_addr (uiout, "address", gdbarch, pc); */
-  pcstr = gdbarch_addr_prettyprint (gdbarch, pc);
-  ui_out_field_string (uiout, "address", pcstr);
+  ui_out_field_core_addr (uiout, "address", gdbarch, pc);
 
   if (!build_address_symbolic (gdbarch, pc, 0, &name, &offset, &filename,
 			       &line, &unmapped))

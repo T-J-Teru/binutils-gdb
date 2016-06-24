@@ -242,10 +242,6 @@ bits. */
 
 #define MRK3_MEM_MASK      MRK3_MEM_FLAGS(0xffffffff)
 
-#define MRK3_MEM_MODE_NUM(a) (a & MRK3_MEM_MODE_MASK) >> (MRK3_FLAG_SHIFT + 28)
-#define MRK3_MEM_CARD_NUM(a) (a & MRK3_MEM_CARD_MASK) >> (MRK3_FLAG_SHIFT + 24)
-#define MRK3_MEM_PROC_NUM(a) (a & MRK3_MEM_PROC_MASK) >> (MRK3_FLAG_SHIFT + 16)
-
 #define MRK3_DM16_MASK     0xffff0000
 
 #define MRK3_CLASS_NONE    0
@@ -1560,23 +1556,6 @@ mrk3_addr_bits_add (int is_code,
 }	/* mrk3_addr_bits_add () */
 
 
-/*! Remove address bits for presentation
-
-    Used by the assembler address printing routines.
-
-  @param[in] gdbarch  The current architecture
-  @param[in] addr     The address of interest
-  @return             The address with bits stripped. */
-
-static CORE_ADDR
-mrk3_addr_bits_remove (struct gdbarch *gdbarch,
-		       CORE_ADDR       addr)
-{
-  return addr & (~MRK3_MEM_MASK);
-
-}	/* mrk3_addr_bits_remove () */
-
-
 /*! Convert target pointer to GDB address (buffer version).
 
   @see mrk3-tdep.c for documentation of MRK3 addressing and how this is
@@ -2624,89 +2603,6 @@ mrk3_address_class_name_to_type_flags (struct gdbarch *gdbarch,
     return 0;
 }
 
-
-/*! Fancy print of instruction addresses
-
-    Print out the address supplied according to the details we are given. This
-    is expected to be used primarily for code addresses, so we don't bother with
-    code/data bits.
-
-    The size should be consistent. For now we are interpreting this as being
-    consistent between modes, cards and processes, but not between code (20
-    bits of word address) and data (32 bits of byte address).
-
-    @param[in] gdbarch  The current architecture
-    @param[in] addr     The address to pretty print
-    @return             A string representation of the address */
-
-static char *
-mkr3_addr_prettyprint (struct gdbarch *gdbarch,
-		       CORE_ADDR       addr)
-{
-  int fillcount = 0;		/* How many spaces padding (max 5) */
-  char fillstr [6];		/* For constructed padding */
-  /* Max size: "MMMCP: 0xdddddddd" */
-  char  str [18];		/* For constructed string */
-  char *mode;			/* To describe mode */
-  int   card;			/* Card number */
-  char  cardstr[2];		/* To describe card */
-  int   proc;			/* Process number */
-  char  procstr[6];
-
-  /* Mode name */
-  switch (addr & MRK3_MEM_MODE_MASK)
-    {
-    case MRK3_MEM_MODE_SSM:  mode = "SSM"; fillcount=0;    break;
-    case MRK3_MEM_MODE_SM:   mode = "SM";  fillcount=1;   break;
-    case MRK3_MEM_MODE_UM:   mode = "UM";  fillcount=1;   break;
-    default:                 mode = "";    fillcount=3; break;
-    }
-
-  /* Card name */
-  card = MRK3_MEM_CARD_NUM (addr);
-  if (0 == card)
-    {
-      cardstr[0] = '\0';		/* Empty string */
-      fillcount++;
-    }
-  else
-    {
-      cardstr[0] = 'A' + card - 1;
-      cardstr[1] = '\0';
-    }
-
-  /* Process number */
-  proc = MRK3_MEM_PROC_NUM (addr);
-  if (0 == proc)
-    {
-      /* We assume that we will not have more than 9 processes for now, taking
-	 up one character of output width. If we do have more, the alignment
-	 will go off, but it will all be correct. */
-      procstr[0] = '\0';		/* Empty string */
-      fillcount +=1;
-    }
-  else
-    {
-      sprintf (procstr, "%d", proc);
-    }
-
-  /* Construct padding */
-  fillstr[fillcount] = '\0';
-  for (fillcount--; fillcount >=0; fillcount--)
-    fillstr[fillcount] = ' ';
-
-  if (MRK3_MEM_TYPE_CODE == (addr & MRK3_MEM_TYPE_MASK))
-    sprintf (str, "%s%s%s:0x%05lx", mode, cardstr, procstr,
-	     (long unsigned int) ((addr & 0x1fffff) >> 1));
-  else
-    sprintf (str, "%s%s%s:0x%08lx", mode, cardstr, procstr,
-	     (long unsigned int) (addr & 0xffffffff));
-
-  return xstrdup (str);
-
-}	/* mkr3_addr_prettyprint () */
-
-
 /* Skip whitespace in BUF, update BUF.  Return non-zero if at least one
    whitespace is skipped, otherwise return zero.  */
 static int
@@ -3013,7 +2909,7 @@ mrk3_fancy_print_insn (CORE_ADDR         addr,
   else
     (*info->fprintf_func) (info->stream, "%-8s  %s",
 			   opc, allargs);
-}	/* mrk3_fancy_print_insn () */
+}	/* mark3_fancy_print_insn () */
 
 
 /*! Diassembler
@@ -3641,10 +3537,8 @@ mrk3_gdbarch_init (struct gdbarch_info info,
   /* set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call); */
   set_gdbarch_dwarf2_reg_to_regnum (gdbarch, mrk3_dwarf2_reg_to_regnum);
 
-  set_gdbarch_addr_bits_remove (gdbarch, mrk3_addr_bits_remove);
   set_gdbarch_address_to_pointer (gdbarch, mrk3_address_to_pointer);
   set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
-  set_gdbarch_addr_prettyprint (gdbarch, mkr3_addr_prettyprint);
 
   set_gdbarch_skip_prologue (gdbarch, mrk3_skip_prologue);
   set_gdbarch_inner_than (gdbarch, core_addr_lessthan);

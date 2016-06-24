@@ -633,15 +633,6 @@ typedef CORE_ADDR (gdbarch_addr_bits_remove_ftype) (struct gdbarch *gdbarch, COR
 extern CORE_ADDR gdbarch_addr_bits_remove (struct gdbarch *gdbarch, CORE_ADDR addr);
 extern void set_gdbarch_addr_bits_remove (struct gdbarch *gdbarch, gdbarch_addr_bits_remove_ftype *addr_bits_remove);
 
-/* On some machines with complex memory structures, an option to print the
-   address in arbitrarily complex ways is useful for disassembly. The only rule
-   is that the resulting string should always be the same size, so output stays
-   neatly aligned. */
-
-typedef char * (gdbarch_addr_prettyprint_ftype) (struct gdbarch *gdbarch, CORE_ADDR addr);
-extern char * gdbarch_addr_prettyprint (struct gdbarch *gdbarch, CORE_ADDR addr);
-extern void set_gdbarch_addr_prettyprint (struct gdbarch *gdbarch, gdbarch_addr_prettyprint_ftype *addr_prettyprint);
-
 /* FIXME/cagney/2001-01-18: This should be split in two.  A target method that
    indicates if the target needs software single step.  An ISA method to
    implement it.

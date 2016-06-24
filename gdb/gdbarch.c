@@ -244,7 +244,6 @@ struct gdbarch
   int frame_red_zone_size;
   gdbarch_convert_from_func_ptr_addr_ftype *convert_from_func_ptr_addr;
   gdbarch_addr_bits_remove_ftype *addr_bits_remove;
-  gdbarch_addr_prettyprint_ftype *addr_prettyprint;
   gdbarch_software_single_step_ftype *software_single_step;
   gdbarch_single_step_through_delay_ftype *single_step_through_delay;
   gdbarch_print_insn_ftype *print_insn;
@@ -405,7 +404,6 @@ gdbarch_alloc (const struct gdbarch_info *info,
   gdbarch->stabs_argument_has_addr = default_stabs_argument_has_addr;
   gdbarch->convert_from_func_ptr_addr = convert_from_func_ptr_addr_identity;
   gdbarch->addr_bits_remove = core_addr_identity;
-  gdbarch->addr_prettyprint = print_core_address;
   gdbarch->skip_trampoline_code = generic_skip_trampoline_code;
   gdbarch->skip_solib_resolver = generic_skip_solib_resolver;
   gdbarch->in_solib_return_trampoline = generic_in_solib_return_trampoline;
@@ -592,7 +590,6 @@ verify_gdbarch (struct gdbarch *gdbarch)
   /* Skip verify of stabs_argument_has_addr, invalid_p == 0 */
   /* Skip verify of convert_from_func_ptr_addr, invalid_p == 0 */
   /* Skip verify of addr_bits_remove, invalid_p == 0 */
-  /* Skip verify of addr_prettyprint, invalid_p == 0 */
   /* Skip verify of software_single_step, has predicate.  */
   /* Skip verify of single_step_through_delay, has predicate.  */
   if (gdbarch->print_insn == 0)
@@ -712,9 +709,6 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
   fprintf_unfiltered (file,
                       "gdbarch_dump: addr_bits_remove = <%s>\n",
                       host_address_to_string (gdbarch->addr_bits_remove));
-  fprintf_unfiltered (file,
-                      "gdbarch_dump: addr_prettyprint = <%s>\n",
-                      host_address_to_string (gdbarch->addr_prettyprint));
   fprintf_unfiltered (file,
                       "gdbarch_dump: gdbarch_address_class_name_to_type_flags_p() = %d\n",
                       gdbarch_address_class_name_to_type_flags_p (gdbarch));
@@ -3046,23 +3040,6 @@ set_gdbarch_addr_bits_remove (struct gdbarch *gdbarch,
                               gdbarch_addr_bits_remove_ftype addr_bits_remove)
 {
   gdbarch->addr_bits_remove = addr_bits_remove;
-}
-
-char *
-gdbarch_addr_prettyprint (struct gdbarch *gdbarch, CORE_ADDR addr)
-{
-  gdb_assert (gdbarch != NULL);
-  gdb_assert (gdbarch->addr_prettyprint != NULL);
-  if (gdbarch_debug >= 2)
-    fprintf_unfiltered (gdb_stdlog, "gdbarch_addr_prettyprint called\n");
-  return gdbarch->addr_prettyprint (gdbarch, addr);
-}
-
-void
-set_gdbarch_addr_prettyprint (struct gdbarch *gdbarch,
-                              gdbarch_addr_prettyprint_ftype addr_prettyprint)
-{
-  gdbarch->addr_prettyprint = addr_prettyprint;
 }
 
 int
