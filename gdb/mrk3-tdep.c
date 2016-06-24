@@ -1560,6 +1560,23 @@ mrk3_addr_bits_add (int is_code,
 }	/* mrk3_addr_bits_add () */
 
 
+/*! Remove address bits for presentation
+
+    Used by the assembler address printing routines.
+
+  @param[in] gdbarch  The current architecture
+  @param[in] addr     The address of interest
+  @return             The address with bits stripped. */
+
+static CORE_ADDR
+mrk3_addr_bits_remove (struct gdbarch *gdbarch,
+		       CORE_ADDR       addr)
+{
+  return addr & (~MRK3_MEM_MASK);
+
+}	/* mrk3_addr_bits_remove () */
+
+
 /*! Convert target pointer to GDB address (buffer version).
 
   @see mrk3-tdep.c for documentation of MRK3 addressing and how this is
@@ -3624,6 +3641,7 @@ mrk3_gdbarch_init (struct gdbarch_info info,
   /* set_gdbarch_push_dummy_call (gdbarch, dummy_push_dummy_call); */
   set_gdbarch_dwarf2_reg_to_regnum (gdbarch, mrk3_dwarf2_reg_to_regnum);
 
+  set_gdbarch_addr_bits_remove (gdbarch, mrk3_addr_bits_remove);
   set_gdbarch_address_to_pointer (gdbarch, mrk3_address_to_pointer);
   set_gdbarch_pointer_to_address (gdbarch, mrk3_pointer_to_address);
   set_gdbarch_addr_prettyprint (gdbarch, mkr3_addr_prettyprint);
