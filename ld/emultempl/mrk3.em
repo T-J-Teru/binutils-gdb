@@ -48,18 +48,31 @@ gld${EMULATION_NAME}_finish (void)
   LANG_FOR_EACH_INPUT_STATEMENT (is)
     {
       bfd *abfd = is->the_bfd;
-      asection *sec;
+      asection *in_sec;
 
       /* Propagate the NON_RELAX flag from each input section to the output
          section.  If any single input section is marked non-relax then the
          whole output section will be marked as non-relax.  */
-      for (sec = abfd->sections; sec != NULL; sec = sec->next)
+      for (in_sec = abfd->sections; in_sec != NULL; in_sec = in_sec->next)
         {
-          asection *out_sec = sec->output_section;
+          asection *out_sec = in_sec->output_section;
 
           if (out_sec
-              && elf_section_flags (sec) & SHF_MRK3_NON_RELAX)
+              && elf_section_flags (in_sec) & SHF_MRK3_NON_RELAX)
             elf_section_flags (out_sec) |= SHF_MRK3_NON_RELAX;
+
+          if (elf_elfheader (abfd)->e_type == ET_EXEC)
+            {
+              bfd_vma out_flags = ((out_sec->vma  >> 32) & 0xffffffff);
+              bfd_vma in_flags = ((in_sec->vma >> 32) & 0xffffffff);
+
+              if (out_flags != in_flags)
+                einfo ("%P:%B: mrk3 address flags on input section %A "
+                       "(vma: 0x%V, output offset: 0x%V), does not match "
+                       "address flags on output section %A (vma: 0x%V)\n",
+                       abfd, in_sec, in_sec->vma, in_sec->output_offset,
+                       out_sec, out_sec->vma);
+            }
         }
     }
 }

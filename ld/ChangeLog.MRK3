@@ -1,3 +1,8 @@
+2016-06-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* emultempl/mrk3.em (gld${EMULATION_NAME}_finish): Warn when flags
+	on input sections don't match the flags on output sections.
+
 2016-06-14  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* emultempl/mrk3.em (handle_special_placement_sections): Don't
