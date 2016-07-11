@@ -96,7 +96,7 @@ fill_structs (void)
 int
 main ()
 {
-  int size, value;
+  volatile int size, value;
 
   fill_structs ();
 

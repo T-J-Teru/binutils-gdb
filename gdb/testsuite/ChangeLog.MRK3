@@ -1,3 +1,8 @@
+2016-07-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/sizeof.c (fill_structs): Make local variables volatile
+	to avoid writes to them being optimised away.
+
 2016-06-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.base/callfuncs.exp: Use UNSUPPORTED not FAIL when a target
