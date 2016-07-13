@@ -1,3 +1,8 @@
+2016-07-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* mrk3-tdep.c (gdb_pretty_print_insn): Handle case where no fill
+	space is required.
+
 2016-06-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* mrk3-tdep.c (mrk3_fancy_print_insn): Avoid trailing whitespace
