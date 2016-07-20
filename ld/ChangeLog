@@ -1,3 +1,10 @@
+2016-07-20  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* Makefile.am (libldtestplug_la_LDFLAGS): Add libibery library.
+	* Makefile.in: Regenerate.
+	* testplug.c: Use 'safe-ctype.h' not 'ctype.h'.
+	(record_read_length): Use ISDIGIT instead of isdigit.
+
 2016-07-20  Alan Modra  <amodra@gmail.com>
 
 	* ldexp.c (exp_unop, exp_binop, exp_trinop, exp_nameop): Don't

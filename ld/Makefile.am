@@ -2147,7 +2147,7 @@ noinst_LTLIBRARIES = libldtestplug.la libldtestplug2.la \
 		     libldtestplug3.la libldtestplug4.la
 libldtestplug_la_SOURCES = testplug.c
 libldtestplug_la_CFLAGS= -g -O2
-libldtestplug_la_LDFLAGS = -no-undefined -rpath /nowhere
+libldtestplug_la_LDFLAGS = -no-undefined -rpath /nowhere -L../libiberty -liberty
 libldtestplug2_la_SOURCES = testplug2.c
 libldtestplug2_la_CFLAGS= -g -O2
 libldtestplug2_la_LDFLAGS = -no-undefined -rpath /nowhere

@@ -985,7 +985,7 @@ ld_new_LDADD = $(EMULATION_OFILES) $(EMUL_EXTRA_OFILES) $(BFDLIB) $(LIBIBERTY) $
 
 @ENABLE_PLUGINS_TRUE@libldtestplug_la_SOURCES = testplug.c
 @ENABLE_PLUGINS_TRUE@libldtestplug_la_CFLAGS = -g -O2
-@ENABLE_PLUGINS_TRUE@libldtestplug_la_LDFLAGS = -no-undefined -rpath /nowhere
+@ENABLE_PLUGINS_TRUE@libldtestplug_la_LDFLAGS = -no-undefined -rpath /nowhere -L../libiberty -liberty
 @ENABLE_PLUGINS_TRUE@libldtestplug2_la_SOURCES = testplug2.c
 @ENABLE_PLUGINS_TRUE@libldtestplug2_la_CFLAGS = -g -O2
 @ENABLE_PLUGINS_TRUE@libldtestplug2_la_LDFLAGS = -no-undefined -rpath /nowhere
