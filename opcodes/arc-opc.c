@@ -2371,7 +2371,29 @@ get_operand_type (const struct arc_opcode *opcode,
 {
   if (operand_index == 0
       && operand->flags & ARC_OPERAND_IR)
-    return operand_type_dst;
+    {
+      switch ((opcode->opcode >> 27) & 0x1f)
+	{
+	case 0xb:
+	  switch ((opcode->opcode >> 16) & 0x1f)
+	    {
+	    case 0xc:
+	    case 0xd:
+	    case 0xe:
+	      return operand_type_src;
+	      break;
+
+	    default:
+	      break;
+	    }
+	  break;
+
+	default:
+	  break;
+	}
+
+      return operand_type_dst;
+    }
 
   if (operand_index > 0
       && operand->flags & ARC_OPERAND_IR)
