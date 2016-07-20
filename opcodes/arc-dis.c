@@ -635,7 +635,8 @@ operand_iterator_next (struct arc_operand_iterator *iter,
 {
   if (iter->mode == OPERAND_ITERATOR_STANDARD)
     {
-      if (*iter->state.standard.opidx == 0)
+      if (iter->state.standard.opidx == NULL
+	  || *iter->state.standard.opidx == 0)
         {
           *operand = NULL;
           return FALSE;
