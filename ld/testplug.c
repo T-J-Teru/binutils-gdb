@@ -24,7 +24,7 @@
 /* For ARRAY_SIZE macro only - we don't link the library itself.  */
 #include "libiberty.h"
 
-#include <ctype.h> /* For isdigit.  */
+#include "safe-ctype.h" /* For ISDIGIT.  */
 
 extern enum ld_plugin_status onload (struct ld_plugin_tv *tv);
 static enum ld_plugin_status onclaim_file (const struct ld_plugin_input_file *file,
@@ -172,7 +172,7 @@ record_read_length (const char *length)
   const char *tmp;
 
   tmp = length;
-  while (*tmp != '\0' && isdigit (*tmp))
+  while (*tmp != '\0' && ISDIGIT (*tmp))
     ++tmp;
   if (*tmp != '\0' || *length == '\0')
     {

@@ -71,6 +71,7 @@ build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
 bin_PROGRAMS = ld-new$(EXEEXT)
+@ENABLE_PLUGINS_FALSE@libldtestplug_la_DEPENDENCIES =
 
 # Automake 1.9 will only build info files in the objdir if they are
 # mentioned in DISTCLEANFILES.  It doesn't have to be unconditional,
@@ -109,7 +110,6 @@ CONFIG_HEADER = config.h
 CONFIG_CLEAN_FILES = po/Makefile.in
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
-libldtestplug_la_LIBADD =
 @ENABLE_PLUGINS_TRUE@am_libldtestplug_la_OBJECTS =  \
 @ENABLE_PLUGINS_TRUE@	libldtestplug_la-testplug.lo
 libldtestplug_la_OBJECTS = $(am_libldtestplug_la_OBJECTS)
@@ -986,6 +986,8 @@ ld_new_LDADD = $(EMULATION_OFILES) $(EMUL_EXTRA_OFILES) $(BFDLIB) $(LIBIBERTY) $
 @ENABLE_PLUGINS_TRUE@libldtestplug_la_SOURCES = testplug.c
 @ENABLE_PLUGINS_TRUE@libldtestplug_la_CFLAGS = -g -O2
 @ENABLE_PLUGINS_TRUE@libldtestplug_la_LDFLAGS = -no-undefined -rpath /nowhere
+@ENABLE_PLUGINS_TRUE@libldtestplug_la_LIBADD = -L../libiberty -liberty
+@ENABLE_PLUGINS_TRUE@libldtestplug_la_DEPENDENCIES = $(LIBIBERTY)
 @ENABLE_PLUGINS_TRUE@libldtestplug2_la_SOURCES = testplug2.c
 @ENABLE_PLUGINS_TRUE@libldtestplug2_la_CFLAGS = -g -O2
 @ENABLE_PLUGINS_TRUE@libldtestplug2_la_LDFLAGS = -no-undefined -rpath /nowhere
