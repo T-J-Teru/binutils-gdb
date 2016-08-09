@@ -1881,13 +1881,15 @@ s390_unwind_pseudo_register (struct frame_info *this_frame, int regnum)
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
   struct type *type = register_type (gdbarch, regnum);
+  struct frame_info *prev_frame = get_prev_frame (this_frame);
 
   /* Unwind PC via PSW address.  */
+
   if (regnum == tdep->pc_regnum)
     {
       struct value *val;
 
-      val = frame_unwind_register_value (this_frame, S390_PSWA_REGNUM);
+      val = get_frame_register_value (prev_frame, S390_PSWA_REGNUM);
       if (!value_optimized_out (val))
 	{
 	  LONGEST pswa = value_as_long (val);
@@ -1904,7 +1906,7 @@ s390_unwind_pseudo_register (struct frame_info *this_frame, int regnum)
     {
       struct value *val;
 
-      val = frame_unwind_register_value (this_frame, S390_PSWM_REGNUM);
+      val = get_frame_register_value (prev_frame, S390_PSWM_REGNUM);
       if (!value_optimized_out (val))
 	{
 	  LONGEST pswm = value_as_long (val);
@@ -1923,7 +1925,7 @@ s390_unwind_pseudo_register (struct frame_info *this_frame, int regnum)
       int reg = regnum - tdep->gpr_full_regnum;
       struct value *val;
 
-      val = frame_unwind_register_value (this_frame, S390_R0_REGNUM + reg);
+      val = get_frame_register_value (prev_frame, S390_R0_REGNUM + reg);
       if (!value_optimized_out (val))
 	return value_cast (type, val);
     }
