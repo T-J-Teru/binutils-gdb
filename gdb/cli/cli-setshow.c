@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include "arch-utils.h"
 #include "observer.h"
+#include "exceptions.h"
 
 #include "ui-out.h"
 
@@ -140,6 +141,100 @@ is_unlimited_literal (const char *arg)
 	  && (isspace (arg[len]) || arg[len] == '\0'));
 }
 
+/* Used within DO_SET_COMMAND and SET_CMD_CLEANUP_OR_REVERT.  Holds
+   information required to either cleanup the previous value of a setting,
+   or to restore the previous value.  */
+
+struct set_cmd_cleanup_data
+{
+  /* The setting we're working on.  */
+  struct cmd_list_element *c;
+
+  /* Should we revert the setting to the previous value?  If not then we
+     should clean up the previous value.  */
+  int revert_p;
+
+  /* The previous value.  Which field is used depends on c->var_type.  */
+  union
+  {
+    enum auto_boolean b;
+    int i;
+    const char *s;
+    unsigned int u;
+  } prev_value;
+};
+
+/* Cleanup function called from DO_SET_COMMAND.  Either cleans up the
+   previous value of a setting, freeing any associated memory, or,
+   restores the previous value, freeing the new value of a setting.  */
+
+static void
+set_cmd_cleanup_or_revert (void *arg)
+{
+  struct set_cmd_cleanup_data *set_cmd_cleanup_data
+    = (struct set_cmd_cleanup_data *) arg;
+
+  if (set_cmd_cleanup_data->revert_p)
+    {
+      switch (set_cmd_cleanup_data->c->var_type)
+	{
+	case var_string:
+	case var_string_noescape:
+	case var_filename:
+	case var_optional_filename:
+	  xfree (*(char **) set_cmd_cleanup_data->c->var);
+	  *(char **) set_cmd_cleanup_data->c->var
+	    = (char *) set_cmd_cleanup_data->prev_value.s;
+	  break;
+
+	case var_boolean:
+	case var_integer:
+	case var_zinteger:
+	case var_zuinteger_unlimited:
+	  *(int *) set_cmd_cleanup_data->c->var
+	    = set_cmd_cleanup_data->prev_value.i;
+	  break;
+
+	case var_auto_boolean:
+	  *(enum auto_boolean *) set_cmd_cleanup_data->c->var
+	    = set_cmd_cleanup_data->prev_value.b;
+	  break;
+
+	case var_uinteger:
+	case var_zuinteger:
+	  *(unsigned int *) set_cmd_cleanup_data->c->var
+	    = set_cmd_cleanup_data->prev_value.u;
+	  break;
+
+	case var_enum:
+	  *(char **) set_cmd_cleanup_data->c->var
+	    = (char *) set_cmd_cleanup_data->prev_value.s;
+	  break;
+	}
+    }
+  else
+    {
+      switch (set_cmd_cleanup_data->c->var_type)
+	{
+	case var_string:
+	case var_string_noescape:
+	case var_filename:
+	case var_optional_filename:
+	  xfree ((char *) set_cmd_cleanup_data->prev_value.s);
+	  break;
+
+	case var_boolean:
+	case var_integer:
+	case var_zinteger:
+	case var_zuinteger_unlimited:
+	case var_auto_boolean:
+	case var_uinteger:
+	case var_zuinteger:
+	case var_enum:
+	  break;
+	}
+    }
+}
 
 /* Do a "set" command.  ARG is NULL if no argument, or the
    text of the argument, and FROM_TTY is nonzero if this command is
@@ -151,8 +246,19 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 {
   /* A flag to indicate the option is changed or not.  */
   int option_changed = 0;
+  /* Cleanups created to free the previous value of the setting.  */
+  struct cleanup *cleanups;
+  /* Data used to either clean up the previous value of the setting, or
+     restore the previous value, after we have called c->func.  */
+  struct set_cmd_cleanup_data set_cmd_cleanup_data;
+  set_cmd_cleanup_data.c = c;
+  set_cmd_cleanup_data.revert_p = 0;
+  memset (&set_cmd_cleanup_data.prev_value, 0,
+	  sizeof (set_cmd_cleanup_data.prev_value));
 
   gdb_assert (c->type == set_cmd);
+  cleanups = make_cleanup (set_cmd_cleanup_or_revert,
+			   &set_cmd_cleanup_data);
 
   switch (c->var_type)
     {
@@ -200,7 +306,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	if (*(char **) c->var == NULL
 	    || strcmp (*(char **) c->var, newobj) != 0)
 	  {
-	    xfree (*(char **) c->var);
+	    set_cmd_cleanup_data.prev_value.s = *(const char **) c->var;
 	    *(char **) c->var = newobj;
 
 	    option_changed = 1;
@@ -215,7 +321,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
       if (*(char **) c->var == NULL || strcmp (*(char **) c->var, arg) != 0)
 	{
-	  xfree (*(char **) c->var);
+	  set_cmd_cleanup_data.prev_value.s = *(const char **) c->var;
 	  *(char **) c->var = xstrdup (arg);
 
 	  option_changed = 1;
@@ -248,7 +354,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	if (*(char **) c->var == NULL
 	    || strcmp (*(char **) c->var, val) != 0)
 	  {
-	    xfree (*(char **) c->var);
+	    set_cmd_cleanup_data.prev_value.s = *(const char **) c->var;
 	    *(char **) c->var = val;
 
 	    option_changed = 1;
@@ -265,6 +371,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  error (_("\"on\" or \"off\" expected."));
 	if (val != *(int *) c->var)
 	  {
+	    set_cmd_cleanup_data.prev_value.i = *(int *) c->var;
 	    *(int *) c->var = val;
 
 	    option_changed = 1;
@@ -277,6 +384,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
 	if (*(enum auto_boolean *) c->var != val)
 	  {
+	    set_cmd_cleanup_data.prev_value.b = *(enum auto_boolean *) c->var;
 	    *(enum auto_boolean *) c->var = val;
 
 	    option_changed = 1;
@@ -313,6 +421,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
 	if (*(unsigned int *) c->var != val)
 	  {
+	    set_cmd_cleanup_data.prev_value.u = *(unsigned int *) c->var;
 	    *(unsigned int *) c->var = val;
 
 	    option_changed = 1;
@@ -349,12 +458,13 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
 	if (*(int *) c->var != val)
 	  {
+	    set_cmd_cleanup_data.prev_value.i = *(int *) c->var;
 	    *(int *) c->var = val;
 
 	    option_changed = 1;
 	  }
-	break;
       }
+      break;
     case var_enum:
       {
 	int i;
@@ -419,6 +529,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
 	if (*(const char **) c->var != match)
 	  {
+	    set_cmd_cleanup_data.prev_value.s = *(const char **) c->var;
 	    *(const char **) c->var = match;
 
 	    option_changed = 1;
@@ -444,6 +555,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
 	if (*(int *) c->var != val)
 	  {
+	    set_cmd_cleanup_data.prev_value.i = *(int *) c->var;
 	    *(int *) c->var = val;
 	    option_changed = 1;
 	  }
@@ -452,7 +564,24 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
     default:
       error (_("gdb internal error: bad var_type in do_setshow_command"));
     }
-  c->func (c, NULL, from_tty);
+
+  TRY
+    {
+      c->func (c, NULL, from_tty);
+    }
+  CATCH (ex, RETURN_MASK_ERROR)
+    {
+      /* Set the REVERT_P flag based on OPTION_CHANGED.  If this leaves
+	 REVERT_P as false then the cleanup SET_CMD_CLEANUP_OR_REVERT will
+	 try to cleanup the previous value, but as OPTION_CHANGED was
+	 false, there is no previous value, and so nothing is done.  If
+	 REVERT_P is changed to TRUE here then there was a previous value,
+	 and so the SET_CMD_CLEANUP_OR_REVERT will restore the previous
+	 value, and cleanup the new value that we no longer need.  */
+      set_cmd_cleanup_data.revert_p = option_changed;
+      throw_exception (ex);
+    }
+  END_CATCH
 
   if (notify_command_param_changed_p (option_changed, c))
     {
@@ -493,6 +622,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  xfree (cmds);
 	  xfree (name);
 
+	  do_cleanups (cleanups);
 	  return;
 	}
       /* Traverse them in the reversed order, and copy their names into
@@ -557,6 +687,8 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	}
       xfree (name);
     }
+
+  do_cleanups (cleanups);
 }
 
 /* Do a "show" command.  ARG is NULL if no argument, or the

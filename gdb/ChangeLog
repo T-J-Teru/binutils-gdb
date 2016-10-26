@@ -1,3 +1,12 @@
+2016-11-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cli/cli-setshow.c: Add exceptions.h include.
+	(struct set_cmd_cleanup_data): New definition.
+	(set_cmd_cleanup_or_revert): New function.
+	(do_set_comment): When installing a setting's new value, don't
+	lose the previous value until the set-hook has been called.  Use a
+	cleanup to either delete or restore the previous value.
+
 2016-11-11  Yao Qi  <yao.qi@linaro.org>
 
 	* cp-valprint.c (cp_print_value): Remove local base_valaddr.

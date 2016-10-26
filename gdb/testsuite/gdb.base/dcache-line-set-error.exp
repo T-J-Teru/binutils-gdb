@@ -1,0 +1,67 @@
+# Test error handling when seting dcache line size
+# Copyright 2011-2016 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+gdb_exit
+gdb_start
+gdb_reinitialize_dir $srcdir/$subdir
+
+# Read the current dcache line-size, check default is still 64.
+set default_line_size 0
+set testname "read default value for dcache line-size"
+send_gdb "show dcache line-size\n"
+gdb_expect {
+    -re "Dcache line size is (\[0-9\]+\)\.\r\n$gdb_prompt $" {
+	set default_line_size $expect_out(1,string)
+	pass $testname
+    }
+    -re ".*$gdb_prompt $"   { fail $testname }
+    timeout	            { fail "$testname (timeout)" }
+}
+
+if { $default_line_size == 0 } then {
+    unsupported "dcache-line-set-error"
+    return
+}
+
+# Try to change to some invalid (non power of 2 value)
+set invalid_line_size [expr $default_line_size - 1]
+gdb_test "set dcache line-size $invalid_line_size" \
+    "Invalid dcache line size: $invalid_line_size .*" \
+    "First attempt to set invalid dcache line size"
+
+# Check the default is still 64
+gdb_test "show dcache line-size" \
+    "Dcache line size is $default_line_size\." \
+    "Check that the default value is still in place"
+
+# Change the line size to some other valid value, and check the value
+# changed.
+set new_line_size [expr $default_line_size * 2]
+gdb_test_no_output "set dcache line-size $new_line_size" \
+    "Set dcache line size to a new value"
+gdb_test "show dcache line-size" \
+    "Dcache line size is $new_line_size\." \
+    "Check that the new value took"
+
+# Try to change to some invalid (non power of 2 value)
+gdb_test "set dcache line-size $invalid_line_size" \
+    "Invalid dcache line size: $invalid_line_size .*" \
+    "Second attempt to set invalid dcache line size"
+
+# Check that the new value is still in place.
+gdb_test "show dcache line-size" \
+    "Dcache line size is $new_line_size\." \
+    "Check that the new value is still in place"
