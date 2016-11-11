@@ -214,19 +214,13 @@ set_disable_randomization (char *args, int from_tty,
 /* User interface for non-stop mode.  */
 
 int non_stop = 0;
-static int non_stop_1 = 0;
 
 static void
 set_non_stop (char *args, int from_tty,
 	      struct cmd_list_element *c)
 {
   if (target_has_execution)
-    {
-      non_stop_1 = non_stop;
-      error (_("Cannot change this setting while the inferior is running."));
-    }
-
-  non_stop = non_stop_1;
+    error (_("Cannot change this setting while the inferior is running."));
 }
 
 static void
@@ -243,19 +237,13 @@ show_non_stop (struct ui_file *file, int from_tty,
    target's execution have been disabled.  */
 
 int observer_mode = 0;
-static int observer_mode_1 = 0;
 
 static void
 set_observer_mode (char *args, int from_tty,
 		   struct cmd_list_element *c)
 {
   if (target_has_execution)
-    {
-      observer_mode_1 = observer_mode;
-      error (_("Cannot change this setting while the inferior is running."));
-    }
-
-  observer_mode = observer_mode_1;
+    error (_("Cannot change this setting while the inferior is running."));
 
   may_write_registers = !observer_mode;
   may_write_memory = !observer_mode;
@@ -273,7 +261,7 @@ set_observer_mode (char *args, int from_tty,
   if (observer_mode)
     {
       pagination_enabled = 0;
-      non_stop = non_stop_1 = 1;
+      non_stop = 1;
     }
 
   if (from_tty)
@@ -310,7 +298,7 @@ update_observer_mode (void)
     printf_filtered (_("Observer mode is now %s.\n"),
 		     (newval ? "on" : "off"));
 
-  observer_mode = observer_mode_1 = newval;
+  observer_mode = newval;
 }
 
 /* Tables of how to react to signals; the user sets them.  */
@@ -9303,7 +9291,7 @@ When non-zero, displaced stepping specific debugging is enabled."),
 			    &setdebuglist, &showdebuglist);
 
   add_setshow_boolean_cmd ("non-stop", no_class,
-			   &non_stop_1, _("\
+			   &non_stop, _("\
 Set whether gdb controls the inferior in non-stop mode."), _("\
 Show whether gdb controls the inferior in non-stop mode."), _("\
 When debugging a multi-threaded program and this setting is\n\
@@ -9533,7 +9521,7 @@ enabled by default on some platforms."),
   create_internalvar_type_lazy ("_siginfo", &siginfo_funcs, NULL);
 
   add_setshow_boolean_cmd ("observer", no_class,
-			   &observer_mode_1, _("\
+			   &observer_mode, _("\
 Set whether gdb controls the inferior in observer mode."), _("\
 Show whether gdb controls the inferior in observer mode."), _("\
 In observer mode, GDB can get data from the inferior, but not\n\

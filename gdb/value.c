@@ -987,11 +987,7 @@ set_max_value_size (char *args, int from_tty,
   gdb_assert (max_value_size == -1 || max_value_size >= 0);
 
   if (max_value_size > -1 && max_value_size < MIN_VALUE_FOR_MAX_VALUE_SIZE)
-    {
-      max_value_size = MIN_VALUE_FOR_MAX_VALUE_SIZE;
-      error (_("max-value-size set too low, increasing to %d bytes"),
-	     max_value_size);
-    }
+    error (_("max-value-size %d bytes is too low"), max_value_size);
 }
 
 /* Implement the "show max-value-size" command.  */

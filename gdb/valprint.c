@@ -2955,11 +2955,6 @@ val_print_string (struct type *elttype, const char *encoding,
 }
 
 
-/* The 'set input-radix' command writes to this auxiliary variable.
-   If the requested radix is valid, INPUT_RADIX is updated; otherwise,
-   it is left unchanged.  */
-
-static unsigned input_radix_1 = 10;
 
 /* Validate an input or output radix setting, and make sure the user
    knows what they really did here.  Radix setting is confusing, e.g.
@@ -2968,7 +2963,7 @@ static unsigned input_radix_1 = 10;
 static void
 set_input_radix (char *args, int from_tty, struct cmd_list_element *c)
 {
-  set_input_radix_1 (from_tty, input_radix_1);
+  set_input_radix_1 (from_tty, input_radix);
 }
 
 static void
@@ -2982,12 +2977,9 @@ set_input_radix_1 (int from_tty, unsigned radix)
      (FIXME).  */
 
   if (radix < 2)
-    {
-      input_radix_1 = input_radix;
-      error (_("Nonsense input radix ``decimal %u''; input radix unchanged."),
-	     radix);
-    }
-  input_radix_1 = input_radix = radix;
+    error (_("Nonsense input radix ``decimal %u''; input radix unchanged."),
+	   radix);
+  input_radix = radix;
   if (from_tty)
     {
       printf_filtered (_("Input radix now set to "
@@ -2996,16 +2988,10 @@ set_input_radix_1 (int from_tty, unsigned radix)
     }
 }
 
-/* The 'set output-radix' command writes to this auxiliary variable.
-   If the requested radix is valid, OUTPUT_RADIX is updated,
-   otherwise, it is left unchanged.  */
-
-static unsigned output_radix_1 = 10;
-
 static void
 set_output_radix (char *args, int from_tty, struct cmd_list_element *c)
 {
-  set_output_radix_1 (from_tty, output_radix_1);
+  set_output_radix_1 (from_tty, output_radix);
 }
 
 static void
@@ -3025,12 +3011,11 @@ set_output_radix_1 (int from_tty, unsigned radix)
       user_print_options.output_format = 'o';	/* octal */
       break;
     default:
-      output_radix_1 = output_radix;
       error (_("Unsupported output radix ``decimal %u''; "
 	       "output radix unchanged."),
 	     radix);
     }
-  output_radix_1 = output_radix = radix;
+  output_radix = radix;
   if (from_tty)
     {
       printf_filtered (_("Output radix now set to "
@@ -3208,7 +3193,7 @@ Show printing of symbol names when printing pointers."),
 			   show_symbol_print,
 			   &setprintlist, &showprintlist);
 
-  add_setshow_zuinteger_cmd ("input-radix", class_support, &input_radix_1,
+  add_setshow_zuinteger_cmd ("input-radix", class_support, &input_radix,
 			     _("\
 Set default input radix for entering numbers."), _("\
 Show default input radix for entering numbers."), NULL,
@@ -3216,7 +3201,7 @@ Show default input radix for entering numbers."), NULL,
 			     show_input_radix,
 			     &setlist, &showlist);
 
-  add_setshow_zuinteger_cmd ("output-radix", class_support, &output_radix_1,
+  add_setshow_zuinteger_cmd ("output-radix", class_support, &output_radix,
 			     _("\
 Set default output radix for printing of values."), _("\
 Show default output radix for printing of values."), NULL,

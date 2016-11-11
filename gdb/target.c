@@ -3979,21 +3979,12 @@ target_thread_events (int enable)
    just for maintainers to use when debugging gdb.  */
 int target_async_permitted = 1;
 
-/* The set command writes to this variable.  If the inferior is
-   executing, target_async_permitted is *not* updated.  */
-static int target_async_permitted_1 = 1;
-
 static void
 maint_set_target_async_command (char *args, int from_tty,
 				struct cmd_list_element *c)
 {
   if (have_live_inferiors ())
-    {
-      target_async_permitted_1 = target_async_permitted;
-      error (_("Cannot change this setting while the inferior is running."));
-    }
-
-  target_async_permitted = target_async_permitted_1;
+    error (_("Cannot change this setting while the inferior is running."));
 }
 
 static void
@@ -4030,10 +4021,6 @@ target_is_non_stop_p (void)
    mode.  This is just for maintainers to use when debugging gdb.  */
 enum auto_boolean target_non_stop_enabled = AUTO_BOOLEAN_AUTO;
 
-/* The set command writes to this variable.  If the inferior is
-   executing, target_non_stop_enabled is *not* updated.  */
-static enum auto_boolean target_non_stop_enabled_1 = AUTO_BOOLEAN_AUTO;
-
 /* Implementation of "maint set target-non-stop".  */
 
 static void
@@ -4041,12 +4028,7 @@ maint_set_target_non_stop_command (char *args, int from_tty,
 				   struct cmd_list_element *c)
 {
   if (have_live_inferiors ())
-    {
-      target_non_stop_enabled_1 = target_non_stop_enabled;
-      error (_("Cannot change this setting while the inferior is running."));
-    }
-
-  target_non_stop_enabled = target_non_stop_enabled_1;
+    error (_("Cannot change this setting while the inferior is running."));
 }
 
 /* Implementation of "maint show target-non-stop".  */
@@ -4160,7 +4142,7 @@ result in significant performance improvement for remote targets."),
            &maintenanceprintlist);
 
   add_setshow_boolean_cmd ("target-async", no_class,
-			   &target_async_permitted_1, _("\
+			   &target_async_permitted, _("\
 Set whether gdb controls the inferior in asynchronous mode."), _("\
 Show whether gdb controls the inferior in asynchronous mode."), _("\
 Tells gdb whether to control the inferior in asynchronous mode."),
@@ -4170,7 +4152,7 @@ Tells gdb whether to control the inferior in asynchronous mode."),
 			   &maintenance_show_cmdlist);
 
   add_setshow_auto_boolean_cmd ("target-non-stop", no_class,
-				&target_non_stop_enabled_1, _("\
+				&target_non_stop_enabled, _("\
 Set whether gdb always controls the inferior in non-stop mode."), _("\
 Show whether gdb always controls the inferior in non-stop mode."), _("\
 Tells gdb whether to control the inferior in non-stop mode."),

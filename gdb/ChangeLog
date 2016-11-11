@@ -1,5 +1,48 @@
 2016-11-11  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* dcache.c (set_dcache_size): Don't change value on error path.
+	(set_dcache_line_size): Likewise.
+	* record.c (record_insn_history_size_setshow_var): Remove.
+	(record_call_history_size_setshow_var): Remove.
+	(validate_history_size): Simplify to just the error check.
+	(set_record_insn_history_size): Update call to
+	validate_history_size.
+	(set_record_call_history_size): Likewise.
+	(_initialize_record): Remove use of *_setshow_var.
+	* symtab.c (new_symbol_cache_size): Remove.
+	(symbol_cache_size): Update comment.
+	(set_symbol_cache_size_handler): Simplify error check.
+	(_initialize_symtab): Remove use of new_symbol_cache_size.
+	* valprint.c (input_radix_1): Remove.
+	(set_input_radix): Remove use of input_radix_1.
+	(set_input_radix_1): Likewise.
+	(output_radix_1): Remove.
+	(set_output_radix): Remove use of output_radix_1.
+	(set_output_radix_1): Likewise.
+	(_initialize_valprint): Remove use of output_radix_1 and
+	input_radix_1.
+	* value.c (set_max_value_size): Simplify error case.
+	* infrun.c (non_stop_1): Remove.
+	(set_non_stop): Simplify to just the error check.
+	(observer_mode_1): Remove.
+	(set_observer_mode): Simplify to just the error check.
+	(update_observer_mode): Remove use of observer_mode_1.
+	(_initialize_infrun): Remove use of observer_mode_1 and
+	non_stop_1.
+	* mi/mi-main.c (mi_async_1): Remove.
+	(set_mi_async_command): Simplify to just the error check.
+	(_initialize_mi_main): Remove use of mi_async_1.
+	* target.c (target_async_permitted_1): Remove.
+	(maint_set_target_async_command): Simplify to just the error
+	check.
+	(target_non_stop_enabled_1): Remove.
+	(maint_set_target_non_stop_command): Simplify to just the error
+	check.
+	(initialize_targets): Remove use of target_async_permitted_1 and
+	target_non_stop_enabled_1.
+
+2016-11-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* cli/cli-setshow.c: Add exceptions.h include.
 	(struct set_cmd_cleanup_data): New definition.
 	(set_cmd_cleanup_or_revert): New function.

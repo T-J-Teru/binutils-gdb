@@ -652,10 +652,7 @@ set_dcache_size (char *args, int from_tty,
 		 struct cmd_list_element *c)
 {
   if (dcache_size == 0)
-    {
-      dcache_size = DCACHE_DEFAULT_SIZE;
-      error (_("Dcache size must be greater than 0."));
-    }
+    error (_("Dcache size must be greater than 0."));
   target_dcache_invalidate ();
 }
 
@@ -665,11 +662,8 @@ set_dcache_line_size (char *args, int from_tty,
 {
   if (dcache_line_size < 2
       || (dcache_line_size & (dcache_line_size - 1)) != 0)
-    {
-      unsigned d = dcache_line_size;
-      dcache_line_size = DCACHE_DEFAULT_LINE_SIZE;
-      error (_("Invalid dcache line size: %u (must be power of 2)."), d);
-    }
+    error (_("Invalid dcache line size: %u (must be power of 2)."),
+	   dcache_line_size);
   target_dcache_invalidate ();
 }
 

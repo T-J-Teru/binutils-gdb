@@ -212,12 +212,7 @@ unsigned int symtab_create_debug = 0;
 /* When non-zero, print debugging messages related to symbol lookup.  */
 unsigned int symbol_lookup_debug = 0;
 
-/* The size of the cache is staged here.  */
-static unsigned int new_symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
-
-/* The current value of the symbol cache size.
-   This is saved so that if the user enters a value too big we can restore
-   the original value from here.  */
+/* The current value of the symbol cache size.  */
 static unsigned int symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
 
 /* Non-zero if a file may be known by two different basenames.
@@ -1285,17 +1280,9 @@ static void
 set_symbol_cache_size_handler (char *args, int from_tty,
 			       struct cmd_list_element *c)
 {
-  if (new_symbol_cache_size > MAX_SYMBOL_CACHE_SIZE)
-    {
-      /* Restore the previous value.
-	 This is the value the "show" command prints.  */
-      new_symbol_cache_size = symbol_cache_size;
-
-      error (_("Symbol cache size is too large, max is %u."),
-	     MAX_SYMBOL_CACHE_SIZE);
-    }
-  symbol_cache_size = new_symbol_cache_size;
-
+  if (symbol_cache_size > MAX_SYMBOL_CACHE_SIZE)
+    error (_("Symbol cache size is too large, max is %u."),
+	   MAX_SYMBOL_CACHE_SIZE);
   set_symbol_cache_size (symbol_cache_size);
 }
 
@@ -6222,7 +6209,7 @@ When enabled (non-zero), symbol lookups are logged."),
 			   &setdebuglist, &showdebuglist);
 
   add_setshow_zuinteger_cmd ("symbol-cache-size", no_class,
-			     &new_symbol_cache_size,
+			     &symbol_cache_size,
 			     _("Set the size of the symbol cache."),
 			     _("Show the size of the symbol cache."), _("\
 The size of the symbol cache.\n\

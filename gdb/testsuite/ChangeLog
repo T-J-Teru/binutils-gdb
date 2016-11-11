@@ -1,5 +1,9 @@
 2016-11-11  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.base/max-value-size.exp: Update expected output.
+
+2016-11-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.base/dcache-line-set-error.exp: New file.
 
 2016-11-09  Pedro Alves  <palves@redhat.com>

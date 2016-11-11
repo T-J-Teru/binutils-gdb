@@ -106,21 +106,12 @@ static void output_register (struct frame_info *, int regnum, int format,
 /* Controls whether the frontend wants MI in async mode.  */
 static int mi_async = 0;
 
-/* The set command writes to this variable.  If the inferior is
-   executing, mi_async is *not* updated.  */
-static int mi_async_1 = 0;
-
 static void
 set_mi_async_command (char *args, int from_tty,
 		      struct cmd_list_element *c)
 {
   if (have_live_inferiors ())
-    {
-      mi_async_1 = mi_async;
-      error (_("Cannot change this setting while the inferior is running."));
-    }
-
-  mi_async = mi_async_1;
+    error (_("Cannot change this setting while the inferior is running."));
 }
 
 static void
@@ -3042,7 +3033,7 @@ _initialize_mi_main (void)
   struct cmd_list_element *c;
 
   add_setshow_boolean_cmd ("mi-async", class_run,
-			   &mi_async_1, _("\
+			   &mi_async, _("\
 Set whether MI asynchronous mode is enabled."), _("\
 Show whether MI asynchronous mode is enabled."), _("\
 Tells GDB whether MI should be in asynchronous mode."),

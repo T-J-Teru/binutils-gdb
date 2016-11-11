@@ -35,17 +35,8 @@ unsigned int record_debug = 0;
 /* The number of instructions to print in "record instruction-history".  */
 static unsigned int record_insn_history_size = 10;
 
-/* The variable registered as control variable in the "record
-   instruction-history" command.  Necessary for extra input
-   validation.  */
-static unsigned int record_insn_history_size_setshow_var;
-
 /* The number of functions to print in "record function-call-history".  */
 static unsigned int record_call_history_size = 10;
-
-/* The variable registered as control variable in the "record
-   call-history" command.  Necessary for extra input validation.  */
-static unsigned int record_call_history_size_setshow_var;
 
 struct cmd_list_element *record_cmdlist = NULL;
 struct cmd_list_element *record_goto_cmdlist = NULL;
@@ -690,23 +681,13 @@ cmd_record_call_history (char *arg, int from_tty)
 
 /* Helper for "set record instruction-history-size" and "set record
    function-call-history-size" input validation.  COMMAND_VAR is the
-   variable registered in the command as control variable.  *SETTING
-   is the real setting the command allows changing.  */
+   variable registered in the command as control variable.  */
 
 static void
-validate_history_size (unsigned int *command_var, unsigned int *setting)
+validate_history_size (unsigned int command_var)
 {
-  if (*command_var != UINT_MAX && *command_var > INT_MAX)
-    {
-      unsigned int new_value = *command_var;
-
-      /* Restore previous value.  */
-      *command_var = *setting;
-      error (_("integer %u out of range"), new_value);
-    }
-
-  /* Commit new value.  */
-  *setting = *command_var;
+  if (command_var != UINT_MAX && command_var > INT_MAX)
+    error (_("integer %u out of range"), command_var);
 }
 
 /* Called by do_setshow_command.  We only want values in the
@@ -717,8 +698,7 @@ static void
 set_record_insn_history_size (char *args, int from_tty,
 			      struct cmd_list_element *c)
 {
-  validate_history_size (&record_insn_history_size_setshow_var,
-			 &record_insn_history_size);
+  validate_history_size (record_insn_history_size);
 }
 
 /* Called by do_setshow_command.  We only want values in the
@@ -729,8 +709,7 @@ static void
 set_record_call_history_size (char *args, int from_tty,
 			      struct cmd_list_element *c)
 {
-  validate_history_size (&record_call_history_size_setshow_var,
-			 &record_call_history_size);
+  validate_history_size (record_call_history_size);
 }
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */
@@ -750,7 +729,7 @@ _initialize_record (void)
 			     &showdebuglist);
 
   add_setshow_uinteger_cmd ("instruction-history-size", no_class,
-			    &record_insn_history_size_setshow_var, _("\
+			    &record_insn_history_size, _("\
 Set number of instructions to print in \"record instruction-history\"."), _("\
 Show number of instructions to print in \"record instruction-history\"."), _("\
 A size of \"unlimited\" means unlimited instructions.  The default is 10."),
@@ -758,7 +737,7 @@ A size of \"unlimited\" means unlimited instructions.  The default is 10."),
 			    &set_record_cmdlist, &show_record_cmdlist);
 
   add_setshow_uinteger_cmd ("function-call-history-size", no_class,
-			    &record_call_history_size_setshow_var, _("\
+			    &record_call_history_size, _("\
 Set number of function to print in \"record function-call-history\"."), _("\
 Show number of functions to print in \"record function-call-history\"."), _("\
 A size of \"unlimited\" means unlimited lines.  The default is 10."),
@@ -855,8 +834,4 @@ from the first argument.\n\
 The number of functions to print can be defined with \"set record \
 function-call-history-size\"."),
            &record_cmdlist);
-
-  /* Sync command control variables.  */
-  record_insn_history_size_setshow_var = record_insn_history_size;
-  record_call_history_size_setshow_var = record_call_history_size;
 }
