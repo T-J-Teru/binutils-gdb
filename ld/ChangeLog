@@ -1,3 +1,16 @@
+2016-12-09  Graham Markall  <graham.markall@embecosm.com>
+
+	* Makefile.am: Add earclinux_nps.c and earclinux_nps_prof
+	targets and add to ALL_EMULATION_SOURCES.
+	* Makefile.in: Likewise, regenerated.
+	* configure.tgt: Add arclinux_nps and arclinux_nps_prof as
+	extra emulations for arc*-*-elf* and arc*-*-linux*.
+	* emulparams/arclinux_nps.sh: New file.
+	* emulparams/arclinux_nps_prof.sh: New file.
+	* scripttempl/arclinux_nps.sc: New file.
+	* testsuite/ld-arc/arclinux-nps.d,
+	* testsuite/ld-arc/arclinux-nps.s: New test.
+
 2016-12-08  Alan Modra  <amodra@gmail.com>
 
 	* configure: Regenerate.
