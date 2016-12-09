@@ -740,16 +740,18 @@ earclinux.c: $(srcdir)/emulparams/arclinux.sh \
   $(srcdir)/scripttempl/arclinux.sc ${GEN_DEPENDS}
 
 earclinux_nps.c: $(srcdir)/emulparams/arclinux_nps.sh \
+  $(srcdir)/emulparams/arc-nps.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/arclinux.em \
-  $(srcdir)/scripttempl/arclinux_nps.sc ${GEN_DEPENDS}
+  $(srcdir)/scripttempl/arclinux.sc ${GEN_DEPENDS}
 
 earclinux_prof.c: $(srcdir)/emulparams/arclinux_prof.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/arclinux.em \
   $(srcdir)/scripttempl/arclinux.sc ${GEN_DEPENDS}
 
 earclinux_nps_prof.c: $(srcdir)/emulparams/arclinux_nps_prof.sh \
+  $(srcdir)/emulparams/arc-nps.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/arclinux.em \
-  $(srcdir)/scripttempl/arclinux_nps.sc ${GEN_DEPENDS}
+  $(srcdir)/scripttempl/arclinux.sc ${GEN_DEPENDS}
 
 earm_epoc_pe.c: $(srcdir)/emulparams/arm_epoc_pe.sh \
   $(srcdir)/emultempl/pe.em $(srcdir)/scripttempl/epocpe.sc ${GEN_DEPENDS}

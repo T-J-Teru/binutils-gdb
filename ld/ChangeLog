@@ -1,3 +1,14 @@
+2016-12-09  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* emulparams/arc-nps.sh: New file.
+	* emulparams/arclinux_nps.sh: Use arclinux.sh and arc-nps.sh.
+	* emulparams/arclinux_nps_prof.sh: Use arclinux_prof.sh and
+	arc-nps.sh.
+	* scripttempl/arclinux_nps.sc: Delete.
+	* Makefile.am (earclinux_nps.c): Update dependencies.
+	(earclinux_nps_prof.c): Likewise.
+	* Makefile.in: Regenerate.
+
 2016-12-09  Graham Markall  <graham.markall@embecosm.com>
 
 	* Makefile.am: Add earclinux_nps.c and earclinux_nps_prof
