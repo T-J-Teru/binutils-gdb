@@ -1567,6 +1567,17 @@ _bfd_elf_print_private_bfd_data (bfd *abfd, void *farg)
       unsigned int i, c;
 
       fprintf (f, _("\nProgram Header:\n"));
+
+      fprintf (f, _("%-8s %-18s %-18s %-18s %-5s %-18s %-18s %s\n"),
+               _("Type"),
+               _("Offset"),
+               _("vaddr"),
+               _("paddr"),
+               _("align"),
+               _("filesz"),
+               _("memsz"),
+               _("flags"));
+
       c = elf_elfheader (abfd)->e_phnum;
       for (i = 0; i < c; i++, p++)
 	{
@@ -1578,18 +1589,20 @@ _bfd_elf_print_private_bfd_data (bfd *abfd, void *farg)
 	      sprintf (buf, "0x%lx", p->p_type);
 	      pt = buf;
 	    }
-	  fprintf (f, "%8s off    0x", pt);
+	  fprintf (f, "%-8s ", pt);
+	  fprintf (f, "0x");
 	  bfd_fprintf_vma (abfd, f, p->p_offset);
-	  fprintf (f, " vaddr 0x");
+	  fprintf (f, " 0x");
 	  bfd_fprintf_vma (abfd, f, p->p_vaddr);
-	  fprintf (f, " paddr 0x");
+	  fprintf (f, " 0x");
 	  bfd_fprintf_vma (abfd, f, p->p_paddr);
-	  fprintf (f, " align 2**%u\n", bfd_log2 (p->p_align));
-	  fprintf (f, "         filesz 0x");
+	  sprintf (buf, "2**%u", bfd_log2 (p->p_align));
+	  fprintf (f, " %-5s", buf);
+	  fprintf (f, " 0x");
 	  bfd_fprintf_vma (abfd, f, p->p_filesz);
-	  fprintf (f, " memsz 0x");
+	  fprintf (f, " 0x");
 	  bfd_fprintf_vma (abfd, f, p->p_memsz);
-	  fprintf (f, " flags %c%c%c",
+	  fprintf (f, " %c%c%c",
 		   (p->p_flags & PF_R) != 0 ? 'r' : '-',
 		   (p->p_flags & PF_W) != 0 ? 'w' : '-',
 		   (p->p_flags & PF_X) != 0 ? 'x' : '-');
