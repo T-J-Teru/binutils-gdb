@@ -390,6 +390,34 @@ AC_DEFINE_UNQUOTED(DEFAULT_LD_Z_RELRO,
   $ac_default_ld_z_relro,
   [Define to 1 if you want to enable -z relro in ELF linker by default.])
 
+# Provide a configure time option to override the default linker
+# emulation.  The new default must be one of the valid emulations, and
+# the old default will be added to the list of available alternatives.
+AC_ARG_WITH(default_linker_emulation,
+	      AS_HELP_STRING([--with-default-linker-emulation=NAME],
+	      [override default linker emulation]),
+              # Action if present
+  AC_MSG_CHECKING(linker emulation override is valid)
+  ac_override_default_emulation=unset
+  if test "x$withval" != "x$EMUL"; then
+    # Not the current default, check against other known emulations
+    ac_override_extra_emuls=$EMUL
+    for i in $targ_extra_emuls; do
+       if test "x$withval" = "x$i"; then
+          ac_override_default_emulation=$withval
+       else
+          ac_override_extra_emuls="$ac_override_extra_emuls $i"
+       fi
+    done
+    if test "x$ac_override_default_emulation" = "xunset"; then
+      AC_MSG_RESULT(no)
+      AC_MSG_ERROR(unknown linker emulation '${withval}' known emulations are ${EMUL} ${targ_extra_emuls})
+    fi
+    AC_MSG_RESULT(yes)
+    targ_extra_emuls=$ac_override_extra_emuls
+    EMUL=$ac_override_default_emulation
+  fi)dnl
+
 AC_SUBST(elf_list_options)
 AC_SUBST(elf_shlib_list_options)
 AC_SUBST(elf_plt_unwind_list_options)

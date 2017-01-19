@@ -2,6 +2,10 @@
 
 * Add support for the Texas Instruments PRU processor.
 
+* Add new configure option --with-default-linker-emulation=NAME, where NAME is
+  a valid linker emulation for the target being configured.  This allows the
+  default linker emulation to be overridden at configure time.
+
 Changes in 2.28:
 
 * The EXCLUDE_FILE linker script construct can now be applied outside of the
