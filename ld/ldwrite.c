@@ -298,6 +298,7 @@ build_link_order (lang_statement_union_type *statement)
 	link_order->offset = statement->padding_statement.output_offset;
 	link_order->u.data.contents = statement->padding_statement.fill->data;
 	link_order->u.data.size = statement->padding_statement.fill->size;
+	link_order->u.data.random = statement->padding_statement.fill->random;
       }
       break;
 

@@ -1,3 +1,8 @@
+2017-03-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* linker.c (default_data_link_order): Handle filling section with
+	random values.
+
 2017-04-24  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* elf64-x86-64.c (elf_x86_64_link_hash_entry): Add

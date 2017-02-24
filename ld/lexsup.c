@@ -535,6 +535,9 @@ static const struct ld_option ld_options[] =
   { {"orphan-handling", required_argument, NULL, OPTION_ORPHAN_HANDLING},
     '\0', N_("=MODE"), N_("Control how orphan sections are handled."),
     TWO_DASHES },
+  { {"random-fill-seed", required_argument, NULL, OPTION_RANDOM_FILL_SEED},
+    '\0', N_("=VALUE"), N_("Set initial seed for random fill generation."),
+    TWO_DASHES },
 };
 
 #define OPTION_COUNT ARRAY_SIZE (ld_options)
@@ -1562,6 +1565,18 @@ parse_args (unsigned argc, char **argv)
 	    einfo (_("%P%F: invalid argument to option"
 		     " \"--orphan-handling\"\n"));
 	  break;
+
+        case OPTION_RANDOM_FILL_SEED:
+          {
+            char *end;
+            unsigned int seed = (unsigned int) strtoul (optarg, &end, 0);
+            if (*end)
+              einfo (_("%P%F: unable to parse `%s' for option"
+                       " \"--random-fill-seed\"\n"), optarg);
+            initstate (seed, link_info.random_fill_state,
+                       sizeof (link_info.random_fill_state));
+          }
+          break;
 	}
     }
 

@@ -49,6 +49,7 @@
 #endif
 
 #include <string.h>
+#include <time.h>
 
 #ifdef HAVE_SBRK
 #if !HAVE_DECL_SBRK
@@ -193,6 +194,17 @@ ld_bfd_error_handler (const char *fmt, va_list ap)
   (*default_bfd_error_handler) (fmt, ap);
 }
 
+/* Initialise the RANDOM_FILL_SEED field of global LINK_INFO based on the
+   current time.  */
+
+static void
+init_random_seed (void)
+{
+  unsigned int seed = (unsigned int) time (NULL);
+  initstate (seed, link_info.random_fill_state,
+             sizeof (link_info.random_fill_state));
+}
+
 int
 main (int argc, char **argv)
 {
@@ -298,6 +310,7 @@ main (int argc, char **argv)
 #ifdef DEFAULT_FLAG_COMPRESS_DEBUG
   link_info.compress_debug = COMPRESS_DEBUG_GABI_ZLIB;
 #endif
+  init_random_seed ();
 
   ldfile_add_arch ("");
   emulation = get_emulation (argc, argv);

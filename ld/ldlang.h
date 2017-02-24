@@ -35,6 +35,7 @@ typedef enum
 
 struct _fill_type
 {
+  int random;
   size_t size;
   unsigned char data[1];
 };

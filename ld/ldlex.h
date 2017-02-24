@@ -146,6 +146,7 @@ enum option_values
   OPTION_PRINT_MEMORY_USAGE,
   OPTION_REQUIRE_DEFINED_SYMBOL,
   OPTION_ORPHAN_HANDLING,
+  OPTION_RANDOM_FILL_SEED,
 };
 
 /* The initial parser states.  */

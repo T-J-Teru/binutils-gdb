@@ -4286,10 +4286,15 @@ print_fill_statement (lang_fill_statement_type *fill)
 {
   size_t size;
   unsigned char *p;
-  fputs (" FILL mask 0x", config.map_file);
-  for (p = fill->fill->data, size = fill->fill->size; size != 0; p++, size--)
-    fprintf (config.map_file, "%02x", *p);
-  fputs ("\n", config.map_file);
+  if (fill->fill->random)
+    fputs (" FILL mask RANDOM\n", config.map_file);
+  else
+    {
+      fputs (" FILL mask 0x", config.map_file);
+      for (p = fill->fill->data, size = fill->fill->size; size != 0; p++, size--)
+	fprintf (config.map_file, "%02x", *p);
+      fputs ("\n", config.map_file);
+    }
 }
 
 static void

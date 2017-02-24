@@ -2448,7 +2448,7 @@ default_data_link_order (bfd *abfd,
   size_t fill_size;
   bfd_byte *fill;
   file_ptr loc;
-  bfd_boolean result;
+  bfd_boolean result, fill_random;
 
   BFD_ASSERT ((sec->flags & SEC_HAS_CONTENTS) != 0);
 
@@ -2458,7 +2458,36 @@ default_data_link_order (bfd *abfd,
 
   fill = link_order->u.data.contents;
   fill_size = link_order->u.data.size;
-  if (fill_size == 0)
+  fill_random = link_order->u.data.random;
+  if (fill_random)
+    {
+      bfd_byte *p;
+      long int val;
+      PTR ostate;
+
+      fill = (bfd_byte *) bfd_malloc (size);
+      if (fill == NULL)
+        return FALSE;
+
+      ostate = setstate (info->random_fill_state);
+      p = fill;
+      while (size > sizeof (val))
+        {
+          val = random ();
+          memcpy (p, &val, sizeof (val));
+          p += sizeof (val);
+          size -= sizeof (val);
+        }
+
+      if (size > 0)
+        {
+          val = random ();
+          memcpy (p, &val, size);
+        }
+      size = link_order->size;
+      setstate (ostate);
+    }
+  else if (fill_size == 0)
     {
       fill = abfd->arch_info->fill (size, bfd_big_endian (abfd),
 				    (sec->flags & SEC_CODE) != 0);

@@ -620,6 +620,10 @@ struct bfd_link_info
 
   /* The version information.  */
   struct bfd_elf_version_tree *version_info;
+
+  /* When filling sections with random values, this is the state
+     information used by the random number generator.  */
+  char random_fill_state [256];
 };
 
 /* This structures holds a set of callback functions.  These are called
@@ -787,6 +791,8 @@ struct bfd_link_order
 	} indirect;
       struct
 	{
+          /* If true then fill the contents with random values.  */
+          bfd_boolean random;
 	  /* Size of contents, or zero when contents should be filled by
 	     the architecture-dependent fill function.
 	     A non-zero value allows filling of the output section

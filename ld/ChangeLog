@@ -1,3 +1,25 @@
+2017-03-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ldexp.c (exp_get_fill): Spot 'RANDOM' expression, and initialise
+	'random' flag in fill_type result.
+	* ldlang.c (print_fill_statement): Print something suitable for
+	RANDOM fill.
+	* ldlang.h (struct _fill_type): Add 'random' field.
+	* ldlex.h (enum option_values): Add OPTION_RANDOM_FILL_SEED.
+	* ldmain.c: Add 'time.h' include.
+	(init_random_seed): New function to initialise 'random_fill_state'
+	in 'link_info'.
+	(main): Call new function init_random_seed.
+	* ldwrite.c (build_link_order): Initialise 'random' flag in the
+	bfd_link_order.
+	* lexsup.c (ld_options): Add 'random-fill-seed' entry.
+	(parse_args): Handle OPTION_RANDOM_FILL_SEED.
+	* ld.texinfo (Options): Document '--random-fill-seed' option.
+	(Output Section Data): Document 'FILL(RANDOM)'.
+	(Output Section Fill): Document '=RANDOM'.
+	* testsuite/ld-scripts/fill.t: Add random fill test.
+	* testsuite/ld-scripts/fill.d: Extend expected results.
+
 2017-04-24  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* testsuite/ld-x86-64/no-plt.exp: Also check no-plt-1e.nd.

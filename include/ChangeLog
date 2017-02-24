@@ -1,3 +1,8 @@
+2017-03-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* bfdlink.h (struct bfd_link_info): Add 'random_fill_state'.
+	(struct bfd_link_order): Add 'random' flag.
+
 2017-04-20  H.J. Lu  <hongjiu.lu@intel.com>
 
 	PR ld/21382

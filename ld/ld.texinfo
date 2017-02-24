@@ -2452,6 +2452,16 @@ string identifying the original linked file does not change.
 
 Passing @code{none} for @var{style} disables the setting from any
 @code{--build-id} options earlier on the command line.
+
+@kindex --random-fill-seed=@var{value}
+@item --random-fill-seed=@var{value}
+When using @code{FILL} or @samp{=@var{fillexp}} to fill section
+contents with random values (@pxref{Output Section Fill} and
+@ref{Output Section Data}) if reproducible output is required, for
+example, in the case of testing, then passing @var{value} will
+override the random seed usually set by the linker.  Passing the same
+random seed to subsequent runs will cause the same random values to be
+generated for each link.
 @end table
 
 @c man end
@@ -4687,8 +4697,11 @@ SECTIONS @{@ .text : @{@ *(.text) ; LONG(1) @}@ .data : @{@ *(.data) @}@ @}@
 @end smallexample
 
 @kindex FILL(@var{expression})
+@kindex FILL(RANDOM)
 @cindex holes, filling
 @cindex unspecified memory
+@cindex fill pattern
+@cindex fill pattern, random
 You may use the @code{FILL} command to set the fill pattern for the
 current section.  It is followed by an expression in parentheses.  Any
 otherwise unspecified regions of memory within the section (for example,
@@ -4703,6 +4716,14 @@ This example shows how to fill unspecified regions of memory with the
 value @samp{0x90}:
 @smallexample
 FILL(0x90909090)
+@end smallexample
+
+If the expression @samp{RANDOM} is used the any unspecified memory
+will be filled with random values.  This is an example of how to use
+@samp{RANDOM}:
+
+@smallexample
+FILL(RANDOM)
 @end smallexample
 
 The @code{FILL} command is similar to the @samp{=@var{fillexp}} output
@@ -5058,8 +5079,12 @@ SECTIONS @{ .text : @{ *(.text) @} :text @}
 @node Output Section Fill
 @subsubsection Output Section Fill
 @kindex =@var{fillexp}
+@kindex =RANDOM
+@cindex holes, filling
+@cindex unspecified memory
 @cindex section fill pattern
 @cindex fill pattern, entire section
+@cindex fill pattern, random
 You can set the fill pattern for an entire section by using
 @samp{=@var{fillexp}}.  @var{fillexp} is an expression
 (@pxref{Expressions}).  Any otherwise unspecified regions of memory
@@ -5080,6 +5105,16 @@ Here is a simple example:
 @smallexample
 @group
 SECTIONS @{ .text : @{ *(.text) @} =0x90909090 @}
+@end group
+@end smallexample
+
+If the @var{fillexp} @samp{RANDOM} is used then any unspecified
+regions of memory will be filled with random values.
+
+Here is a simple example:
+@smallexample
+@group
+SECTIONS @{ .text : @{ *(.text) @} =RANDOM @}
 @end group
 @end smallexample
 

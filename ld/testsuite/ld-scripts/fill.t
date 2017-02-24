@@ -16,5 +16,7 @@ SECTIONS
     LONG (0xdeadbeef)
     . += 12;
     . += 16;
+    FILL (RANDOM)
+    . += 4;
   } =0xcafebabe
 }

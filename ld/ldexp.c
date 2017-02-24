@@ -1548,6 +1548,15 @@ exp_get_fill (etree_type *tree, fill_type *def, char *name)
   if (tree == NULL)
     return def;
 
+  if (tree->type.node_class == etree_name
+      && strcmp (tree->name.name, "RANDOM") == 0)
+    {
+      fill = (fill_type *) xmalloc (sizeof (*fill));
+      fill->random = 1;
+      fill->size = 0;
+      return fill;
+    }
+
   exp_fold_tree_no_dot (tree);
   if (!expld.result.valid_p)
     {
@@ -1562,6 +1571,7 @@ exp_get_fill (etree_type *tree, fill_type *def, char *name)
       unsigned char *dst;
       unsigned char *s;
       fill = (fill_type *) xmalloc ((len + 1) / 2 + sizeof (*fill) - 1);
+      fill->random = 0;
       fill->size = (len + 1) / 2;
       dst = fill->data;
       s = (unsigned char *) expld.result.str;
@@ -1593,6 +1603,7 @@ exp_get_fill (etree_type *tree, fill_type *def, char *name)
       fill->data[2] = (val >>  8) & 0xff;
       fill->data[3] = (val >>  0) & 0xff;
       fill->size = 4;
+      fill->random = 0;
     }
   return fill;
 }
