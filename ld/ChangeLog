@@ -1,5 +1,10 @@
 2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldlang.c (placed_commons): Delete.
+	(lang_add_wild): No longer set placed_commons.
+
+2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldgram.y (ldgram_had_keep): Make static.
 	(ldgram_vers_current_lang): Likewise.
 

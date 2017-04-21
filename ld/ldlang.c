@@ -61,7 +61,6 @@ static struct obstack map_obstack;
 #define obstack_chunk_alloc xmalloc
 #define obstack_chunk_free free
 static const char *entry_symbol_default = "start";
-static bfd_boolean placed_commons = FALSE;
 static bfd_boolean map_head_is_link_order = FALSE;
 static lang_output_section_statement_type *default_common_section;
 static bfd_boolean map_option_f;
@@ -7238,9 +7237,6 @@ lang_add_wild (struct wildcard_spec *filespec,
        curr != NULL;
        section_list = curr, curr = next)
     {
-      if (curr->spec.name != NULL && strcmp (curr->spec.name, "COMMON") == 0)
-	placed_commons = TRUE;
-
       next = curr->next;
       curr->next = section_list;
     }
