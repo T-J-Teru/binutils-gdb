@@ -98,7 +98,7 @@ static int error_index;
 %type <name> memspec_opt casesymlist
 %type <name> memspec_at_opt
 %type <cname> wildcard_name
-%type <wildcard> wildcard_spec filename_spec wildcard_maybe_exclude
+%type <wildcard> section_name_spec filename_spec wildcard_maybe_exclude
 %token <bigint> INT
 %token <name> NAME LNAME
 %type <integer> length
@@ -478,7 +478,7 @@ filename_spec:
 			}
 	;
 
-wildcard_spec:
+section_name_spec:
 		wildcard_name
 			{
 			  $$.name = $1;
@@ -630,7 +630,7 @@ exclude_name_list:
 	;
 
 section_NAME_list:
-		section_NAME_list opt_comma wildcard_spec
+		section_NAME_list opt_comma section_name_spec
 			{
 			  struct wildcard_list *tmp;
 			  tmp = (struct wildcard_list *) xmalloc (sizeof *tmp);
@@ -639,7 +639,7 @@ section_NAME_list:
 			  $$ = tmp;
 			}
 	|
-		wildcard_spec
+		section_name_spec
 			{
 			  struct wildcard_list *tmp;
 			  tmp = (struct wildcard_list *) xmalloc (sizeof *tmp);

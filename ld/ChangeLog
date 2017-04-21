@@ -1,5 +1,10 @@
 2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldgram.y (wildcard_spec): Rename to...
+	(section_name_spec): ...this.
+
+2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldgram.y (filename_spec): New rule.
 	(input_section_spec_no_keep): Use filename_spec.
 	(wildcard_maybe_exclude): New rule.
