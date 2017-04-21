@@ -98,7 +98,7 @@ static int error_index;
 %type <name> memspec_opt casesymlist
 %type <name> memspec_at_opt
 %type <cname> wildcard_name
-%type <wildcard> wildcard_spec
+%type <wildcard> wildcard_spec filename_spec wildcard_maybe_exclude
 %token <bigint> INT
 %token <name> NAME LNAME
 %type <integer> length
@@ -447,6 +447,37 @@ wildcard_name:
 			}
 	;
 
+wildcard_maybe_exclude:
+		wildcard_name
+			{
+			  $$.name = $1;
+			  $$.sorted = none;
+			  $$.exclude_name_list = NULL;
+			  $$.section_flag_list = NULL;
+			}
+	| 	EXCLUDE_FILE '(' exclude_name_list ')' wildcard_name
+			{
+			  $$.name = $5;
+			  $$.sorted = none;
+			  $$.exclude_name_list = $3;
+			  $$.section_flag_list = NULL;
+			}
+	;
+
+filename_spec:
+		wildcard_maybe_exclude
+	|	SORT_BY_NAME '(' wildcard_maybe_exclude ')'
+			{
+			  $$ = $3;
+			  $$.sorted = by_name;
+			}
+	|	SORT_NONE '(' wildcard_maybe_exclude ')'
+			{
+			  $$ = $3;
+			  $$.sorted = by_none;
+			}
+	;
+
 wildcard_spec:
 		wildcard_name
 			{
@@ -650,11 +681,11 @@ input_section_spec_no_keep:
 			  tmp.section_flag_list = $1;
 			  lang_add_wild (&tmp, $3, ldgram_had_keep);
 			}
-	|	wildcard_spec '(' section_NAME_list ')'
+	|	filename_spec '(' section_NAME_list ')'
 			{
 			  lang_add_wild (&$1, $3, ldgram_had_keep);
 			}
-	|	sect_flags wildcard_spec '(' section_NAME_list ')'
+	|	sect_flags filename_spec '(' section_NAME_list ')'
 			{
 			  $2.section_flag_list = $1;
 			  lang_add_wild (&$2, $4, ldgram_had_keep);

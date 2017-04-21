@@ -1,5 +1,19 @@
 2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldgram.y (filename_spec): New rule.
+	(input_section_spec_no_keep): Use filename_spec.
+	(wildcard_maybe_exclude): New rule.
+	* testsuite/ld-scripts/align.exp: Run new tests.
+	* testsuite/ld-scripts/align3.d: New file.
+	* testsuite/ld-scripts/align3.t: New file.
+	* testsuite/ld-scripts/align4.d: New file.
+	* testsuite/ld-scripts/align4.t: New file.
+	* testsuite/ld-scripts/align5.d: New file.
+	* testsuite/ld-scripts/align5.t: New file.
+	* NEWS: Mention change.
+
+2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldlang.c (placed_commons): Delete.
 	(lang_add_wild): No longer set placed_commons.
 
