@@ -479,82 +479,46 @@ filename_spec:
 	;
 
 section_name_spec:
-		wildcard_name
+		wildcard_maybe_exclude
+	|	SORT_BY_NAME '(' wildcard_maybe_exclude ')'
 			{
-			  $$.name = $1;
-			  $$.sorted = none;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
-			}
-	| 	EXCLUDE_FILE '(' exclude_name_list ')' wildcard_name
-			{
-			  $$.name = $5;
-			  $$.sorted = none;
-			  $$.exclude_name_list = $3;
-			  $$.section_flag_list = NULL;
-			}
-	|	SORT_BY_NAME '(' wildcard_name ')'
-			{
-			  $$.name = $3;
+			  $$ = $3;
 			  $$.sorted = by_name;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
-	|	SORT_BY_ALIGNMENT '(' wildcard_name ')'
+	|	SORT_BY_ALIGNMENT '(' wildcard_maybe_exclude ')'
 			{
-			  $$.name = $3;
+			  $$ = $3;
 			  $$.sorted = by_alignment;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
-	|	SORT_NONE '(' wildcard_name ')'
+	|	SORT_NONE '(' wildcard_maybe_exclude ')'
 			{
-			  $$.name = $3;
+			  $$ = $3;
 			  $$.sorted = by_none;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
-	|	SORT_BY_NAME '(' SORT_BY_ALIGNMENT '(' wildcard_name ')' ')'
+	|	SORT_BY_NAME '(' SORT_BY_ALIGNMENT '(' wildcard_maybe_exclude ')' ')'
 			{
-			  $$.name = $5;
+			  $$ = $5;
 			  $$.sorted = by_name_alignment;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
-	|	SORT_BY_NAME '(' SORT_BY_NAME '(' wildcard_name ')' ')'
+	|	SORT_BY_NAME '(' SORT_BY_NAME '(' wildcard_maybe_exclude ')' ')'
 			{
-			  $$.name = $5;
+			  $$ = $5;
 			  $$.sorted = by_name;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
-	|	SORT_BY_ALIGNMENT '(' SORT_BY_NAME '(' wildcard_name ')' ')'
+	|	SORT_BY_ALIGNMENT '(' SORT_BY_NAME '(' wildcard_maybe_exclude ')' ')'
 			{
-			  $$.name = $5;
+			  $$ = $5;
 			  $$.sorted = by_alignment_name;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
-	|	SORT_BY_ALIGNMENT '(' SORT_BY_ALIGNMENT '(' wildcard_name ')' ')'
+	|	SORT_BY_ALIGNMENT '(' SORT_BY_ALIGNMENT '(' wildcard_maybe_exclude ')' ')'
 			{
-			  $$.name = $5;
+			  $$ = $5;
 			  $$.sorted = by_alignment;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
-	|	SORT_BY_NAME '(' EXCLUDE_FILE '(' exclude_name_list ')' wildcard_name ')'
+	|	SORT_BY_INIT_PRIORITY '(' wildcard_maybe_exclude ')'
 			{
-			  $$.name = $7;
-			  $$.sorted = by_name;
-			  $$.exclude_name_list = $5;
-			  $$.section_flag_list = NULL;
-			}
-	|	SORT_BY_INIT_PRIORITY '(' wildcard_name ')'
-			{
-			  $$.name = $3;
+			  $$ = $3;
 			  $$.sorted = by_init_priority;
-			  $$.exclude_name_list = NULL;
-			  $$.section_flag_list = NULL;
 			}
 	;
 

@@ -1,5 +1,20 @@
 2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldgram.y (section_name_spec): Simplifiy and use
+	wildcard_maybe_exclude.
+	* testsuite/ld-scripts/exclude-file-5.d: New file.
+	* testsuite/ld-scripts/exclude-file-5.map: New file.
+	* testsuite/ld-scripts/exclude-file-5.t: New file.
+	* testsuite/ld-scripts/exclude-file-6.d: New file.
+	* testsuite/ld-scripts/exclude-file-6.map: New file.
+	* testsuite/ld-scripts/exclude-file-6.t: New file.
+	* testsuite/ld-scripts/exclude-file-7.d: New file.
+	* testsuite/ld-scripts/exclude-file-7.map: New file.
+	* testsuite/ld-scripts/exclude-file-7.t: New file.
+	* NEWS: Mention change.
+
+2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldlang.c (print_wild_statement): Use full names for SORT
 	specifiers.
 
