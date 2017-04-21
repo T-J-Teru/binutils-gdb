@@ -48,8 +48,8 @@
 static enum section_type sectype;
 static lang_memory_region_type *region;
 
-bfd_boolean ldgram_had_keep = FALSE;
-char *ldgram_vers_current_lang = NULL;
+static bfd_boolean ldgram_had_keep = FALSE;
+static char *ldgram_vers_current_lang = NULL;
 
 #define ERROR_NAME_MAX 20
 static char *error_names[ERROR_NAME_MAX];
