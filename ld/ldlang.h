@@ -351,9 +351,14 @@ typedef void (*callback_t) (lang_wild_statement_type *, struct wildcard_list *,
 			    asection *, struct flag_info *,
 			    lang_input_statement_type *, void *);
 
+struct walk_wild_callbacks_t
+{
+  callback_t callback;
+};
+
 typedef void (*walk_wild_section_handler_t) (lang_wild_statement_type *,
 					     lang_input_statement_type *,
-					     callback_t callback,
+					     struct walk_wild_callbacks_t *,
 					     void *data);
 
 typedef bfd_boolean (*lang_match_sec_type_func) (bfd *, const asection *,

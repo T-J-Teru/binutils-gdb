@@ -269,14 +269,14 @@ walk_wild_consider_section (lang_wild_statement_type *ptr,
 			    lang_input_statement_type *file,
 			    asection *s,
 			    struct wildcard_list *sec,
-			    callback_t callback,
+			    struct walk_wild_callbacks_t *callbacks,
 			    void *data)
 {
   /* Don't process sections from files which were excluded.  */
   if (walk_wild_file_in_exclude_list (sec->spec.exclude_name_list, file))
     return;
 
-  (*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
+  (*callbacks->callback) (ptr, sec, s, ptr->section_flag_list, file, data);
 }
 
 /* Lowest common denominator routine that can handle everything correctly,
@@ -285,7 +285,7 @@ walk_wild_consider_section (lang_wild_statement_type *ptr,
 static void
 walk_wild_section_general (lang_wild_statement_type *ptr,
 			   lang_input_statement_type *file,
-			   callback_t callback,
+			   struct walk_wild_callbacks_t *callbacks,
 			   void *data)
 {
   asection *s;
@@ -295,7 +295,7 @@ walk_wild_section_general (lang_wild_statement_type *ptr,
     {
       sec = ptr->section_list;
       if (sec == NULL)
-	(*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
+	(*callbacks->callback) (ptr, sec, s, ptr->section_flag_list, file, data);
 
       while (sec != NULL)
 	{
@@ -309,7 +309,7 @@ walk_wild_section_general (lang_wild_statement_type *ptr,
 	    }
 
 	  if (!skip)
-	    walk_wild_consider_section (ptr, file, s, sec, callback, data);
+	    walk_wild_consider_section (ptr, file, s, sec, callbacks, data);
 
 	  sec = sec->next;
 	}
@@ -565,7 +565,7 @@ output_section_callback_tree_to_list (lang_wild_statement_type *ptr,
 static void
 walk_wild_section_specs1_wild0 (lang_wild_statement_type *ptr,
 				lang_input_statement_type *file,
-				callback_t callback,
+				struct walk_wild_callbacks_t *callbacks,
 				void *data)
 {
   /* We can just do a hash lookup for the section with the right name.
@@ -578,15 +578,15 @@ walk_wild_section_specs1_wild0 (lang_wild_statement_type *ptr,
   asection *s0 = find_section (file, sec0, &multiple_sections_found);
 
   if (multiple_sections_found)
-    walk_wild_section_general (ptr, file, callback, data);
+    walk_wild_section_general (ptr, file, callbacks, data);
   else if (s0)
-    walk_wild_consider_section (ptr, file, s0, sec0, callback, data);
+    walk_wild_consider_section (ptr, file, s0, sec0, callbacks, data);
 }
 
 static void
 walk_wild_section_specs1_wild1 (lang_wild_statement_type *ptr,
 				lang_input_statement_type *file,
-				callback_t callback,
+				struct walk_wild_callbacks_t *callbacks,
 				void *data)
 {
   asection *s;
@@ -598,14 +598,14 @@ walk_wild_section_specs1_wild1 (lang_wild_statement_type *ptr,
       bfd_boolean skip = !match_simple_wild (wildsec0->spec.name, sname);
 
       if (!skip)
-	walk_wild_consider_section (ptr, file, s, wildsec0, callback, data);
+	walk_wild_consider_section (ptr, file, s, wildsec0, callbacks, data);
     }
 }
 
 static void
 walk_wild_section_specs2_wild1 (lang_wild_statement_type *ptr,
 				lang_input_statement_type *file,
-				callback_t callback,
+				struct walk_wild_callbacks_t *callbacks,
 				void *data)
 {
   asection *s;
@@ -616,7 +616,7 @@ walk_wild_section_specs2_wild1 (lang_wild_statement_type *ptr,
 
   if (multiple_sections_found)
     {
-      walk_wild_section_general (ptr, file, callback, data);
+      walk_wild_section_general (ptr, file, callbacks, data);
       return;
     }
 
@@ -628,14 +628,14 @@ walk_wild_section_specs2_wild1 (lang_wild_statement_type *ptr,
 	 than one spec, so if s == s0 then it cannot match
 	 wildspec1.  */
       if (s == s0)
-	walk_wild_consider_section (ptr, file, s, sec0, callback, data);
+	walk_wild_consider_section (ptr, file, s, sec0, callbacks, data);
       else
 	{
 	  const char *sname = bfd_get_section_name (file->the_bfd, s);
 	  bfd_boolean skip = !match_simple_wild (wildsec1->spec.name, sname);
 
 	  if (!skip)
-	    walk_wild_consider_section (ptr, file, s, wildsec1, callback,
+	    walk_wild_consider_section (ptr, file, s, wildsec1, callbacks,
 					data);
 	}
     }
@@ -644,7 +644,7 @@ walk_wild_section_specs2_wild1 (lang_wild_statement_type *ptr,
 static void
 walk_wild_section_specs3_wild2 (lang_wild_statement_type *ptr,
 				lang_input_statement_type *file,
-				callback_t callback,
+				struct walk_wild_callbacks_t *callbacks,
 				void *data)
 {
   asection *s;
@@ -656,26 +656,26 @@ walk_wild_section_specs3_wild2 (lang_wild_statement_type *ptr,
 
   if (multiple_sections_found)
     {
-      walk_wild_section_general (ptr, file, callback, data);
+      walk_wild_section_general (ptr, file, callbacks, data);
       return;
     }
 
   for (s = file->the_bfd->sections; s != NULL; s = s->next)
     {
       if (s == s0)
-	walk_wild_consider_section (ptr, file, s, sec0, callback, data);
+	walk_wild_consider_section (ptr, file, s, sec0, callbacks, data);
       else
 	{
 	  const char *sname = bfd_get_section_name (file->the_bfd, s);
 	  bfd_boolean skip = !match_simple_wild (wildsec1->spec.name, sname);
 
 	  if (!skip)
-	    walk_wild_consider_section (ptr, file, s, wildsec1, callback, data);
+	    walk_wild_consider_section (ptr, file, s, wildsec1, callbacks, data);
 	  else
 	    {
 	      skip = !match_simple_wild (wildsec2->spec.name, sname);
 	      if (!skip)
-		walk_wild_consider_section (ptr, file, s, wildsec2, callback,
+		walk_wild_consider_section (ptr, file, s, wildsec2, callbacks,
 					    data);
 	    }
 	}
@@ -685,7 +685,7 @@ walk_wild_section_specs3_wild2 (lang_wild_statement_type *ptr,
 static void
 walk_wild_section_specs4_wild2 (lang_wild_statement_type *ptr,
 				lang_input_statement_type *file,
-				callback_t callback,
+				struct walk_wild_callbacks_t *callbacks,
 				void *data)
 {
   asection *s;
@@ -698,24 +698,24 @@ walk_wild_section_specs4_wild2 (lang_wild_statement_type *ptr,
 
   if (multiple_sections_found)
     {
-      walk_wild_section_general (ptr, file, callback, data);
+      walk_wild_section_general (ptr, file, callbacks, data);
       return;
     }
 
   s1 = find_section (file, sec1, &multiple_sections_found);
   if (multiple_sections_found)
     {
-      walk_wild_section_general (ptr, file, callback, data);
+      walk_wild_section_general (ptr, file, callbacks, data);
       return;
     }
 
   for (s = file->the_bfd->sections; s != NULL; s = s->next)
     {
       if (s == s0)
-	walk_wild_consider_section (ptr, file, s, sec0, callback, data);
+	walk_wild_consider_section (ptr, file, s, sec0, callbacks, data);
       else
 	if (s == s1)
-	  walk_wild_consider_section (ptr, file, s, sec1, callback, data);
+	  walk_wild_consider_section (ptr, file, s, sec1, callbacks, data);
 	else
 	  {
 	    const char *sname = bfd_get_section_name (file->the_bfd, s);
@@ -723,14 +723,14 @@ walk_wild_section_specs4_wild2 (lang_wild_statement_type *ptr,
 						   sname);
 
 	    if (!skip)
-	      walk_wild_consider_section (ptr, file, s, wildsec2, callback,
+	      walk_wild_consider_section (ptr, file, s, wildsec2, callbacks,
 					  data);
 	    else
 	      {
 		skip = !match_simple_wild (wildsec3->spec.name, sname);
 		if (!skip)
 		  walk_wild_consider_section (ptr, file, s, wildsec3,
-					      callback, data);
+					      callbacks, data);
 	      }
 	  }
     }
@@ -739,13 +739,13 @@ walk_wild_section_specs4_wild2 (lang_wild_statement_type *ptr,
 static void
 walk_wild_section (lang_wild_statement_type *ptr,
 		   lang_input_statement_type *file,
-		   callback_t callback,
+		   struct walk_wild_callbacks_t *callbacks,
 		   void *data)
 {
   if (file->flags.just_syms)
     return;
 
-  (*ptr->walk_wild_section_handler) (ptr, file, callback, data);
+  (*ptr->walk_wild_section_handler) (ptr, file, callbacks, data);
 }
 
 /* Returns TRUE when name1 is a wildcard spec that might match
@@ -869,7 +869,7 @@ analyze_walk_wild_section_handler (lang_wild_statement_type *ptr)
 static void
 walk_wild_file (lang_wild_statement_type *s,
 		lang_input_statement_type *f,
-		callback_t callback,
+		struct walk_wild_callbacks_t *callbacks,
 		void *data)
 {
   if (walk_wild_file_in_exclude_list (s->exclude_name_list, f))
@@ -877,7 +877,7 @@ walk_wild_file (lang_wild_statement_type *s,
 
   if (f->the_bfd == NULL
       || !bfd_check_format (f->the_bfd, bfd_archive))
-    walk_wild_section (s, f, callback, data);
+    walk_wild_section (s, f, callbacks, data);
   else
     {
       bfd *member;
@@ -896,7 +896,7 @@ walk_wild_file (lang_wild_statement_type *s,
 	    {
 	      walk_wild_section (s,
 				 (lang_input_statement_type *) member->usrdata,
-				 callback, data);
+				 callbacks, data);
 	    }
 
 	  member = bfd_openr_next_archived_file (f->the_bfd, member);
@@ -905,7 +905,9 @@ walk_wild_file (lang_wild_statement_type *s,
 }
 
 static void
-walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
+walk_wild (lang_wild_statement_type *s,
+	   struct walk_wild_callbacks_t *callbacks,
+	   void *data)
 {
   const char *file_spec = s->filename;
   char *p;
@@ -915,7 +917,7 @@ walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
       /* Perform the iteration over all files in the list.  */
       LANG_FOR_EACH_INPUT_STATEMENT (f)
 	{
-	  walk_wild_file (s, f, callback, data);
+	  walk_wild_file (s, f, callbacks, data);
 	}
     }
   else if ((p = archive_path (file_spec)) != NULL)
@@ -923,7 +925,7 @@ walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
       LANG_FOR_EACH_INPUT_STATEMENT (f)
 	{
 	  if (input_statement_is_archive_path (file_spec, p, f))
-	    walk_wild_file (s, f, callback, data);
+	    walk_wild_file (s, f, callbacks, data);
 	}
     }
   else if (wildcardp (file_spec))
@@ -931,7 +933,7 @@ walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
       LANG_FOR_EACH_INPUT_STATEMENT (f)
 	{
 	  if (fnmatch (file_spec, f->filename, 0) == 0)
-	    walk_wild_file (s, f, callback, data);
+	    walk_wild_file (s, f, callbacks, data);
 	}
     }
   else
@@ -941,7 +943,7 @@ walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
       /* Perform the iteration over a single file.  */
       f = lookup_name (file_spec);
       if (f)
-	walk_wild_file (s, f, callback, data);
+	walk_wild_file (s, f, callbacks, data);
     }
 }
 
@@ -2903,8 +2905,10 @@ wild (lang_wild_statement_type *s,
       && !s->filenames_sorted)
     {
       lang_section_bst_type *tree;
+      struct walk_wild_callbacks_t callbacks;
 
-      walk_wild (s, output_section_callback_fast, output);
+      callbacks.callback = output_section_callback_fast;
+      walk_wild (s, &callbacks, output);
 
       tree = s->tree;
       if (tree)
@@ -2914,7 +2918,12 @@ wild (lang_wild_statement_type *s,
 	}
     }
   else
-    walk_wild (s, output_section_callback, output);
+    {
+      struct walk_wild_callbacks_t callbacks;
+
+      callbacks.callback = output_section_callback;
+      walk_wild (s, &callbacks, output);
+    }
 
   if (default_common_section == NULL)
     for (sec = s->section_list; sec != NULL; sec = sec->next)
@@ -3488,12 +3497,15 @@ check_input_sections
   (lang_statement_union_type *s,
    lang_output_section_statement_type *output_section_statement)
 {
+  struct walk_wild_callbacks_t callbacks;
+
   for (; s != (lang_statement_union_type *) NULL; s = s->header.next)
     {
       switch (s->header.type)
 	{
 	case lang_wild_statement_enum:
-	  walk_wild (&s->wild_statement, check_section_callback,
+	  callbacks.callback = check_section_callback;
+	  walk_wild (&s->wild_statement, &callbacks,
 		     output_section_statement);
 	  if (!output_section_statement->all_input_readonly)
 	    return;
@@ -6789,12 +6801,15 @@ gc_section_callback (lang_wild_statement_type *ptr,
 static void
 lang_gc_sections_1 (lang_statement_union_type *s)
 {
+  struct walk_wild_callbacks_t callbacks;
+
   for (; s != NULL; s = s->header.next)
     {
       switch (s->header.type)
 	{
 	case lang_wild_statement_enum:
-	  walk_wild (&s->wild_statement, gc_section_callback, NULL);
+	  callbacks.callback = gc_section_callback;
+	  walk_wild (&s->wild_statement, &callbacks, NULL);
 	  break;
 	case lang_constructors_statement_enum:
 	  lang_gc_sections_1 (constructor_list.head);
@@ -6869,6 +6884,8 @@ lang_find_relro_sections_1 (lang_statement_union_type *s,
 			    seg_align_type *seg,
 			    bfd_boolean *has_relro_section)
 {
+  struct walk_wild_callbacks_t callbacks;
+
   if (*has_relro_section)
     return;
 
@@ -6880,8 +6897,9 @@ lang_find_relro_sections_1 (lang_statement_union_type *s,
       switch (s->header.type)
 	{
 	case lang_wild_statement_enum:
+	  callbacks.callback = find_relro_section_callback;
 	  walk_wild (&s->wild_statement,
-		     find_relro_section_callback,
+		     &callbacks,
 		     has_relro_section);
 	  break;
 	case lang_constructors_statement_enum:
