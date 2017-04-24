@@ -709,4 +709,7 @@ lang_print_memory_usage (void);
 extern void
 lang_add_gc_name (const char *);
 
+extern void
+lang_build_sort_group (struct wildcard_list *, sort_type);
+
 #endif

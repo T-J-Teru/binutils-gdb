@@ -7440,17 +7440,7 @@ lang_add_wild (struct wildcard_spec *filespec,
 	       struct wildcard_list *section_list,
 	       bfd_boolean keep_sections)
 {
-  struct wildcard_list *curr, *next;
   lang_wild_statement_type *new_stmt;
-
-  /* Reverse the list as the parser puts it back to front.  */
-  for (curr = section_list, section_list = NULL;
-       curr != NULL;
-       section_list = curr, curr = next)
-    {
-      next = curr->next;
-      curr->next = section_list;
-    }
 
   if (filespec != NULL && filespec->name != NULL)
     {
@@ -8798,3 +8788,18 @@ lang_print_memory_usage (void)
       printf ("    %6.2f%%\n", percent);
     }
 }
+
+void
+lang_build_sort_group (struct wildcard_list *head, sort_type mode)
+{
+  if (head->next != NULL)
+    einfo (_("%P%F: unable to sort over multiple sections for now\n"));
+
+  for (; head != NULL; head = head->next)
+    {
+      head->sort_group_next = head->next;
+      ASSERT (head->spec.sorted == none);
+      head->spec.sorted = mode;
+    }
+}
+

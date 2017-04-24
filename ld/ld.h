@@ -110,6 +110,7 @@ struct wildcard_list
 {
   struct wildcard_list *next;
   struct wildcard_spec spec;
+  struct wildcard_list *sort_group_next;
 };
 
 #define BYTE_SIZE	(1)

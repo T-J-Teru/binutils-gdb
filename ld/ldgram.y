@@ -69,6 +69,11 @@ static int error_index;
   const char *cname;
   struct wildcard_spec wildcard;
   struct wildcard_list *wildcard_list;
+  struct wildcard_list_info
+    {
+      struct wildcard_list *head;
+      struct wildcard_list *tail;
+    } wildcard_list_info;
   struct name_list *name_list;
   struct flag_info_list *flag_info_list;
   struct flag_info *flag_info;
@@ -93,12 +98,15 @@ static int error_index;
 %type <fill> fill_opt fill_exp
 %type <name_list> exclude_name_list
 %type <wildcard_list> section_name_list
+%type <wildcard_list_info> section_name_list_info
+%type <wildcard_list_info> unsorted_section_name_list
+%type <wildcard_list_info> sorted_section_name_list
 %type <flag_info_list> sect_flag_list
 %type <flag_info> sect_flags
 %type <name> memspec_opt casesymlist
 %type <name> memspec_at_opt
 %type <cname> wildcard_name
-%type <wildcard> section_name_spec filename_spec wildcard_maybe_exclude
+%type <wildcard> filename_spec wildcard_maybe_exclude
 %token <bigint> INT
 %token <name> NAME LNAME
 %type <integer> length
@@ -478,50 +486,6 @@ filename_spec:
 			}
 	;
 
-section_name_spec:
-		wildcard_maybe_exclude
-	|	SORT_BY_NAME '(' wildcard_maybe_exclude ')'
-			{
-			  $$ = $3;
-			  $$.sorted = by_name;
-			}
-	|	SORT_BY_ALIGNMENT '(' wildcard_maybe_exclude ')'
-			{
-			  $$ = $3;
-			  $$.sorted = by_alignment;
-			}
-	|	SORT_NONE '(' wildcard_maybe_exclude ')'
-			{
-			  $$ = $3;
-			  $$.sorted = by_none;
-			}
-	|	SORT_BY_NAME '(' SORT_BY_ALIGNMENT '(' wildcard_maybe_exclude ')' ')'
-			{
-			  $$ = $5;
-			  $$.sorted = by_name_alignment;
-			}
-	|	SORT_BY_NAME '(' SORT_BY_NAME '(' wildcard_maybe_exclude ')' ')'
-			{
-			  $$ = $5;
-			  $$.sorted = by_name;
-			}
-	|	SORT_BY_ALIGNMENT '(' SORT_BY_NAME '(' wildcard_maybe_exclude ')' ')'
-			{
-			  $$ = $5;
-			  $$.sorted = by_alignment_name;
-			}
-	|	SORT_BY_ALIGNMENT '(' SORT_BY_ALIGNMENT '(' wildcard_maybe_exclude ')' ')'
-			{
-			  $$ = $5;
-			  $$.sorted = by_alignment;
-			}
-	|	SORT_BY_INIT_PRIORITY '(' wildcard_maybe_exclude ')'
-			{
-			  $$ = $3;
-			  $$.sorted = by_init_priority;
-			}
-	;
-
 sect_flag_list:	NAME
 			{
 			  struct flag_info_list *n;
@@ -593,25 +557,110 @@ exclude_name_list:
 			}
 	;
 
-section_name_list:
-		section_name_list opt_comma section_name_spec
+unsorted_section_name_list:
+		unsorted_section_name_list opt_comma wildcard_maybe_exclude
 			{
 			  struct wildcard_list *tmp;
 			  tmp = (struct wildcard_list *) xmalloc (sizeof *tmp);
-			  tmp->next = $1;
+			  memset (tmp, 0, sizeof (*tmp));
 			  tmp->spec = $3;
-			  $$ = tmp;
+                          $1.tail->next = tmp;
+                          $$.head = $1.head;
+                          $$.tail = tmp;
 			}
-	|
-		section_name_spec
+	|	wildcard_maybe_exclude
 			{
 			  struct wildcard_list *tmp;
 			  tmp = (struct wildcard_list *) xmalloc (sizeof *tmp);
-			  tmp->next = NULL;
+			  memset (tmp, 0, sizeof (*tmp));
 			  tmp->spec = $1;
-			  $$ = tmp;
+			  $$.head = tmp;
+                          $$.tail = tmp;
 			}
 	;
+
+sorted_section_name_list:
+		SORT_BY_NAME '(' unsorted_section_name_list ')'
+			{
+			  lang_build_sort_group ($3.head, by_name);
+                          $$ = $3;
+			}
+	|	SORT_BY_ALIGNMENT '(' unsorted_section_name_list ')'
+                        {
+			  lang_build_sort_group ($3.head, by_alignment);
+                          $$ = $3;
+                        }
+	|	SORT_NONE '(' unsorted_section_name_list ')'
+                        {
+			  lang_build_sort_group ($3.head, by_none);
+                          $$ = $3;
+                        }
+	|	SORT_BY_NAME '(' SORT_BY_ALIGNMENT '(' unsorted_section_name_list ')' ')'
+                        {
+			  lang_build_sort_group ($5.head, by_name_alignment);
+                          $$ = $5;
+                       }
+	|	SORT_BY_NAME '(' SORT_BY_NAME '(' unsorted_section_name_list ')' ')'
+                        {
+			  lang_build_sort_group ($5.head, by_name);
+                          $$ = $5;
+                        }
+	|	SORT_BY_ALIGNMENT '(' SORT_BY_NAME '(' unsorted_section_name_list ')' ')'
+                        {
+			  lang_build_sort_group ($5.head, by_alignment_name);
+                          $$ = $5;
+                        }
+	|	SORT_BY_ALIGNMENT '(' SORT_BY_ALIGNMENT '(' unsorted_section_name_list ')' ')'
+                        {
+			  lang_build_sort_group ($5.head, by_alignment);
+                          $$ = $5;
+                        }
+	|	SORT_BY_INIT_PRIORITY '(' unsorted_section_name_list ')'
+			{
+			  lang_build_sort_group ($3.head, by_init_priority);
+                          $$ = $3;
+			}
+	;
+
+section_name_list_info:
+		section_name_list_info opt_comma sorted_section_name_list
+			{
+			  $1.tail->next = $3.head;
+			  $1.tail = $3.tail;
+			  $$ = $1;
+			}
+	|	sorted_section_name_list
+			{
+			  $$ = $1;
+			}
+
+	|	section_name_list_info opt_comma wildcard_maybe_exclude
+			{
+			  struct wildcard_list *tmp;
+			  tmp = (struct wildcard_list *) xmalloc (sizeof *tmp);
+			  memset (tmp, 0, sizeof (*tmp));
+			  tmp->spec = $3;
+			  $$ = $1;
+                          $$.tail->next = tmp;
+			  $$.tail = tmp;
+			}
+	|	wildcard_maybe_exclude
+			{
+			  struct wildcard_list *tmp;
+			  tmp = (struct wildcard_list *) xmalloc (sizeof *tmp);
+			  memset (tmp, 0, sizeof (*tmp));
+			  tmp->spec = $1;
+			  $$.head = tmp;
+                          $$.tail = tmp;
+			}
+	;
+
+section_name_list:
+		section_name_list_info
+			{
+			  $$ = $1.head;
+			}
+		;
 
 input_section_spec_no_keep:
 		NAME
