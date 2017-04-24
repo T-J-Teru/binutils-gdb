@@ -1,5 +1,10 @@
 2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldgram.y (section_NAME_list): Rename to...
+	(section_name_list): ...this.
+
+2017-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldgram.y (section_name_spec): Simplifiy and use
 	wildcard_maybe_exclude.
 	* testsuite/ld-scripts/exclude-file-5.d: New file.
