@@ -641,7 +641,8 @@ arc_linux_is_sigtramp (struct frame_info *this_frame)
 static CORE_ADDR
 arc_linux_sigcontext_addr (struct frame_info *this_frame)
 {
-  return (CORE_ADDR) get_frame_sp (this_frame);
+  /* Yuck! Magic offset 0x94 derived from how structures sit on the stack.  */
+  return (CORE_ADDR) (get_frame_sp (this_frame) + 0x94);
 
 }	/* arc_linux_sigcontext_addr () */
 
