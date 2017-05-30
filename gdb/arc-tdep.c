@@ -1125,7 +1125,29 @@ arc_is_in_prologue (struct gdbarch *gdbarch,
 	}
     }
 
-  return FALSE;
+  /* Stop only for non-call branch instructions
+     Recognized branch instructions:
+     inst:     opcode:      subopcode1:      subopcode2:
+     Bcc          0x00
+     BRcc_s       0x1D
+     Bcc_s        0x1E
+     BRcc         0x01             0x01             0x01
+     Jcc          0x04             0x20
+     Jcc_s        0x1F             0x00             0x07   */
+  if (insn->opcode == 0x00
+      || insn->opcode == 0x1d
+      || insn->opcode == 0x1e
+      || (insn->opcode == 0x01
+	  && insn->subopcode1 == 0x01
+	  && insn->subopcode2 == 0x01)
+      || (insn->opcode == 0x04
+	  && insn->subopcode1 == 0x20)
+      || (insn->opcode == 0x0f
+	  && insn->subopcode1 == 0x00
+	  && insn->subopcode2 == 0x07))
+    return FALSE;
+
+  return TRUE;
 
 }	/* arc_is_in_prologue () */
 

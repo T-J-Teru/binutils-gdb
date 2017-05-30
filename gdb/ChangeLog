@@ -1,5 +1,9 @@
 2017-05-10  Guy Benyei  <guy.benyei@mellanox.com>
 
+	* arc-tdep.c (arc_is_in_prologue): Only stop at some branch instructions.
+
+2017-05-10  Guy Benyei  <guy.benyei@mellanox.com>
+
 	* arc-tdep.c (arc_is_in_prologue): Check for st.a to stack for
 	case where offset is -4, but we're not pushing blink or fp.
 
