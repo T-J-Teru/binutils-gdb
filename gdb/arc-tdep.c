@@ -969,21 +969,19 @@ arc_is_in_prologue (struct gdbarch *gdbarch,
 		      return TRUE;
 		    }
 		}
-	      else
-		{
-		  if (arc_insn_operand_is_reg (insn, 0))
-		    {
-		      /* st.a <reg>, [sp,<offset>] */
 
-		      if (arc_is_callee_saved (gdbarch,
-				    arc_insn_get_operand_reg (insn, 0),
-				    arc_insn_get_memory_offset (insn),
-				    info))
-			{
-			  /* This is a push onto the stack.  */
-			  info->delta_sp += arc_insn_get_memory_offset (insn);
-			  return TRUE;
-			}
+	      if (arc_insn_operand_is_reg (insn, 0))
+		{
+		  /* st.a <reg>, [sp,<offset>] */
+
+		  if (arc_is_callee_saved (gdbarch,
+					   arc_insn_get_operand_reg (insn, 0),
+					   arc_insn_get_memory_offset (insn),
+					   info))
+		    {
+		      /* This is a push onto the stack.  */
+		      info->delta_sp += arc_insn_get_memory_offset (insn);
+		      return TRUE;
 		    }
 		}
 	    }
