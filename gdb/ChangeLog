@@ -1,6 +1,12 @@
 2017-05-10  Andrew Burgess  <andrew.burgess@embecosm.com>
 	    Guy Benyei  <guy.benyei@mellanox.com>
 
+	* arc-linux-tdep.c (arc_sigtramp_insns_be): Correct byte ordering
+	for big endian targets.
+
+2017-05-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+	Guy Benyei  <guy.benyei@mellanox.com>
+
 	* arc-linux-tdep.c (arc_linux_sc_reg_offset): Fill in the pc field
 	to refer to the stop_pc.
 
