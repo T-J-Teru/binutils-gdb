@@ -129,7 +129,7 @@ static const int arc_linux_sc_reg_offset[] = {
   REGISTER_NOT_PRESENT,  	/* limm     */
   REGISTER_NOT_PRESENT,  	/* pcl      */
 
-  REGISTER_NOT_PRESENT,  	/* stop_pc  */
+  6 * BYTES_IN_REGISTER,  	/* stop_pc  */
   2 * BYTES_IN_REGISTER,	/* lp_start */
   3 * BYTES_IN_REGISTER,	/* lp_end   */
   5 * BYTES_IN_REGISTER,	/* status32 */
