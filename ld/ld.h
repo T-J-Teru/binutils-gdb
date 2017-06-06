@@ -127,6 +127,13 @@ enum dynamic_list_enum
   dynamic_list
 };
 
+enum group_allocation
+{
+  group_allocation_unset = 0,
+  group_allocation_force,
+  group_allocation_inhibit
+};
+
 typedef struct
 {
   /* 1 => assign space to common symbols even if `relocatable_output'.  */
@@ -172,10 +179,11 @@ typedef struct
   /* If set, display the target memory usage (per memory region).  */
   bfd_boolean print_memory_usage;
 
-  /* Should we force section groups to be resolved?  Controlled with
-     --force-group-allocation on the command line or FORCE_GROUP_ALLOCATION
-     in the linker script.  */
-  bfd_boolean force_group_allocation;
+  /* How are sections within groups handled.  Controlled with
+     --force-group-allocation and --inhibit-group-allocation on the command
+     line, or FORCE_GROUP_ALLOCATION and INHIBIT_GROUP_ALLOCATION in the
+     linker script.  */
+  enum group_allocation group_allocation;
 
   /* Big or little endian as set on command line.  */
   enum endian_enum endian;

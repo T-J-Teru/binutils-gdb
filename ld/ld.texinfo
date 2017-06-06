@@ -1496,6 +1496,19 @@ change the behaviour of a relocatable link (@samp{-r}).  The script
 command @code{FORCE_GROUP_ALLOCATION} has the same
 effect. @xref{Miscellaneous Commands}.
 
+@cindex group allocation in linker script
+@cindex section groups
+@cindex COMDAT
+@kindex --inhibit-group-allocation
+@item --inhibit-group-allocation
+This option prevents the linker from resolving sections groups,
+sections that are part of a group remain group members in the output
+file and the section groups are retained.  This is the default
+behaviour for a relocatable link (@samp{-r}) but this option can be
+used to change the behaviour of a final link.  The script command
+@code{INHIBIT_GROUP_ALLOCATION} has the same
+effect. @xref{Miscellaneous Commands}.
+
 @cindex symbols, from command line
 @kindex --defsym=@var{symbol}=@var{exp}
 @item --defsym=@var{symbol}=@var{expression}
@@ -3748,6 +3761,18 @@ This command has the same effect as the
 @command{ld} place section group members like normal input sections,
 and to delete the section groups even if a relocatable output file is
 specified (@samp{-r}).
+
+@item INHIBIT_GROUP_ALLOCATION
+@kindex INHIBIT_GROUP_ALLOCATION
+@cindex group allocation in linker script
+@cindex section groups
+@cindex COMDAT
+This command has the same effect as the
+@samp{--inhibit-group-allocation} command-line option: @command{ld}
+will preserve section groups in the output file even if a final link
+is performed.  Section group members will not be placed like normal
+input sections but will instead be left as unique sections in the
+output file.
 
 @item INSERT [ AFTER | BEFORE ] @var{output_section}
 @kindex INSERT

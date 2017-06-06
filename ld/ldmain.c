@@ -386,8 +386,9 @@ main (int argc, char **argv)
       info_msg ("\n==================================================\n");
     }
 
-  if (command_line.force_group_allocation
-      || !bfd_link_relocatable (&link_info))
+  if (command_line.group_allocation == group_allocation_force
+      || (command_line.group_allocation == group_allocation_unset
+	  && !bfd_link_relocatable (&link_info)))
     link_info.resolve_section_groups = TRUE;
   else
     link_info.resolve_section_groups = FALSE;

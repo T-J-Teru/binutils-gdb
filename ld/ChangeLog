@@ -1,5 +1,28 @@
 2017-06-06  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ld.h (enum group_allocation): New enum.
+	(struct args_type): Change type of group_allocation field.
+	* ldgram.y: Add support for FORCE_GROUP_ALLOCATION and
+	INHIBIT_GROUP_ALLOCATION.
+	* ldlex.h: Likewise.
+	* ldlex.l: Likewise.
+	* lexsup.c: Likewise.
+	* ldlang.c (unique_section_p): Check resolve_section_groups flag
+	not the relaxable link flag.
+	(lang_add_section): Discard section groups when we're resolving
+	groups.  Clear the SEC_LINK_ONCE flag if we're resolving section
+	groups.
+	* ldmain.c (main): Initialise resolve_section_groups flag in
+	link_info based on command line flags.
+	* testsuite/ld-elf/group13.d: New file.
+	* testsuite/ld-elf/group13.ld: New file.
+	* testsuite/ld-elf/group14.d: New file.
+	* ld.texinfo (Options): Document --inhibit-group-allocation.
+	(Miscellaneous Commands): Document INHIBIT_GROUP_ALLOCATION.
+	* NEWS: Document new feature.
+
+2017-06-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ld.h (struct args_type): Fix typo in comment.
 
 2017-06-06  Andrew Burgess  <andrew.burgess@embecosm.com>

@@ -20,6 +20,11 @@
   option --force-group-allocation or by placing FORCE_GROUP_ALLOCATION into the
   linker script.
 
+* Resolution of section groups can be prevented in a final link using the
+  --inhibit-group-allocation command line flag, or the linker script command
+  INHIBIT_GROUP_ALLOCATION.  Using these will result in section groups in a fully
+  linked ELF, which is non-standard compliant (and therefore an invalid ELF).
+
 Changes in 2.28:
 
 * The EXCLUDE_FILE linker script construct can now be applied outside of the

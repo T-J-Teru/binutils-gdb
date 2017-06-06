@@ -132,6 +132,7 @@ static int error_index;
 %token '{' '}'
 %token SIZEOF_HEADERS OUTPUT_FORMAT FORCE_COMMON_ALLOCATION OUTPUT_ARCH
 %token INHIBIT_COMMON_ALLOCATION FORCE_GROUP_ALLOCATION
+%token INHIBIT_GROUP_ALLOCATION
 %token SEGMENT_START
 %token INCLUDE
 %token MEMORY
@@ -337,9 +338,11 @@ ifile_p1:
 	|	FORCE_COMMON_ALLOCATION
 		{ command_line.force_common_definition = TRUE ; }
 	|	FORCE_GROUP_ALLOCATION
-		{ command_line.force_group_allocation = TRUE ; }
+		{ command_line.group_allocation = group_allocation_force ; }
 	|	INHIBIT_COMMON_ALLOCATION
 		{ command_line.inhibit_common_definition = TRUE ; }
+	|	INHIBIT_GROUP_ALLOCATION
+		{command_line.group_allocation = group_allocation_inhibit ; }
 	|	INPUT '(' input_list ')'
 	|	GROUP
 		  { lang_enter_group (); }

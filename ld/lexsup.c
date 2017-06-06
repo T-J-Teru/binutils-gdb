@@ -115,6 +115,9 @@ static const struct ld_option ld_options[] =
   { {"force-group-allocation", no_argument, NULL,
      OPTION_FORCE_GROUP_ALLOCATION},
     '\0', NULL, N_("Force group members out of groups"), TWO_DASHES },
+  { {"inhibit-group-allocation", no_argument, NULL,
+     OPTION_INHIBIT_GROUP_ALLOCATION},
+    '\0', NULL, N_("Prevent section groups from being resolved"), TWO_DASHES },
   { {"entry", required_argument, NULL, 'e'},
     'e', N_("ADDRESS"), N_("Set start address"), TWO_DASHES },
   { {"export-dynamic", no_argument, NULL, OPTION_EXPORT_DYNAMIC},
@@ -771,7 +774,10 @@ parse_args (unsigned argc, char **argv)
 	  command_line.force_common_definition = TRUE;
 	  break;
         case OPTION_FORCE_GROUP_ALLOCATION:
-          command_line.force_group_allocation = TRUE;
+          command_line.group_allocation = group_allocation_force;
+          break;
+        case OPTION_INHIBIT_GROUP_ALLOCATION:
+          command_line.group_allocation = group_allocation_inhibit;
           break;
 	case OPTION_DEFSYM:
 	  lex_string = optarg;
