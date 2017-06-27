@@ -4929,6 +4929,7 @@ static int
 start_step_over (struct lwp_info *lwp)
 {
   struct thread_info *thread = get_lwp_thread (lwp);
+  int lwpid = lwpid_of (thread);
   struct thread_info *saved_thread;
   CORE_ADDR pc;
   int step;
@@ -4938,6 +4939,13 @@ start_step_over (struct lwp_info *lwp)
 		  lwpid_of (thread));
 
   stop_all_lwps (1, lwp);
+
+  if (lwp_is_marked_dead (lwp))
+    {
+      if (debug_threads)
+	debug_printf ("LWP %d is already dead\n", lwpid);
+      return 0;
+    }
 
   if (lwp->suspended != 0)
     {
