@@ -4413,7 +4413,7 @@ print_wild_statement (lang_wild_statement_type *w,
     }
 
   if (w->filenames_sorted)
-    minfo ("SORT(");
+    minfo ("SORT_BY_NAME(");
   if (w->filename != NULL)
     minfo ("%s", w->filename);
   else
@@ -4424,8 +4424,44 @@ print_wild_statement (lang_wild_statement_type *w,
   minfo ("(");
   for (sec = w->section_list; sec; sec = sec->next)
     {
-      if (sec->spec.sorted)
-	minfo ("SORT(");
+      int closing_paren = 0;
+
+      switch (sec->spec.sorted)
+        {
+        case none:
+          break;
+
+        case by_name:
+          minfo ("SORT_BY_NAME(");
+          closing_paren = 1;
+          break;
+
+        case by_alignment:
+          minfo ("SORT_BY_ALIGNMENT(");
+          closing_paren = 1;
+          break;
+
+        case by_name_alignment:
+          minfo ("SORT_BY_NAME(SORT_BY_ALIGNMENT(");
+          closing_paren = 2;
+          break;
+
+        case by_alignment_name:
+          minfo ("SORT_BY_ALIGNMENT(SORT_BY_NAME(");
+          closing_paren = 2;
+          break;
+
+        case by_none:
+          minfo ("SORT_NONE(");
+          closing_paren = 1;
+          break;
+
+        case by_init_priority:
+          minfo ("SORT_BY_INIT_PRIORITY(");
+          closing_paren = 1;
+          break;
+        }
+
       if (sec->spec.exclude_name_list != NULL)
 	{
 	  name_list *tmp;
@@ -4438,8 +4474,8 @@ print_wild_statement (lang_wild_statement_type *w,
 	minfo ("%s", sec->spec.name);
       else
 	minfo ("*");
-      if (sec->spec.sorted)
-	minfo (")");
+      for (;closing_paren > 0; closing_paren--)
+        minfo (")");
       if (sec->next)
 	minfo (" ");
     }
