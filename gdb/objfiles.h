@@ -884,6 +884,10 @@ public:
   bool object_format_has_copy_relocs = false;
 };
 
+/* This file was loaded according to the BUILD_ID_CORE_LOADS rules.  */
+
+#define OBJF_BUILD_ID_CORE_LOADED static_cast<enum objfile_flag>(1 << 12)
+
 /* A deleter for objfile.  */
 
 struct objfile_deleter

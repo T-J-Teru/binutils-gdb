@@ -363,6 +363,11 @@ void map_symbol_filenames (gdb::function_view<symbol_filename_ftype> fun,
    optional offset to apply to each section.  */
 extern void generic_load (const char *args, int from_tty);
 
+/* build-id support.  */
+extern struct bfd_build_id *build_id_addr_get (CORE_ADDR addr);
+extern void debug_print_missing (const char *binary, const char *debug);
+#define BUILD_ID_MAIN_EXECUTABLE_FILENAME _("the main executable file")
+
 /* From minidebug.c.  */
 
 extern gdb_bfd_ref_ptr find_separate_debug_file_in_section (struct objfile *);
