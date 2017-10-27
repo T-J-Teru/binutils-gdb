@@ -1,0 +1,84 @@
+# Copyright (C) 2012 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+set testfile gstack
+set executable ${testfile}
+set binfile [standard_output_file $executable]
+if {[build_executable ${testfile} ${executable} "" {debug}] == -1} {
+    return -1
+}
+
+set test "spawn inferior"
+set command "${binfile}"
+set res [remote_spawn host $command];
+if { $res < 0 || $res == "" } {
+    perror "Spawning $command failed."
+    fail $test
+    return
+}
+
+# The spawn id of the test inferior.
+set test_spawn_id $res
+
+set use_gdb_stub 1
+set pid [exp_pid -i $res]
+gdb_expect {
+    -re "looping\r\n" {
+	pass $test
+    }
+    eof {
+	fail "$test (eof)"
+	return
+    }
+    timeout {
+	fail "$test (timeout)"
+	return
+    }
+}
+
+# Testcase uses the most simple notification not to get caught by attach on
+# exiting the function.  Still we could retry the gstack command if we fail.
+
+set test "spawn gstack"
+set command "sh -c GDB=$GDB\\ GDBARGS=-data-directory\\\\\\ $GDB_DATA_DIRECTORY\\ sh\\ ${srcdir}/../gstack.sh\\ $pid\\;echo\\ GSTACK-END"
+set res [remote_spawn host $command];
+if { $res < 0 || $res == "" } {
+    perror "Spawning $command failed."
+    fail $test
+}
+
+set gdb_spawn_id $res
+
+gdb_test_multiple "" $test {
+    -re "^#0 +(0x\[0-9a-f\]+ in )?\\.?func \\(\\) at \[^\r\n\]*\r\n#1 +0x\[0-9a-f\]+ in \\.?main \\(\\) at \[^\r\n\]*\r\nGSTACK-END\r\n\$" {
+	pass $test
+    }
+}
+
+gdb_test_multiple "" "gstack exits" {
+    eof {
+	set result [wait -i $gdb_spawn_id]
+	verbose $result
+
+	gdb_assert { [lindex $result 2] == 0 } "gstack exits with no error"
+	gdb_assert { [lindex $result 3] == 0 } "gstack's exit status is 0"
+
+	remote_close host
+	clear_gdb_spawn_id
+    }
+}
+
+# Kill the test inferior.
+kill_wait_spawned_process $test_spawn_id
