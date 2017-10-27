@@ -1308,6 +1308,11 @@ process_print_command_args (const char *args, value_print_options *print_opts,
 
   if (exp != nullptr && *exp)
     {
+      /* '*((int *(*) (void)) __errno_location) ()' is incompatible with
+	 function descriptors.  */
+      if (target_has_execution () && strcmp (exp, "errno") == 0)
+	exp = "*(*(int *(*)(void)) __errno_location) ()";
+
       /* This setting allows large arrays to be printed by limiting the
 	 number of elements that are loaded into GDB's memory; we only
 	 need to load as many array elements as we plan to print.  */
