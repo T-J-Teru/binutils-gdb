@@ -16,13 +16,51 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# This program assumes gdb and objcopy are in $PATH.
-# If not, or you want others, pass the following in the environment
-GDB=${GDB:=gdb}
+# This program assumes objcopy and readelf are in $PATH.  If not, or
+# you want others, pass the following in the environment
 OBJCOPY=${OBJCOPY:=objcopy}
 READELF=${READELF:=readelf}
 
 myname="${0##*/}"
+
+# For GDB itself we need to be a little smarter.  If GDB is set in the
+# environment then we will use that.  But if GDB is not set in the
+# environment then we have a couple of options that we need to check
+# through.
+#
+# Our default choice is for /usr/bin/gdb.minimal.  For an explanation
+# of why this is chosen, check out:
+#   https://bugzilla.redhat.com/show_bug.cgi?id=1695015
+#   https://fedoraproject.org/wiki/Changes/Minimal_GDB_in_buildroot
+#
+# If gdb.minimal is not found then we look for a 'gdb' executable on
+# the path.
+#
+# And finally, we check for /usr/libexec/gdb.
+#
+# If none of those result in a useable GDB then we give an error and
+# exit.
+if test -z "$GDB"; then
+    for possible_gdb in /usr/bin/gdb.minimal gdb /usr/libexec/gdb; do
+        if ! command -v "$possible_gdb" >/dev/null 2>&1; then
+            continue
+        fi
+
+        possible_gdb=$(command -v "$possible_gdb")
+
+        if ! test -x "$possible_gdb"; then
+            continue
+        fi
+
+        GDB="$possible_gdb"
+        break
+    done
+
+    if test -z "$GDB"; then
+        echo "$myname: Failed to find a useable GDB binary" 1>&2
+        exit 1
+    fi
+fi
 
 dwarf5=""
 if [ "$1" = "-dwarf-5" ]; then
