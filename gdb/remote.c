@@ -14742,7 +14742,17 @@ remote_target::pid_to_exec_file (int pid)
   char *annex = NULL;
 
   if (m_features.packet_support (PACKET_qXfer_exec_file) != PACKET_ENABLE)
-    return NULL;
+    {
+      warning (_("Remote gdbserver does not support determining executable "
+		 "automatically.\n"
+"RHEL <=6.8 and <=7.2 versions of gdbserver do not support such automatic executable detection.\n"
+"The following versions of gdbserver support it:\n"
+"- Upstream version of gdbserver (unsupported) 7.10 or later\n"
+"- Red Hat Developer Toolset (DTS) version of gdbserver from DTS 4.0 or later (only on x86_64)\n"
+"- RHEL-7.3 versions of gdbserver (on any architecture)"
+));
+      return NULL;
+    }
 
   inferior *inf = find_inferior_pid (this, pid);
   if (inf == NULL)
