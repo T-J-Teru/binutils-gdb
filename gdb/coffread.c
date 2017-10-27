@@ -729,7 +729,7 @@ coff_symfile_read (struct objfile *objfile, symfile_add_flags symfile_flags)
     {
       deferred_warnings warnings;
       std::string debugfile
-	= find_separate_debug_file_by_buildid (objfile, &warnings);
+	= find_separate_debug_file_by_buildid (objfile, &warnings, NULL);
 
       if (debugfile.empty ())
 	debugfile

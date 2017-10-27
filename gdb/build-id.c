@@ -24,9 +24,67 @@
 #include "gdbsupport/gdb_vecs.h"
 #include "symfile.h"
 #include "objfiles.h"
+#include <sys/stat.h>
+#include "elf-bfd.h"
+#include "elf/common.h"
+#include "elf/external.h"
+#include "elf/internal.h"
 #include "filenames.h"
+#include "gdb_bfd.h"
+#include "gdbcmd.h"
 #include "gdbcore.h"
 #include "cli/cli-style.h"
+#include "inferior.h"
+#include "objfiles.h"
+#include "observable.h"
+#include "symfile.h"
+
+#define BUILD_ID_VERBOSE_NONE 0
+#define BUILD_ID_VERBOSE_FILENAMES 1
+#define BUILD_ID_VERBOSE_BINARY_PARSE 2
+static int build_id_verbose = BUILD_ID_VERBOSE_FILENAMES;
+static void
+show_build_id_verbose (struct ui_file *file, int from_tty,
+		       struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file, _("Verbosity level of the build-id locator is %s.\n"),
+	      value);
+}
+/* Locate NT_GNU_BUILD_ID and return its matching debug filename.
+   FIXME: NOTE decoding should be unified with the BFD core notes decoding.  */
+
+static struct bfd_build_id *
+build_id_buf_get (bfd *templ, gdb_byte *buf, bfd_size_type size)
+{
+  bfd_byte *p;
+
+  p = buf;
+  while (p < buf + size)
+    {
+      /* FIXME: bad alignment assumption.  */
+      Elf_External_Note *xnp = (Elf_External_Note *) p;
+      size_t namesz = H_GET_32 (templ, xnp->namesz);
+      size_t descsz = H_GET_32 (templ, xnp->descsz);
+      bfd_byte *descdata = (gdb_byte *) xnp->name + BFD_ALIGN (namesz, 4);
+
+      if (H_GET_32 (templ, xnp->type) == NT_GNU_BUILD_ID
+	  && namesz == sizeof "GNU"
+	  && memcmp (xnp->name, "GNU", sizeof "GNU") == 0)
+	{
+	  size_t sz = descsz;
+	  gdb_byte *data = (gdb_byte *) descdata;
+	  struct bfd_build_id *retval;
+
+	  retval = (struct bfd_build_id *) xmalloc (sizeof *retval - 1 + sz);
+	  retval->size = sz;
+	  memcpy (retval->data, data, sz);
+
+	  return retval;
+	}
+      p = descdata + BFD_ALIGN (descsz, 4);
+    }
+  return NULL;
+}
 
 /* See build-id.h.  */
 
@@ -48,6 +106,348 @@ build_id_bfd_get (bfd *abfd)
 
   /* No build-id */
   return NULL;
+}
+
+/* Core files may have missing (corrupt) SHDR but PDHR is correct there.
+   bfd_elf_bfd_from_remote_memory () has too much overhead by
+   allocating/reading all the available ELF PT_LOADs.  */
+
+static struct bfd_build_id *
+build_id_phdr_get (bfd *templ, bfd_vma loadbase, unsigned e_phnum,
+		   Elf_Internal_Phdr *i_phdr)
+{
+  int i;
+  struct bfd_build_id *retval = NULL;
+
+  for (i = 0; i < e_phnum; i++)
+    if (i_phdr[i].p_type == PT_NOTE && i_phdr[i].p_filesz > 0)
+      {
+	Elf_Internal_Phdr *hdr = &i_phdr[i];
+	gdb_byte *buf;
+	int err;
+
+	buf = (gdb_byte *) xmalloc (hdr->p_filesz);
+	err = target_read_memory (loadbase + i_phdr[i].p_vaddr, buf,
+				  hdr->p_filesz);
+	if (err == 0)
+	  retval = build_id_buf_get (templ, buf, hdr->p_filesz);
+	else
+	  retval = NULL;
+	xfree (buf);
+	if (retval != NULL)
+	  break;
+      }
+  return retval;
+}
+
+/* First we validate the file by reading in the ELF header and checking
+   the magic number.  */
+
+static inline bfd_boolean
+elf_file_p (Elf64_External_Ehdr *x_ehdrp64)
+{
+  gdb_assert (sizeof (Elf64_External_Ehdr) >= sizeof (Elf32_External_Ehdr));
+  gdb_assert (offsetof (Elf64_External_Ehdr, e_ident)
+	      == offsetof (Elf32_External_Ehdr, e_ident));
+  gdb_assert (sizeof (((Elf64_External_Ehdr *) 0)->e_ident)
+	      == sizeof (((Elf32_External_Ehdr *) 0)->e_ident));
+
+  return ((x_ehdrp64->e_ident[EI_MAG0] == ELFMAG0)
+	  && (x_ehdrp64->e_ident[EI_MAG1] == ELFMAG1)
+	  && (x_ehdrp64->e_ident[EI_MAG2] == ELFMAG2)
+	  && (x_ehdrp64->e_ident[EI_MAG3] == ELFMAG3));
+}
+
+/* Translate an ELF file header in external format into an ELF file header in
+   internal format.  */
+
+#define H_GET_WORD(bfd, ptr) (is64 ? H_GET_64 (bfd, (ptr))		\
+				   : H_GET_32 (bfd, (ptr)))
+#define H_GET_SIGNED_WORD(bfd, ptr) (is64 ? H_GET_S64 (bfd, (ptr))	\
+					  : H_GET_S32 (bfd, (ptr)))
+
+static void
+elf_swap_ehdr_in (bfd *abfd,
+		  const Elf64_External_Ehdr *src64,
+		  Elf_Internal_Ehdr *dst)
+{
+  int is64 = bfd_get_arch_size (abfd) == 64;
+#define SRC(field) (is64 ? src64->field \
+			 : ((const Elf32_External_Ehdr *) src64)->field)
+
+  int signed_vma = get_elf_backend_data (abfd)->sign_extend_vma;
+  memcpy (dst->e_ident, SRC (e_ident), EI_NIDENT);
+  dst->e_type = H_GET_16 (abfd, SRC (e_type));
+  dst->e_machine = H_GET_16 (abfd, SRC (e_machine));
+  dst->e_version = H_GET_32 (abfd, SRC (e_version));
+  if (signed_vma)
+    dst->e_entry = H_GET_SIGNED_WORD (abfd, SRC (e_entry));
+  else
+    dst->e_entry = H_GET_WORD (abfd, SRC (e_entry));
+  dst->e_phoff = H_GET_WORD (abfd, SRC (e_phoff));
+  dst->e_shoff = H_GET_WORD (abfd, SRC (e_shoff));
+  dst->e_flags = H_GET_32 (abfd, SRC (e_flags));
+  dst->e_ehsize = H_GET_16 (abfd, SRC (e_ehsize));
+  dst->e_phentsize = H_GET_16 (abfd, SRC (e_phentsize));
+  dst->e_phnum = H_GET_16 (abfd, SRC (e_phnum));
+  dst->e_shentsize = H_GET_16 (abfd, SRC (e_shentsize));
+  dst->e_shnum = H_GET_16 (abfd, SRC (e_shnum));
+  dst->e_shstrndx = H_GET_16 (abfd, SRC (e_shstrndx));
+
+#undef SRC
+}
+
+/* Translate an ELF program header table entry in external format into an
+   ELF program header table entry in internal format.  */
+
+static void
+elf_swap_phdr_in (bfd *abfd,
+		  const Elf64_External_Phdr *src64,
+		  Elf_Internal_Phdr *dst)
+{
+  int is64 = bfd_get_arch_size (abfd) == 64;
+#define SRC(field) (is64 ? src64->field					\
+			 : ((const Elf32_External_Phdr *) src64)->field)
+
+  int signed_vma = get_elf_backend_data (abfd)->sign_extend_vma;
+
+  dst->p_type = H_GET_32 (abfd, SRC (p_type));
+  dst->p_flags = H_GET_32 (abfd, SRC (p_flags));
+  dst->p_offset = H_GET_WORD (abfd, SRC (p_offset));
+  if (signed_vma)
+    {
+      dst->p_vaddr = H_GET_SIGNED_WORD (abfd, SRC (p_vaddr));
+      dst->p_paddr = H_GET_SIGNED_WORD (abfd, SRC (p_paddr));
+    }
+  else
+    {
+      dst->p_vaddr = H_GET_WORD (abfd, SRC (p_vaddr));
+      dst->p_paddr = H_GET_WORD (abfd, SRC (p_paddr));
+    }
+  dst->p_filesz = H_GET_WORD (abfd, SRC (p_filesz));
+  dst->p_memsz = H_GET_WORD (abfd, SRC (p_memsz));
+  dst->p_align = H_GET_WORD (abfd, SRC (p_align));
+
+#undef SRC
+}
+
+#undef H_GET_SIGNED_WORD
+#undef H_GET_WORD
+
+static Elf_Internal_Phdr *
+elf_get_phdr (bfd *templ, bfd_vma ehdr_vma, unsigned *e_phnum_pointer,
+              bfd_vma *loadbase_pointer)
+{
+  /* sizeof (Elf64_External_Ehdr) >= sizeof (Elf32_External_Ehdr)  */
+  Elf64_External_Ehdr x_ehdr64;	/* Elf file header, external form */
+  Elf_Internal_Ehdr i_ehdr;	/* Elf file header, internal form */
+  bfd_size_type x_phdrs_size;
+  gdb_byte *x_phdrs_ptr;
+  Elf_Internal_Phdr *i_phdrs;
+  int err;
+  unsigned int i;
+  bfd_vma loadbase;
+  int loadbase_set;
+
+  gdb_assert (templ != NULL);
+  gdb_assert (sizeof (Elf64_External_Ehdr) >= sizeof (Elf32_External_Ehdr));
+
+  /* Read in the ELF header in external format.  */
+  err = target_read_memory (ehdr_vma, (bfd_byte *) &x_ehdr64, sizeof x_ehdr64);
+  if (err)
+    {
+      if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+        warning (_("build-id: Error reading ELF header at address 0x%lx"),
+		 (unsigned long) ehdr_vma);
+      return NULL;
+    }
+
+  /* Now check to see if we have a valid ELF file, and one that BFD can
+     make use of.  The magic number must match, the address size ('class')
+     and byte-swapping must match our XVEC entry.  */
+
+  if (! elf_file_p (&x_ehdr64)
+      || x_ehdr64.e_ident[EI_VERSION] != EV_CURRENT
+      || !((bfd_get_arch_size (templ) == 64
+            && x_ehdr64.e_ident[EI_CLASS] == ELFCLASS64)
+           || (bfd_get_arch_size (templ) == 32
+	       && x_ehdr64.e_ident[EI_CLASS] == ELFCLASS32)))
+    {
+      if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+        warning (_("build-id: Unrecognized ELF header at address 0x%lx"),
+		 (unsigned long) ehdr_vma);
+      return NULL;
+    }
+
+  /* Check that file's byte order matches xvec's */
+  switch (x_ehdr64.e_ident[EI_DATA])
+    {
+    case ELFDATA2MSB:		/* Big-endian */
+      if (! bfd_header_big_endian (templ))
+	{
+	  if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+	    warning (_("build-id: Unrecognized "
+		       "big-endian ELF header at address 0x%lx"),
+		     (unsigned long) ehdr_vma);
+	  return NULL;
+	}
+      break;
+    case ELFDATA2LSB:		/* Little-endian */
+      if (! bfd_header_little_endian (templ))
+	{
+	  if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+	    warning (_("build-id: Unrecognized "
+		       "little-endian ELF header at address 0x%lx"),
+		     (unsigned long) ehdr_vma);
+	  return NULL;
+	}
+      break;
+    case ELFDATANONE:		/* No data encoding specified */
+    default:			/* Unknown data encoding specified */
+      if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+	warning (_("build-id: Unrecognized "
+		   "ELF header endianity at address 0x%lx"),
+		 (unsigned long) ehdr_vma);
+      return NULL;
+    }
+
+  elf_swap_ehdr_in (templ, &x_ehdr64, &i_ehdr);
+
+  /* The file header tells where to find the program headers.
+     These are what we use to actually choose what to read.  */
+
+  if (i_ehdr.e_phentsize != (bfd_get_arch_size (templ) == 64
+                             ? sizeof (Elf64_External_Phdr)
+			     : sizeof (Elf32_External_Phdr))
+      || i_ehdr.e_phnum == 0)
+    {
+      if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+	warning (_("build-id: Invalid ELF program headers from the ELF header "
+		   "at address 0x%lx"), (unsigned long) ehdr_vma);
+      return NULL;
+    }
+
+  x_phdrs_size = (bfd_get_arch_size (templ) == 64 ? sizeof (Elf64_External_Phdr)
+						: sizeof (Elf32_External_Phdr));
+
+  i_phdrs = (Elf_Internal_Phdr *) xmalloc (i_ehdr.e_phnum * (sizeof *i_phdrs + x_phdrs_size));
+  x_phdrs_ptr = (gdb_byte *) &i_phdrs[i_ehdr.e_phnum];
+  err = target_read_memory (ehdr_vma + i_ehdr.e_phoff, (bfd_byte *) x_phdrs_ptr,
+			    i_ehdr.e_phnum * x_phdrs_size);
+  if (err)
+    {
+      free (i_phdrs);
+      if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+        warning (_("build-id: Error reading "
+		   "ELF program headers at address 0x%lx"),
+		 (unsigned long) (ehdr_vma + i_ehdr.e_phoff));
+      return NULL;
+    }
+
+  loadbase = ehdr_vma;
+  loadbase_set = 0;
+  for (i = 0; i < i_ehdr.e_phnum; ++i)
+    {
+      elf_swap_phdr_in (templ, (Elf64_External_Phdr *)
+			       (x_phdrs_ptr + i * x_phdrs_size), &i_phdrs[i]);
+      /* IA-64 vDSO may have two mappings for one segment, where one mapping
+	 is executable only, and one is read only.  We must not use the
+	 executable one (PF_R is the first one, PF_X the second one).  */
+      if (i_phdrs[i].p_type == PT_LOAD && (i_phdrs[i].p_flags & PF_R))
+	{
+	  /* Only the first PT_LOAD segment indicates the file bias.
+	     Next segments may have P_VADDR arbitrarily higher.
+	     If the first segment has P_VADDR zero any next segment must not
+	     confuse us, the first one sets LOADBASE certainly enough.  */
+	  if (!loadbase_set && i_phdrs[i].p_offset == 0)
+	    {
+	      loadbase = ehdr_vma - i_phdrs[i].p_vaddr;
+	      loadbase_set = 1;
+	    }
+	}
+    }
+
+  if (build_id_verbose >= BUILD_ID_VERBOSE_BINARY_PARSE)
+    warning (_("build-id: Found ELF header at address 0x%lx, loadbase 0x%lx"),
+	     (unsigned long) ehdr_vma, (unsigned long) loadbase);
+
+  *e_phnum_pointer = i_ehdr.e_phnum;
+  *loadbase_pointer = loadbase;
+  return i_phdrs;
+}
+
+/* BUILD_ID_ADDR_GET gets ADDR located somewhere in the object.
+   Find the first section before ADDR containing an ELF header.
+   We rely on the fact the sections from multiple files do not mix.
+   FIXME: We should check ADDR is contained _inside_ the section with possibly
+   missing content (P_FILESZ < P_MEMSZ).  These omitted sections are currently
+   hidden by _BFD_ELF_MAKE_SECTION_FROM_PHDR.  */
+
+static CORE_ADDR build_id_addr;
+struct build_id_addr_sect
+  {
+    struct build_id_addr_sect *next;
+    asection *sect;
+  };
+static struct build_id_addr_sect *build_id_addr_sect;
+
+static void build_id_addr_candidate (bfd *abfd, asection *sect, void *obj)
+{
+  if (build_id_addr >= bfd_section_vma (sect))
+    {
+      struct build_id_addr_sect *candidate;
+
+      candidate = (struct build_id_addr_sect *) xmalloc (sizeof *candidate);
+      candidate->next = build_id_addr_sect;
+      build_id_addr_sect = candidate;
+      candidate->sect = sect;
+    }
+}
+
+struct bfd_build_id *
+build_id_addr_get (CORE_ADDR addr)
+{
+  struct build_id_addr_sect *candidate;
+  struct bfd_build_id *retval = NULL;
+  Elf_Internal_Phdr *i_phdr = NULL;
+  bfd_vma loadbase = 0;
+  unsigned e_phnum = 0;
+
+  if (core_bfd == NULL)
+    return NULL;
+
+  build_id_addr = addr;
+  gdb_assert (build_id_addr_sect == NULL);
+  bfd_map_over_sections (core_bfd, build_id_addr_candidate, NULL);
+
+  /* Sections are sorted in the high-to-low VMAs order.
+     Stop the search on the first ELF header we find.
+     Do not continue the search even if it does not contain NT_GNU_BUILD_ID.  */
+
+  for (candidate = build_id_addr_sect; candidate != NULL;
+       candidate = candidate->next)
+    {
+      i_phdr = elf_get_phdr (core_bfd,
+			     bfd_section_vma (candidate->sect),
+			     &e_phnum, &loadbase);
+      if (i_phdr != NULL)
+	break;
+    }
+
+  if (i_phdr != NULL)
+    {
+      retval = build_id_phdr_get (core_bfd, loadbase, e_phnum, i_phdr);
+      xfree (i_phdr);
+    }
+
+  while (build_id_addr_sect != NULL)
+    {
+      candidate = build_id_addr_sect;
+      build_id_addr_sect = candidate->next;
+      xfree (candidate);
+    }
+
+  return retval;
 }
 
 /* See build-id.h.  */
@@ -73,63 +473,166 @@ build_id_verify (bfd *abfd, size_t check_len, const bfd_byte *check)
   return retval;
 }
 
+static char *
+link_resolve (const char *symlink, int level)
+{
+  char buf[PATH_MAX + 1], *retval;
+  gdb::unique_xmalloc_ptr<char> target;
+  ssize_t got;
+
+  if (level > 10)
+    return xstrdup (symlink);
+
+  got = readlink (symlink, buf, sizeof (buf));
+  if (got < 0 || got >= sizeof (buf))
+    return xstrdup (symlink);
+  buf[got] = '\0';
+
+  if (IS_ABSOLUTE_PATH (buf))
+    target = make_unique_xstrdup (buf);
+  else
+    {
+      const std::string dir (ldirname (symlink));
+
+      target = xstrprintf ("%s"
+#ifndef HAVE_DOS_BASED_FILE_SYSTEM
+			   "/"
+#else /* HAVE_DOS_BASED_FILE_SYSTEM */
+			   "\\"
+#endif /* HAVE_DOS_BASED_FILE_SYSTEM */
+			   "%s", dir.c_str(), buf);
+    }
+
+  retval = link_resolve (target.get (), level + 1);
+  return retval;
+}
+
 /* Helper for build_id_to_debug_bfd.  LINK is a path to a potential
    build-id-based separate debug file, potentially a symlink to the real file.
    If the file exists and matches BUILD_ID, return a BFD reference to it.  */
 
 static gdb_bfd_ref_ptr
-build_id_to_debug_bfd_1 (const std::string &link, size_t build_id_len,
-			 const bfd_byte *build_id)
+build_id_to_debug_bfd_1 (const std::string &orig_link, size_t build_id_len,
+			 const bfd_byte *build_id, char **link_return)
 {
-  if (separate_debug_file_debug)
-    {
-      gdb_printf (gdb_stdlog, _("  Trying %s..."), link.c_str ());
-      gdb_flush (gdb_stdlog);
-    }
-
-  /* lrealpath() is expensive even for the usually non-existent files.  */
-  gdb::unique_xmalloc_ptr<char> filename_holder;
-  const char *filename = nullptr;
-  if (startswith (link, TARGET_SYSROOT_PREFIX))
-    filename = link.c_str ();
-  else if (access (link.c_str (), F_OK) == 0)
-    {
-      filename_holder.reset (lrealpath (link.c_str ()));
-      filename = filename_holder.get ();
-    }
-
-  if (filename == NULL)
-    {
-      if (separate_debug_file_debug)
-	gdb_printf (gdb_stdlog,
-		    _(" no, unable to compute real path\n"));
-
-      return {};
-    }
-
-  /* We expect to be silent on the non-existing files.  */
-  gdb_bfd_ref_ptr debug_bfd = gdb_bfd_open (filename, gnutarget);
-
-  if (debug_bfd == NULL)
-    {
-      if (separate_debug_file_debug)
-	gdb_printf (gdb_stdlog, _(" no, unable to open.\n"));
-
-      return {};
-    }
-
-  if (!build_id_verify (debug_bfd.get(), build_id_len, build_id))
-    {
-      if (separate_debug_file_debug)
-	gdb_printf (gdb_stdlog, _(" no, build-id does not match.\n"));
-
-      return {};
-    }
+  gdb_bfd_ref_ptr ret_bfd = {};
+  std::string ret_link;
 
   if (separate_debug_file_debug)
-    gdb_printf (gdb_stdlog, _(" yes!\n"));
+    {
+      gdb_printf (gdb_stdlog, _("  Trying %s..."), orig_link.c_str ());
+      gdb_flush (gdb_stdout);
+    }
 
-  return debug_bfd;
+  for (unsigned seqno = 0;; seqno++)
+    {
+      std::string link = orig_link;
+
+      if (seqno > 0)
+	{
+	  /* There can be multiple build-id symlinks pointing to real files
+	     with the same build-id (such as hard links).  Some of the real
+	     files may not be installed.  */
+
+	  string_appendf (link, ".%u", seqno);
+	}
+
+      ret_link = link;
+
+      struct stat statbuf_trash;
+
+      /* `access' automatically dereferences LINK.  */
+      if (lstat (link.c_str (), &statbuf_trash) != 0)
+	{
+	  /* Stop increasing SEQNO.  */
+	  break;
+	}
+
+      /* lrealpath() is expensive even for the usually non-existent files.  */
+      gdb::unique_xmalloc_ptr<char> filename_holder;
+      const char *filename = nullptr;
+      if (startswith (link, TARGET_SYSROOT_PREFIX))
+	filename = link.c_str ();
+      else if (access (link.c_str (), F_OK) == 0)
+	{
+	  filename_holder.reset (lrealpath (link.c_str ()));
+	  filename = filename_holder.get ();
+	}
+
+      if (filename == NULL)
+	{
+	  if (separate_debug_file_debug)
+	    gdb_printf (gdb_stdlog,
+	                       _(" no, unable to compute real path\n"));
+
+	  continue;
+	}
+
+      /* We expect to be silent on the non-existing files.  */
+      gdb_bfd_ref_ptr debug_bfd = gdb_bfd_open (filename, gnutarget);
+
+      if (debug_bfd == NULL)
+	{
+	  if (separate_debug_file_debug)
+	    gdb_printf (gdb_stdlog, _(" no, unable to open.\n"));
+
+	  continue;
+	}
+
+      if (!build_id_verify (debug_bfd.get(), build_id_len, build_id))
+	{
+	  if (separate_debug_file_debug)
+	    gdb_printf (gdb_stdlog,
+	                _(" no, build-id does not match.\n"));
+
+	  continue;
+	}
+
+      ret_bfd = debug_bfd;
+      break;
+    }
+
+  std::string link_all;
+
+  if (ret_bfd != NULL)
+    {
+      if (separate_debug_file_debug)
+	gdb_printf (gdb_stdlog, _(" yes!\n"));
+    }
+  else
+    {
+      /* If none of the real files is found report as missing file
+	 always the non-.%u-suffixed file.  */
+      std::string link0 = orig_link;
+
+      /* If the symlink has target request to install the target.
+	 BASE-debuginfo.rpm contains the symlink but BASE.rpm may be missing.
+	 https://bugzilla.redhat.com/show_bug.cgi?id=981154  */
+      std::string link0_resolved (link_resolve (link0.c_str (), 0));
+
+      if (link_all.empty ())
+	link_all = link0_resolved;
+      else
+	{
+	  /* Use whitespace instead of DIRNAME_SEPARATOR to be compatible with
+	     its possible use as an argument for installation command.  */
+	  link_all += " " + link0_resolved;
+	}
+    }
+
+  if (link_return != NULL)
+    {
+      if (ret_bfd != NULL)
+	{
+	  *link_return = xstrdup (ret_link.c_str ());
+	}
+      else
+	{
+	  *link_return = xstrdup (link_all.c_str ());
+	}
+    }
+
+  return ret_bfd;
 }
 
 /* Common code for finding BFDs of a given build-id.  This function
@@ -138,7 +641,7 @@ build_id_to_debug_bfd_1 (const std::string &link, size_t build_id_len,
 
 static gdb_bfd_ref_ptr
 build_id_to_bfd_suffix (size_t build_id_len, const bfd_byte *build_id,
-			const char *suffix)
+			const char *suffix, char **link_return)
 {
   /* Keep backward compatibility so that DEBUG_FILE_DIRECTORY being "" will
      cause "/.build-id/..." lookups.  */
@@ -161,16 +664,17 @@ build_id_to_bfd_suffix (size_t build_id_len, const bfd_byte *build_id,
       if (size > 0)
 	{
 	  size--;
-	  string_appendf (link, "%02x/", (unsigned) *data++);
+	  string_appendf (link, "%02x", (unsigned) *data++);
 	}
-
+      if (size > 0)
+	link += "/";
       while (size-- > 0)
 	string_appendf (link, "%02x", (unsigned) *data++);
 
       link += suffix;
 
       gdb_bfd_ref_ptr debug_bfd
-	= build_id_to_debug_bfd_1 (link, build_id_len, build_id);
+	= build_id_to_debug_bfd_1 (link, build_id_len, build_id, link_return);
       if (debug_bfd != NULL)
 	return debug_bfd;
 
@@ -181,7 +685,7 @@ build_id_to_bfd_suffix (size_t build_id_len, const bfd_byte *build_id,
       if (!gdb_sysroot.empty ())
 	{
 	  link = gdb_sysroot + link;
-	  debug_bfd = build_id_to_debug_bfd_1 (link, build_id_len, build_id);
+	  debug_bfd = build_id_to_debug_bfd_1 (link, build_id_len, build_id, NULL);
 	  if (debug_bfd != NULL)
 	    return debug_bfd;
 	}
@@ -190,29 +694,661 @@ build_id_to_bfd_suffix (size_t build_id_len, const bfd_byte *build_id,
   return {};
 }
 
-/* See build-id.h.  */
-
-gdb_bfd_ref_ptr
-build_id_to_debug_bfd (size_t build_id_len, const bfd_byte *build_id)
+char *
+build_id_to_filename (const struct bfd_build_id *build_id, char **link_return)
 {
-  return build_id_to_bfd_suffix (build_id_len, build_id, ".debug");
+  gdb_bfd_ref_ptr abfd;
+  char *result;
+
+  abfd = build_id_to_exec_bfd (build_id->size, build_id->data, link_return);
+  if (abfd == NULL)
+    return NULL;
+
+  result = xstrdup (bfd_get_filename (abfd.get ()));
+  return result;
+}
+
+void debug_flush_missing (void);
+
+#ifdef HAVE_LIBRPM
+
+#include <rpm/rpmlib.h>
+#include <rpm/rpmts.h>
+#include <rpm/rpmdb.h>
+#include <rpm/header.h>
+#ifdef DLOPEN_LIBRPM
+#include <dlfcn.h>
+#endif
+
+/* Workarodun https://bugzilla.redhat.com/show_bug.cgi?id=643031
+   librpm must not exit() an application on SIGINT
+
+   Enable or disable a signal handler.  SIGNUM: signal to enable (or disable
+   if negative).  HANDLER: sa_sigaction handler (or NULL to use
+   rpmsqHandler()).  Returns: no. of refs, -1 on error.  */
+extern int rpmsqEnable (int signum, /* rpmsqAction_t handler */ void *handler);
+int
+rpmsqEnable (int signum, /* rpmsqAction_t handler */ void *handler)
+{
+  return 0;
+}
+
+/* This MISSING_RPM_HASH tracker is used to collect all the missing rpm files
+   and avoid their duplicities during a single inferior run.  */
+
+static struct htab *missing_rpm_hash;
+
+/* This MISSING_RPM_LIST tracker is used to collect and print as a single line
+   all the rpms right before the nearest GDB prompt.  It gets cleared after
+   each such print (it is questionable if we should clear it after the print).
+   */
+
+struct missing_rpm
+  {
+    struct missing_rpm *next;
+    char rpm[1];
+  };
+static struct missing_rpm *missing_rpm_list;
+static int missing_rpm_list_entries;
+
+/* Returns the count of newly added rpms.  */
+
+static int
+#ifndef GDB_INDEX_VERIFY_VENDOR
+missing_rpm_enlist (const char *filename)
+#else
+missing_rpm_enlist_1 (const char *filename, int verify_vendor)
+#endif
+{
+  static int rpm_init_done = 0;
+  rpmts ts;
+  rpmdbMatchIterator mi;
+  int count = 0;
+
+#ifdef DLOPEN_LIBRPM
+  /* Duplicate here the declarations to verify they match.  The same sanity
+     check is present also in `configure.ac'.  */
+  extern char * headerFormat(Header h, const char * fmt, errmsg_t * errmsg);
+  static char *(*headerFormat_p) (Header h, const char * fmt, errmsg_t *errmsg);
+  extern int rpmReadConfigFiles(const char * file, const char * target);
+  static int (*rpmReadConfigFiles_p) (const char * file, const char * target);
+  extern rpmdbMatchIterator rpmdbFreeIterator(rpmdbMatchIterator mi);
+  static rpmdbMatchIterator (*rpmdbFreeIterator_p) (rpmdbMatchIterator mi);
+  extern Header rpmdbNextIterator(rpmdbMatchIterator mi);
+  static Header (*rpmdbNextIterator_p) (rpmdbMatchIterator mi);
+  extern rpmts rpmtsCreate(void);
+  static rpmts (*rpmtsCreate_p) (void);
+  extern rpmts rpmtsFree(rpmts ts);
+  static rpmts (*rpmtsFree_p) (rpmts ts);
+  extern rpmdbMatchIterator rpmtsInitIterator(const rpmts ts, rpmTag rpmtag,
+                                              const void * keyp, size_t keylen);
+  static rpmdbMatchIterator (*rpmtsInitIterator_p) (const rpmts ts,
+						    rpmTag rpmtag,
+						    const void *keyp,
+						    size_t keylen);
+#else	/* !DLOPEN_LIBRPM */
+# define headerFormat_p headerFormat
+# define rpmReadConfigFiles_p rpmReadConfigFiles
+# define rpmdbFreeIterator_p rpmdbFreeIterator
+# define rpmdbNextIterator_p rpmdbNextIterator
+# define rpmtsCreate_p rpmtsCreate
+# define rpmtsFree_p rpmtsFree
+# define rpmtsInitIterator_p rpmtsInitIterator
+#endif	/* !DLOPEN_LIBRPM */
+
+  gdb_assert (filename != NULL);
+
+  if (strcmp (filename, BUILD_ID_MAIN_EXECUTABLE_FILENAME) == 0)
+    return 0;
+
+  if (is_target_filename (filename))
+    return 0;
+
+  if (filename[0] != '/')
+    {
+      warning (_("Ignoring non-absolute filename: <%s>"), filename);
+      return 0;
+    }
+
+  if (!rpm_init_done)
+    {
+      static int init_tried;
+
+      /* Already failed the initialization before?  */
+      if (init_tried)
+        return 0;
+      init_tried = 1;
+
+#ifdef DLOPEN_LIBRPM
+      {
+	void *h;
+
+	h = dlopen (DLOPEN_LIBRPM, RTLD_LAZY);
+	if (!h)
+	  {
+	    warning (_("Unable to open \"%s\" (%s), "
+		      "missing debuginfos notifications will not be displayed"),
+		     DLOPEN_LIBRPM, dlerror ());
+	    return 0;
+	  }
+
+	if (!((headerFormat_p = (char *(*) (Header h, const char * fmt, errmsg_t *errmsg)) dlsym (h, "headerFormat"))
+	      && (rpmReadConfigFiles_p = (int (*) (const char * file, const char * target)) dlsym (h, "rpmReadConfigFiles"))
+	      && (rpmdbFreeIterator_p = (rpmdbMatchIterator (*) (rpmdbMatchIterator mi)) dlsym (h, "rpmdbFreeIterator"))
+	      && (rpmdbNextIterator_p = (Header (*) (rpmdbMatchIterator mi)) dlsym (h, "rpmdbNextIterator"))
+	      && (rpmtsCreate_p = (rpmts (*) (void)) dlsym (h, "rpmtsCreate"))
+	      && (rpmtsFree_p = (rpmts (*) (rpmts ts)) dlsym (h, "rpmtsFree"))
+	      && (rpmtsInitIterator_p = (rpmdbMatchIterator (*) (const rpmts ts, rpmTag rpmtag, const void *keyp, size_t keylen)) dlsym (h, "rpmtsInitIterator"))))
+	  {
+	    warning (_("Opened library \"%s\" is incompatible (%s), "
+		      "missing debuginfos notifications will not be displayed"),
+		     DLOPEN_LIBRPM, dlerror ());
+	    if (dlclose (h))
+	      warning (_("Error closing library \"%s\": %s\n"), DLOPEN_LIBRPM,
+		       dlerror ());
+	    return 0;
+	  }
+      }
+#endif	/* DLOPEN_LIBRPM */
+
+      if (rpmReadConfigFiles_p (NULL, NULL) != 0)
+	{
+	  warning (_("Error reading the rpm configuration files"));
+	  return 0;
+	}
+
+      rpm_init_done = 1;
+    }
+
+  ts = rpmtsCreate_p ();
+
+  mi = rpmtsInitIterator_p (ts, RPMTAG_BASENAMES, filename, 0);
+  if (mi != NULL)
+    {
+#ifndef GDB_INDEX_VERIFY_VENDOR
+      for (;;)
+#else
+      if (!verify_vendor) for (;;)
+#endif
+	{
+	  Header h;
+	  char *debuginfo, **slot, *s, *s2;
+	  errmsg_t err;
+	  size_t srcrpmlen = sizeof (".src.rpm") - 1;
+	  size_t debuginfolen = sizeof ("-debuginfo") - 1;
+	  rpmdbMatchIterator mi_debuginfo;
+
+	  h = rpmdbNextIterator_p (mi);
+	  if (h == NULL)
+	    break;
+
+	  /* Verify the debuginfo file is not already installed.  */
+
+	  debuginfo = headerFormat_p (h, "%{sourcerpm}-debuginfo.%{arch}",
+				      &err);
+	  if (!debuginfo)
+	    {
+	      warning (_("Error querying the rpm file `%s': %s"), filename,
+	               err);
+	      continue;
+	    }
+	  /* s = `.src.rpm-debuginfo.%{arch}' */
+	  s = strrchr (debuginfo, '-') - srcrpmlen;
+	  s2 = NULL;
+	  if (s > debuginfo && memcmp (s, ".src.rpm", srcrpmlen) == 0)
+	    {
+	      /* s2 = `-%{release}.src.rpm-debuginfo.%{arch}' */
+	      s2 = (char *) memrchr (debuginfo, '-', s - debuginfo);
+	    }
+	  if (s2)
+	    {
+	      /* s2 = `-%{version}-%{release}.src.rpm-debuginfo.%{arch}' */
+	      s2 = (char *) memrchr (debuginfo, '-', s2 - debuginfo);
+	    }
+	  if (!s2)
+	    {
+	      warning (_("Error querying the rpm file `%s': %s"), filename,
+	               debuginfo);
+	      xfree (debuginfo);
+	      continue;
+	    }
+	  /* s = `.src.rpm-debuginfo.%{arch}' */
+	  /* s2 = `-%{version}-%{release}.src.rpm-debuginfo.%{arch}' */
+	  memmove (s2 + debuginfolen, s2, s - s2);
+	  memcpy (s2, "-debuginfo", debuginfolen);
+	  /* s = `XXXX.%{arch}' */
+	  /* strlen ("XXXX") == srcrpmlen + debuginfolen */
+	  /* s2 = `-debuginfo-%{version}-%{release}XX.%{arch}' */
+	  /* strlen ("XX") == srcrpmlen */
+	  memmove (s + debuginfolen, s + srcrpmlen + debuginfolen,
+		   strlen (s + srcrpmlen + debuginfolen) + 1);
+	  /* s = `-debuginfo-%{version}-%{release}.%{arch}' */
+
+	  /* RPMDBI_PACKAGES requires keylen == sizeof (int).  */
+	  /* RPMDBI_LABEL is an interface for NVR-based dbiFindByLabel().  */
+	  mi_debuginfo = rpmtsInitIterator_p (ts, (rpmTag) RPMDBI_LABEL, debuginfo, 0);
+	  xfree (debuginfo);
+	  if (mi_debuginfo)
+	    {
+	      rpmdbFreeIterator_p (mi_debuginfo);
+	      count = 0;
+	      break;
+	    }
+
+	  /* The allocated memory gets utilized below for MISSING_RPM_HASH.  */
+	  debuginfo = headerFormat_p (h,
+				      "%{name}-%{version}-%{release}.%{arch}",
+				      &err);
+	  if (!debuginfo)
+	    {
+	      warning (_("Error querying the rpm file `%s': %s"), filename,
+	               err);
+	      continue;
+	    }
+
+	  /* Base package name for `debuginfo-install'.  We do not use the
+	     `yum' command directly as the line
+		 yum --enablerepo='*debug*' install NAME-debuginfo.ARCH
+	     would be more complicated than just:
+		 debuginfo-install NAME-VERSION-RELEASE.ARCH
+	     Do not supply the rpm base name (derived from .src.rpm name) as
+	     debuginfo-install is unable to install the debuginfo package if
+	     the base name PKG binary rpm is not installed while for example
+	     PKG-libs would be installed (RH Bug 467901).
+	     FUTURE: After multiple debuginfo versions simultaneously installed
+	     get supported the support for the VERSION-RELEASE tags handling
+	     may need an update.  */
+
+	  if (missing_rpm_hash == NULL)
+	    {
+	      /* DEL_F is passed NULL as MISSING_RPM_LIST's HTAB_DELETE
+		 should not deallocate the entries.  */
+
+	      missing_rpm_hash = htab_create_alloc (64, htab_hash_string,
+			       (int (*) (const void *, const void *)) streq,
+						    NULL, xcalloc, xfree);
+	    }
+	  slot = (char **) htab_find_slot (missing_rpm_hash, debuginfo, INSERT);
+	  /* XCALLOC never returns NULL.  */
+	  gdb_assert (slot != NULL);
+	  if (*slot == NULL)
+	    {
+	      struct missing_rpm *missing_rpm;
+
+	      *slot = debuginfo;
+
+	      missing_rpm = (struct missing_rpm *) xmalloc (sizeof (*missing_rpm) + strlen (debuginfo));
+	      strcpy (missing_rpm->rpm, debuginfo);
+	      missing_rpm->next = missing_rpm_list;
+	      missing_rpm_list = missing_rpm;
+	      missing_rpm_list_entries++;
+	    }
+	  else
+	    xfree (debuginfo);
+	  count++;
+	}
+#ifdef GDB_INDEX_VERIFY_VENDOR
+      else /* verify_vendor */
+	{
+	  int vendor_pass = 0, vendor_fail = 0;
+
+	  for (;;)
+	    {
+	      Header h;
+	      errmsg_t err;
+	      char *vendor;
+
+	      h = rpmdbNextIterator_p (mi);
+	      if (h == NULL)
+		break;
+
+	      vendor = headerFormat_p (h, "%{vendor}", &err);
+	      if (!vendor)
+		{
+		  warning (_("Error querying the rpm file `%s': %s"), filename,
+			   err);
+		  continue;
+		}
+	      if (strcmp (vendor, "Red Hat, Inc.") == 0)
+		vendor_pass = 1;
+	      else
+		vendor_fail = 1;
+	      xfree (vendor);
+	    }
+	  count = vendor_pass != 0 && vendor_fail == 0;
+	}
+#endif
+
+      rpmdbFreeIterator_p (mi);
+    }
+
+  rpmtsFree_p (ts);
+
+  return count;
+}
+
+#ifdef GDB_INDEX_VERIFY_VENDOR
+missing_rpm_enlist (const char *filename)
+{
+  return missing_rpm_enlist_1 (filename, 0);
+}
+
+extern int rpm_verify_vendor (const char *filename);
+int
+rpm_verify_vendor (const char *filename)
+{
+  return missing_rpm_enlist_1 (filename, 1);
+}
+#endif
+
+static bool
+missing_rpm_list_compar (const char *ap, const char *bp)
+{
+  return strcoll (ap, bp) < 0;
+}
+
+/* It returns a NULL-terminated array of strings needing to be FREEd.  It may
+   also return only NULL.  */
+
+static void
+missing_rpm_list_print (void)
+{
+  struct missing_rpm *list_iter;
+
+  if (missing_rpm_list_entries == 0)
+    return;
+
+  std::vector<const char *> array (missing_rpm_list_entries);
+  size_t idx = 0;
+
+  for (list_iter = missing_rpm_list; list_iter != NULL;
+       list_iter = list_iter->next)
+    {
+      array[idx++] = list_iter->rpm;
+    }
+  gdb_assert (idx == missing_rpm_list_entries);
+
+  std::sort (array.begin (), array.end (), missing_rpm_list_compar);
+
+  /* We zero out the number of missing RPMs here because of a nasty
+     bug (see RHBZ 1801974).
+
+     When we call 'puts_unfiltered' below, if pagination is on and if
+     the number of missing RPMs is big enough to trigger pagination,
+     we will end up in an infinite recursion.  The call chain looks
+     like this:
+
+     missing_rpm_list_print -> puts_unfiltered -> fputs_maybe_filtered
+     -> prompt_for_continue -> display_gdb_prompt ->
+     debug_flush_missing -> missing_rpm_list_print ...
+
+     For this reason, we make sure MISSING_RPM_LIST_ENTRIES is zero
+     *before* calling any print function.
+     
+     Note: kevinb/2023-02-22: The code below used to call
+     puts_unfiltered() and printf_unfiltered(), but calls to these
+     functions have been replaced by calls to gdb_printf().  The call
+     chain shown above (probably) used to be the case at one time and
+     hopefully something similar is still the case now that
+     gdb_printf() is being used instead.  */
+  missing_rpm_list_entries = 0;
+
+  gdb_printf (_("Missing separate debuginfos, use: %s"),
+#ifdef DNF_DEBUGINFO_INSTALL
+		     "dnf "
+#endif
+		     "debuginfo-install");
+  for (const char *el : array)
+    {
+      gdb_printf (" %s", el);
+    }
+  gdb_printf ("\n");
+
+  while (missing_rpm_list != NULL)
+    {
+      list_iter = missing_rpm_list;
+      missing_rpm_list = list_iter->next;
+      xfree (list_iter);
+    }
+}
+
+static void
+missing_rpm_change (void)
+{
+  debug_flush_missing ();
+
+  gdb_assert (missing_rpm_list == NULL);
+  if (missing_rpm_hash != NULL)
+    {
+      htab_delete (missing_rpm_hash);
+      missing_rpm_hash = NULL;
+    }
+}
+
+enum missing_exec
+  {
+    /* Init state.  EXEC_BFD also still could be NULL.  */
+    MISSING_EXEC_NOT_TRIED,
+    /* We saw a non-NULL EXEC_BFD but RPM has no info about it.  */
+    MISSING_EXEC_NOT_FOUND,
+    /* We found EXEC_BFD by RPM and we either have its symbols (either embedded
+       or separate) or the main executable's RPM is now contained in
+       MISSING_RPM_HASH.  */
+    MISSING_EXEC_ENLISTED
+  };
+static enum missing_exec missing_exec = MISSING_EXEC_NOT_TRIED;
+
+#endif	/* HAVE_LIBRPM */
+
+void
+debug_flush_missing (void)
+{
+#ifdef HAVE_LIBRPM
+  missing_rpm_list_print ();
+#endif
+}
+
+/* This MISSING_FILEPAIR_HASH tracker is used only for the duplicite messages
+     yum --enablerepo='*debug*' install ...
+   avoidance.  */
+
+struct missing_filepair
+  {
+    char *binary;
+    char *debug;
+    char data[1];
+  };
+
+static struct htab *missing_filepair_hash;
+static struct obstack missing_filepair_obstack;
+
+static void *
+missing_filepair_xcalloc (size_t nmemb, size_t nmemb_size)
+{
+  void *retval;
+  size_t size = nmemb * nmemb_size;
+
+  retval = obstack_alloc (&missing_filepair_obstack, size);
+  memset (retval, 0, size);
+  return retval;
+}
+
+static hashval_t
+missing_filepair_hash_func (const struct missing_filepair *elem)
+{
+  hashval_t retval = 0;
+
+  retval ^= htab_hash_string (elem->binary);
+  if (elem->debug != NULL)
+    retval ^= htab_hash_string (elem->debug);
+
+  return retval;
+}
+
+static int
+missing_filepair_eq (const struct missing_filepair *elem1,
+		       const struct missing_filepair *elem2)
+{
+  return strcmp (elem1->binary, elem2->binary) == 0
+         && ((elem1->debug == NULL) == (elem2->debug == NULL))
+         && (elem1->debug == NULL || strcmp (elem1->debug, elem2->debug) == 0);
+}
+
+static void
+missing_filepair_change (void)
+{
+  if (missing_filepair_hash != NULL)
+    {
+      obstack_free (&missing_filepair_obstack, NULL);
+      /* All their memory came just from missing_filepair_OBSTACK.  */
+      missing_filepair_hash = NULL;
+    }
+#ifdef HAVE_LIBRPM
+  missing_exec = MISSING_EXEC_NOT_TRIED;
+#endif
+}
+
+static void
+debug_print_executable_changed (struct program_space *pspace, bool reload_p)
+{
+#ifdef HAVE_LIBRPM
+  missing_rpm_change ();
+#endif
+  missing_filepair_change ();
+}
+
+/* Notify user the file BINARY with (possibly NULL) associated separate debug
+   information file DEBUG is missing.  DEBUG may or may not be the build-id
+   file such as would be:
+     /usr/lib/debug/.build-id/dd/b1d2ce632721c47bb9e8679f369e2295ce71be.debug
+   */
+
+void
+debug_print_missing (const char *binary, const char *debug)
+{
+  size_t binary_len0 = strlen (binary) + 1;
+  size_t debug_len0 = debug ? strlen (debug) + 1 : 0;
+  struct missing_filepair missing_filepair_find;
+  struct missing_filepair *missing_filepair;
+  struct missing_filepair **slot;
+
+  if (build_id_verbose < BUILD_ID_VERBOSE_FILENAMES)
+    return;
+
+  if (missing_filepair_hash == NULL)
+    {
+      obstack_init (&missing_filepair_obstack);
+      missing_filepair_hash = htab_create_alloc (64,
+	(hashval_t (*) (const void *)) missing_filepair_hash_func,
+	(int (*) (const void *, const void *)) missing_filepair_eq, NULL,
+	missing_filepair_xcalloc, NULL);
+    }
+
+  /* Use MISSING_FILEPAIR_FIND first instead of calling obstack_alloc with
+     obstack_free in the case of a (rare) match.  The problem is ALLOC_F for
+     MISSING_FILEPAIR_HASH allocates from MISSING_FILEPAIR_OBSTACK maintenance
+     structures for MISSING_FILEPAIR_HASH.  Calling obstack_free would possibly
+     not to free only MISSING_FILEPAIR but also some such structures (allocated
+     during the htab_find_slot call).  */
+
+  missing_filepair_find.binary = (char *) binary;
+  missing_filepair_find.debug = (char *) debug;
+  slot = (struct missing_filepair **) htab_find_slot (missing_filepair_hash,
+						      &missing_filepair_find,
+						      INSERT);
+
+  /* While it may be still printed duplicitely with the missing debuginfo file
+   * it is due to once printing about the binary file build-id link and once
+   * about the .debug file build-id link as both the build-id symlinks are
+   * located in the debuginfo package.  */
+
+  if (*slot != NULL)
+    return;
+
+  missing_filepair = (struct missing_filepair *) obstack_alloc (&missing_filepair_obstack,
+								sizeof (*missing_filepair) - 1
+								+ binary_len0 + debug_len0);
+  missing_filepair->binary = missing_filepair->data;
+  memcpy (missing_filepair->binary, binary, binary_len0);
+  if (debug != NULL)
+    {
+      missing_filepair->debug = missing_filepair->binary + binary_len0;
+      memcpy (missing_filepair->debug, debug, debug_len0);
+    }
+  else
+    missing_filepair->debug = NULL;
+
+  *slot = missing_filepair;
+
+#ifdef HAVE_LIBRPM
+  if (missing_exec == MISSING_EXEC_NOT_TRIED)
+    {
+      const char *execfilename = get_exec_file (0);
+
+      if (execfilename != NULL)
+	{
+	  if (missing_rpm_enlist (execfilename) == 0)
+	    missing_exec = MISSING_EXEC_NOT_FOUND;
+	  else
+	    missing_exec = MISSING_EXEC_ENLISTED;
+	}
+    }
+  if (missing_exec != MISSING_EXEC_ENLISTED)
+    if ((binary[0] == 0 || missing_rpm_enlist (binary) == 0)
+	&& (debug == NULL || missing_rpm_enlist (debug) == 0))
+#endif	/* HAVE_LIBRPM */
+      {
+	/* We do not collect and flush these messages as each such message
+	   already requires its own separate lines.  */
+
+	gdb_printf (gdb_stdlog,
+		    _("Missing separate debuginfo for %s.\n"), binary);
+	if (debug != NULL)
+	{
+	  if (access (debug, F_OK) == 0) {
+	    gdb_printf (gdb_stdlog, _("Try: %s %s\n"),
+#ifdef DNF_DEBUGINFO_INSTALL
+			"dnf"
+#else
+			"yum"
+#endif
+			" --enablerepo='*debug*' install", debug);
+	  } else
+	    gdb_printf (gdb_stdlog, _("The debuginfo package for this file is probably broken.\n"));
+	}
+      }
 }
 
 /* See build-id.h.  */
 
 gdb_bfd_ref_ptr
-build_id_to_exec_bfd (size_t build_id_len, const bfd_byte *build_id)
+build_id_to_debug_bfd (size_t build_id_len, const bfd_byte *build_id,
+		       char **link_return)
 {
-  return build_id_to_bfd_suffix (build_id_len, build_id, "");
+  return build_id_to_bfd_suffix (build_id_len, build_id, ".debug",
+				 link_return);
+}
+
+/* See build-id.h.  */
+
+gdb_bfd_ref_ptr
+build_id_to_exec_bfd (size_t build_id_len, const bfd_byte *build_id,
+		      char **link_return)
+{
+  return build_id_to_bfd_suffix (build_id_len, build_id, "", link_return);
 }
 
 /* See build-id.h.  */
 
 std::string
 find_separate_debug_file_by_buildid (struct objfile *objfile,
-				     deferred_warnings *warnings)
+				     deferred_warnings *warnings,
+				     gdb::unique_xmalloc_ptr<char> *build_id_filename_return)
 {
   const struct bfd_build_id *build_id;
+
+  if (build_id_filename_return)
+    *build_id_filename_return = NULL;
 
   build_id = build_id_bfd_get (objfile->obfd.get ());
   if (build_id != NULL)
@@ -222,8 +1358,21 @@ find_separate_debug_file_by_buildid (struct objfile *objfile,
 		    _("\nLooking for separate debug info (build-id) for "
 		      "%s\n"), objfile_name (objfile));
 
+      char *build_id_filename_cstr = NULL;
       gdb_bfd_ref_ptr abfd (build_id_to_debug_bfd (build_id->size,
-						   build_id->data));
+						   build_id->data,
+	      (!build_id_filename_return ? NULL : &build_id_filename_cstr)));
+      if (build_id_filename_return)
+	{
+	  if (!build_id_filename_cstr)
+	    gdb_assert (!*build_id_filename_return);
+	  else
+	    {
+	      *build_id_filename_return = gdb::unique_xmalloc_ptr<char> (build_id_filename_cstr);
+	      build_id_filename_cstr = NULL;
+	    }
+	}
+
       /* Prevent looping on a stripped .debug file.  */
       if (abfd != NULL
 	  && filename_cmp (bfd_get_filename (abfd.get ()),
@@ -242,4 +1391,23 @@ find_separate_debug_file_by_buildid (struct objfile *objfile,
     }
 
   return std::string ();
+}
+
+void _initialize_build_id ();
+
+void
+_initialize_build_id ()
+{
+  add_setshow_zinteger_cmd ("build-id-verbose", no_class, &build_id_verbose,
+			    _("\
+Set debugging level of the build-id locator."), _("\
+Show debugging level of the build-id locator."), _("\
+Level 1 (default) enables printing the missing debug filenames,\n\
+level 2 also prints the parsing of binaries to find the identificators."),
+			    NULL,
+			    show_build_id_verbose,
+			    &setlist, &showlist);
+
+  gdb::observers::executable_changed.attach (debug_print_executable_changed,
+                                             "build-id");
 }
