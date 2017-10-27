@@ -749,7 +749,8 @@ if test x"$prefer_curses" = xyes; then
   # search /usr/local/include, if ncurses is installed in /usr/local.  A
   # default installation of ncurses on alpha*-dec-osf* will lead to such
   # a situation.
-  AC_SEARCH_LIBS(waddstr, [ncursesw ncurses cursesX curses],
+  # Fedora: Force libncursesw over libncurses to match the includes.
+  AC_SEARCH_LIBS(waddstr, [ncursesw],
                  [curses_found=yes
                   AC_DEFINE([HAVE_LIBCURSES], [1],
                             [Define to 1 if curses is enabled.])
@@ -789,7 +790,8 @@ case $host_os in
 esac
 
 # These are the libraries checked by Readline.
-AC_SEARCH_LIBS(tgetent, [termcap tinfow tinfo curses ncursesw ncurses])
+# Fedora: Force libncursesw over libncurses to match the includes.
+AC_SEARCH_LIBS(tgetent, [ncursesw])
 
 if test "$ac_cv_search_tgetent" = no; then
   CONFIG_OBS="$CONFIG_OBS stub-termcap.o"
