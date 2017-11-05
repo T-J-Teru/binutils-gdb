@@ -199,7 +199,7 @@ set_riscv_command (char *args, int from_tty)
 }
 
 static uint32_t
-cached_misa ()
+cached_misa (void)
 {
   static bool read = false;
   static uint32_t value = 0;
@@ -223,6 +223,25 @@ cached_misa ()
   return value;
 }
 
+static bool
+riscv_supports_isa_feature (char f)
+{
+  uint32_t misa_value;
+
+  if (f < 'A' || f > 'Q')
+    return false;
+
+  if (target_has_execution)
+    {
+      misa_value = cached_misa ();
+      return ((misa_value & (1 << (f - 'A'))) != 0);
+    }
+
+  return false;
+}
+
+
+
 /* Implement the breakpoint_kind_from_pc gdbarch method.  */
 
 static int
@@ -234,8 +253,7 @@ riscv_breakpoint_kind_from_pc (struct gdbarch *gdbarch, CORE_ADDR *pcptr)
       /* TODO: Because we try to read misa, it is not possible to set a
          breakpoint before connecting to a live target. A suggested workaround is
          to look at the ELF file in this case.  */
-      uint32_t misa = cached_misa();
-      if (misa & (1<<2))
+      if (riscv_supports_isa_feature ('C'))
         gdbarch_tdep (gdbarch)->supports_compressed_isa = AUTO_BOOLEAN_TRUE;
       else
         gdbarch_tdep (gdbarch)->supports_compressed_isa = AUTO_BOOLEAN_FALSE;
@@ -739,39 +757,50 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch,
       || gdbarch_register_name (gdbarch, regnum)[0] == '\0')
     return 0;
 
-  if (reggroup == all_reggroup) {
-    if (regnum < RISCV_FIRST_CSR_REGNUM || regnum == RISCV_PRIV_REGNUM)
-      return 1;
-    /* Only include CSRs that have aliases.  */
-    for (i = 0; i < ARRAY_SIZE (riscv_register_aliases); ++i) {
-	if (regnum == riscv_register_aliases[i].regnum)
-          return 1;
+  if (reggroup == all_reggroup)
+    {
+      if (regnum < RISCV_FIRST_CSR_REGNUM || regnum == RISCV_PRIV_REGNUM)
+	return 1;
+      /* Only include CSRs that have aliases.  */
+      for (i = 0; i < ARRAY_SIZE (riscv_register_aliases); ++i)
+	{
+	  if (regnum == riscv_register_aliases[i].regnum)
+	    return 1;
+	}
+      return 0;
     }
-    return 0;
-  } else if (reggroup == float_reggroup)
-    return (regnum >= RISCV_FIRST_FP_REGNUM && regnum <= RISCV_LAST_FP_REGNUM)
+  else if (reggroup == float_reggroup)
+    return ((regnum >= RISCV_FIRST_FP_REGNUM && regnum <= RISCV_LAST_FP_REGNUM)
 	    || (regnum == RISCV_CSR_FCSR_REGNUM
-	        || regnum == RISCV_CSR_FFLAGS_REGNUM
-	        || regnum == RISCV_CSR_FRM_REGNUM);
+		|| regnum == RISCV_CSR_FFLAGS_REGNUM
+	        || regnum == RISCV_CSR_FRM_REGNUM));
   else if (reggroup == general_reggroup)
     return regnum < RISCV_FIRST_FP_REGNUM;
-  else if (reggroup == restore_reggroup || reggroup == save_reggroup) {
-    if (cached_misa() & ((1<<('F'-'A')) | (1<<('D'-'A')) | (1<<('Q'-'A'))))
-      return regnum <= RISCV_LAST_FP_REGNUM;
-    else
-      return regnum < RISCV_FIRST_FP_REGNUM;
-  } else if (reggroup == system_reggroup) {
-    if (regnum == RISCV_PRIV_REGNUM)
-      return 1;
-    if (regnum < RISCV_FIRST_CSR_REGNUM || regnum > RISCV_LAST_CSR_REGNUM)
-      return 0;
-    /* Only include CSRs that have aliases.  */
-    for (i = 0; i < ARRAY_SIZE (riscv_register_aliases); ++i) {
-	if (regnum == riscv_register_aliases[i].regnum)
-          return 1;
+  else if (reggroup == restore_reggroup || reggroup == save_reggroup)
+    {
+      if (riscv_supports_isa_feature ('F')
+	  || riscv_supports_isa_feature ('D')
+	  || riscv_supports_isa_feature ('Q'))
+	return regnum <= RISCV_LAST_FP_REGNUM;
+      else
+	return regnum < RISCV_FIRST_FP_REGNUM;
     }
-    return 0;
-  } else if (reggroup == vector_reggroup)
+  else if (reggroup == system_reggroup)
+    {
+      if (regnum == RISCV_PRIV_REGNUM)
+	return 1;
+      if (regnum < RISCV_FIRST_CSR_REGNUM
+	  || regnum > RISCV_LAST_CSR_REGNUM)
+	return 0;
+      /* Only include CSRs that have aliases.  */
+      for (i = 0; i < ARRAY_SIZE (riscv_register_aliases); ++i)
+	{
+	  if (regnum == riscv_register_aliases[i].regnum)
+	    return 1;
+	}
+      return 0;
+    }
+  else if (reggroup == vector_reggroup)
     return 0;
   else
     internal_error (__FILE__, __LINE__, _("unhandled reggroup"));
@@ -1279,11 +1308,13 @@ riscv_gdbarch_init (struct gdbarch_info info,
   set_gdbarch_long_double_bit (gdbarch, 128);
   set_gdbarch_ptr_bit (gdbarch, riscv_isa_regsize (gdbarch) * 8);
   set_gdbarch_char_signed (gdbarch, 1);
+  set_gdbarch_long_double_format (gdbarch, floatformats_ia64_quad);
 
   /* Information about the target architecture.  */
   set_gdbarch_return_value (gdbarch, riscv_return_value);
   set_gdbarch_breakpoint_kind_from_pc (gdbarch, riscv_breakpoint_kind_from_pc);
   set_gdbarch_sw_breakpoint_from_kind (gdbarch, riscv_sw_breakpoint_from_kind);
+  set_gdbarch_decr_pc_after_break (gdbarch, 4);
 
   /* Register architecture.  */
   set_gdbarch_pseudo_register_read (gdbarch, riscv_pseudo_register_read);

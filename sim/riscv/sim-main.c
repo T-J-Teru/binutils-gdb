@@ -560,9 +560,20 @@ execute_i (SIM_CPU *cpu, unsigned_word iw, const struct riscv_opcode *op)
       TRACE_INSN (cpu, "fence.i;");
       break;
     case MATCH_SBREAK:
-      TRACE_INSN (cpu, "sbreak;");
-      /* GDB expects us to step over SBREAK.  */
-      sim_engine_halt (sd, cpu, NULL, cpu->pc + 4, sim_stopped, SIM_SIGTRAP);
+      {
+        uint32_t insn_before, insn_after;
+
+        TRACE_INSN (cpu, "sbreak;");
+        /* GDB expects us to step over SBREAK.  */
+        insn_before =
+          sim_core_read_unaligned_4 (cpu, cpu->pc, read_map, cpu->pc - 4);
+        insn_after =
+          sim_core_read_unaligned_4 (cpu, cpu->pc, read_map, cpu->pc + 4);
+        if (insn_before == insn_after && insn_before == 0x13 /* NOP */)
+          cpu->a0 = sim_syscall (cpu, cpu->a7, cpu->a0, cpu->a1, cpu->a2, cpu->a3);
+        else
+          sim_engine_halt (sd, cpu, NULL, cpu->pc + 4, sim_stopped, SIM_SIGTRAP);
+      }
       break;
     case MATCH_ECALL:
       TRACE_INSN (cpu, "ecall;");
@@ -1035,6 +1046,9 @@ reg_store (sim_cpu *cpu, int rn, unsigned char *buf, int len)
 
   switch (rn)
     {
+    case SIM_RISCV_ZERO_REGNUM:
+      /* Discard.  */
+      return len;
     case SIM_RISCV_RA_REGNUM ... SIM_RISCV_T6_REGNUM:
       memcpy (&cpu->regs[rn], buf, len);
       return len;
