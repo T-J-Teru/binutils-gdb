@@ -1,3 +1,7 @@
+2018-02-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* nltvals.def: Add riscv syscall names/numbers.
+
 2018-02-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* sim-syscall.c (sim_syscall_multi): Don't update sc->errcode at

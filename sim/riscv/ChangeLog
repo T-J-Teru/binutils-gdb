@@ -1,0 +1,13 @@
+2018-02-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* Makefile.in: New file.
+	* configure.ac: New file.
+	* interp.c: New file.
+	* machs.c: New file.
+	* machs.h: New file.
+	* model_list.def: New file.
+	* sim-main.c: New file.
+	* sim-main.h: New file.
+	* aclocal.m4: Regenerated.
+	* config.in: Regenerated.
+	* configure: Regenerated.

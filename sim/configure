@@ -655,6 +655,7 @@ mn10300
 moxie
 or1k
 msp430
+riscv
 rl78
 rx
 sh64
@@ -3778,6 +3779,13 @@ subdirs="$subdirs aarch64"
 
 
        sim_testsuite=yes
+       ;;
+   riscv*-*-*)
+
+  sim_arch=riscv
+  subdirs="$subdirs riscv"
+
+
        ;;
    rl78-*-*)
 
