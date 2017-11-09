@@ -1,3 +1,7 @@
+2018-02-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* configure: Regenerated.
+
 2019-12-19  Tom Tromey  <tromey@adacore.com>
 
 	PR build/24572:

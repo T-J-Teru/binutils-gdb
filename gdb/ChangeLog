@@ -1,3 +1,7 @@
+2018-02-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* configure.tgt: Add libsim.a as a dependency for riscv.
+
 2020-02-26  Simon Marchi  <simon.marchi@efficios.com>
 
 	* dwarf2/loc.h (dwarf2_fetch_die_loc_sect_off,
