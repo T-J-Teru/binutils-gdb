@@ -1892,6 +1892,9 @@ case "${target}" in
        sim_arch=or1k
        sim_testsuite=yes
        ;;
+   riscv*-*-*)
+       sim_arch=riscv
+       ;;
    rl78-*-*)
        sim_arch=rl78
        ;;
