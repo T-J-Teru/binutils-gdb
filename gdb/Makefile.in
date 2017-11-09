@@ -749,6 +749,7 @@ ALL_TARGET_OBS = \
 	ppc64-tdep.o \
 	ravenscar-thread.o \
 	riscv-tdep.o \
+	riscv-linux-tdep.o \
 	rl78-tdep.o \
 	rs6000-aix-tdep.o \
 	rs6000-lynx178-tdep.o \
@@ -2324,6 +2325,7 @@ ALLDEPFILES = \
 	ravenscar-thread.c \
 	remote-sim.c \
 	riscv-tdep.c \
+	riscv-linux-tdep.c \
 	rl78-tdep.c \
 	rs6000-lynx178-tdep.c \
 	rs6000-nat.c \
