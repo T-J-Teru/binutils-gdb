@@ -7065,6 +7065,21 @@ init_dwarf_regnames_s390 (void)
   dwarf_regnames_count = ARRAY_SIZE (dwarf_regnames_s390);
 }
 
+static const char *const dwarf_regnames_riscv[] =
+{
+ "x0", "ra", "sp",  "gp",  "tp", "t0", "t1", "t2", /* 0  - 7 */
+ "s0", "s1", "a0",  "a1",  "a2", "a3", "a4", "a5", /* 8  - 15 */
+ "a6", "a7", "s2",  "s3",  "s4", "s5", "s6", "s7", /* 16 - 23 */
+ "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6"  /* 24 - 31 */
+};
+
+void
+init_dwarf_regnames_riscv (void)
+{
+  dwarf_regnames = dwarf_regnames_riscv;
+  dwarf_regnames_count = ARRAY_SIZE (dwarf_regnames_riscv);
+}
+
 void
 init_dwarf_regnames (unsigned int e_machine)
 {
@@ -7090,6 +7105,10 @@ init_dwarf_regnames (unsigned int e_machine)
 
     case EM_S390:
       init_dwarf_regnames_s390 ();
+      break;
+
+    case EM_RISCV:
+      init_dwarf_regnames_riscv ();
       break;
 
     default:
