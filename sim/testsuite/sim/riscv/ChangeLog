@@ -1,0 +1,5 @@
+2018-02-13  Mike Frysinger  <vapier@gentoo.org>
+
+	* allinsn.exp: New file.
+	* pass.s: New file.
+	* testutils.inc: New file.
