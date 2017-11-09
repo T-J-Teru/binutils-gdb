@@ -1,3 +1,8 @@
+2018-02-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* readelf.c (target_specific_reloc_handling): Relocation handling
+	for EM_RISCV.
+
 2018-10-18  Nick Clifton  <nickc@redhat.com>
 
 	* doc/binutils.texi (readelf): Document alternatives to the
