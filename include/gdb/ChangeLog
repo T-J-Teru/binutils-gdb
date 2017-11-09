@@ -1,3 +1,7 @@
+2018-02-13  Andrew Burgess  <aburgess@broadcom.com>
+
+	* sim-riscv.h: New file.
+
 2016-07-15  John Baldwin  <jhb@FreeBSD.org>
 
 	* signals.def: Add GDB_SIGNAL_LIBRT.
