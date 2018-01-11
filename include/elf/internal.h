@@ -334,11 +334,13 @@ struct elf_segment_map
 	    || (segment)->p_type == PT_GNU_STACK))			\
    /* Any section besides one of type SHT_NOBITS must have file		\
       offsets within the segment.  */					\
+   && (((sec_hdr)->sh_type == SHT_NOBITS				\
+	&& ((bfd_vma) (sec_hdr)->sh_offset == 0))			\
+       || ((bfd_vma) (sec_hdr)->sh_offset >= (segment)->p_offset))	\
    && ((sec_hdr)->sh_type == SHT_NOBITS					\
-       || ((bfd_vma) (sec_hdr)->sh_offset >= (segment)->p_offset	\
-	   && (!(strict)						\
-	       || ((sec_hdr)->sh_offset - (segment)->p_offset		\
-		   <= (segment)->p_filesz - 1))				\
+       || ((!(strict)							\
+	    || ((sec_hdr)->sh_offset - (segment)->p_offset		\
+		<= (segment)->p_filesz - 1))				\
 	   && (((sec_hdr)->sh_offset - (segment)->p_offset		\
 		+ ELF_SECTION_SIZE(sec_hdr, segment))			\
 	       <= (segment)->p_filesz)))				\
