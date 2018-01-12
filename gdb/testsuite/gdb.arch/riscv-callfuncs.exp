@@ -1,0 +1,52 @@
+# Copyright 2018 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+standard_testfile
+
+set compile_flags {debug}
+if [support_complex_tests] {
+    lappend compile_flags "additional_flags=-DTEST_COMPLEX"
+}
+
+# Some targets can't do function calls, so don't even bother with this
+# test.
+if [target_info exists gdb,cannot_call_functions] {
+    unsupported "this target can not call functions"
+    continue
+}
+
+set skip_float_test [gdb_skip_float_test]
+
+if { [prepare_for_testing "failed to prepare" $testfile $srcfile "$compile_flags"] } {
+    continue
+}
+
+if { ![runto_main] } {
+    perror "couldn't run to main"
+    continue
+}
+
+gdb_breakpoint breakpt
+gdb_continue_to_breakpoint "breakpt"
+
+gdb_test "p handle_single_f_f (f_f_val1)" " = 1"
+gdb_test "p handle_single_d_d (d_d_val1)" " = 1"
+gdb_test "p handle_single_ld_ld (ld_ld_val1)" " = 1"
+
+if [support_complex_tests] {
+    gdb_test "p handle_single_fc (fc_val1)" " = 1"
+    gdb_test "p handle_single_dc (dc_val1)" " = 1"
+    gdb_test "p handle_single_ldc (ldc_val1)" " = 1"
+}
