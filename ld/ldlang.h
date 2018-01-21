@@ -355,12 +355,45 @@ typedef struct lang_section_bst
   struct lang_section_bst *right;
 } lang_section_bst_type;
 
+/* Used to hold a growing list of LANG_INPUT_STATEMENT_TYPE pointers that
+   have matched against our LANG_FILENAME_SPEC.  */
+struct lang_input_statement_list
+{
+  /* Pointer to the first pointer in the list.  */
+  lang_input_statement_type **head;
+
+  /* Pointer to the first element after the end of the list.  */
+  lang_input_statement_type **end;
+
+  /* Pointer to the next location that needs to be filled.  Starts of
+     holding the same value as HEAD.  As each item is written to the list
+     this is incremented until it has the value END, at which point we
+     reallocate the list and update HEAD, END, and TAIL.  */
+  lang_input_statement_type **tail;
+};
+
+/* Information for matching filename patterns in the linker script, and for
+   caching the results in order to avoid having to repeat the matching
+   multiple times.  */
+
+struct lang_filename_spec
+{
+  /* The string from the linker script that will be matched against object
+     file names to see which should be use by this part of the linker
+     script.  This could be a complete file name or a wild card pattern.  */
+  const char *filename;
+
+  /* The list of matching input statements (objects, archives, etc).  */
+  struct lang_input_statement_list *matches;
+};
+
 struct lang_wild_statement_struct
 {
   lang_statement_header_type header;
 
-  /* Pattern that matches the filenames for this wildcard statement.  */
-  const char *filename;
+  /* Information used for matching filenames of objects against the filename
+     patterns in the linker script.  */
+  struct lang_filename_spec filename_spec;
 
   /* When true the filenames should be sorted alphabetically.  */
   bfd_boolean filenames_sorted;
