@@ -1,5 +1,21 @@
 2019-09-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ldlang.c (walk_wild_add_match): New function.
+	(walk_wild_init_matches): New function.
+	(walk_wild_populate_matches): New function.
+	(walk_wild): Rewrite to populate cache, and then walk matches out
+	of the cache.
+	(open_input_bfds): Update location of filename field.
+	(print_wild_statement): Likewise.
+	(lang_add_wild): Update location of filename field, and initialise
+	new matches field.
+	* ldlang.h (struct lang_input_statement_list): New structure.
+	(struct lang_filename_spec): New structure.
+	(struct lang_wild_statement_struct): Remove 'filename' field, and
+	add 'filename_spec' field.
+
+2019-09-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* ldlang.c (match_simple_wild): Reorder checking of characters.
 
 2019-09-13  Alan Modra  <amodra@gmail.com>

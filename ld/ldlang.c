@@ -922,44 +922,135 @@ walk_wild_file (lang_wild_statement_type *s,
     }
 }
 
+/* Add matching lang_input_statement_type F to the
+   lang_input_statement_list of matches held inside FILENAME_SPEC.  This
+   can potentially cause the list to fill up and then be reallocated, which
+   can change the contents of FILENAME_SPEC.  */
+
 static void
-walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
+walk_wild_add_match (struct lang_filename_spec *filename_spec,
+                     lang_input_statement_type *f)
 {
-  const char *file_spec = s->filename;
+  if (filename_spec->matches->tail == filename_spec->matches->end)
+    {
+      int curr_size =
+        filename_spec->matches->end - filename_spec->matches->head;
+      int new_size = curr_size * 2;
+
+      filename_spec->matches
+        = xrealloc (filename_spec->matches,
+                    sizeof (struct lang_input_statement_list)
+                    + sizeof (lang_input_statement_type *) * new_size);
+      filename_spec->matches->tail = filename_spec->matches->head
+        = ((lang_input_statement_type **)
+           ((uintptr_t) filename_spec->matches
+            + sizeof (struct lang_input_statement_list)));
+      filename_spec->matches->end = filename_spec->matches->head + new_size;
+    }
+
+  (*filename_spec->matches->tail) = f;
+  filename_spec->matches->tail++;
+}
+
+/* Initialise the lang_input_statement_list held inside FILENAME_SPEC.  */
+
+static void
+walk_wild_init_matches (struct lang_filename_spec *filename_spec)
+{
+  const int init_size = 10;
+  filename_spec->matches
+    = xmalloc (sizeof (struct lang_input_statement_list)
+               + sizeof (lang_input_statement_type *) * init_size);
+  filename_spec->matches->tail = filename_spec->matches->head
+    = ((lang_input_statement_type **)
+       ((uintptr_t) filename_spec->matches
+        + sizeof (struct lang_input_statement_list)));
+  filename_spec->matches->end = filename_spec->matches->head + init_size;
+}
+
+/* Iterate over all lang_input_statement_type structures, and find the ones
+   that match the lang_filename_spec held inside S.  The matching input
+   statements are cached inside the file name spec.  */
+
+static void
+walk_wild_populate_matches (lang_wild_statement_type *s)
+{
+  struct lang_filename_spec *file_spec = &s->filename_spec;
   char *p;
 
-  if (file_spec == NULL)
+  ASSERT (file_spec->matches == NULL);
+
+  /* We expect only some input statements to match our file name spec
+     pattern, so setup a list to hold the matching ones.  */
+  walk_wild_init_matches (file_spec);
+
+  /* Special case which matches against all files.  There's no point
+     copying all input statements into a new list, we mark this case by
+     setting the tail pointer to be NULL (but otherwise we leave the list
+     allocated and empty.  We then handle this special case differently in
+     WALK_WILD.  */
+  if (file_spec->filename == NULL)
+      file_spec->matches->tail = NULL;
+  else if ((p = archive_path (file_spec->filename)) != NULL)
     {
-      /* Perform the iteration over all files in the list.  */
       LANG_FOR_EACH_INPUT_STATEMENT (f)
-	{
-	  walk_wild_file (s, f, callback, data);
-	}
+        {
+          if (input_statement_is_archive_path (file_spec->filename, p, f))
+            walk_wild_add_match (file_spec, f);
+        }
     }
-  else if ((p = archive_path (file_spec)) != NULL)
+  else if (wildcardp (file_spec->filename))
     {
       LANG_FOR_EACH_INPUT_STATEMENT (f)
-	{
-	  if (input_statement_is_archive_path (file_spec, p, f))
-	    walk_wild_file (s, f, callback, data);
-	}
-    }
-  else if (wildcardp (file_spec))
-    {
-      LANG_FOR_EACH_INPUT_STATEMENT (f)
-	{
-	  if (fnmatch (file_spec, f->filename, 0) == 0)
-	    walk_wild_file (s, f, callback, data);
-	}
+        {
+          if (fnmatch (file_spec->filename, f->filename, 0) == 0)
+            walk_wild_add_match (file_spec, f);
+        }
     }
   else
     {
       lang_input_statement_type *f;
 
       /* Perform the iteration over a single file.  */
-      f = lookup_name (file_spec);
+      f = lookup_name (file_spec->filename);
       if (f)
-	walk_wild_file (s, f, callback, data);
+        walk_wild_add_match (file_spec, f);
+    }
+}
+
+/* Walk over all lang_input_statement_type structures and call
+   WALK_WILD_FILE for any that match in the filename specification in S,
+   passing CALLBACK and DATA on to WALK_WILD_FILE.  */
+
+static void
+walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
+{
+  struct lang_filename_spec *file_spec = &s->filename_spec;
+
+  if (file_spec->matches == NULL)
+    walk_wild_populate_matches (s);
+  ASSERT (file_spec->matches != NULL);
+
+  /* We have a list of cached results which we can now iterate over
+     invoking the callback.  */
+  if (file_spec->matches->tail == NULL)
+    {
+      /* Special case, iterate over all files.  */
+      LANG_FOR_EACH_INPUT_STATEMENT (f)
+      {
+        walk_wild_file (s, f, callback, data);
+      }
+    }
+  else
+    {
+      lang_input_statement_type **f_ptr;
+
+      for (f_ptr = file_spec->matches->head;
+           f_ptr != file_spec->matches->tail;
+           ++f_ptr)
+        {
+          walk_wild_file (s, (*f_ptr), callback, data);
+        }
     }
 }
 
@@ -3476,10 +3567,10 @@ open_input_bfds (lang_statement_union_type *s, enum open_bfd_mode mode)
 	case lang_wild_statement_enum:
 	  /* Maybe we should load the file's symbols.  */
 	  if ((mode & OPEN_BFD_RESCAN) == 0
-	      && s->wild_statement.filename
-	      && !wildcardp (s->wild_statement.filename)
-	      && !archive_path (s->wild_statement.filename))
-	    lookup_name (s->wild_statement.filename);
+	      && s->wild_statement.filename_spec.filename
+	      && !wildcardp (s->wild_statement.filename_spec.filename)
+	      && !archive_path (s->wild_statement.filename_spec.filename))
+	    lookup_name (s->wild_statement.filename_spec.filename);
 	  open_input_bfds (s->wild_statement.children.head, mode);
 	  break;
 	case lang_group_statement_enum:
@@ -4667,8 +4758,8 @@ print_wild_statement (lang_wild_statement_type *w,
 
   if (w->filenames_sorted)
     minfo ("SORT_BY_NAME(");
-  if (w->filename != NULL)
-    minfo ("%s", w->filename);
+  if (w->filename_spec.filename != NULL)
+    minfo ("%s", w->filename_spec.filename);
   else
     minfo ("*");
   if (w->filenames_sorted)
@@ -7754,13 +7845,14 @@ lang_add_wild (struct wildcard_spec *filespec,
     }
 
   new_stmt = new_stat (lang_wild_statement, stat_ptr);
-  new_stmt->filename = NULL;
+  new_stmt->filename_spec.filename = NULL;
+  new_stmt->filename_spec.matches = NULL;
   new_stmt->filenames_sorted = FALSE;
   new_stmt->section_flag_list = NULL;
   new_stmt->exclude_name_list = NULL;
   if (filespec != NULL)
     {
-      new_stmt->filename = filespec->name;
+      new_stmt->filename_spec.filename = filespec->name;
       new_stmt->filenames_sorted = filespec->sorted == by_name;
       new_stmt->section_flag_list = filespec->section_flag_list;
       new_stmt->exclude_name_list = filespec->exclude_name_list;
