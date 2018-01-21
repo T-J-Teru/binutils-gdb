@@ -377,6 +377,23 @@ struct file_spec_matcher_data
 
 typedef int (*file_spec_match_p) (const struct file_spec_matcher_data *, const char *);
 
+struct section_and_wildcard_spec
+{
+  asection *section;
+  struct wildcard_list *list;
+};
+
+struct section_spec
+{
+  int size;
+
+  struct section_and_wildcard_spec *head;
+
+  struct section_and_wildcard_spec *tail;
+
+  struct section_and_wildcard_spec *end;
+};
+
 struct file_spec
 {
   /* The string from the script, could be a filename, or a pattern matching
@@ -411,6 +428,9 @@ struct lang_wild_statement_struct
 
   /* List of section matching wildcards.  */
   struct wildcard_list *section_list;
+
+  /* TODO: Document.  */
+  struct section_spec *section_spec;
 
   /* When true sections matched by SECTION_LIST must not be garbage
      collected.  */
