@@ -355,6 +355,23 @@ typedef struct lang_section_bst
   struct lang_section_bst *right;
 } lang_section_bst_type;
 
+struct section_and_wildcard_spec
+{
+  asection *section;
+  struct wildcard_list *list;
+};
+
+struct section_spec
+{
+  int size;
+
+  struct section_and_wildcard_spec *head;
+
+  struct section_and_wildcard_spec *tail;
+
+  struct section_and_wildcard_spec *end;
+};
+
 /* Used to hold a growing list of LANG_INPUT_STATEMENT_TYPE pointers that
    have matched against our LANG_FILENAME_SPEC.  */
 struct lang_input_statement_list
@@ -400,6 +417,9 @@ struct lang_wild_statement_struct
 
   /* List of section matching wildcards.  */
   struct wildcard_list *section_list;
+
+  /* TODO: Document.  */
+  struct section_spec *section_spec;
 
   /* When true sections matched by SECTION_LIST must not be garbage
      collected.  */
