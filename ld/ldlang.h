@@ -368,10 +368,52 @@ typedef struct lang_section_bst
   struct lang_section_bst *right;
 } lang_section_bst_type;
 
+struct lang_input_statement_list
+{
+  struct lang_input_statement_list *next;
+
+  /* Pointer to the first pointer in the list.  */
+  lang_input_statement_type **head;
+
+  /* Pointer to the first element after the end of the list.  */
+  lang_input_statement_type **end;
+
+  /* Pointer to the slot that needs  */
+  lang_input_statement_type **tail;
+};
+
+struct file_spec_matcher_data
+{
+  int start;
+  int end;
+};
+
+typedef int (*file_spec_match_p) (const struct file_spec_matcher_data *, const char *);
+
+struct file_spec
+{
+  /* The string from the script, could be a filename, or a pattern matching
+     many filenames, this could also indicate a file within an archive.  */
+  const char *filename;
+
+  /* Match function, initially NULL, setup the first time we walk the wild
+     list. */
+  file_spec_match_p matcher;
+
+  /* Data used with the MATCHER function.  This is only configured at the
+     same time as the MATCHER function, so, when MATCHER is NULL, the contents
+     of this struct are undefined.  */
+  struct file_spec_matcher_data matcher_data;
+
+  /* The list of matches.  */
+  struct lang_input_statement_list *matches;
+};
+
 struct lang_wild_statement_struct
 {
   lang_statement_header_type header;
   const char *filename;
+  struct file_spec file_spec;
   bfd_boolean filenames_sorted;
   struct wildcard_list *section_list;
   bfd_boolean keep_sections;

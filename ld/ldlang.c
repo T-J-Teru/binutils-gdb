@@ -905,7 +905,7 @@ walk_wild_file (lang_wild_statement_type *s,
 }
 
 static void
-walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
+walk_wild_old (lang_wild_statement_type *s, callback_t callback, void *data)
 {
   const char *file_spec = s->filename;
   char *p;
@@ -943,6 +943,112 @@ walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
       if (f)
 	walk_wild_file (s, f, callback, data);
     }
+}
+
+static void
+walk_wild_new_add_match (struct file_spec *file_spec, lang_input_statement_type *f)
+{
+  /* Add F to the matches list in FILE_SPEC.  */
+  if (file_spec->matches->tail == file_spec->matches->end)
+    abort ();
+
+  (*file_spec->matches->tail) = f;
+  file_spec->matches->tail++;
+}
+
+static void
+walk_wild_new (lang_wild_statement_type *s, callback_t callback, void *data)
+{
+  struct file_spec *file_spec = &s->file_spec;
+  struct lang_input_statement_list *stmt_list;
+  char *p;
+
+  if (file_spec->matches == NULL)
+    {
+      file_spec->matches = xmalloc (sizeof (struct lang_input_statement_list));
+      file_spec->matches->head = xmalloc (sizeof (lang_input_statement_type *) * 10);
+      file_spec->matches->end = file_spec->matches->head + 10;
+      file_spec->matches->tail = file_spec->matches->head;
+
+      /* Fill in the matches.  */
+      if (file_spec->filename == NULL)
+        {
+          /* Special case, matches against all files.  Not much point
+             copying the statements into a new list, we really do just want
+             to iterate over all of them.  To represent this we allocate a
+             list, with zero entries.  */
+          free (file_spec->matches->head);
+          file_spec->matches->head = NULL;
+          file_spec->matches->end = NULL;
+          file_spec->matches->tail = NULL;
+        }
+      else if ((p = archive_path (file_spec->filename)) != NULL)
+        {
+          LANG_FOR_EACH_INPUT_STATEMENT (f)
+          {
+            if (input_statement_is_archive_path (file_spec->filename, p, f))
+              {
+                /* Add F.  */
+                walk_wild_new_add_match (file_spec, f);
+              }
+          }
+        }
+      else if (wildcardp (file_spec->filename))
+        {
+          LANG_FOR_EACH_INPUT_STATEMENT (f)
+          {
+            if (fnmatch (file_spec->filename, f->filename, 0) == 0)
+              {
+                /* Add F.  */
+                walk_wild_new_add_match (file_spec, f);
+              }
+          }
+        }
+      else
+        {
+          lang_input_statement_type *f;
+
+          /* Perform the iteration over a single file.  */
+          f = lookup_name (file_spec->filename);
+          if (f)
+            {
+              /* Add F.  */
+              walk_wild_new_add_match (file_spec, f);
+            }
+        }
+    }
+
+  ASSERT (file_spec->matches != NULL);
+
+  stmt_list = file_spec->matches;
+  if (stmt_list->head == NULL)
+    {
+      /* Special case, iterate over all files.  */
+      LANG_FOR_EACH_INPUT_STATEMENT (f)
+      {
+        walk_wild_file (s, f, callback, data);
+      }
+    }
+  else
+    {
+      lang_input_statement_type **f_ptr;
+
+      for (f_ptr = stmt_list->head;
+           f_ptr != stmt_list->tail;
+           ++f_ptr)
+        {
+          walk_wild_file (s, (*f_ptr), callback, data);
+        }
+    }
+}
+
+static void
+walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
+{
+  if (getenv ("APB_OLD") != NULL)
+    return walk_wild_old (s, callback, data);
+  else
+    return walk_wild_new (s, callback, data);
 }
 
 /* lang_for_each_statement walks the parse tree and calls the provided
@@ -7443,6 +7549,9 @@ lang_add_wild (struct wildcard_spec *filespec,
     }
 
   new_stmt = new_stat (lang_wild_statement, stat_ptr);
+  new_stmt->file_spec.filename = NULL;
+  new_stmt->file_spec.matcher = NULL;
+  new_stmt->file_spec.matches = NULL;
   new_stmt->filename = NULL;
   new_stmt->filenames_sorted = FALSE;
   new_stmt->section_flag_list = NULL;
@@ -7450,6 +7559,7 @@ lang_add_wild (struct wildcard_spec *filespec,
   if (filespec != NULL)
     {
       new_stmt->filename = filespec->name;
+      new_stmt->file_spec.filename = filespec->name;
       new_stmt->filenames_sorted = filespec->sorted == by_name;
       new_stmt->section_flag_list = filespec->section_flag_list;
       new_stmt->exclude_name_list = filespec->exclude_name_list;
