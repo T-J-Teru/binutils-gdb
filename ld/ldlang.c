@@ -279,14 +279,15 @@ walk_wild_consider_section (lang_wild_statement_type *ptr,
   (*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
 }
 
+
 /* Lowest common denominator routine that can handle everything correctly,
    but slowly.  */
 
 static void
-walk_wild_section_general (lang_wild_statement_type *ptr,
-			   lang_input_statement_type *file,
-			   callback_t callback,
-			   void *data)
+walk_wild_section_general_old (lang_wild_statement_type *ptr,
+                               lang_input_statement_type *file,
+                               callback_t callback,
+                               void *data)
 {
   asection *s;
   struct wildcard_list *sec;
@@ -309,11 +310,139 @@ walk_wild_section_general (lang_wild_statement_type *ptr,
 	    }
 
 	  if (!skip)
-	    walk_wild_consider_section (ptr, file, s, sec, callback, data);
+            {
+              /* Don't process sections from files which were excluded.  */
+              if (walk_wild_file_in_exclude_list (sec->spec.exclude_name_list, file))
+                return;
+
+              (*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
+              //walk_wild_consider_section (ptr, file, s, sec, callback, data);
+            }
 
 	  sec = sec->next;
 	}
     }
+}
+
+static void
+walk_wild_section_general_process (lang_wild_statement_type *ptr,
+                                   lang_input_statement_type *file,
+                                   callback_t callback,
+                                   void *data)
+{
+  asection *s;
+  struct wildcard_list *sec;
+
+  (void) callback;
+  (void) data;
+
+  ASSERT (ptr->section_spec == NULL);
+  ptr->section_spec = xmalloc (sizeof (struct section_spec));
+  ptr->section_spec->size = 0;
+  ptr->section_spec->head = NULL;
+  ptr->section_spec->tail = NULL;
+  ptr->section_spec->end = NULL;
+
+  for (s = file->the_bfd->sections; s != NULL; s = s->next)
+    {
+      sec = ptr->section_list;
+      if (sec == NULL)
+        {
+          abort ();
+          //(*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
+        }
+
+      while (sec != NULL)
+	{
+	  bfd_boolean skip = FALSE;
+
+	  if (sec->spec.name != NULL)
+	    {
+	      const char *sname = bfd_get_section_name (file->the_bfd, s);
+
+	      skip = name_match (sec->spec.name, sname) != 0;
+	    }
+
+	  if (!skip)
+            {
+              /* Don't process sections from files which were excluded.  */
+              if (walk_wild_file_in_exclude_list (sec->spec.exclude_name_list, file))
+                return;
+
+              if (ptr->section_spec->head == NULL)
+                {
+                  #define APB_SZ 1000
+                  ptr->section_spec->head
+                    = xmalloc (sizeof (struct section_and_wildcard_spec) * APB_SZ);
+                  ptr->section_spec->tail = ptr->section_spec->head;
+                  ptr->section_spec->end = ptr->section_spec->head + APB_SZ;
+                  ptr->section_spec->size = APB_SZ;
+                }
+
+              ptr->section_spec->tail->list = sec;
+              ptr->section_spec->tail->section = s;
+
+              ptr->section_spec->tail++;
+              if (ptr->section_spec->tail == ptr->section_spec->end)
+                abort (); /* Grow list.  */
+
+              //(*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
+              //walk_wild_consider_section (ptr, file, s, sec, callback, data);
+            }
+
+	  sec = sec->next;
+	}
+    }
+}
+
+
+/* Lowest common denominator routine that can handle everything correctly,
+   but slowly.  */
+
+static void
+walk_wild_section_general_new (lang_wild_statement_type *ptr,
+                               lang_input_statement_type *file,
+                               callback_t callback,
+                               void *data)
+{
+  if (ptr->section_spec == NULL)
+    walk_wild_section_general_process (ptr, file, callback, data);
+
+  ASSERT (ptr->section_spec != NULL);
+
+  if (ptr->section_spec->head == NULL)
+    {
+      /* There's no matches.  */
+    }
+  /* Now walk the list of cached sections.  */
+  else if (ptr->section_spec->head == ptr->section_spec->tail)
+    {
+      /* All sections in FILE's bfd, with a NULL wildcard_spec.  */
+      //(*callback) (ptr, NULL, s, ptr->section_flag_list, file, data);
+      abort ();
+    }
+  else
+    {
+      struct section_and_wildcard_spec *s;
+
+      for (s = ptr->section_spec->head;
+           s != ptr->section_spec->tail;
+           s++)
+        (*callback) (ptr, s->list, s->section,
+                     ptr->section_flag_list, file, data);
+    }
+}
+
+static void
+walk_wild_section_general (lang_wild_statement_type *ptr,
+			   lang_input_statement_type *file,
+			   callback_t callback,
+			   void *data)
+{
+  if (getenv ("APB_OLD"))
+    return walk_wild_section_general_old (ptr, file, callback, data);
+  else
+    return walk_wild_section_general_new (ptr, file, callback, data);
 }
 
 /* Routines to find a single section given its name.  If there's more
@@ -7549,6 +7678,7 @@ lang_add_wild (struct wildcard_spec *filespec,
     }
 
   new_stmt = new_stat (lang_wild_statement, stat_ptr);
+  new_stmt->section_spec = NULL;
   new_stmt->file_spec.filename = NULL;
   new_stmt->file_spec.matcher = NULL;
   new_stmt->file_spec.matches = NULL;
