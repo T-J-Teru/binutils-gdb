@@ -1,5 +1,15 @@
 2018-02-19  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* libbfd.c (bfd_getl16): Optimise the case of running on a little
+	endian host.
+	(bfd_getl_signed_16): Likewise.
+	(bfd_getl32): Likewise.
+	(bfd_getl_signed_32): Likewise.
+	(bfd_getl64): Likewise.
+	(bfd_getl_signed_64): Likewise.
+
+2018-02-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* archures.c (bfd_octets_per_byte): Use bits_per_byte on the
 	cached arch_info instead of looking up the information each time.
 
