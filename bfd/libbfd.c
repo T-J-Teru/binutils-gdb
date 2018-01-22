@@ -579,8 +579,14 @@ bfd_getb16 (const void *p)
 bfd_vma
 bfd_getl16 (const void *p)
 {
+#if defined __BYTE_ORDER__ && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  unsigned long v = 0;
+  memcpy (&v, p, 2);
+  return v;
+#else
   const bfd_byte *addr = (const bfd_byte *) p;
   return (addr[1] << 8) | addr[0];
+#endif
 }
 
 bfd_signed_vma
@@ -593,8 +599,14 @@ bfd_getb_signed_16 (const void *p)
 bfd_signed_vma
 bfd_getl_signed_16 (const void *p)
 {
+#if defined __BYTE_ORDER__ && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  unsigned long v = 0;
+  memcpy (&v, p, 4);
+  return COERCE16 (v);
+#else
   const bfd_byte *addr = (const bfd_byte *) p;
   return COERCE16 ((addr[1] << 8) | addr[0]);
+#endif
 }
 
 void
@@ -629,13 +641,20 @@ bfd_getb32 (const void *p)
 bfd_vma
 bfd_getl32 (const void *p)
 {
-  const bfd_byte *addr = (const bfd_byte *) p;
+#if defined __BYTE_ORDER__ && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  unsigned long v = 0;
+  memcpy (&v, p, 4);
+#else
   unsigned long v;
+  const bfd_byte *addr = (const bfd_byte *) p;
 
   v = (unsigned long) addr[0];
   v |= (unsigned long) addr[1] << 8;
   v |= (unsigned long) addr[2] << 16;
   v |= (unsigned long) addr[3] << 24;
+
+#endif
+
   return v;
 }
 
@@ -655,6 +674,10 @@ bfd_getb_signed_32 (const void *p)
 bfd_signed_vma
 bfd_getl_signed_32 (const void *p)
 {
+#if defined __BYTE_ORDER__ && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  unsigned long v = 0;
+  memcpy (&v, p, 4);
+#else
   const bfd_byte *addr = (const bfd_byte *) p;
   unsigned long v;
 
@@ -662,6 +685,7 @@ bfd_getl_signed_32 (const void *p)
   v |= (unsigned long) addr[1] << 8;
   v |= (unsigned long) addr[2] << 16;
   v |= (unsigned long) addr[3] << 24;
+#endif
   return COERCE32 (v);
 }
 
@@ -692,8 +716,12 @@ bfd_uint64_t
 bfd_getl64 (const void *p ATTRIBUTE_UNUSED)
 {
 #ifdef BFD_HOST_64_BIT
-  const bfd_byte *addr = (const bfd_byte *) p;
   bfd_uint64_t v;
+
+#if defined __BYTE_ORDER__ && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  memcpy (&v, p, 8);
+#else
+  const bfd_byte *addr = (const bfd_byte *) p;
 
   v  = addr[7]; v <<= 8;
   v |= addr[6]; v <<= 8;
@@ -703,6 +731,8 @@ bfd_getl64 (const void *p ATTRIBUTE_UNUSED)
   v |= addr[2]; v <<= 8;
   v |= addr[1]; v <<= 8;
   v |= addr[0];
+
+#endif
 
   return v;
 #else
@@ -739,8 +769,13 @@ bfd_int64_t
 bfd_getl_signed_64 (const void *p ATTRIBUTE_UNUSED)
 {
 #ifdef BFD_HOST_64_BIT
-  const bfd_byte *addr = (const bfd_byte *) p;
+
   bfd_uint64_t v;
+
+#if defined __BYTE_ORDER__ && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  memcpy (&v, p, 8);
+#else
+  const bfd_byte *addr = (const bfd_byte *) p;
 
   v  = addr[7]; v <<= 8;
   v |= addr[6]; v <<= 8;
@@ -750,6 +785,7 @@ bfd_getl_signed_64 (const void *p ATTRIBUTE_UNUSED)
   v |= addr[2]; v <<= 8;
   v |= addr[1]; v <<= 8;
   v |= addr[0];
+#endif
 
   return COERCE64 (v);
 #else
