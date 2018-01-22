@@ -1397,8 +1397,7 @@ DESCRIPTION
 unsigned int
 bfd_octets_per_byte (bfd *abfd)
 {
-  return bfd_arch_mach_octets_per_byte (bfd_get_arch (abfd),
-					bfd_get_mach (abfd));
+  return abfd->arch_info->bits_per_byte / 8;
 }
 
 /*

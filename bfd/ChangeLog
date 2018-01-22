@@ -1,3 +1,8 @@
+2018-02-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* archures.c (bfd_octets_per_byte): Use bits_per_byte on the
+	cached arch_info instead of looking up the information each time.
+
 2018-02-19  Maciej W. Rozycki  <macro@mips.com>
 
 	Revert
