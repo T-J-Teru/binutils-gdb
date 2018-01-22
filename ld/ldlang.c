@@ -500,8 +500,8 @@ match_simple_wild (const char *pattern, const char *name)
 {
   /* The first four characters of the pattern are guaranteed valid
      non-wildcard characters.  So we can go faster.  */
-  if (pattern[0] != name[0] || pattern[1] != name[1]
-      || pattern[2] != name[2] || pattern[3] != name[3])
+  if (pattern[1] != name[1] || pattern[2] != name[2]
+      || pattern[3] != name[3] || pattern[0] != name[0])
     return FALSE;
 
   pattern += 4;
