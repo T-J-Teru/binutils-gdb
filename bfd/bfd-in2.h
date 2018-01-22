@@ -6912,6 +6912,14 @@ struct bfd
   /* Set if this is a plugin output file.  */
   unsigned int lto_output : 1;
 
+  unsigned int checked_0 : 1;
+  unsigned int checked_1 : 1;
+  unsigned int checked_2 : 1;
+
+  unsigned int answer_0 : 1;
+  unsigned int answer_1 : 1;
+  unsigned int answer_2 : 1;
+
   /* Set to dummy BFD created when claimed by a compiler plug-in
      library.  */
   bfd *plugin_dummy_bfd;

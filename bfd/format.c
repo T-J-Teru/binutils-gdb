@@ -91,7 +91,38 @@ DESCRIPTION
 bfd_boolean
 bfd_check_format (bfd *abfd, bfd_format format)
 {
-  return bfd_check_format_matches (abfd, format, NULL);
+  switch (format)
+    {
+    case 0:
+      if (!abfd->checked_0)
+        {
+          abfd->answer_0
+            = (bfd_check_format_matches (abfd, format, NULL) ? 1:0);
+          abfd->checked_0 = 1;
+        }
+      return abfd->answer_0;
+
+    case 1:
+      if (!abfd->checked_1)
+        {
+          abfd->answer_1
+            = (bfd_check_format_matches (abfd, format, NULL) ? 1:0);
+          abfd->checked_1 = 1;
+        }
+      return abfd->answer_1;
+
+    case 2:
+      if (!abfd->checked_2)
+        {
+          abfd->answer_2
+            = (bfd_check_format_matches (abfd, format, NULL) ? 1:0);
+          abfd->checked_2 = 1;
+        }
+      return abfd->answer_2;
+
+    default:
+      return bfd_check_format_matches (abfd, format, NULL);
+    }
 }
 
 struct bfd_preserve
