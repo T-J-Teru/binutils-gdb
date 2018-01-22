@@ -1,3 +1,7 @@
+2019-09-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* ldlang.c (match_simple_wild): Reorder checking of characters.
+
 2019-09-13  Alan Modra  <amodra@gmail.com>
 
 	* ldlang.c (new_afile): Remove add_to_list parameter.

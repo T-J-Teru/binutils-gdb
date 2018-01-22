@@ -386,9 +386,11 @@ static bfd_boolean
 match_simple_wild (const char *pattern, const char *name)
 {
   /* The first four characters of the pattern are guaranteed valid
-     non-wildcard characters.  So we can go faster.  */
-  if (pattern[0] != name[0] || pattern[1] != name[1]
-      || pattern[2] != name[2] || pattern[3] != name[3])
+     non-wildcard characters.  So we can go faster.  Section names often
+     start with a '.' so the character at offset 0 will frequently match,
+     so check that one last.  */
+  if (pattern[1] != name[1] || pattern[2] != name[2]
+      || pattern[3] != name[3] || pattern[0] != name[0])
     return FALSE;
 
   pattern += 4;
