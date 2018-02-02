@@ -1059,6 +1059,9 @@ elf_checksum_contents (bfd *abfd,
   Elf_Internal_Phdr *i_phdrp = elf_tdata (abfd)->phdr;
   unsigned int count, num;
 
+  fprintf (stderr, "elf_checksum_contents for %s\n",
+           abfd->filename);
+
   {
     Elf_External_Ehdr x_ehdr;
     Elf_Internal_Ehdr i_ehdr;

@@ -152,8 +152,11 @@ sec_merge_hash_lookup (struct sec_merge_hash *table, const char *string,
 	{
 	  while ((c = *s++) != '\0')
 	    {
-	      hash += c + (c << 17);
-	      hash ^= hash >> 2;
+              if (len < 25)
+                {
+                  hash += c + (c << 17);
+                  hash ^= hash >> 2;
+                }
 	      ++len;
 	    }
 	  hash += len + (len << 17);
@@ -167,12 +170,13 @@ sec_merge_hash_lookup (struct sec_merge_hash *table, const char *string,
 		  break;
 	      if (i == table->entsize)
 		break;
-	      for (i = 0; i < table->entsize; ++i)
-		{
-		  c = *s++;
-		  hash += c + (c << 17);
-		  hash ^= hash >> 2;
-		}
+              if (len < 25)
+                for (i = 0; i < table->entsize; ++i)
+                  {
+                    c = *s++;
+                    hash += c + (c << 17);
+                    hash ^= hash >> 2;
+                  }
 	      ++len;
 	    }
 	  hash += len + (len << 17);
