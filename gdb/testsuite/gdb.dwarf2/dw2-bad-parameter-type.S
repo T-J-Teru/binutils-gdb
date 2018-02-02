@@ -71,3 +71,6 @@ debug_end:
 	.byte	0x0
 	.byte	0x0
 	.byte	0x0
+
+        .text
+        .word 0
