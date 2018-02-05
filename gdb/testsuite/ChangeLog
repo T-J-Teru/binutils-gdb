@@ -1,3 +1,9 @@
+2018-02-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.mi/mi-cmd-param-changed.exp
+	(target_supports_scheduler_locking): New proc.
+	(test_command_param_changed): Call new proc.
+
 2018-03-14  Tom Tromey  <tom@tromey.com>
 
 	PR cli/14977:
