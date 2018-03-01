@@ -226,6 +226,14 @@ exit_inferior_1 (struct inferior *inftoex, int silent)
   inf->pending_detach = 0;
   /* Reset it.  */
   inf->control = {NO_STOP_QUIETLY};
+
+  /* Just because an inferior has exited doesn't mean it will be deleted
+     any time soon.  The current inferior is always around and new
+     executions "appear" into that inferior instead of creating a new
+     inferior object from scratch.  The per-inferior data though should be
+     recreated for each new inferior, so, throw out the existing data
+     now.  */
+  clear_inferior_data (inf);
 }
 
 void

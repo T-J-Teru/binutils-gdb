@@ -1,3 +1,8 @@
+2018-03-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* inferior.c (exit_inferior_1): Clear per-inferior data when an
+	inferior exits.
+
 2018-02-28  Sergio Durigan Junior  <sergiodj@redhat.com>
 	    Simon Marchi  <simon.marchi@polymtl.ca>
 
