@@ -371,13 +371,29 @@ typedef struct lang_section_bst
 struct lang_wild_statement_struct
 {
   lang_statement_header_type header;
+
+  /* Pattern that matches the filenames for this wildcard statement.  */
   const char *filename;
+
+  /* When true the filenames should be sorted alphabetically.  */
   bfd_boolean filenames_sorted;
+
+  /* List of section matching wildcards.  */
   struct wildcard_list *section_list;
+
+  /* When true sections matched by SECTION_LIST must not be garbage
+     collected.  */
   bfd_boolean keep_sections;
+
+  /* After the wildcard has been processed and input sections matched,
+     they are attached to this list.   */
   lang_statement_list_type children;
+
+  /* List of file names within an EXCLUDE_FILES for this wildcard
+     statement.  */
   struct name_list *exclude_name_list;
 
+  /* Additional information used while processing the wildcard statement.  */
   walk_wild_section_handler_t walk_wild_section_handler;
   struct wildcard_list *handler_data[4];
   lang_section_bst_type *tree;
