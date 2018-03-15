@@ -1,3 +1,8 @@
+2018-04-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* riscv-tdep.h: Number CSRs from the first CSR number, not from
+	the last FP register.
+
 2018-02-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* configure.tgt: Add libsim.a as a dependency for riscv.
