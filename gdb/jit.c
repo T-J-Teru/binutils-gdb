@@ -1283,7 +1283,9 @@ static const struct frame_unwind jit_frame_unwind =
   jit_frame_prev_register,
   NULL,
   jit_frame_sniffer,
-  jit_dealloc_cache
+  jit_dealloc_cache,
+  NULL,
+  "jit_frame_unwind"
 };
 
 

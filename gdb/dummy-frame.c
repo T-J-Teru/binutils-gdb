@@ -383,6 +383,9 @@ const struct frame_unwind dummy_frame_unwind =
   dummy_frame_prev_register,
   NULL,
   dummy_frame_sniffer,
+  NULL,
+  NULL,
+  "dummy_frame_unwind"
 };
 
 static void

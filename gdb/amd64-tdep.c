@@ -2651,7 +2651,10 @@ static const struct frame_unwind amd64_frame_unwind =
   amd64_frame_this_id,
   amd64_frame_prev_register,
   NULL,
-  default_frame_sniffer
+  default_frame_sniffer,
+  NULL,
+  NULL,
+  "amd64_frame_unwind"
 };
 
 /* Generate a bytecode expression to get the value of the saved PC.  */
@@ -2796,7 +2799,10 @@ static const struct frame_unwind amd64_sigtramp_frame_unwind =
   amd64_sigtramp_frame_this_id,
   amd64_sigtramp_frame_prev_register,
   NULL,
-  amd64_sigtramp_frame_sniffer
+  amd64_sigtramp_frame_sniffer,
+  NULL,
+  NULL,
+  "amd64_sigtramp_frame_unwind"
 };
 
 
@@ -2932,7 +2938,10 @@ static const struct frame_unwind amd64_epilogue_frame_unwind =
   amd64_epilogue_frame_this_id,
   amd64_frame_prev_register,
   NULL, 
-  amd64_epilogue_frame_sniffer
+  amd64_epilogue_frame_sniffer,
+  NULL,
+  NULL,
+  "amd64_epilogue_frame_unwind"
 };
 
 static struct frame_id

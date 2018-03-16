@@ -155,6 +155,7 @@ struct frame_unwind
   frame_sniffer_ftype *sniffer;
   frame_dealloc_cache_ftype *dealloc_cache;
   frame_prev_arch_ftype *prev_arch;
+  const char *unwinder_name;
 };
 
 /* Register a frame unwinder, _prepending_ it to the front of the

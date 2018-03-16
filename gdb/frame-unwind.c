@@ -26,6 +26,10 @@
 #include "regcache.h"
 #include "gdb_obstack.h"
 #include "target.h"
+#include "gdbcmd.h"
+
+/* Command list for frame unwinders maintenance commands.  */
+static struct cmd_list_element *maint_unwinders_cmdlist;
 
 static struct gdbarch_data *frame_unwind_data;
 
@@ -285,8 +289,64 @@ frame_unwind_got_address (struct frame_info *frame, int regnum,
   return reg_val;
 }
 
+/* The "maintenance unwinders" command.  */
+
+static void
+maint_unwinders_cmd (const char *args, int from_tty)
+{
+  help_list (maint_unwinders_cmdlist, "maintenance unwinders ",
+	     all_commands, gdb_stdout);
+}
+
+void
+maint_print_one_unwinder (const struct frame_unwind *unwinder,
+			  const int number)
+{
+  if (unwinder->unwinder_name != NULL)
+    fprintf_filtered (gdb_stdout, "% 3d\t%s\n",
+		      number, unwinder->unwinder_name);
+  else
+    fprintf_filtered (gdb_stdout, "% 3d\t%p\n",
+		      number, unwinder);
+}
+
+/* The "maintenance unwinders list" command.  */
+
+static void
+maint_unwinders_list_cmd (const char *arg, int from_tty)
+{
+  struct gdbarch *gdbarch = get_frame_arch (get_selected_frame (NULL));
+  struct frame_unwind_table_entry *entry;
+  const struct frame_unwind *unwinder_from_target;
+  struct frame_unwind_table *table
+    = (struct frame_unwind_table *) gdbarch_data (gdbarch, frame_unwind_data);
+  int num = 1;
+
+  unwinder_from_target = target_get_unwinder ();
+  if (unwinder_from_target != NULL)
+    maint_print_one_unwinder (unwinder_from_target, num++);
+
+  unwinder_from_target = target_get_tailcall_unwinder ();
+  if (unwinder_from_target != NULL)
+    maint_print_one_unwinder (unwinder_from_target, num++);
+
+
+  for (entry = table->list; entry != NULL; entry = entry->next)
+    maint_print_one_unwinder (entry->unwinder, num++);
+}
+
 void
 _initialize_frame_unwind (void)
 {
   frame_unwind_data = gdbarch_data_register_pre_init (frame_unwind_init);
+
+  add_prefix_cmd ("unwinders", class_maintenance, maint_unwinders_cmd,
+		  _("Frame unwinders maintenance commands"),
+		  &maint_unwinders_cmdlist, "maintenance unwinders ",
+		  0, &maintenancelist);
+
+  add_cmd ("list", class_maintenance, maint_unwinders_list_cmd,
+	   _("List all registered frame unwinders.\n\
+blah blah blah\n"),
+	   &maint_unwinders_cmdlist);
 }

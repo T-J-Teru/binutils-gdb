@@ -637,6 +637,7 @@ pyuw_on_new_gdbarch (struct gdbarch *newarch)
       unwinder->unwind_data = (const struct frame_data *) newarch;
       unwinder->sniffer = pyuw_sniffer;
       unwinder->dealloc_cache = pyuw_dealloc_cache;
+      unwinder->unwinder_name = "python unwinder";
       frame_unwind_prepend_unwinder (newarch, unwinder);
       data->unwinder_registered = 1;
     }

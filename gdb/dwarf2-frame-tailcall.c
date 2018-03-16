@@ -461,7 +461,8 @@ const struct frame_unwind dwarf2_tailcall_frame_unwind =
   NULL,
   tailcall_frame_sniffer,
   tailcall_frame_dealloc_cache,
-  tailcall_frame_prev_arch
+  tailcall_frame_prev_arch,
+  "dwarf2_tailcall_frame_unwind"
 };
 
 void

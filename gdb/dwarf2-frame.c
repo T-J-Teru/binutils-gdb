@@ -1362,7 +1362,9 @@ static const struct frame_unwind dwarf2_frame_unwind =
   dwarf2_frame_prev_register,
   NULL,
   dwarf2_frame_sniffer,
-  dwarf2_frame_dealloc_cache
+  dwarf2_frame_dealloc_cache,
+  NULL,
+  "dwarf2_frame_unwind"
 };
 
 static const struct frame_unwind dwarf2_signal_frame_unwind =
@@ -1375,7 +1377,9 @@ static const struct frame_unwind dwarf2_signal_frame_unwind =
   dwarf2_frame_sniffer,
 
   /* TAILCALL_CACHE can never be in such frame to need dealloc_cache.  */
-  NULL
+  NULL,
+  NULL,
+  "dwarf2_signal_frame_unwind"
 };
 
 /* Append the DWARF-2 frame unwinders to GDBARCH's list.  */

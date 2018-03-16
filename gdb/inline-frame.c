@@ -255,7 +255,10 @@ const struct frame_unwind inline_frame_unwind = {
   inline_frame_this_id,
   inline_frame_prev_register,
   NULL,
-  inline_frame_sniffer
+  inline_frame_sniffer,
+  NULL,
+  NULL,
+  "inline_frame_unwind"
 };
 
 /* Return non-zero if BLOCK, an inlined function block containing PC,

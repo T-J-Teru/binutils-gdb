@@ -2320,7 +2320,10 @@ static const struct frame_unwind i386_epilogue_frame_unwind =
   i386_epilogue_frame_this_id,
   i386_epilogue_frame_prev_register,
   NULL, 
-  i386_epilogue_frame_sniffer
+  i386_epilogue_frame_sniffer,
+  NULL,
+  NULL,
+  "i386_epilogue_frame_unwind"
 };
 
 
