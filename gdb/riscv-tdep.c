@@ -1944,9 +1944,7 @@ riscv_print_arg_location (ui_file *stream, struct gdbarch *gdbarch,
 			  struct riscv_arg_info *info,
 			  CORE_ADDR sp_refs, CORE_ADDR sp_args)
 {
-  const char* type_name = TYPE_NAME (info->type);
-  if (type_name == nullptr)
-    type_name = "???";
+  const char* type_name = TYPE_SAFE_NAME (info->type);
 
   fprintf_unfiltered (stream, "type: '%s', length: 0x%x, alignment: 0x%x",
 		      type_name, info->length, info->align);

@@ -1,5 +1,9 @@
 2018-04-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* riscv-tdep.c (riscv_print_arg_location): Use TYPE_SAFE_NAME.
+
+2018-04-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* riscv-tdep.c (riscv_register_name): Only return names for actual
 	CSR register numbers, return NULL for anything else.
 
