@@ -62,8 +62,22 @@ gdb_test_no_output "set height 0"
 gdb_file_cmd ${binfile}
 
 # Test for a regression where this command would internal-error if the
-# program wasn't running.
-gdb_test "maint print registers" "Name.*Nr.*Rel.*Offset.*Size.*Type.*"
+# program wasn't running.  If there's a lot of registers then this
+# might overflow expect's buffers, so process the output line at a
+# time.
+send_gdb "maint print registers\n"
+gdb_expect {
+    -re "^\[^\n\r\]+\[0-9\]+\[^\n\r\]+\[0-9\]+\[^\n\r\]+\[0-9\]+\[^\n\r\]+\[0-9\]+\[^\n\r\]+\[\n\r\]+" {
+	exp_continue
+    }
+    -re ".*$gdb_prompt $" {
+	pass "maint print registers"
+    }
+    timeout {
+	fail "maint print registers (timeout)"
+    }
+}
+
 
 # Test "mt expand-symtabs" here as it's easier to verify before we
 # run the program.
