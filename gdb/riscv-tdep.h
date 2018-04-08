@@ -61,19 +61,18 @@ struct gdbarch_tdep
     struct
     {
       /* Encode the base machine length following the same rules as in the
-	 MISA register.  */
+	 MISA register, 1 for RV32, 2 for RV64, and 3 for RV128.  */
       unsigned base_len : 2;
 
-      /* Encode which floating point ABI is in use following the same rules
-	 as the ELF e_flags field.  */
-      unsigned float_abi : 2;
+      /* Feature set described in the abi.  This is a bit-set with the same
+	 encoding as the MISA registers.  As the declared ABI only relies
+	 on, some features then only a few of these bits will ever be set.
+	 Specifically the F, D, and Q bits describe the float ABI, while
+	 the C bit declares whether compressed instructions are required.
+	 Each bit is encoded as (1 << (BIT - 'A')).  */
+      unsigned features : 26;
     } fields;
   } abi;
-
-  /* Only the least significant 26 bits are (possibly) valid, and indicate
-     features that are supported on the target.  These could be cached from
-     the target, or read from the executable when available.  */
-  unsigned core_features;
 };
 
 #endif /* RISCV_TDEP_H */

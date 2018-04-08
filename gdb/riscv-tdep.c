@@ -59,7 +59,8 @@
 #define SP_ALIGNMENT 16
 
 /* Forward declarations.  */
-static bool riscv_has_feature (struct gdbarch *gdbarch, char feature);
+static bool riscv_isa_has_feature (struct gdbarch *gdbarch, char feature);
+static bool riscv_abi_has_feature (struct gdbarch *gdbarch, char feature);
 struct riscv_inferior_data;
 struct riscv_inferior_data * riscv_inferior_data (struct inferior *const inf);
 
@@ -208,7 +209,7 @@ show_use_compressed_breakpoints (struct ui_file *file, int from_tty,
   struct gdbarch *gdbarch = target_gdbarch ();
 
   if (use_compressed_breakpoints == AUTO_BOOLEAN_AUTO)
-    if (riscv_has_feature (gdbarch, 'C'))
+    if (riscv_isa_has_feature (gdbarch, 'C'))
       additional_info = _(" (currently on)");
     else
       additional_info = _(" (currently off)");
@@ -328,7 +329,7 @@ riscv_read_misa_reg (bool *read_p)
    the RiscV ISA manual, these are between 'A' and 'Z'.  */
 
 static bool
-riscv_has_feature (struct gdbarch *gdbarch, char feature)
+riscv_isa_has_feature (struct gdbarch *gdbarch, char feature)
 {
   bool have_read_misa = false;
   uint32_t misa;
@@ -339,31 +340,55 @@ riscv_has_feature (struct gdbarch *gdbarch, char feature)
      however, for compressed instructions this is a bad idea.
 
      The call to `set_gdbarch_decr_pc_after_break' is made just once per
-     GDBARCH and we decide at that point if we should decrement by 2 or 4
-     bytes based on whether the BFD has compressed instruction support or
-     not.
+     GDBARCH and we have to decide at that point if we should decrement by
+     2 or 4 bytes.  As the target is not running at that point, we use the
+     abi information from the bfd object to pick a suitable answer.
 
-     If the BFD was not compiled with compressed instruction support, but we
-     are running on a target with compressed instructions then we might
-     place a 4-byte breakpoint, then decrement the $pc by 2 bytes leading to
-     confusion.
+     If the bfd was not compiled with compressed instruction support, but
+     the target does support compressed instructions, then we will have set
+     decr_pc_after_break to 4 bytes, but we will then plant 2-byte
+     compressed breakpoints.  The result is that when we hit a breakpoint
+     we will decrement $pc by 4-bytes and end up in the wrong place.
 
-     It's safer if we just make decisions about compressed instruction
-     support based on the BFD.  */
+     It is safer then to always make compressed instruction support
+     decisions based on the abi rather than the actual hardware.  */
   if (feature != 'C')
     misa = riscv_read_misa_reg (&have_read_misa);
-  if (!have_read_misa || misa == 0)
-    misa = gdbarch_tdep (gdbarch)->core_features;
 
+  /* If we could not read the misa register from the target, or the value 0
+     was returned (which means the target doesn't implement misa) then we
+     use the features of the abi as the features of the machine.
+     Hopefully, if the user knows what they are doing then the abi
+     features should be a subset of the actual features, so for all
+     current uses this is probably fine.  */
+  if (!have_read_misa || misa == 0)
+    misa = gdbarch_tdep (gdbarch)->abi.fields.features;
+
+  /* Extract the feature bit we care about.  */
   return (misa & (1 << (feature - 'A'))) != 0;
 }
 
-/* Return the width in bytes  of the general purpose registers for GDBARCH.
-   Possible return values are 4, 8, or 16 for RiscV variants RV32, RV64, or
-   RV128.  */
+/* Return true if FEATURE is available for the abi associated with GDBARCH.
+   The FEATURE should be one of the single character feature codes
+   described in the RiscV ISA manual, these are between 'A' and 'Z'.  */
+
+static bool
+riscv_abi_has_feature (struct gdbarch *gdbarch, char feature)
+{
+  unsigned abi_features;
+
+  gdb_assert (feature >= 'A' && feature <= 'Z');
+  abi_features = gdbarch_tdep (gdbarch)->abi.fields.features;
+
+  return (abi_features & (1 << (feature - 'A'))) != 0;
+}
+
+/* Return the width in bytes of xlen as used by the abi.  This might be
+   less than xlen of of actual hardware.  For example, if an rv32 binary is
+   running on an rv64 target.  */
 
 static int
-riscv_isa_xlen (struct gdbarch *gdbarch)
+riscv_abi_xlen (struct gdbarch *gdbarch)
 {
   switch (gdbarch_tdep (gdbarch)->abi.fields.base_len)
     {
@@ -378,6 +403,54 @@ riscv_isa_xlen (struct gdbarch *gdbarch)
     }
 }
 
+/* Return the width in bytes of the floating point registers being used in
+   the abi for GDBARCH.  This might be different than the value returned by
+   RISCV_ISA_FLEN which tells us what registers are available on the
+   machine.  This function tells us the size of floating point registers
+   that the compiler is using for argument passing.  For an example, a
+   machine with 8-byte floating point registers could be running code
+   compiled with the 4-byte floating point abi style.  */
+
+static int
+riscv_abi_flen (struct gdbarch *gdbarch)
+{
+  if (riscv_abi_has_feature (gdbarch, 'Q'))
+    return 16;
+  else if (riscv_abi_has_feature (gdbarch, 'D'))
+    return 8;
+  else if (riscv_abi_has_feature (gdbarch, 'F'))
+    return 4;
+
+  return 0;
+}
+
+/* Return true if GDBARCH is using any of the floating point hardware ABIs.  */
+
+static bool
+riscv_abi_any_float_p (struct gdbarch *gdbarch)
+{
+  return (riscv_abi_flen (gdbarch) > 0);
+}
+
+/* Return the width in bytes  of the general purpose registers for GDBARCH.
+   Possible return values are 4, 8, or 16 for RiscV variants RV32, RV64, or
+   RV128.  */
+
+static int
+riscv_isa_xlen (struct gdbarch *gdbarch)
+{
+  /* This should return the actual width from the actual target, but right
+     now it's not clear how to get at this information.  Remote targets can
+     use target descriptions, and native targets can use native code to
+     read the actual width.  It's not clear how the builtin simulator is
+     supposed to handle this.
+
+     For now, I rely on returning the abi xlen value, which is fine so long
+     as you only run rv32 binaries on rv32 targets and not on rv64
+     targets.  */
+  return riscv_abi_xlen (gdbarch);
+}
+
 /* Return the width in bytes of the floating point registers for GDBARCH.
    If this architecture has no floating point registers, then return 0.
    Possible values are 4, 8, or 16 for depending on which of single, double
@@ -386,11 +459,11 @@ riscv_isa_xlen (struct gdbarch *gdbarch)
 static int
 riscv_isa_flen (struct gdbarch *gdbarch)
 {
-  if (riscv_has_feature (gdbarch, 'Q'))
+  if (riscv_isa_has_feature (gdbarch, 'Q'))
     return 16;
-  else if (riscv_has_feature (gdbarch, 'D'))
+  else if (riscv_isa_has_feature (gdbarch, 'D'))
     return 8;
-  else if (riscv_has_feature (gdbarch, 'F'))
+  else if (riscv_isa_has_feature (gdbarch, 'F'))
     return 4;
 
   return 0;
@@ -402,14 +475,6 @@ static bool
 riscv_has_fp_regs (struct gdbarch *gdbarch)
 {
   return (riscv_isa_flen (gdbarch) > 0);
-}
-
-/* Return true if GDBARCH is using any of the floating point hardware ABIs.  */
-
-static bool
-riscv_has_fp_abi (struct gdbarch *gdbarch)
-{
-  return (gdbarch_tdep (gdbarch)->abi.fields.float_abi != 0);
 }
 
 /* Return true if REGNO is a floating pointer register.  */
@@ -428,7 +493,7 @@ riscv_breakpoint_kind_from_pc (struct gdbarch *gdbarch, CORE_ADDR *pcptr)
 {
   if (use_compressed_breakpoints == AUTO_BOOLEAN_AUTO)
     {
-      if (riscv_has_feature (gdbarch, 'C'))
+      if (riscv_isa_has_feature (gdbarch, 'C'))
 	return 2;
       else
 	return 4;
@@ -1473,11 +1538,11 @@ struct riscv_call_info
     : int_regs (RISCV_A0_REGNUM, RISCV_A0_REGNUM + 7),
       float_regs (RISCV_FA0_REGNUM, RISCV_FA0_REGNUM + 7)
   {
-    xlen = riscv_isa_xlen (gdbarch);
-    flen = riscv_isa_flen (gdbarch);
+    xlen = riscv_abi_xlen (gdbarch);
+    flen = riscv_abi_flen (gdbarch);
 
     /* Disable use of floating point registers if needed.  */
-    if (!riscv_has_fp_abi (gdbarch))
+    if (!riscv_abi_any_float_p (gdbarch))
       float_regs.next_regnum = float_regs.last_regnum + 1;
   }
 
@@ -1494,7 +1559,7 @@ struct riscv_call_info
   struct riscv_arg_reg float_regs;
 
   /* The XLEN and FLEN are copied in to this structure for convenience, and
-     are just the results of calling RISCV_ISA_XLEN and RISCV_ISA_FLEN.  */
+     are just the results of calling RISCV_ABI_XLEN and RISCV_ABI_FLEN.  */
   int xlen;
   int flen;
 };
@@ -2080,7 +2145,7 @@ riscv_push_dummy_call (struct gdbarch *gdbarch,
     {
       fprintf_unfiltered (gdb_stdlog, "dummy call args:\n");
       fprintf_unfiltered (gdb_stdlog, ": floating point ABI %s in use\n",
-	       (riscv_has_fp_abi (gdbarch) ? "is" : "is not"));
+	       (riscv_abi_any_float_p (gdbarch) ? "is" : "is not"));
       fprintf_unfiltered (gdb_stdlog, ": xlen: %d\n: flen: %d\n",
 	       call_info.xlen, call_info.flen);
       if (struct_return)
@@ -2485,19 +2550,17 @@ riscv_gdbarch_init (struct gdbarch_info info,
       if (e_flags & EF_RISCV_RVC)
 	{
 	  has_compressed_isa = true;
-	  tmp_tdep.core_features |= (1 << ('C' - 'A'));
+	  tmp_tdep.abi.fields.features |= (1 << ('C' - 'A'));
 	}
 
       if (e_flags & EF_RISCV_FLOAT_ABI_DOUBLE)
 	{
-	  tmp_tdep.abi.fields.float_abi = 2;
-	  tmp_tdep.core_features |= (1 << ('D' - 'A'));
-	  tmp_tdep.core_features |= (1 << ('F' - 'A'));
+	  tmp_tdep.abi.fields.features |= (1 << ('D' - 'A'));
+	  tmp_tdep.abi.fields.features |= (1 << ('F' - 'A'));
 	}
       else if (e_flags & EF_RISCV_FLOAT_ABI_SINGLE)
 	{
-	  tmp_tdep.abi.fields.float_abi = 1;
-	  tmp_tdep.core_features |= (1 << ('F' - 'A'));
+	  tmp_tdep.abi.fields.features |= (1 << ('F' - 'A'));
 	}
     }
   else
