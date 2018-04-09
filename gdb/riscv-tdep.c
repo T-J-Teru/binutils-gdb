@@ -61,8 +61,6 @@
 /* Forward declarations.  */
 static bool riscv_isa_has_feature (struct gdbarch *gdbarch, char feature);
 static bool riscv_abi_has_feature (struct gdbarch *gdbarch, char feature);
-struct riscv_inferior_data;
-struct riscv_inferior_data * riscv_inferior_data (struct inferior *const inf);
 
 /* Define a series of is_XXX_insn functions to check if the value INSN
    is an instance of instruction XXX.  */
@@ -73,22 +71,6 @@ static inline bool is_ ## INSN_NAME ## _insn (long insn) \
 }
 #include "opcode/riscv-opc.h"
 #undef DECLARE_INSN
-
-/* Per inferior information for RiscV.  */
-
-struct riscv_inferior_data
-{
-  /* True when MISA_VALUE is valid, otherwise false.  */
-  bool misa_read;
-
-  /* If MISA_READ is true then MISA_VALUE holds the value of the MISA
-     register read from the target.  */
-  uint32_t misa_value;
-};
-
-/* Key created when the RiscV per-inferior data is registered.  */
-
-static const struct inferior_data *riscv_inferior_data_reg;
 
 /* Architectural name for core registers.  */
 
@@ -294,17 +276,16 @@ static unsigned int riscv_debug_infcall = 0;
 static uint32_t
 riscv_read_misa_reg (bool *read_p)
 {
-  struct riscv_inferior_data *inf_data
-    = riscv_inferior_data (current_inferior ());
+  uint32_t value = 0;
 
-  if (!inf_data->misa_read && target_has_registers)
+  if (target_has_registers)
     {
-      uint32_t value = 0;
       struct frame_info *frame = get_current_frame ();
 
       TRY
 	{
-	  value = get_frame_register_unsigned (frame, RISCV_CSR_MISA_REGNUM);
+	  value = get_frame_register_unsigned (frame,
+					       RISCV_CSR_MISA_REGNUM);
 	}
       CATCH (ex, RETURN_MASK_ERROR)
 	{
@@ -313,15 +294,9 @@ riscv_read_misa_reg (bool *read_p)
 					       RISCV_CSR_LEGACY_MISA_REGNUM);
 	}
       END_CATCH
-
-      inf_data->misa_read = true;
-      inf_data->misa_value = value;
     }
 
-  if (read_p != nullptr)
-    *read_p = inf_data->misa_read;
-
-  return inf_data->misa_value;
+  return value;
 }
 
 /* Return true if FEATURE is available for the architecture GDBARCH.  The
@@ -2646,81 +2621,10 @@ riscv_gdbarch_init (struct gdbarch_info info,
   return gdbarch;
 }
 
-
-/* Allocate new riscv_inferior_data object.  */
-
-static struct riscv_inferior_data *
-riscv_new_inferior_data (void)
-{
-  struct riscv_inferior_data *inf_data
-    = new (struct riscv_inferior_data);
-  inf_data->misa_read = false;
-  return inf_data;
-}
-
-/* Free inferior data.  */
-
-static void
-riscv_inferior_data_cleanup (struct inferior *inf, void *data)
-{
-  struct riscv_inferior_data *inf_data =
-    static_cast <struct riscv_inferior_data *> (data);
-  delete (inf_data);
-}
-
-/* Return riscv_inferior_data for the given INFERIOR.  If not yet created,
-   construct it.  */
-
-struct riscv_inferior_data *
-riscv_inferior_data (struct inferior *const inf)
-{
-  struct riscv_inferior_data *inf_data;
-
-  gdb_assert (inf != NULL);
-
-  inf_data
-    = (struct riscv_inferior_data *) inferior_data (inf, riscv_inferior_data_reg);
-  if (inf_data == NULL)
-    {
-      inf_data = riscv_new_inferior_data ();
-      set_inferior_data (inf, riscv_inferior_data_reg, inf_data);
-    }
-
-  return inf_data;
-}
-
-/* Free the inferior data when an inferior exits.  */
-
-static void
-riscv_invalidate_inferior_data (struct inferior *inf)
-{
-  struct riscv_inferior_data *inf_data;
-
-  gdb_assert (inf != NULL);
-
-  /* Don't call RISCV_INFERIOR_DATA as we don't want to create the data if
-     we've not already created it by this point.  */
-  inf_data
-    = (struct riscv_inferior_data *) inferior_data (inf, riscv_inferior_data_reg);
-  if (inf_data != NULL)
-    {
-      delete (inf_data);
-      set_inferior_data (inf, riscv_inferior_data_reg, NULL);
-    }
-}
-
 void
 _initialize_riscv_tdep (void)
 {
   gdbarch_register (bfd_arch_riscv, riscv_gdbarch_init, NULL);
-
-  /* Register per-inferior data.  */
-  riscv_inferior_data_reg
-    = register_inferior_data_with_cleanup (NULL, riscv_inferior_data_cleanup);
-
-  /* Observers used to invalidate the inferior data when needed.  */
-  observer_attach_inferior_exit (riscv_invalidate_inferior_data);
-  observer_attach_inferior_appeared (riscv_invalidate_inferior_data);
 
   /* Add root prefix command for all "set debug riscv" and "show debug
      riscv" commands.  */
