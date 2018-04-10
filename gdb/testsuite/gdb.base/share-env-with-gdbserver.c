@@ -29,6 +29,7 @@ my_getenv (const char *name)
 int
 main (int argc, char *argv[])
 {
+  char *tmp = malloc (1);
   const char *myvar = getenv ("GDB_TEST_VAR");
 
   if (myvar != NULL)
@@ -36,5 +37,6 @@ main (int argc, char *argv[])
   else
     printf ("It failed.");
 
+  free (tmp);
   return 0;	/* break-here */
 }
