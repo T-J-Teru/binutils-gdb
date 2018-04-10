@@ -22,11 +22,6 @@
 # operation.  (Note that we don't have any of these watchpoints
 # trigger.)
 
-if [target_info exists gdb,no_hardware_watchpoints] {
-    unsupported "no target support"
-    return
-}
-
 standard_testfile
 
 if {[prepare_for_testing "failed to prepare" $testfile $srcfile debug]} {
@@ -193,8 +188,15 @@ proc watch_command {cmd base offset width} {
 	gdb_test "hbreak $expr" "Hardware assisted breakpoint \[0-9\]+ at $hex"
     } elseif {$cmd == "watch"} {
 	set expr "*(buf.byte + $base + $offset)@$width"
+
+	if [target_info exists gdb,no_hardware_watchpoints] {
+	    set wp_prefix "Watchpoint"
+	} else {
+	    set wp_prefix "Hardware watchpoint"
+	}
+
 	gdb_test "$cmd $expr" \
-	    "Hardware watchpoint \[0-9\]+: [string_to_regexp $expr]"
+	    "${wp_prefix} \[0-9\]+: [string_to_regexp $expr]"
     } elseif {$cmd == "awatch"} {
 	set expr "*(buf.byte + $base + $offset)@$width"
 	gdb_test "$cmd $expr" \
