@@ -1,3 +1,8 @@
+2021-04-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python.texi (Pretty Printing API): Mention the use of
+	pretty-printers for [] indexing.
+
 2021-04-21  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
 
 	* gdb.texinfo (GDB/MI Breakpoint Information): Update the

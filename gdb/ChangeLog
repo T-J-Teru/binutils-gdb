@@ -1,5 +1,24 @@
 2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* NEWS: Mention use of pretty-printer for [] indexing.
+	* eval.c (evaluate_subexp_standard): Use pretty printers to find
+	children for BINOP_SUBSCRIPT.
+	* extension-priv.h (struct extension_language_ops)
+	<val_pretty_printer_find_child>: New member variable.
+	* extension.c (ext_lang_pretty_printer_find_child): New function.
+	* extension.h (ext_lang_pretty_printer_find_child): Declare new
+	function.
+	* guile/guile.c (guile_extension_ops): Add new field, initialised
+	to NULL.
+	* python/py-prettyprint.c (gdbpy_val_pretty_printer_find_child):
+	New function.
+	* python/python-internal.h (gdbpy_val_pretty_printer_find_child):
+	Declare.
+	* python/python.c (python_extension_ops): Add new field, initialised
+	to gdbpy_val_pretty_printer_find_child.
+
+2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* arch-utils.c (default_addressable_memory_unit_size): Return a
 	value based on bfd's bits per byte.
 

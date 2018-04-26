@@ -173,6 +173,8 @@ const struct extension_language_ops python_extension_ops =
 
   gdbpy_apply_val_pretty_printer,
 
+  gdbpy_val_pretty_printer_find_child,
+
   gdbpy_apply_frame_filter,
 
   gdbpy_preserve_values,

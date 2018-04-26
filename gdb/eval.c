@@ -1329,31 +1329,89 @@ eval_op_subscript (struct type *expect_type, struct expression *exp,
 		   enum noside noside, enum exp_opcode op,
 		   struct value *arg1, struct value *arg2)
 {
+  gdb::optional<gdb_exception> except;
+
+  value_ref_ptr arg1_ref = value_ref_ptr::new_reference (arg1);
+  value_ref_ptr arg2_ref = value_ref_ptr::new_reference (arg2);
+
   if (binop_user_defined_p (op, arg1, arg2))
-    return value_x_binop (arg1, arg2, op, OP_NULL, noside);
-  else
     {
-      /* If the user attempts to subscript something that is not an
-	 array or pointer type (like a plain int variable for example),
-	 then report this as an error.  */
-
-      arg1 = coerce_ref (arg1);
-      struct type *type = check_typedef (value_type (arg1));
-      if (type->code () != TYPE_CODE_ARRAY
-	  && type->code () != TYPE_CODE_PTR)
+      try
 	{
-	  if (type->name ())
-	    error (_("cannot subscript something of type `%s'"),
-		   type->name ());
-	  else
-	    error (_("cannot subscript requested type"));
+	  return value_x_binop (arg1, arg2, op, OP_NULL, noside);
 	}
-
-      if (noside == EVAL_AVOID_SIDE_EFFECTS)
-	return value_zero (TYPE_TARGET_TYPE (type), VALUE_LVAL (arg1));
-      else
-	return value_subscript (arg1, value_as_long (arg2));
+      catch (const gdb_exception_error &e)
+	{
+	  if (e.error == NOT_FOUND_ERROR)
+	    except.emplace (std::move (e));
+	  else
+	    throw;
+	}
     }
+
+  arg1 = coerce_ref (arg1);
+  arg2 = coerce_ref (arg2);
+
+  try
+    {
+      struct value *ret
+	= ext_lang_pretty_printer_find_child (arg1, arg2,
+					      exp->language_defn);
+      if (ret != nullptr)
+	return ret;
+    }
+  catch (const gdb_exception_error &e)
+    {
+      /* If the lookup via pretty-printer failed with a
+	 NOT_FOUND_ERROR, then this is the next best error to
+	 report.  */
+      if (e.error == NOT_FOUND_ERROR)
+	throw e;
+
+      /* Lookup via the pretty-printer failed.  If the lookup using
+	 value_x_binop also failed with NOT_FOUND_ERROR then report
+	 that error now.  */
+      if (except.has_value ()
+	  && except->error == NOT_FOUND_ERROR)
+	throw *except;
+
+      /* Otherwise, if value_x_binop gave some other error, lets
+	 report that one now.  */
+      if (except.has_value ())
+	throw *except;
+
+      /* Finally, fall-back to just reporting E.  */
+      throw e;
+    }
+
+  /* If EXCEPT holds a value at this point it means we tried using a
+     user defined function to perform the subscript, and this
+     failed.  We then had a go using the pretty-printer, and that
+     also failed, so now we report the error from the user defined
+     operation.  */
+  if (except.has_value ())
+    throw *except;
+
+  /* If the user attempts to subscript something that is not an
+     array or pointer type (like a plain int variable for example),
+     then report this as an error.  */
+
+  arg1 = coerce_ref (arg1);
+  struct type *type = check_typedef (value_type (arg1));
+  if (type->code () != TYPE_CODE_ARRAY
+      && type->code () != TYPE_CODE_PTR)
+    {
+      if (type->name ())
+	error (_("cannot subscript something of type `%s'"),
+	       type->name ());
+      else
+	error (_("cannot subscript requested type"));
+    }
+
+  if (noside == EVAL_AVOID_SIDE_EFFECTS)
+    return value_zero (TYPE_TARGET_TYPE (type), VALUE_LVAL (arg1));
+  else
+    return value_subscript (arg1, value_as_long (arg2));
 }
 
 /* A helper function for BINOP_EQUAL.  */

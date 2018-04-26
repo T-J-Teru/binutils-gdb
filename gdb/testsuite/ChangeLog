@@ -1,3 +1,10 @@
+2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.python/py-prettyprint-subscript.c: New file.
+	* gdb.python/py-prettyprint-subscript.cc: New file.
+	* gdb.python/py-prettyprint-subscript.exp: New file.
+	* gdb.python/py-prettyprint-subscript.py: New file.
+
 2021-04-21  Carl Love  <cel@us.ibm.com>
 
 	* gdb.base/valgrind-bt.exp: Add gdb_test "break main".

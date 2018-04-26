@@ -302,6 +302,24 @@ extern const struct extension_language_defn *get_breakpoint_cond_ext_lang
 
 extern int breakpoint_ext_lang_cond_says_stop (struct breakpoint *);
 
+/* Use the pretty printers to lookup CHILD, a named child of OBJECT_VAL.
+   The lookup is done, either by calling the 'child' method within the
+   pretty printer, or by matching against the names returned by the
+   'children' method of the pretty printer.
+
+   If OBJECT doesn't have a pretty-printer, or the display_hint for OBJECT
+   is neither map or array then nullptr is silently returned.
+
+   If there's an error from the scripting language then an error will have
+   been shown to the user, and nullptr will be returned.
+
+   However, if OBJECT's display_hint was suitable, and GDB successfully
+   searched through all the children but was unable to find a matching
+   child, then a NOT_FOUND_ERROR will be thrown.  */
+
+extern value *ext_lang_pretty_printer_find_child
+  (struct value *object, struct value *idx, const language_defn *language);
+
 /* If a method with name METHOD_NAME is to be invoked on an object of type
    TYPE, then all extension languages are searched for implementations of
    methods with name METHOD_NAME.  All matches found are appended to the WORKERS

@@ -162,6 +162,12 @@ struct extension_language_ops
      const struct value_print_options *options,
      const struct language_defn *language);
 
+  /* See the documentation for ext_lang_pretty_printer_find_child in
+     extension.h for details.  */
+  struct value *(*val_pretty_printer_find_child)
+    (const struct extension_language_defn *extlang, struct value *object,
+     struct value *idx, const struct language_defn *language);
+
   /* GDB access to the "frame filter" feature.
      FRAME is the source frame to start frame-filter invocation.  FLAGS is an
      integer holding the flags for printing.  The following elements of

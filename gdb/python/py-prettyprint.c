@@ -684,3 +684,173 @@ gdbpy_default_visualizer (PyObject *self, PyObject *args)
 
   return find_pretty_printer (val_obj).release ();
 }
+
+/* See ext_lang_pretty_printer_find_child in extension.h for details.  */
+
+struct value *
+gdbpy_val_pretty_printer_find_child (const extension_language_defn *extlang,
+				     struct value *object,
+				     struct value *idx,
+				     const language_defn *language)
+{
+  /* A simple wrapper to make returning easier.  If we got an error then
+     print the Python stack, and return nullptr.  Otherwise, return the
+     value passed in.  */
+  auto print_errors_before_return = [] (struct value *ret) -> struct value *
+  {
+    if (PyErr_Occurred ())
+      {
+	if (!PyErr_ExceptionMatches (gdbpy_gdb_memory_error))
+	  {
+	    ret = nullptr;
+	    gdbpy_print_stack ();
+	  }
+      }
+    return ret;
+  };
+
+  struct gdbarch *gdbarch = value_type (object)->arch ();
+
+  gdbpy_enter enter_py (gdbarch, language);
+
+  /* Prepare the value to be passed to the pretty printer.  */
+  gdbpy_ref<> val_obj (value_to_value_object_no_release (object));
+  if (val_obj == nullptr)
+    return print_errors_before_return (nullptr);
+
+  /* Find the pretty-printer constructor.  */
+  gdbpy_ref<> printer (find_pretty_printer (val_obj.get ()));
+  if (printer == nullptr || printer == Py_None)
+    return print_errors_before_return (nullptr);
+
+  /* If the pretty printer has no 'children' method then we're not going to
+     be able to lookup any children.  */
+  if (!PyObject_HasAttr (printer.get (), gdbpy_children_cst))
+    return print_errors_before_return (nullptr);
+
+  /* If we get here then the pretty printer has no 'child' method, but does
+     have the 'children' method.  We can manually walk the children and
+     find one that matches IDX.  First, find out how the children are
+     represented by the children method.  */
+  gdb::unique_xmalloc_ptr<char> hint (gdbpy_get_display_hint (printer.get ()));
+  bool is_map = hint && ! strcmp (hint.get (), "map");
+  bool is_array = hint && ! strcmp (hint.get (), "array");
+
+  /* There are 4 different display_hint values, map, array, string, or the
+     default (when display_hint returns None).  Of these it is only
+     feasible to find children for map and array.  For the other
+     display_hint modes just return nullptr so GDB will know it has to look
+     up the child on its own.  */
+  if (!is_map && !is_array)
+    return print_errors_before_return (nullptr);
+
+  /* Use the children method to create an iterator.  */
+  gdbpy_ref<> children (PyObject_CallMethodObjArgs (printer.get (),
+						    gdbpy_children_cst,
+						    NULL));
+  if (children == nullptr)
+    return print_errors_before_return (nullptr);
+
+  gdbpy_ref<> iter (PyObject_GetIter (children.get ()));
+  if (iter == nullptr)
+    return print_errors_before_return (nullptr);
+
+  /* This flag is only ever set if we're displaying a 'map'.  For maps
+     the children alternate between being names and values.  This is set
+     when we see a name child.  */
+
+  /* This flag is used when the display_hint is 'map'.  As we walk through
+     the children (for a map) alternative children are keys, then values.
+     When we see a matching key this flag is set true, the next child is
+     then returned as the result.  */
+  bool prev_matched_as_name = false;
+
+  /* This variable is used when the display_hint is 'array'.  We set this
+     variable here to be the array index we are searching for.  As we
+     iterate through the children when we reach this index, we return the
+     result.  */
+  LONGEST array_index_to_find = 0;
+  if (is_array)
+    {
+      /* Convert idx to an array index to look for.  */
+      if (check_typedef (value_type (idx))->code () != TYPE_CODE_INT)
+	return print_errors_before_return (nullptr);
+      array_index_to_find = value_as_long (idx);
+    }
+
+  /* Now iterate through the children.  */
+  gdbpy_ref<> item;
+  for (LONGEST i = 0; ; ++i)
+    {
+      PyObject *py_v;
+      const char *name;
+
+      /* Try to get the next item from the iterator.  When we get back
+	 nullptr then all children have been considered.  */
+      item.reset (PyIter_Next (iter.get ()));
+      if (item == nullptr)
+	break;
+
+      /* Ensure the data we got back was in the correct layout.  */
+      if (!PyTuple_Check (item.get ()) || PyTuple_Size (item.get ()) != 2)
+	{
+	  PyErr_SetString (PyExc_TypeError,
+			   _("Result of children iterator not a tuple"
+			     " of two elements."));
+	  return print_errors_before_return (nullptr);
+	}
+      if (!PyArg_ParseTuple (item.get (), "sO", &name, &py_v))
+	{
+	  /* The user won't necessarily get a stack trace here, so provide
+	     more context.  */
+	  if (gdbpy_print_python_errors_p ())
+	    fprintf_unfiltered (gdb_stderr,
+				_("Bad result from children iterator.\n"));
+	  return print_errors_before_return (nullptr);
+	}
+
+      if (is_map)
+	{
+	  if (i % 2 == 0)
+	    {
+	      /* This child represents the name of the next child we will
+		 pull from the iterator.  Check to see if this is the name
+		 we're looking for.  */
+	      struct value *tmp = convert_value_from_python (py_v);
+	      prev_matched_as_name = value_equal (idx, tmp);
+	    }
+	  else if (prev_matched_as_name)
+	    {
+	      gdb_assert (i % 2 == 1);
+	      /* The previous child (which represented a name) matched the
+		 name we are looking for, this then is the value we want.  */
+	      struct value *tmp = convert_value_from_python (py_v);
+	      return print_errors_before_return (tmp);
+	    }
+	}
+      else if (is_array)
+	{
+	  /* This assumes that all languages index their arrays from 0,
+	     which we know is not the case.  It might be nice to handle
+	     these languages slightly differently here.  */
+	  if (i == array_index_to_find)
+	    {
+	      struct value *tmp = convert_value_from_python (py_v);
+	      return print_errors_before_return (tmp);
+	    }
+	}
+      else
+	gdb_assert_not_reached ("unexpected display hint mode");
+    }
+
+  if (PyErr_Occurred ())
+    return print_errors_before_return (nullptr);
+
+  if (is_array)
+    throw_error (NOT_FOUND_ERROR, _("Array subscript %s out of bounds."),
+		 plongest (array_index_to_find));
+  else if (is_map)
+    throw_error (NOT_FOUND_ERROR, _("Unknown key value."));
+
+  return nullptr;
+}

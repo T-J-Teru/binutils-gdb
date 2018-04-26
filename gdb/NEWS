@@ -60,6 +60,13 @@
   and "-eiex" that allow options (that would normally appear in a
   gdbearlyinit file) to be passed on the command line.
 
+* If a type has a pretty-printer defined, and the pretty-printer
+  display type is 'map' or 'array', then GDB will now use this pretty
+  printer to implement '[]' indexing into the type.  For example, if
+  object's pretty printer is of type array then object[3] will perform
+  array like indexing and the pretty printer will be used to find
+  element 3 in the array.
+
 * New commands
 
 set debug event-loop

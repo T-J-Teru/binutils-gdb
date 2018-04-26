@@ -1494,6 +1494,15 @@ pretty-printer for this value exists, then it is returned.  If no such
 printer exists, then this returns @code{None}.
 @end defun
 
+If a pretty printer is available for a value, and if the
+@code{display_hint} for that pretty printer is @samp{array} or
+@samp{map} then @value{GDBN} will make use of the pretty printer to
+provide @code{[]} indexing into the type, if no xmethods
+(@pxref{Xmethods In Python}) or compiled in @code{operator[]} can be
+found.  For example, if @code{object} has a pretty printer defined,
+and the @code{display_hint} is @samp{array}, then @code{object[3]}
+will return the value at index @code{3} in the array.
+
 @node Selecting Pretty-Printers
 @subsubsection Selecting Pretty-Printers
 @cindex selecting python pretty-printers

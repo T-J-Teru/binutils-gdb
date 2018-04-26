@@ -1,0 +1,182 @@
+# Copyright (C) 2021 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Use the pretty-printer to provide subscripted access to arrays and
+# maps.
+
+load_lib gdb-python.exp
+
+# Skip all tests if Python scripting is not enabled.  We need to start
+# GDB in order to check if Python is supported.
+gdb_exit
+gdb_start
+if { [skip_python_tests] } { continue }
+
+# Send the pretty-printer script to the remote.
+set remote_python_file [gdb_remote_download host \
+			    ${srcdir}/${subdir}/${gdb_test_file_name}.py]
+
+# Return a string that is a regular expression for the error we expect
+# when the user attempts to access an out of bounds array index.
+#
+# IDX is the integer for the index being accessed.
+# USE_SUBSCRIPT_OPERATORS is a boolean, have the operator[] methods
+#    been compiled in?
+# USE_XMETHODS is a boolean, have the Python xmethods been registered?
+proc build_array_bounds_error { idx use_subscript_operators use_xmethods } {
+    if { $use_xmethods } {
+	set msg [multi_line \
+		     "Python Exception <class 'gdb.GdbError'>: array index ${idx} out of bounds" \
+		     "Error while executing Python code."]
+    } elseif { $use_subscript_operators } {
+	return [multi_line \
+		    "The program being debugged entered a std::terminate call, most likely" \
+		    "caused by an unhandled C\\+\\+ exception\\..*" \
+		    "Evaluation of the expression containing the function \\(.*::operator\\\[\\\]\\(int\\)\\)" \
+		    "will be abandoned\\."]
+    } else {
+	set msg "Array subscript ${idx} out of bounds."
+    }
+
+    return [string_to_regexp $msg]
+}
+
+# Return a string that is a regular expression for the error we expect
+# when the user attempts to access an invalid key in a map.
+#
+# IDX is the integer for the index being accessed.
+# USE_XMETHODS is a boolean, have the Python xmethods been registered?
+proc build_map_key_error { key use_xmethods } {
+    if { $use_xmethods } {
+	set msg [multi_line \
+		     "Python Exception <class 'gdb.GdbError'>: invalid map key ${key}" \
+		     "Error while executing Python code."]
+    } else {
+	set msg "Unknown key value."
+    }
+
+    return [string_to_regexp $msg]
+}
+
+# Run the tests using the source file for LANG (either 'c' or 'c++').
+# USE_SUBSCRIPT_OPERATORS is a boolean, should the operator[] methods
+# be compiled in?  USE_XMETHODS is a boolean, should the Python
+# xmethods be loaded?
+proc run_tests {lang use_subscript_operators use_xmethods} {
+    global testfile srcfile srcdir subdir remote_python_file
+    global decimal hex
+
+    set options [list debug]
+    if { $lang == "c++" } {
+	standard_testfile .cc
+	set suffix "-cpp"
+	lappend options {c++}
+    } else {
+	standard_testfile .c
+	set suffix ""
+    }
+
+    set maybe_ref ""
+    if { $use_subscript_operators } {
+	lappend options {additional_flags=-DDEFINE_SUBSCRIPT_OPERATOR}
+	set suffix "${suffix}-operators"
+	if { !$use_xmethods } {
+	    set maybe_ref "\\(\\S+ &\\) @$hex: "
+	}
+    }
+
+    set maybe_xm ""
+    if { $use_xmethods } {
+	set suffix "${suffix}-xm"
+	set maybe_xm "xmethod found it\r\n"
+    }
+
+    if { [prepare_for_testing "failed to prepare" "${testfile}${suffix}" \
+	      $srcfile ${options}] } {
+	return
+    }
+
+    if ![runto_main] {
+	return -1
+    }
+
+    gdb_test_no_output "source ${remote_python_file}" "load python file"
+
+    if { $use_xmethods } {
+	gdb_test_no_output "python register_xmethods ()"
+    }
+
+    gdb_breakpoint [gdb_get_line_number "Breakpoint 1"]
+    gdb_continue_to_breakpoint "Breakpoint 1"
+
+    gdb_test "p obj_int" \
+	" = int array \"first int array\" with 4 elements = \\{3, 6, 4, 2\\}"
+    gdb_test "p obj_int\[0\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}3"
+    gdb_test "p obj_int\[1\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}6"
+    gdb_test "p obj_int\[2\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}4"
+    gdb_test "p obj_int\[3\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}2"
+
+    set err_msg [build_array_bounds_error -1 $use_subscript_operators $use_xmethods]
+    verbose -log "Expecting '${err_msg}'"
+    gdb_test "p obj_int\[-1\]" ${err_msg}
+    set err_msg [build_array_bounds_error 4 $use_subscript_operators $use_xmethods]
+    gdb_test "p obj_int\[4\]" ${err_msg}
+
+    gdb_test "p obj_float" \
+	" = float array \"first float array\" with 4 elements = \\{3\\.$decimal, 6\\.$decimal, 4\\.$decimal, 2\\.$decimal\\}"
+    gdb_test "p obj_float\[0\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}3\\.$decimal"
+    gdb_test "p obj_float\[1\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}6\\.$decimal"
+    gdb_test "p obj_float\[2\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}4\\.$decimal"
+    gdb_test "p obj_float\[3\]" "${maybe_xm}\\\$${decimal} = ${maybe_ref}2\\.$decimal"
+    set err_msg [build_array_bounds_error -1 $use_subscript_operators $use_xmethods]
+    gdb_test "p obj_float\[-1\]" ${err_msg}
+    set err_msg [build_array_bounds_error 4 $use_subscript_operators $use_xmethods]
+    gdb_test "p obj_float\[4\]" ${err_msg}
+
+    gdb_test "p obj_int_int" \
+	" = int -> int map \"int to int map\" with 4 elements = \\{\\\[3\\\] = 99, \\\[5\\\] = 21, \\\[8\\\] = 16, \\\[9\\\] = 42\\}"
+    gdb_test "p obj_int_int\[3\]" "${maybe_xm}\\\$${decimal} = 99"
+    gdb_test "p obj_int_int\[5\]" "${maybe_xm}\\\$${decimal} = 21"
+    gdb_test "p obj_int_int\[8\]" "${maybe_xm}\\\$${decimal} = 16"
+    gdb_test "p obj_int_int\[9\]" "${maybe_xm}\\\$${decimal} = 42"
+    set err_msg [build_map_key_error 2 $use_xmethods]
+    gdb_test "p obj_int_int\[2\]" ${err_msg}
+    set err_msg [build_map_key_error 10 $use_xmethods]
+    gdb_test "p obj_int_int\[10\]" ${err_msg}
+}
+
+# Each test-spec is {
+#  LANGUAGE - Either 'c' or 'c++'
+#  USE_SUBSCRIPT_OPERATORS - A bool.
+#  USE_XMETHODS - A bool.
+# }
+foreach test_spec { {c false false} \
+		    {c++ false false} \
+		    {c++ false true} \
+		    {c++ true false} \
+		    {c++ true true} \
+		  } {
+    set lang [lindex $test_spec 0]
+    set use_subscript_operators [lindex $test_spec 1]
+    set use_xmethods [lindex $test_spec 2]
+
+    set prefix "lang=${lang}"
+    set prefix "${prefix}, subscript_ops=${use_subscript_operators}"
+    set prefix "${prefix}, xmethods=${use_xmethods}"
+
+    with_test_prefix $prefix {
+	run_tests ${lang} ${use_subscript_operators} ${use_xmethods}
+    }
+}

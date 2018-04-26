@@ -123,6 +123,8 @@ static const struct extension_language_ops guile_extension_ops =
 
   gdbscm_apply_val_pretty_printer,
 
+  NULL, /* gdbscm_val_pretty_printer_find_child, */
+
   NULL, /* gdbscm_apply_frame_filter, */
 
   gdbscm_preserve_values,
