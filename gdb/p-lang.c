@@ -253,7 +253,7 @@ pascal_language::printstr (struct ui_file *stream, struct type *elttype,
       return;
     }
 
-  for (i = 0; i < length && things_printed < options->print_max; ++i)
+  for (i = 0; i < length && things_printed < options->print_smax; ++i)
     {
       /* Position of the character we are examining
 	 to see whether it is repeated.  */

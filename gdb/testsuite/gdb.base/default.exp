@@ -667,7 +667,7 @@ gdb_test "show print asm-demangle" "Demangling of C\[+\]+/ObjC names in disassem
 #test show print demangle
 gdb_test "show print demangle" "Demangling of encoded C\[+\]+/ObjC names when displaying symbols is on."
 #test show print elements
-gdb_test "show print elements" "Limit on string chars or array elements to print is 200."
+gdb_test "show print elements" "Limit on array elements to print is 200."
 #test show print object
 gdb_test "show print object" "Printing of object's derived type based on vtable info is on."
 #test show print pretty
@@ -702,7 +702,7 @@ gdb_test "show write" "Writing into executable and core files is o.*"
 set show_confirm_seen 0
 set show_prompt_seen 0
 gdb_test_multiple "show" "show" {
-    -re "confirm:  *Whether to confirm potentially dangerous operations is on.(\[^\r\n\]*\[\r\n\])+history filename:  *The filename in which to record the command history is (\[^\r\n\]*\[\r\n\])+history save:  *Saving of the history record on exit is on.(\[^\r\n\]*\[\r\n\])+history size:  *The size of the command history is(\[^\r\n\]*\[\r\n\])+listsize:  *Number of source lines gdb will list by default is 10(\[^\r\n]*\[\r\n\])+print elements:  *Limit on string chars or array elements to print is 200." {
+    -re "confirm:  *Whether to confirm potentially dangerous operations is on.(\[^\r\n\]*\[\r\n\])+history filename:  *The filename in which to record the command history is (\[^\r\n\]*\[\r\n\])+history save:  *Saving of the history record on exit is on.(\[^\r\n\]*\[\r\n\])+history size:  *The size of the command history is(\[^\r\n\]*\[\r\n\])+listsize:  *Number of source lines gdb will list by default is 10(\[^\r\n]*\[\r\n\])+print elements:  *Limit on array elements to print is 200." {
 	verbose "Confirm dislayed"
 	set show_confirm_seen 1
 	exp_continue

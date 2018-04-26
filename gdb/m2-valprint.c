@@ -332,7 +332,7 @@ m2_language::value_print_inner (struct value *val, struct ui_file *stream,
 		  /* Look for a NULL char.  */
 		  for (temp_len = 0;
 		       (valaddr[temp_len]
-			&& temp_len < len && temp_len < options->print_max);
+			&& temp_len < len && temp_len < options->print_smax);
 		       temp_len++);
 		  len = temp_len;
 		}

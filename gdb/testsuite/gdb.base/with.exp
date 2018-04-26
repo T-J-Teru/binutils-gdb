@@ -252,7 +252,7 @@ with_test_prefix "errors" {
     gdb_test "with print elements 1 -- unknowncommand" \
 	"Undefined command: \"unknowncommand\"\\.  Try \"help\"\\."
     gdb_test "show print elements" \
-	"Limit on string chars or array elements to print is 200\\."
+	"Limit on array elements to print is 200\\."
 }
 
 # Check completion.

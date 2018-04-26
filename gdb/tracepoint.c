@@ -545,9 +545,9 @@ decode_agent_options (const char *exp, int *trace_string)
       if (target_supports_string_tracing ())
 	{
 	  /* Allow an optional decimal number giving an explicit maximum
-	     string length, defaulting it to the "print elements" value;
+	     string length, defaulting it to the "print characters" value;
 	     so "collect/s80 mystr" gets at most 80 bytes of string.  */
-	  *trace_string = opts.print_max;
+	  *trace_string = opts.print_smax;
 	  exp++;
 	  if (*exp >= '0' && *exp <= '9')
 	    *trace_string = atoi (exp);

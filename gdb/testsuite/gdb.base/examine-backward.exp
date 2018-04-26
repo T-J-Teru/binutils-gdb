@@ -56,6 +56,7 @@ with_test_prefix "memory page boundary" {
     set boundary [get_first_mapped_address]
     if {![is_address_zero_readable] && $boundary != 0} {
         gdb_test_no_output "set print elements 0"
+        gdb_test_no_output "set print characters 0"
         gdb_test_sequence "x/3s ${boundary}" "take 3 strings forward" {
             "0x"
             "0x"
@@ -145,6 +146,7 @@ gdb_test_no_output "set charset ASCII"
 
 with_test_prefix "char-width=1, print-max=20" {
     gdb_test_no_output "set print elements 20"
+    gdb_test_no_output "set print characters 20"
     gdb_test_sequence "x/6s &TestStrings" "take 6 strings forward" {
         "\"ABCDEFGHIJKLMNOPQRST\"\.\.\."
         "\"UVWXYZ\""
@@ -187,6 +189,7 @@ with_test_prefix "char-width=1, print-max=20" {
 
 with_test_prefix "char-width=2, print-max=20" {
     gdb_test_no_output "set print elements 20"
+    gdb_test_no_output "set print characters 20"
     gdb_test_sequence "x/6sh &TestStringsH" "take 6 strings forward" {
         "u\"ABCDEFGHIJKLMNOPQRST\"\.\.\."
         "u\"UVWXYZ\""
@@ -229,6 +232,7 @@ with_test_prefix "char-width=2, print-max=20" {
 
 with_test_prefix "char-width=4, print-max=20" {
     gdb_test_no_output "set print elements 20"
+    gdb_test_no_output "set print characters 20"
     gdb_test_sequence "x/6sw &TestStringsW" "take 6 strings forward" {
         "U\"ABCDEFGHIJKLMNOPQRST\"\.\.\."
         "U\"UVWXYZ\""
@@ -271,6 +275,7 @@ with_test_prefix "char-width=4, print-max=20" {
 
 with_test_prefix "char-width=2, print-max=0" {
     gdb_test_no_output "set print elements 0"
+    gdb_test_no_output "set print characters 0"
     gdb_test_sequence "x/6sh &TestStringsH" "take 6 strings forward" {
         "u\"ABCDEFGHIJKLMNOPQRSTUVWXYZ\""
         "u\"\""
@@ -314,6 +319,7 @@ with_test_prefix "char-width=2, print-max=0" {
 
 with_test_prefix "char-width=1, print-max=4" {
     gdb_test_no_output "set print elements 4"
+    gdb_test_no_output "set print characters 4"
     gdb_test_sequence "x/9s &TestStrings" "take 9 strings forward" {
         "\"ABCD\"\.\.\."
         "\"EFGH\"\.\.\."

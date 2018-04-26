@@ -111,7 +111,7 @@ pascal_language::value_print_inner (struct value *val,
 		    for (temp_len = 0;
 			 extract_unsigned_integer (valaddr + temp_len * eltlen,
 						   eltlen, byte_order)
-			   && temp_len < len && temp_len < options->print_max;
+			   && temp_len < len && temp_len < options->print_smax;
 			 temp_len++);
 		    len = temp_len;
 		  }

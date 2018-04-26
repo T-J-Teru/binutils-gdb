@@ -968,9 +968,9 @@ find_string_backward (struct gdbarch *gdbarch,
 	  int offset = (chars_to_read - i - 1) * char_size;
 
 	  if (integer_is_zero (&buffer[offset], char_size)
-	      || chars_counted == options->print_max)
+	      || chars_counted == options->print_smax)
 	    {
-	      /* Found '\0' or reached print_max.  As OFFSET is the offset to
+	      /* Found '\0' or reached print_smax.  As OFFSET is the offset to
 		 '\0', we add CHAR_SIZE to return the start address of
 		 a string.  */
 	      --count;

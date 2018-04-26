@@ -76,13 +76,15 @@ proc run_lang_tests {exefile lang} {
 		" = \{.*<Vbase1> = pp class name: Vbase1.*<Vbase2> = \{.*<VirtualTest> = pp value variable is: 1,.*members of Vbase2:.*_vptr.Vbase2 = $hex.*<Vbase3> = \{.*members of Vbase3.*members of Derived:.*value = 2.*"
 	    gdb_test "print ns " "\"embedded\\\\000null\\\\000string\"" \
 		"print ns with 200 elements"
-	    gdb_test_no_output "set print elements 3" ""
+	    gdb_test_no_output "set print characters 3" ""
 	    gdb_test "print ns" "emb\.\.\.." \
-		"print ns with 3 elements"
-	    gdb_test_no_output "set print elements 10" ""
+		"print ns with 3 characters"
+	    gdb_test "print -characters 4 -- ns" "embe\.\.\.." \
+		"print ns with 4 characters"
+	    gdb_test_no_output "set print characters 10" ""
 	    gdb_test "print ns" "embedded\\\\000n\.\.\.." \
-		"print ns with 10 elements"
-	    gdb_test_no_output "set print elements 200" ""
+		"print ns with 10 characters"
+	    gdb_test_no_output "set print characters 200" ""
 	}
 
 	if { ![is_address_zero_readable] } {

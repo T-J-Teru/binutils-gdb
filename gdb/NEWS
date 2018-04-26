@@ -32,6 +32,24 @@ maint show internal-warning backtrace
   internal-error, or an internal-warning.  This is on by default for
   internal-error and off by default for internal-warning.
 
+set print characters LIMIT
+show print characters
+print -characters LIMIT
+  This new setting is like 'set print elements', but controls how many
+  characters of a string are printed.  This functionality used to be
+  covered by 'set print elements', but is now a separate setting.
+  LIMIT can be set to 'unlimited' to print all characters of a string.
+  The default value for LIMIT is 200.
+
+* Changed commands
+
+set print elements LIMIT
+show print elements
+print -elements LIMIT
+  This setting no longer affects how many characters of a string are
+  printed, instead the new 'set print characters' setting should be
+  used.
+
 * Python API
 
   ** New function gdb.add_history(), which takes a gdb.Value object

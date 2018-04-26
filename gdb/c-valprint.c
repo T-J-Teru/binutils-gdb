@@ -271,7 +271,7 @@ c_value_print_array (struct value *val,
 
 	      for (temp_len = 0;
 		   (temp_len < len
-		    && temp_len < options->print_max
+		    && temp_len < options->print_smax
 		    && extract_unsigned_integer (valaddr + temp_len * eltlen,
 						 eltlen, byte_order) != 0);
 		   ++temp_len)
@@ -280,7 +280,7 @@ c_value_print_array (struct value *val,
 	      /* Force LA_PRINT_STRING to print ellipses if
 		 we've printed the maximum characters and
 		 the next character is not \000.  */
-	      if (temp_len == options->print_max && temp_len < len)
+	      if (temp_len == options->print_smax && temp_len < len)
 		{
 		  ULONGEST ival
 		    = extract_unsigned_integer (valaddr + temp_len * eltlen,

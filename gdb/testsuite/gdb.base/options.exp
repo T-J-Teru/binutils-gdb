@@ -165,6 +165,7 @@ proc_with_prefix test-print {{prefix ""}} {
 	"-address"
 	"-array"
 	"-array-indexes"
+	"-characters"
 	"-elements"
 	"-max-depth"
 	"-memory-tag-violations"

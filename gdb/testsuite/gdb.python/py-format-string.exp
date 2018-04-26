@@ -632,7 +632,7 @@ proc_with_prefix test_max_elements {} {
 
   # 200 is the default maximum number of elements, so setting it should
   # not change the output.
-  set opts "max_elements=200"
+  set opts "max_elements=200, max_characters=200"
   with_test_prefix $opts {
     check_format_string "a_point_t" $opts
     check_format_string "a_point_t_pointer" $opts
@@ -653,7 +653,7 @@ proc_with_prefix test_max_elements {} {
     }
   }
 
-  set opts "max_elements=3"
+  set opts "max_elements=3, max_characters=3"
   with_test_prefix $opts {
     check_format_string "a_point_t" $opts
     check_format_string "a_point_t_pointer" $opts
@@ -683,7 +683,7 @@ proc_with_prefix test_max_elements {} {
 
   # Both 1,000 (we don't have that many elements) and 0 (unlimited) should
   # mean no truncation.
-  foreach opts { "max_elements=1000" "max_elements=0" } {
+  foreach opts { "max_elements=1000, max_characters=1000" "max_elements=0, max_characters=0" } {
     with_test_prefix $opts {
       check_format_string "a_point_t" $opts
       check_format_string "a_point_t_pointer" $opts
@@ -706,13 +706,16 @@ proc_with_prefix test_max_elements {} {
     }
   }
 
-  with_temp_option "set print elements 4" "set print elements 200" {
+  with_temp_option "set print characters 4" "set print characters 200" {
     check_format_string "a_string" "" \
       "${default_pointer_regexp} \"hell\"..."
     check_format_string "a_binary_string" "" \
       "${default_pointer_regexp} \"hell\"..."
     check_format_string "a_binary_string_array" "" \
-      "\"hell\"..."
+	"\"hell\"..."
+  }
+
+  with_temp_option "set print elements 4" "set print elements 200" {
     check_format_string "an_array_with_repetition" "" \
       "\\{1, 3 <repeats 12 times>...\\}"
   }
