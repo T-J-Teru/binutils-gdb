@@ -1,0 +1,102 @@
+# Copyright 2018 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test for a deadlock case.
+
+standard_testfile
+
+set options { debug pthreads }
+
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile $options] == -1} {
+    return -1
+}
+
+proc check_inferior_call {} {
+    gdb_test "call get_value(0)" ".* = 0"
+}
+
+proc setup_for_test {} {
+    global binfile
+
+    clean_restart ${binfile}
+
+    if { ![runto main] } then {
+	fail "run to main"
+	return
+    }
+
+    gdb_breakpoint [gdb_get_line_number "Breakpoint 1"]
+    gdb_breakpoint [gdb_get_line_number "Breakpoint 2"]
+    gdb_continue_to_breakpoint "Breakpoint 1"
+
+    # At this point thread 1, the original program thread will be
+    # somewhere in main, while the remaining 4 threads will all be in
+    # thread_function.  We can't be sure which thread will have hit
+    # the breakpoint though.
+    #
+    # First, turn on scheduler-locking.
+    gdb_test_no_output "set scheduler-locking on"
+    gdb_test "show scheduler-locking" \
+	"Mode for locking scheduler during execution is \"on\"."
+}
+
+proc check_inferior_call_in_each_thread {} {
+    setup_for_test
+
+    # Now, check we can make an inferior call in the current thread.
+    check_inferior_call
+
+    # Now switch to each thread in turn and check we can perform an
+    # inferior call in each thread.
+    foreach_with_prefix thread { 1 2 3 4 5 } {
+	gdb_test "thread $thread" "Switching to thread $thread .*" \
+	    "Switch to thread"
+	check_inferior_call
+    }
+}
+
+proc check_continue_to_second_breakpoint {} {
+    setup_for_test
+
+    set bp_thread [get_current_thread_id]
+
+    # Run the current thread, whatever that is to the breakpoint
+    gdb_continue_to_breakpoint "Breakpoint 2"
+
+    # We should still be in the same thread as scheduler-locking is on.
+    set thread_now [get_current_thread_id]
+    gdb_assert { $thread_now == $bp_thread } "check thread has not changed"
+
+    # Now check check we can move all of the other threads upto the
+    # second breakpoint.
+    foreach_with_prefix thread { 2 3 4 5 } {
+	if { $thread == $bp_thread } {
+	    # This thread has already been moved on.
+	    continue
+	}
+
+	gdb_test "thread $thread" "Switching to thread $thread .*" \
+	    "Switch to thread"
+
+	gdb_continue_to_breakpoint "Breakpoint 2"
+
+	# We should still be in the same thread as scheduler-locking is on.
+	set thread_now [get_current_thread_id]
+	gdb_assert { $thread_now == $thread } "check thread has not changed"
+    }
+}
+
+check_inferior_call_in_each_thread
+check_continue_to_second_breakpoint

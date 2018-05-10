@@ -1,3 +1,9 @@
+2018-5-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.threads/schedlock-02.c: New file.
+	* gdb.threads/schedlock-02.exp: New file.
+	* lib/gdb.exp (get_current_thread_id): New function.
+
 2018-05-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.arch/amd64-init-x87-values.S: New file.

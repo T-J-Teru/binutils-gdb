@@ -5805,6 +5805,40 @@ proc get_var_address { var } {
     return ""
 }
 
+# Get the ID of the current thread.
+proc get_current_thread_id { {test_name ""} } {
+    global gdb_prompt
+
+    if { $test_name == "" } {
+	set test_name "get current thread id"
+    }
+
+    set thread_id ""
+    gdb_test_multiple "info threads" $test_name {
+	-re "\[^\r\n\]+Id\[^\r\n\]+Target Id\[^\r\n\]+Frame\[^\n\r\]+\[\n\r\]+" {
+	    # Header line.
+	    exp_continue
+	}
+	-re "^\[^*\r\n0-9\]+\[0-9\]+\[^\r\n\]+\[\r\n\]+" {
+	    # Line that isn't the current thread.
+	    exp_continue
+	}
+	-re "^\\*\[^\r\n0-9\]+(\[0-9\]+)\[^\r\n\]+\[\r\n\]+" {
+	    # Line that is the current thread.
+	    set thread_id $expect_out(1,string)
+	    exp_continue
+	}
+	-re "$gdb_prompt $" {}
+    }
+
+    if { $thread_id == "" } {
+	fail $test_name
+	set thread_id "1"
+    }
+
+    return $thread_id
+}
+
 # Get the current value for remotetimeout and return it.
 proc get_remotetimeout { } {
     global gdb_prompt

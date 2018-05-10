@@ -72,7 +72,7 @@ thread_function (void *args)
     printf ("All threads entering compute region\n");
 
   unsigned long result = fast_fib (100); /* testmarker01 */
-  status = pthread_barrier_wait (&print_barrier);
+  status = pthread_barrier_wait (&print_barrier); /* testmarker02 */
   if (status == PTHREAD_BARRIER_SERIAL_THREAD)
     printf ("All threads outputting results\n");
 
