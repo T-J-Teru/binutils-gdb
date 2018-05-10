@@ -1,0 +1,46 @@
+# Copyright 2018 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test for a deadlock case.
+
+standard_testfile
+
+set options { debug pthreads }
+
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile $options] == -1} {
+    return -1
+}
+
+clean_restart ${binfile}
+
+if { ![runto main] } then {
+   fail "run to main"
+   return
+}
+
+gdb_breakpoint [gdb_get_line_number "testmarker01"]
+gdb_continue_to_breakpoint "testmarker01"
+
+gdb_test_no_output "set scheduler-locking on"
+gdb_test "show scheduler-locking" \
+    "Mode for locking scheduler during execution is \"on\"."
+
+for {set i 4} {$i > 0} {incr i -1} {
+    with_test_prefix "thread $i" {
+	gdb_test "thread $i" "Switching to .*" \
+	    "Switch to thread"
+	gdb_test "call get_value(0)" ".* = 0"
+    }
+}
