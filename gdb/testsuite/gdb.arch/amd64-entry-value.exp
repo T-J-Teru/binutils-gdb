@@ -93,7 +93,7 @@ gdb_test "p v@entry" \
     "@entry can be used only for function parameters, not for \"v\"" \
     "attempt to print global v@entry"
 gdb_test "p unknown@entry" \
-    "@entry can be used only for function parameters, not for \"unknown\"" \
+    "No symbol \"unknown\" in current context." \
     "attempt to print unknown@entry"
 
 # Test various kinds of `set print entry-values'.

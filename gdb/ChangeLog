@@ -1,3 +1,9 @@
+2018-05-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* c-exp.y (variable: name_not_typename ENTRY): Give a separate
+	error message for symbol not found case.  Rely on the
+	SYMBOL_IS_ARGUMENT check to determine if a symbol is an argument.
+
 2018-05-10  Tom Tromey  <tom@tromey.com>
 
 	* configure: Rebuild.

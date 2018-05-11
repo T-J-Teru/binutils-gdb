@@ -931,9 +931,10 @@ block	:	block COLONCOLON name
 
 variable:	name_not_typename ENTRY
 			{ struct symbol *sym = $1.sym.symbol;
-
-			  if (sym == NULL || !SYMBOL_IS_ARGUMENT (sym)
-			      || !symbol_read_needs_frame (sym))
+			  if (sym == NULL)
+			    error (_("No symbol \"%s\" in current context."),
+				   copy_name ($1.stoken));
+			  else if (!SYMBOL_IS_ARGUMENT (sym))
 			    error (_("@entry can be used only for function "
 				     "parameters, not for \"%s\""),
 				   copy_name ($1.stoken));

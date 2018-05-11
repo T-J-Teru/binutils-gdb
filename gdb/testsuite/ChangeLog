@@ -1,3 +1,8 @@
+2018-05-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.arch/amd64-entry-value.exp: Update error message for the
+	unknown symbol case.
+
 2018-05-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.arch/amd64-init-x87-values.S: New file.
