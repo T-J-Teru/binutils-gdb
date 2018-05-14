@@ -22,6 +22,7 @@
 #include "event-top.h"
 #include "queue.h"
 #include "ser-event.h"
+#include "gdbcmd.h"
 
 #ifdef HAVE_POLL
 #if defined (HAVE_POLL_H)
@@ -36,6 +37,7 @@
 #include "gdb_select.h"
 #include "observable.h"
 #include "top.h"
+#include "gdbcmd.h"
 
 /* Tell create_file_handler what events we are interested in.
    This is used by the select version of the event loop.  */
@@ -294,6 +296,8 @@ initialize_async_signal_handlers (void)
 int
 gdb_do_one_event (void)
 {
+  APBLog apb ("gdb_do_one_event");
+
   static int event_source_head = 0;
   const int number_of_sources = 3;
   int current = 0;
@@ -745,6 +749,8 @@ handle_file_event (file_handler *file_ptr, int ready_mask)
 static int
 gdb_wait_for_event (int block)
 {
+  APBLog apb ("gdb_wait_for_event");
+
   file_handler *file_ptr;
   int num_found = 0;
 
@@ -1052,12 +1058,16 @@ clear_async_event_handler (async_event_handler *async_handler_ptr)
 static int
 check_async_event_handlers (void)
 {
+  APBLog apb ("check_async_event_handlers");
+
   async_event_handler *async_handler_ptr;
 
   for (async_handler_ptr = async_event_handler_list.first_handler;
        async_handler_ptr != NULL;
        async_handler_ptr = async_handler_ptr->next_handler)
     {
+      apb.msg ("handler %p, ready %d\n",
+	       async_handler_ptr, async_handler_ptr->ready);
       if (async_handler_ptr->ready)
 	{
 	  async_handler_ptr->ready = 0;

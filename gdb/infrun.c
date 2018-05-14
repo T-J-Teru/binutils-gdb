@@ -68,6 +68,43 @@
 #include "common/gdb_optional.h"
 #include "arch-utils.h"
 
+int APBLog::depth = 0;
+
+APBLog::APBLog (const char *scope) :
+  m_scope (scope)
+{
+  /* Display message.  */
+  msg ("Entering: %s\n", m_scope);
+
+  depth += 2;
+}
+
+APBLog::~APBLog ()
+{
+  depth -= 2;
+  if (depth < 0)
+    depth = 0;
+
+  /* Display message.  */
+  msg ("Leaving: %s\n", m_scope);
+}
+
+void
+APBLog::msg (const char *fmt, ...)
+{
+  va_list ap;
+
+  if (getenv ("APB_NO_LOG") == NULL)
+    {
+      va_start (ap, fmt);
+
+      fprintf (stderr, "%*s", depth, "");
+      vfprintf (stderr, fmt, ap);
+
+      va_end (ap);
+    }
+}
+
 /* Prototypes for local functions */
 
 static void sig_print_info (enum gdb_signal);
@@ -105,8 +142,13 @@ static int infrun_is_async = -1;
 void
 infrun_async (int enable)
 {
+  APBLog apb ("infrun_async");
+  apb.msg ("enable = %d (infrun_is_async = %d)\n", enable, infrun_is_async);
+
   if (infrun_is_async != enable)
     {
+      apb.msg ("Setting infrun_is_async from %d to %d\n",
+	       infrun_is_async, enable);
       infrun_is_async = enable;
 
       if (debug_infrun)
@@ -9159,12 +9201,15 @@ static const struct internalvar_funcs siginfo_funcs =
 static void
 infrun_async_inferior_event_handler (gdb_client_data data)
 {
+  APBLog apb ("infrun_async_inferior_event_handler");
   inferior_event_handler (INF_REG_EVENT, NULL);
 }
 
 void
 _initialize_infrun (void)
 {
+  APBLog apb ("_initialize_infrun");
+
   int i;
   int numsigs;
   struct cmd_list_element *c;
@@ -9172,6 +9217,8 @@ _initialize_infrun (void)
   /* Register extra event sources in the event loop.  */
   infrun_async_inferior_event_token
     = create_async_event_handler (infrun_async_inferior_event_handler, NULL);
+  apb.msg ("created infrun_async_inferior_event_token %p\n",
+	   infrun_async_inferior_event_token);
 
   add_info ("signals", info_signals_command, _("\
 What debugger does when program gets various signals.\n\

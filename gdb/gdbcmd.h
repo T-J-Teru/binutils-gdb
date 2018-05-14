@@ -140,4 +140,19 @@ extern void print_command_line (struct command_line *, unsigned int,
 extern void print_command_lines (struct ui_out *,
 				 struct command_line *, unsigned int);
 
+class APBLog
+{
+private:
+  static int depth;
+
+  const char *m_scope;
+
+public:
+  APBLog (const char *scope);
+
+  ~APBLog ();
+
+  void msg (const char *fmt, ...);
+};
+
 #endif /* !defined (GDBCMD_H) */

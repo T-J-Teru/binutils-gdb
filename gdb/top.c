@@ -496,6 +496,7 @@ check_frame_language_change (void)
 void
 wait_sync_command_done (void)
 {
+  APBLog apb ("wait_sync_command_done");
   /* Processing events may change the current UI.  */
   scoped_restore save_ui = make_scoped_restore (&current_ui);
   struct ui *ui = current_ui;
