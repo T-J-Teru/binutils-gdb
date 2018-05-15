@@ -4350,6 +4350,7 @@ sigchld_handler (int signo)
 static void
 handle_target_event (int error, gdb_client_data client_data)
 {
+  fprintf (stderr, "APB: In linux-nat.c:handle_target_event\n");
   inferior_event_handler (INF_REG_EVENT, NULL);
 }
 
@@ -4396,6 +4397,7 @@ linux_async_pipe (int enable)
 void
 linux_nat_target::async (int enable)
 {
+  fprintf (stderr, "Enter linux_nat_target::async\n");
   if (enable)
     {
       if (!linux_async_pipe (1))
@@ -4404,6 +4406,8 @@ linux_nat_target::async (int enable)
 			    handle_target_event, NULL);
 	  /* There may be pending events to handle.  Tell the event loop
 	     to poll them.  */
+	  fprintf (stderr, "APB: Pushing event to FD %d\n",
+		   linux_nat_event_pipe[0]);
 	  async_file_mark ();
 	}
     }

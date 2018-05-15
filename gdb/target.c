@@ -3917,6 +3917,7 @@ maintenance_print_target_stack (const char *cmd, int from_tty)
 void
 target_async (int enable)
 {
+  fprintf (stderr, "Enter target_async, enable = %d\n", enable);
   infrun_async (enable);
   target_stack->async (enable);
 }

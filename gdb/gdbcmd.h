@@ -147,6 +147,8 @@ private:
 
   const char *m_scope;
 
+  static FILE *logfile;
+
 public:
   APBLog (const char *scope);
 

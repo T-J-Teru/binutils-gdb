@@ -70,6 +70,8 @@
 
 int APBLog::depth = 0;
 
+FILE *APBLog::logfile = NULL;
+
 APBLog::APBLog (const char *scope) :
   m_scope (scope)
 {
@@ -94,12 +96,20 @@ APBLog::msg (const char *fmt, ...)
 {
   va_list ap;
 
+  if (logfile == NULL)
+    {
+      //logfile = fopen ("apb.log", "w");
+      logfile = stderr;
+      gdb_assert (logfile != NULL);
+    }
+
   if (getenv ("APB_NO_LOG") == NULL)
     {
       va_start (ap, fmt);
 
-      fprintf (stderr, "%*s", depth, "");
-      vfprintf (stderr, fmt, ap);
+      fprintf (logfile, "%*s", depth, "");
+      vfprintf (logfile, fmt, ap);
+      fflush (logfile);
 
       va_end (ap);
     }
@@ -145,6 +155,7 @@ infrun_async (int enable)
   APBLog apb ("infrun_async");
   apb.msg ("enable = %d (infrun_is_async = %d)\n", enable, infrun_is_async);
 
+  // async_signal_handler_is_marked (...) ?
   if (infrun_is_async != enable)
     {
       apb.msg ("Setting infrun_is_async from %d to %d\n",
@@ -2450,7 +2461,12 @@ resume_1 (enum gdb_signal sig)
       tp->suspend.stop_signal = GDB_SIGNAL_0;
 
       if (target_can_async_p ())
-	target_async (1);
+	{
+	  target_async (1);
+
+	  /* Tell the event loop we have an event to process. */
+	  mark_async_event_handler (infrun_async_inferior_event_token);
+	}
       return;
     }
 
@@ -3575,7 +3591,7 @@ do_target_wait (ptid_t ptid, struct target_waitstatus *status, int options)
 	    fprintf_unfiltered (gdb_stdlog,
 				"infrun: PC of %s changed.  was=%s, now=%s\n",
 				target_pid_to_str (tp->ptid),
-				paddress (gdbarch, tp->prev_pc),
+				paddress (gdbarch, tp->suspend.stop_pc),
 				paddress (gdbarch, pc));
 	  discard = 1;
 	}

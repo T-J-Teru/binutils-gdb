@@ -768,6 +768,7 @@ gdb_wait_for_event (int block)
     {
 #ifdef HAVE_POLL
       int timeout;
+      int k;
 
       if (block)
 	timeout = gdb_notifier.timeout_valid ? gdb_notifier.poll_timeout : -1;
