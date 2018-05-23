@@ -657,7 +657,7 @@ run_inferior_call (struct call_thread_fsm *sm,
   if (!was_running
       && call_thread_ptid == inferior_ptid
       && stop_stack_dummy == STOP_STACK_DUMMY)
-    finish_thread_state (user_visible_resume_ptid (0));
+    finish_thread_state (pid_to_ptid (ptid_get_pid (inferior_ptid)));
 
   enable_watchpoints_after_interactive_call_stop ();
 

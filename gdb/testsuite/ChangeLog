@@ -1,3 +1,8 @@
+2018-07-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.threads/infcall-create-thread.c: New file.
+	* gdb.threads/infcall-create-thread.exp: New file.
+
 2018-07-13  Sergio Durigan Junior  <sergiodj@redhat.com>
 
 	* lib/gdbserver-support.exp (gdbserver_start): Expect for the

@@ -1,0 +1,71 @@
+# Copyright (C) 2018 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+# Check the state of gdb after an inferior call creates a new thread.
+
+standard_testfile
+
+if {[gdb_compile_pthreads "${srcdir}/${subdir}/${srcfile}" "${binfile}" \
+  executable {debug}] != "" } {
+  return -1
+}
+
+foreach_with_prefix use_schedlock { 0 1 } {
+
+    clean_restart "${binfile}"
+
+    if ![runto_main] then {
+	fail "can't run to main"
+	return 0
+    }
+
+    gdb_breakpoint "breakpt"
+    gdb_continue_to_breakpoint "breakpt"
+
+    if { $use_schedlock } {
+	gdb_test_no_output "set scheduler-locking on"
+	gdb_test "show scheduler-locking" \
+	    "Mode for locking scheduler during execution is \"on\"."
+    }
+
+    gdb_test "call spawn_thread ()" "\[New Thread $hex \\(LWP $decimal\\)\]" \
+	"spawn a new thread in an inferior call"
+
+    set seen_thr_1 0
+    set seen_thr_2 0
+    set test_name "check new thread is not running"
+    gdb_test_multiple "info threads" $test_name {
+	-re "\[^\r\n\]+Id\[^\r\n\]+Target Id\[^\r\n\]+Frame\[^\r\n\]+\[\r\n\]+" {
+	    exp_continue
+	}
+	-re "^\\*\[^\r\n0-9\]+1 \[^\r\n\]+breakpt \\(\\) at \[^\r\n\]+\[\r\n\]+" {
+	    # Thread 1 is active thread, and is NOT running.
+	    set seen_thr_1 1
+	    exp_continue
+	}
+	-re "^\[^*\r\n0-9\]+2 \[^\r\n\]+ (in|at) \[^\r\n\]+\[\r\n\]+" {
+	    set seen_thr_2 1
+	    exp_continue
+	}
+	-re "^\[^\r\n0-9\]+(1|2) \[^\r\n\]+\\(running\\)\[\r\n\]+" {
+	    fail "$test_name"
+	    exp_continue
+	}
+	-re "$gdb_prompt $" {
+	}
+    }
+
+    gdb_assert { $seen_thr_1 && $seen_thr_2 } "seen thread 1 and 2"
+}

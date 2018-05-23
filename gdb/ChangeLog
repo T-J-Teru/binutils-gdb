@@ -1,3 +1,8 @@
+2018-07-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* infrun.c (run_inferior_call): Finish all threads in inferior
+	process in order to catch possible new threads.
+
 2018-07-17  Jim Wilson  <jimw@sifive.com>
 
 	* riscv-tdep.c (riscv_has_feature): Delete comment that refers to
