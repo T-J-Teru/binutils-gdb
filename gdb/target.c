@@ -2043,6 +2043,31 @@ dispose_inferior (struct inferior *inf, void *args)
   return 0;
 }
 
+/* Callback for iterate_over_inferiors.  Record in ARG the first killed
+   inferior.  If we find an inferior that is both killed and not removable,
+   this is returned in preference.  The definition of "first" here is
+   pretty loose, and depends on the order in the inferior list.  */
+
+static int
+find_first_killed_inferior (struct inferior *inf, void *arg)
+{
+  struct inferior **infp = (struct inferior **) arg;
+
+  if (inf->pid == 0)
+    {
+      if (!inf->removable)
+	{
+	  *infp = inf;
+	  return 1;
+	}
+      else if (*infp == nullptr)
+	*infp = inf;
+    }
+
+  return 0;
+}
+
+
 /* This is to be called by the open routine before it does
    anything.  */
 
@@ -2059,6 +2084,16 @@ target_preopen (int from_tty)
 	iterate_over_inferiors (dispose_inferior, NULL);
       else
 	error (_("Program not killed."));
+
+      /* The call to DISPOSE_INFERIOR will leave the last inferior we
+	 killed selected.  Reset the selection to the earliest inferior
+	 that is killed and not removable.  The prune any other killed
+	 inferiors.  */
+      struct inferior *inf = nullptr;
+      iterate_over_inferiors (find_first_killed_inferior, &inf);
+      if (inf != nullptr)
+	set_current_inferior (inf);
+      prune_inferiors ();
     }
 
   /* Calling target_kill may remove the target from the stack.  But if

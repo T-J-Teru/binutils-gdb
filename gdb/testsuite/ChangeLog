@@ -1,5 +1,9 @@
 2018-08-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.server/extended-remote-restart.exp: Extend.
+
+2018-08-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	PR gdb/18050:
 	* gdb.server/extended-remote-restart.c: New file.
 	* gdb.server/extended-remote-restart.exp: New file.

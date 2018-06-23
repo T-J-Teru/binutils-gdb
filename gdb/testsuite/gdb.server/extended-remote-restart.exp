@@ -119,6 +119,12 @@ proc test_reload { do_kill_p follow_child_p } {
     } else {
 	fail "reconnect after fork"
     }
+
+    gdb_test "info inferiors" \
+	[multi_line \
+	     "  Num  Description       Executable.*" \
+	     "\\* 1 +${dead_inf_ptn} \[^\r\n\]+" ] \
+	"Check inferiors after reconnect"
 }
 
 # Run all combinations of the test.

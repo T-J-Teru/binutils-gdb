@@ -1,5 +1,11 @@
 2018-08-08  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* target.c (find_first_killed_inferior): New function.
+	(target_preopen): Use find_first_killed_inferior to reset selected
+	inferior, and prune killed inferior as appropriate.
+
+2018-08-08  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	PR gdb/18050:
 	* target.c (dispose_inferior): Don't dispose of inferiors that are
 	already killed.
