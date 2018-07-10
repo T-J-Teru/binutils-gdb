@@ -84,6 +84,20 @@ print_exception (struct ui_file *file, struct gdb_exception e)
   const char *start;
   const char *end;
 
+  gdb::optional<target_terminal::scoped_restore_terminal_state> term_state;
+  /* While normally there's always something pushed on the target
+     stack, the NULL check is needed here because we can get here very
+     early during startup, before the target stack is first
+     initialized.  */
+  if (current_top_target () != NULL && target_supports_terminal_ours ())
+    {
+      term_state.emplace ();
+
+      /* Use ours not ours_for_output here as the interaction with the
+	 serial file descriptors requires full terminal ownership.  */
+      target_terminal::ours_for_output ();
+    }
+
   for (start = e.message; start != NULL; start = end)
     {
       end = strchr (start, '\n');
@@ -94,7 +108,7 @@ print_exception (struct ui_file *file, struct gdb_exception e)
 	  end++;
 	  ui_file_write (file, start, end - start);
 	}
-    }					    
+    }
   fprintf_filtered (file, "\n");
 
   /* Now append the annotation.  */

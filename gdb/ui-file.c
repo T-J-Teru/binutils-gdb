@@ -24,6 +24,7 @@
 #include "gdb_obstack.h"
 #include "gdb_select.h"
 #include "filestuff.h"
+#include "target/target.h"
 
 null_file null_stream;
 
@@ -214,6 +215,8 @@ stdio_file::read (char *buf, long length_buf)
 void
 stdio_file::write (const char *buf, long length_buf)
 {
+  gdb_assert (!target_terminal::is_inferior ());
+
   /* Calling error crashes when we are called from the exception framework.  */
   if (fwrite (buf, length_buf, 1, m_file))
     {
@@ -224,6 +227,8 @@ stdio_file::write (const char *buf, long length_buf)
 void
 stdio_file::write_async_safe (const char *buf, long length_buf)
 {
+  gdb_assert (!target_terminal::is_inferior ());
+
   /* This is written the way it is to avoid a warning from gcc about not using the
      result of write (since it can be declared with attribute warn_unused_result).
      Alas casting to void doesn't work for this.  */
@@ -236,6 +241,8 @@ stdio_file::write_async_safe (const char *buf, long length_buf)
 void
 stdio_file::puts (const char *linebuffer)
 {
+  gdb_assert (!target_terminal::is_inferior ());
+
   /* Calling error crashes when we are called from the exception framework.  */
   if (fputs (linebuffer, m_file))
     {
