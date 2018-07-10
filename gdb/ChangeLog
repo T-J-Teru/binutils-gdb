@@ -1,3 +1,9 @@
+2018-07-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* exceptions.c (print_flush): Use target_terminal::ours instead of
+	target_terminal::ours_for_output due to interaction with serial
+	file descriptors.
+
 2018-09-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* riscv-tdep.c (riscv_frame_cache): Fix ARI warning, don't end a

@@ -46,7 +46,10 @@ print_flush (void)
   if (current_top_target () != NULL && target_supports_terminal_ours ())
     {
       term_state.emplace ();
-      target_terminal::ours_for_output ();
+
+      /* Use ours not ours_for_output here as the interaction with the
+	 serial file descriptors requires full terminal ownership.  */
+      target_terminal::ours ();
     }
 
   /* We want all output to appear now, before we print the error.  We
