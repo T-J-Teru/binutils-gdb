@@ -1322,6 +1322,13 @@ value_contents_copy_raw (struct value *dst, LONGEST dst_offset,
 					     TARGET_CHAR_BIT * dst_offset,
 					     TARGET_CHAR_BIT * length));
 
+  /* The memory for SRC and DST should already be allocated by now.  Check
+     that we're not about to access outside of allocated memory.  */
+  gdb_assert ((src_offset + length) * unit_size
+              <= TYPE_LENGTH (src->enclosing_type));
+  gdb_assert ((dst_offset + length) * unit_size
+              <= TYPE_LENGTH (dst->enclosing_type));
+
   /* Copy the data.  */
   memcpy (value_contents_all_raw (dst) + dst_offset * unit_size,
 	  value_contents_all_raw (src) + src_offset * unit_size,
