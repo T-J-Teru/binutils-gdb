@@ -720,11 +720,14 @@ valpy_getitem (PyObject *self, PyObject *key)
   long bitpos = -1;
   PyObject *result = NULL;
 
+  printf_filtered ("APB: valpy_getitem  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n");
+
   if (gdbpy_is_string (key))
     {
       field = python_string_to_host_string (key);
       if (field == NULL)
 	return NULL;
+      printf_filtered ("APB: Field: %s\n", field.get ());
     }
   else if (gdbpy_is_field (key))
     {
@@ -794,8 +797,12 @@ valpy_getitem (PyObject *self, PyObject *key)
       scoped_value_mark free_values;
 
       if (field)
-	res_val = value_struct_elt (&tmp, NULL, field.get (), NULL,
-				    "struct/class/union");
+        {
+          printf_filtered ("APB: Source value: %p\n", tmp);
+          res_val = value_struct_elt (&tmp, NULL, field.get (), NULL,
+                                      "struct/class/union");
+          printf_filtered ("APB: Result value: %p\n", res_val);
+        }
       else if (bitpos >= 0)
 	res_val = value_struct_elt_bitpos (&tmp, bitpos, field_type,
 					   "struct/class/union");

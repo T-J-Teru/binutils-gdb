@@ -485,8 +485,8 @@ ext_lang_type_printers::~ext_lang_type_printers ()
    value for pretty-printing.  Here we're referring to, e.g., programming
    errors that trigger an exception in the extension language.  */
 
-int
-apply_ext_lang_val_pretty_printer (struct type *type,
+static int
+apply_ext_lang_val_pretty_printer_1 (struct type *type,
 				   LONGEST embedded_offset, CORE_ADDR address,
 				   struct ui_file *stream, int recurse,
 				   struct value *val,
@@ -499,6 +499,13 @@ apply_ext_lang_val_pretty_printer (struct type *type,
   /* In some cases pretty-printers can't be used.  */
   if (options->raw)
     return 0;
+
+  /* The EMBEDDED_OFFSET passed in is the offset from the start of VAL's
+     content buffer.  The problem is when we access VAL's content buffer we
+     already apply value_embedded_offset (VAL), which really throws things
+     off.  */
+  if (getenv ("APB_FIX") != NULL)
+    embedded_offset -= value_embedded_offset (val);
 
   ALL_ENABLED_EXTENSION_LANGUAGES (i, extlang)
     {
@@ -548,6 +555,37 @@ apply_ext_lang_val_pretty_printer (struct type *type,
 
   return 0;
 }
+
+int
+apply_ext_lang_val_pretty_printer (struct type *type,
+				   LONGEST embedded_offset, CORE_ADDR address,
+				   struct ui_file *stream, int recurse,
+				   struct value *val,
+				   const struct value_print_options *options,
+				   const struct language_defn *language)
+{
+  printf_filtered ("\n\n****************************************\n");
+  printf_filtered ("Enter apply_ext_lang_val_pretty_printer:\n\n");
+
+  value_debug_dump (val);
+  printf_filtered ("\n\n");
+  printf_filtered ("  Printing Type: %s\t(Size: %d)\n",
+                   type->main_type->name,
+                   TYPE_LENGTH (type));
+  printf_filtered ("Embedded Offset: %ld\n", embedded_offset);
+  printf_filtered ("        Address: %s\n", core_addr_to_string (address));
+
+  int result
+    = apply_ext_lang_val_pretty_printer_1 (type, embedded_offset, address,
+                                           stream, recurse, val, options,
+                                           language);
+
+  printf_filtered ("Leave apply_ext_lang_val_pretty_printer: %d\n", result);
+  printf_filtered ("****************************************\n\n\n");
+
+  return result;
+}
+
 
 /* GDB access to the "frame filter" feature.
    FRAME is the source frame to start frame-filter invocation.  FLAGS is an
