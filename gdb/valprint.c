@@ -1162,14 +1162,32 @@ value_print (struct value *val, struct ui_file *stream,
   if (!value_check_printable (val, stream, options))
     return;
 
-  r = apply_ext_lang_val_pretty_printer (value_type (val),
-                                         value_embedded_offset (val),
-                                         value_address (val),
-                                         stream, 0,
-                                         val, options, current_language);
+  if (value_type (val) != value_enclosing_type (val) && getenv ("APB_FIX") != NULL)
+    {
+      int embedded_offset = value_embedded_offset (val);
+
+      r = apply_ext_lang_val_pretty_printer (value_type (val),
+                                             embedded_offset,
+                                             value_address (val),
+                                             stream, 0,
+                                             val, options, current_language);
+    }
+  else
+    {
+      if (getenv ("APB_FIX") != NULL)
+        gdb_assert (value_embedded_offset (val) == 0);
+      r = apply_ext_lang_val_pretty_printer (value_type (val),
+                                             value_embedded_offset (val),
+                                             value_address (val),
+                                             stream, 0,
+                                             val, options, current_language);
+    }
 
   if (r)
-    return;
+    {
+      printf_filtered ("\n\n******* PYTHON PRETTY PRINTER USED %s:%d*******\n\n", __FILE__, __LINE__);
+      return;
+    }
 
   LA_VALUE_PRINT (val, stream, options);
 }

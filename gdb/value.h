@@ -672,6 +672,8 @@ extern struct value *value_from_pointer (struct type *type, CORE_ADDR addr);
 extern struct value *value_from_history_ref (const char *, const char **);
 extern struct value *value_from_component (struct value *, struct type *,
 					   LONGEST);
+extern struct value *value_from_component_2 (struct value *, struct type *,
+                                             LONGEST);
 
 extern struct value *value_at (struct type *type, CORE_ADDR addr);
 extern struct value *value_at_lazy (struct type *type, CORE_ADDR addr);
@@ -1187,5 +1189,8 @@ extern struct value *call_xmethod (struct value *method,
 
 extern int value_union_variant (struct type *union_type,
 				const gdb_byte *contents);
+
+
+extern void value_debug_dump (struct value *val);
 
 #endif /* !defined (VALUE_H) */

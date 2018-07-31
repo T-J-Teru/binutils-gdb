@@ -3378,6 +3378,19 @@ is_unique_ancestor (struct type *base, struct value *val)
 				    value_address (val), val) == 1;
 }
 
+/* See gdbtypes.h.  */
+
+bool
+has_virtual_baseclass (struct type *type)
+{
+  for (int i = 0; i < TYPE_N_BASECLASSES (type); i++)
+    {
+      if (BASETYPE_VIA_VIRTUAL (type, i))
+        return true;
+    }
+  return false;
+}
+
 
 /* Overload resolution.  */
 

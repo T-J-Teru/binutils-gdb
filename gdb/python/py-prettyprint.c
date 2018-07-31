@@ -667,6 +667,9 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
 
   gdb_assert (gdb_python_initialized);
 
+  printf_filtered ("\nEntering gdbpy_apply_val_pretty_printer:\n");
+  printf_filtered ("Value passed to python is: %p\n", value);
+
   gdbpy_enter enter_py (gdbarch, language);
 
   /* Instantiate the value to print.  */
