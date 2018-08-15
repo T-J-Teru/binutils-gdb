@@ -1,3 +1,8 @@
+2018-08-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cli/cli-script.c (user_args::user_args): Allow parenthesis to
+	group arguments.
+
 2018-08-14  Jan Vrany  <jan.vrany@fit.cvut.cz>
 
 	* mi/mi-cmd-disas.c (mi_cmd_disassemble): Add -a option.

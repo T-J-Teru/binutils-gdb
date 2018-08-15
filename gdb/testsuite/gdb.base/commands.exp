@@ -1125,6 +1125,41 @@ proc_with_prefix backslash_in_multi_line_command_test {} {
     gdb_test "print 1" "" "run command"
 }
 
+proc_with_prefix args_with_whitespace {} {
+    gdb_test_multiple "define show_args" "define show_args" {
+	-re "End with"  {
+	    pass "define show_args"
+	}
+    }
+
+    # This test should alternate between 0xdeadbeef and 0xfeedface two times.
+    gdb_test \
+	[multi_line_input \
+	     {printf "nargs=%d:", $argc} \
+	     {set $i = 0} \
+	     {while $i < $argc} \
+	     {printf " "} \
+	     {eval "echo '$arg%d'", $i} \
+	     {set $i = $i + 1} \
+	     {end} \
+	     {printf "\n"} \
+	     {end}] \
+	"" \
+	"enter commands"
+
+    gdb_test "show_args 1 2 3" \
+	"nargs=3: '1' '2' '3'"
+
+    gdb_test "show_args 1 (1 + 1) (1 + (1 + 1))" \
+	"nargs=3: '1' '\\(1 \\+ 1\\)' '\\(1 \\+ \\(1 \\+ 1\\)\\)'"
+
+    gdb_test "show_args ({unsigned long long} &global_var)" \
+	"nargs=1: '\\({unsigned long long} &global_var\\)'"
+
+    gdb_test "show_args (*((unsigned long long *) &global_var))" \
+	"nargs=1: '\\(\\*\\(\\(unsigned long long \\*\\) &global_var\\)\\)'"
+}
+
 gdbvar_simple_if_test
 gdbvar_simple_while_test
 gdbvar_complex_if_while_test
@@ -1154,5 +1189,6 @@ backslash_in_multi_line_command_test
 define_if_without_arg_test
 loop_break_test
 loop_continue_test
+args_with_whitespace
 # This one should come last, as it redefines "backtrace".
 redefine_backtrace_test

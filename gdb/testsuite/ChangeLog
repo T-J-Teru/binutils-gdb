@@ -1,5 +1,11 @@
 2018-08-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.base/commands.exp (args_with_whitespace): New proc, which is
+	added to the list of procs to call.
+	* gdb.base/run.c (global_var): Defined global.
+
+2018-08-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.base/commands.exp (user_defined_command_case_sensitivity):
 	Make test names unique.
 

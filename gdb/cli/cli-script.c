@@ -758,6 +758,7 @@ user_args::user_args (const char *command_line)
       int squote = 0;
       int dquote = 0;
       int bsquote = 0;
+      int pdepth = 0;
 
       /* Strip whitespace.  */
       while (*p == ' ' || *p == '\t')
@@ -769,7 +770,8 @@ user_args::user_args (const char *command_line)
       /* Get to the end of this argument.  */
       while (*p)
 	{
-	  if (((*p == ' ' || *p == '\t')) && !squote && !dquote && !bsquote)
+	  if (((*p == ' ' || *p == '\t'))
+	      && !squote && !dquote && !bsquote && pdepth == 0)
 	    break;
 	  else
 	    {
@@ -793,6 +795,10 @@ user_args::user_args (const char *command_line)
 		    squote = 1;
 		  else if (*p == '"')
 		    dquote = 1;
+		  else if (*p == '(')
+		    pdepth++;
+		  else if (*p == ')')
+		    pdepth--;
 		}
 	      p++;
 	    }
