@@ -368,8 +368,8 @@ proc_with_prefix user_defined_command_case_sensitivity {} {
 
     gdb_test "print 456\nend" "" "enter commands 2"
 
-    gdb_test "Homer-Simpson" " = 123" "execute command"
-    gdb_test "HomeR-SimpsoN" " = 456" "execute command"
+    gdb_test "Homer-Simpson" " = 123" "execute first command"
+    gdb_test "HomeR-SimpsoN" " = 456" "execute second command"
     gdb_test "HOMER-SIMPSON" "Undefined command.*" "try to call in upper case"
     gdb_test "homer-simpson" "Undefined command.*" "try to call in lower case"
 }
