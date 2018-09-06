@@ -1167,6 +1167,55 @@ proc_with_prefix backslash_in_multi_line_command_test {} {
     gdb_test "print 1" "" "run command"
 }
 
+proc_with_prefix user_defined_command_arg_quoting {} {
+
+    gdb_test_no_output "set user-defined-command-argument-scheme v2"
+
+    gdb_test_multiple "define show_args" "define show_args" {
+	-re "End with"  {
+	    pass "define show_args"
+	}
+    }
+
+    # This test should alternate between 0xdeadbeef and 0xfeedface two times.
+    gdb_test \
+	[multi_line_input \
+	     {printf "nargs=%d:", $argc} \
+	     {set $i = 0} \
+	     {while $i < $argc} \
+	     {printf " "} \
+	     {eval "echo '$arg%d'", $i} \
+	     {set $i = $i + 1} \
+	     {end} \
+	     {printf "\n"} \
+	     {end}] \
+	"" \
+	"enter commands"
+
+    gdb_test "show_args 1 2 3" \
+	"nargs=3: '1' '2' '3'"
+
+    gdb_test "show_args 1 '1 + 1' '1 + (1 + 1)'" \
+	"nargs=3: '1' '1 \\+ 1' '1 \\+ \\(1 \\+ 1\\)'"
+
+    gdb_test "show_args '{unsigned long long} &global_var'" \
+	"nargs=1: '{unsigned long long} &global_var'"
+
+    gdb_test "show_args '*((unsigned long long *) &global_var)'" \
+	"nargs=1: '\\*\\(\\(unsigned long long \\*\\) &global_var\\)'"
+
+    gdb_test "show_args '\"' \"'\" \"''\"" \
+	"nargs=3: '\"' ''' ''''"
+
+    gdb_test "show_args \\n a\\'b" \
+	"nargs=2: '\r\n' 'a'b'"
+
+    gdb_test "show_args \"This\\nIs\\nA\\nMulti Line\\nMessage" \
+	"nargs=1: 'This\r\nIs\r\nA\r\nMulti Line\r\nMessage'"
+
+    gdb_test_no_output "set user-defined-command-argument-scheme v1"
+}
+
 gdbvar_simple_if_test
 gdbvar_simple_while_test
 gdbvar_complex_if_while_test
@@ -1182,6 +1231,7 @@ user_defined_command_case_sensitivity
 user_defined_command_args_eval
 user_defined_command_args_stack_test
 user_defined_command_manyargs_test
+user_defined_command_arg_quoting
 watchpoint_command_test
 test_command_prompt_position
 deprecated_command_test

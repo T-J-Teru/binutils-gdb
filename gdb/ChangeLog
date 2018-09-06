@@ -1,3 +1,23 @@
+2018-09-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cli/cli-script.c (user_defined_command_arg_scheme_v1): New
+	static variable.
+	(user_defined_command_arg_scheme_v2): Likewise.
+	(user_defined_command_arg_scheme_names): Likewise.
+	(user_defined_command_arg_scheme_string): Likewise.
+	(show_user_defined_command_arg_scheme): New static function.
+	(user_args::m_command_line): Remove.
+	(user_args::m_args): Change type.
+	(user_args::parse_command_line_v1): New method, contains the old
+	contents of user_args::user_args.
+	(user_args::parse_command_line_v2): New method, contains code to
+	parse arguments using the new scheme.
+	(user_args::user_args): Call one of the parser methods, the old
+	content has moved into user_args::parse_command_line_v1.
+	(user_args::insert_args): Update to take account of m_args type
+	change.
+	(_initialize_cli_script): Register new set/show variable.
+
 2018-09-06  Simon Marchi  <simon.marchi@ericsson.com>
 
 	* compile/compile-c.h (generate_c_for_variable_locations):

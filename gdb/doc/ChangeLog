@@ -1,3 +1,8 @@
+2018-09-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Define): Additional documentation about argument
+	syntax.
+
 2018-08-29  Keith Seitz  <keiths@redhat.com>
 
 	* gdb.texinfo (Compiling and injecting code in GDB): Document

@@ -8,6 +8,9 @@
 
 #include "../lib/unbuffer_output.c"
 
+/* Used by commands.exp test script.  */
+volatile unsigned long long global_var = 34;
+
 int factorial (int);
 
 int

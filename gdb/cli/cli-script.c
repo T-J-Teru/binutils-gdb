@@ -58,6 +58,31 @@ static int command_nest_depth = 1;
 /* This is to prevent certain commands being printed twice.  */
 static int suppress_next_print_command_trace = 0;
 
+/* Constants used in argument parsing control switch.  */
+static const char user_defined_command_arg_scheme_v1[] = "v1";
+static const char user_defined_command_arg_scheme_v2[] = "v2";
+
+static const char *const user_defined_command_arg_scheme_names[] = {
+  user_defined_command_arg_scheme_v1,
+  user_defined_command_arg_scheme_v2,
+  NULL
+};
+
+/* The control variable for which argument parsing scheme user defined
+   commands use.  */
+static const char *user_defined_command_arg_scheme_string
+	= user_defined_command_arg_scheme_v1;
+
+static void
+show_user_defined_command_arg_scheme (struct ui_file *file, int from_tty,
+                                      struct cmd_list_element *c,
+                                      const char *value)
+{
+  fprintf_filtered (file,
+		    _("Arguments to user defined commands are parsed "
+                      "using scheme \"%s\".\n"), value);
+}
+
 /* Structure for arguments to user defined functions.  */
 
 class user_args
@@ -78,12 +103,13 @@ private:
   user_args (const user_args &) =delete;
   user_args &operator= (const user_args &) =delete;
 
-  /* It is necessary to store a copy of the command line to ensure
-     that the arguments are not overwritten before they are used.  */
-  std::string m_command_line;
+  /* We support two schemes for parsing a command line arguments into a
+     list of arguments.  */
+  void parse_command_line_v1 (const char *line);
+  void parse_command_line_v2 (const char *line);
 
-  /* The arguments.  Each element points inside M_COMMAND_LINE.  */
-  std::vector<gdb::string_view> m_args;
+  /* The arguments.  Parsed from the LINE passed into the constructor.  */
+  std::vector<std::string> m_args;
 };
 
 /* The stack of arguments passed to user defined functions.  We need a
@@ -744,17 +770,27 @@ if_command (const char *arg, int from_tty)
 
 user_args::user_args (const char *command_line)
 {
-  const char *p;
-
   if (command_line == NULL)
     return;
 
-  m_command_line = command_line;
-  p = m_command_line.c_str ();
+  if (user_defined_command_arg_scheme_string
+      == user_defined_command_arg_scheme_v1)
+    parse_command_line_v1 (command_line);
+  else
+    parse_command_line_v2 (command_line);
+}
+
+void
+user_args::parse_command_line_v1 (const char *command_line)
+{
+  gdb_assert (command_line != NULL);
+
+  const char *p = command_line;
 
   while (*p)
     {
-      const char *start_arg;
+      std::string arg;
+
       int squote = 0;
       int dquote = 0;
       int bsquote = 0;
@@ -762,9 +798,6 @@ user_args::user_args (const char *command_line)
       /* Strip whitespace.  */
       while (*p == ' ' || *p == '\t')
 	p++;
-
-      /* P now points to an argument.  */
-      start_arg = p;
 
       /* Get to the end of this argument.  */
       while (*p)
@@ -794,11 +827,75 @@ user_args::user_args (const char *command_line)
 		  else if (*p == '"')
 		    dquote = 1;
 		}
+	      arg += *p;
 	      p++;
 	    }
 	}
 
-      m_args.emplace_back (start_arg, p - start_arg);
+      m_args.emplace_back (arg);
+    }
+}
+
+/* The newer v2 scheme for parsing arguments from a command line.  This
+   scheme strips single and double quotes from arguments, thus allowing
+   quoting of expressions.  Within double quotes you can use backslash to
+   escape nested double quotes.  */
+
+void
+user_args::parse_command_line_v2 (const char *command_line)
+{
+  gdb_assert (command_line != NULL);
+
+  for (const char *p = command_line; *p != '\0'; )
+    {
+      std::string arg;
+      bool squote = false;
+      bool dquote = false;
+
+      /* Strip whitespace.  */
+      while (isspace (*p))
+	p++;
+
+      /* Get to the end of this argument.  */
+      while (*p)
+	{
+          /* If we find whitespace and we're not inside a single or double
+             quote then we have found the end of this argument.  */
+          if (isspace (*p) && !(squote || dquote))
+            break;
+          else
+            {
+              /* If we're inside a single quote and we find another single
+                 quote then this is the end of the argument.  */
+              if (*p == '\'' && !dquote)
+                {
+                  ++p;
+                  squote = !squote;
+                  continue;
+                }
+
+              /* If we're inside a double quote and we find another double
+                 quote then this is the end of the argument.  */
+              if (*p == '"' && !squote)
+                {
+                  ++p;
+                  dquote = !dquote;
+                  continue;
+                }
+
+              if (*p == '\\' && !squote)
+                {
+                  if (*(p + 1) == '\''
+                      || *(p + 1) == '"')
+                    ++p;
+                }
+            }
+
+          arg += *p;
+          ++p;
+	}
+
+      m_args.emplace_back (arg);
     }
 }
 
@@ -863,7 +960,7 @@ user_args::insert_args (const char *line) const
 	    error (_("Missing argument %ld in user function."), i);
 	  else
 	    {
-	      new_line.append (m_args[i].data (), m_args[i].length ());
+	      new_line.append (m_args[i]);
 	      line = tmp;
 	    }
 	}
@@ -1618,4 +1715,13 @@ The conditional expression must follow the word `if' and must in turn be\n\
 followed by a new line.  The nested commands must be entered one per line,\n\
 and should be terminated by the word 'else' or `end'.  If an else clause\n\
 is used, the same rules apply to its nested commands as to the first ones."));
+
+  add_setshow_enum_cmd ("user-defined-command-argument-scheme", class_support,
+			user_defined_command_arg_scheme_names,
+                        &user_defined_command_arg_scheme_string, _("\
+Set the argument parsing scheme used by user-defined commands."), _("\
+Show the argument parsing scheme used by user-defined commands."), _("\
+Write something here..."),
+			NULL, show_user_defined_command_arg_scheme,
+			&setlist, &showlist);
 }
