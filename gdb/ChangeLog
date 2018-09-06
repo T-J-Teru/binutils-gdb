@@ -1,3 +1,12 @@
+2018-09-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cli/cli-script.c (user_args::m_command_line): Remove.
+	(user_args::m_args): Change type.
+	(user_args::user_args): Rewrite to build arguments into
+	std::string.
+	(user_args::insert_args): Update to take account of m_args type
+	change.
+
 2018-09-06  Simon Marchi  <simon.marchi@ericsson.com>
 
 	* compile/compile-c.h (generate_c_for_variable_locations):

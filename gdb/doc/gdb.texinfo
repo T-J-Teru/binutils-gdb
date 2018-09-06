@@ -25245,14 +25245,70 @@ adder 1 2 3
 
 @noindent
 This defines the command @code{adder}, which prints the sum of
-its three arguments.  Note the arguments are text substitutions, so they may
-reference variables, use complex expressions, or even perform inferior
-functions calls.
+its three arguments.
+
+The arguments to user-defined commands are text substitutions, so they
+may reference variables, use complex expressions, or even perform
+inferior functions calls.  Each argument is separated with whitespace,
+so in the previous example three arguments were passed.  The following
+example also passes three arguments, though the arguments are more
+complex:
+
+@smallexample
+adder 10+1 10+2 10+3
+@end smallexample
+
+@noindent
+However, if whitespace were added around the @code{+} characters, then
+9 arguments would be passed, @code{adder} only uses the first 3 of
+these arguments, and the others would be silently ignored, for example:
+
+@smallexample
+adder 10 + 1 10 + 2 10 + 3
+@end smallexample
+
+Causes @value{GDBN} to try and evaluate the following, which is likely
+invalid:
+
+@smallexample
+print 10 + + + 1
+@end smallexample
+
+@noindent
+Arguments can be quoted with double (@code{"}) or single (@code{'})
+quotes.  These quotes are not passed through as part of the argument,
+so the complex arguments from the previous example can be written as:
+
+@smallexample
+adder '10 + 1' '10 + 2' '10 + 3'
+@end smallexample
+
+@noindent
+As the quotes are not passed through, then the previous example causes
+@value{GDBN} to evaluate:
+
+@smallexample
+print 10 + 1 + 10 + 2 + 10 + 3
+@end smallexample
+
+@noindent
+Outside of quotes, a backslash can be used to pass a quote as part of
+an argument, for example, @code{\'} will pass a single quote as an
+argument, and @code{\"} passes a double quote as an argument.
+
+Within double quotes a backslash can be used to pass a literal double
+quote, so @code{"\"abc\""} will pass the argument @code{"abc"}.
+
+Within single quotes a backslash does not escape a single quote, the
+next single quote always ends a single quoted argument, and
+backslashes within a single quoted argument are passed straight
+through, so @code{'abc\'} will pass the argument @code{abc\}.
 
 @cindex argument count in user-defined commands
 @cindex how many arguments (user-defined commands)
-In addition, @code{$argc} may be used to find out how many arguments have
-been passed.
+@noindent
+Within a user-defined command @code{$argc} may be used to find out how
+many arguments have been passed.
 
 @smallexample
 define adder

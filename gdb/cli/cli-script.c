@@ -78,12 +78,8 @@ private:
   user_args (const user_args &) =delete;
   user_args &operator= (const user_args &) =delete;
 
-  /* It is necessary to store a copy of the command line to ensure
-     that the arguments are not overwritten before they are used.  */
-  std::string m_command_line;
-
-  /* The arguments.  Each element points inside M_COMMAND_LINE.  */
-  std::vector<gdb::string_view> m_args;
+  /* The arguments.  Parsed from the LINE passed into the constructor.  */
+  std::vector<std::string> m_args;
 };
 
 /* The stack of arguments passed to user defined functions.  We need a
@@ -749,56 +745,58 @@ user_args::user_args (const char *command_line)
   if (command_line == NULL)
     return;
 
-  m_command_line = command_line;
-  p = m_command_line.c_str ();
+  p = command_line;
 
   while (*p)
     {
-      const char *start_arg;
-      int squote = 0;
-      int dquote = 0;
-      int bsquote = 0;
+      std::string arg;
+
+      bool bquote = false;
+      bool squote = false;
+      bool dquote = false;
 
       /* Strip whitespace.  */
-      while (*p == ' ' || *p == '\t')
+      while (isspace (*p))
 	p++;
-
-      /* P now points to an argument.  */
-      start_arg = p;
 
       /* Get to the end of this argument.  */
       while (*p)
 	{
-	  if (((*p == ' ' || *p == '\t')) && !squote && !dquote && !bsquote)
-	    break;
-	  else
-	    {
-	      if (bsquote)
-		bsquote = 0;
-	      else if (*p == '\\')
-		bsquote = 1;
-	      else if (squote)
-		{
-		  if (*p == '\'')
-		    squote = 0;
-		}
-	      else if (dquote)
-		{
-		  if (*p == '"')
-		    dquote = 0;
-		}
-	      else
-		{
-		  if (*p == '\'')
-		    squote = 1;
-		  else if (*p == '"')
-		    dquote = 1;
-		}
-	      p++;
-	    }
+          /* If we find whitespace and we're not inside a single or double
+             quote then we have found the end of this argument.  */
+          if (isspace (*p) && !(squote || dquote))
+            break;
+          else if (bquote)
+            bquote = 0;
+          else
+            {
+              /* If we're inside a single quote and we find another single
+                 quote then this is the end of the argument.  */
+              if (*p == '\'' && !dquote)
+                {
+                  ++p;
+                  squote = !squote;
+                  continue;
+                }
+
+              /* If we're inside a double quote and we find another double
+                 quote then this is the end of the argument.  */
+              if (*p == '"' && !squote)
+                {
+                  ++p;
+                  dquote = !dquote;
+                  continue;
+                }
+
+              if (*p == '\\' && !squote)
+                bquote = true;
+            }
+
+          arg += *p;
+          ++p;
 	}
 
-      m_args.emplace_back (start_arg, p - start_arg);
+      m_args.emplace_back (arg);
     }
 }
 
@@ -863,7 +861,7 @@ user_args::insert_args (const char *line) const
 	    error (_("Missing argument %ld in user function."), i);
 	  else
 	    {
-	      new_line.append (m_args[i].data (), m_args[i].length ());
+	      new_line.append (m_args[i]);
 	      line = tmp;
 	    }
 	}
