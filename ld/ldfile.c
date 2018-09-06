@@ -314,6 +314,7 @@ success:
      one using this one as a template.  */
   if (link_info.lto_plugin_active
       && !no_more_claiming
+      && !bfd_check_format (entry->the_bfd, bfd_archive)
       && bfd_check_format (entry->the_bfd, bfd_object))
     plugin_maybe_claim (entry);
 #endif /* ENABLE_PLUGINS */

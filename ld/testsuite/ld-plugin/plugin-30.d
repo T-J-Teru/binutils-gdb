@@ -23,4 +23,4 @@ Hello from testplugin.
 hook called: claim_file tmpdir/main.o \[@0/.* not claimed
 hook called: claim_file tmpdir/func.o \[@0/.* not claimed
 hook called: claim_file tmpdir/text.o \[@0/.* not claimed
-hook called: claim_file tmpdir/libempty.a \[@.* not claimed
+
