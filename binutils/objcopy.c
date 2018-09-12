@@ -3948,9 +3948,11 @@ discard_relocations (bfd *ibfd ATTRIBUTE_UNUSED, asection *isection)
 static void
 handle_remove_section_option (const char *section_pattern)
 {
-  if (strncmp (section_pattern, ".rela.", 6) == 0)
+  if (strncmp (section_pattern, ".rela", 5) == 0
+      && strlen (section_pattern) > 5)
     handle_remove_relocations_option (section_pattern + 5);
-  else if (strncmp (section_pattern, ".rel.", 5) == 0)
+  else if (strncmp (section_pattern, ".rel", 4) == 0
+           && strlen (section_pattern) > 4)
     handle_remove_relocations_option (section_pattern + 4);
 
   find_section_list (section_pattern, TRUE, SECTION_CONTEXT_REMOVE);

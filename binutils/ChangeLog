@@ -1,3 +1,11 @@
+2018-09-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* objcopoy.c (handle_remove_section_option): Don't assume that
+	section names begin with '.'.
+	* testsuite/binutils-all/remove-relocs-07.d: New file.
+	* testsuite/binutils-all/remove-relocs-07.s: New file.
+	* testsuite/binutils-all/remove-relocs-08.d: New file.
+
 2018-09-10  Alan Modra  <amodra@gmail.com>
 
 	PR binutils/23611
