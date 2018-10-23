@@ -1,5 +1,12 @@
 2018-10-23  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* riscv-tdep.c (riscv_read_misa_reg): Update comment, remove
+	READ_P parameter, catch and ignore register access errors from
+	either the old or new MISA location.
+	(riscv_has_feature): Update call to riscv_read_misa_reg.
+
+2018-10-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* riscv-tdep.c (riscv_register_name): Use the user-friendly names
 	for CSRs.
 
