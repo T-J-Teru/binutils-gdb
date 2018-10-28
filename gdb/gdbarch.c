@@ -5377,7 +5377,7 @@ gdbarch_find_by_info (struct gdbarch_info info)
   /* Fill in missing parts of the INFO struct using a number of
      sources: "set ..."; INFOabfd supplied; and the global
      defaults.  */
-  gdbarch_info_fill (&info);
+  info.fill ();
 
   /* Must have found some sort of architecture.  */
   gdb_assert (info.bfd_arch_info != NULL);

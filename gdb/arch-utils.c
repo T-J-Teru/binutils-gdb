@@ -704,67 +704,65 @@ initialize_current_architecture (void)
   }
 }
 
-/* Similar to init, but this time fill in the blanks.  Information is
-   obtained from the global "set ..." options and explicitly
-   initialized INFO fields.  */
+/* See gdbarch.h.  */
 
 void
-gdbarch_info_fill (struct gdbarch_info *info)
+gdbarch_info::fill ()
 {
   /* "(gdb) set architecture ...".  */
-  if (info->bfd_arch_info == NULL
+  if (this->bfd_arch_info == NULL
       && target_architecture_user)
-    info->bfd_arch_info = target_architecture_user;
+    this->bfd_arch_info = target_architecture_user;
   /* From the file.  */
-  if (info->bfd_arch_info == NULL
-      && info->abfd != NULL
-      && bfd_get_arch (info->abfd) != bfd_arch_unknown
-      && bfd_get_arch (info->abfd) != bfd_arch_obscure)
-    info->bfd_arch_info = bfd_get_arch_info (info->abfd);
+  if (this->bfd_arch_info == NULL
+      && this->abfd != NULL
+      && bfd_get_arch (this->abfd) != bfd_arch_unknown
+      && bfd_get_arch (this->abfd) != bfd_arch_obscure)
+    this->bfd_arch_info = bfd_get_arch_info (this->abfd);
   /* From the target.  */
-  if (info->target_desc != NULL)
-    info->bfd_arch_info = choose_architecture_for_target
-			   (info->target_desc, info->bfd_arch_info);
+  if (this->target_desc != NULL)
+    this->bfd_arch_info = choose_architecture_for_target
+			   (this->target_desc, this->bfd_arch_info);
   /* From the default.  */
-  if (info->bfd_arch_info == NULL)
-    info->bfd_arch_info = default_bfd_arch;
+  if (this->bfd_arch_info == NULL)
+    this->bfd_arch_info = default_bfd_arch;
 
   /* "(gdb) set byte-order ...".  */
-  if (info->byte_order == BFD_ENDIAN_UNKNOWN
+  if (this->byte_order == BFD_ENDIAN_UNKNOWN
       && target_byte_order_user != BFD_ENDIAN_UNKNOWN)
-    info->byte_order = target_byte_order_user;
+    this->byte_order = target_byte_order_user;
   /* From the INFO struct.  */
-  if (info->byte_order == BFD_ENDIAN_UNKNOWN
-      && info->abfd != NULL)
-    info->byte_order = (bfd_big_endian (info->abfd) ? BFD_ENDIAN_BIG
-			: bfd_little_endian (info->abfd) ? BFD_ENDIAN_LITTLE
+  if (this->byte_order == BFD_ENDIAN_UNKNOWN
+      && this->abfd != NULL)
+    this->byte_order = (bfd_big_endian (this->abfd) ? BFD_ENDIAN_BIG
+			: bfd_little_endian (this->abfd) ? BFD_ENDIAN_LITTLE
 			: BFD_ENDIAN_UNKNOWN);
   /* From the default.  */
-  if (info->byte_order == BFD_ENDIAN_UNKNOWN)
-    info->byte_order = default_byte_order;
-  info->byte_order_for_code = info->byte_order;
+  if (this->byte_order == BFD_ENDIAN_UNKNOWN)
+    this->byte_order = default_byte_order;
+  this->byte_order_for_code = this->byte_order;
   /* Wire the default to the last selected byte order.  */
-  default_byte_order = info->byte_order;
+  default_byte_order = this->byte_order;
 
   /* "(gdb) set osabi ...".  Handled by gdbarch_lookup_osabi.  */
   /* From the manual override, or from file.  */
-  if (info->osabi == GDB_OSABI_UNKNOWN)
-    info->osabi = gdbarch_lookup_osabi (info->abfd);
+  if (this->osabi == GDB_OSABI_UNKNOWN)
+    this->osabi = gdbarch_lookup_osabi (this->abfd);
   /* From the target.  */
 
-  if (info->osabi == GDB_OSABI_UNKNOWN && info->target_desc != NULL)
-    info->osabi = tdesc_osabi (info->target_desc);
+  if (this->osabi == GDB_OSABI_UNKNOWN && this->target_desc != NULL)
+    this->osabi = tdesc_osabi (this->target_desc);
   /* From the configured default.  */
 #ifdef GDB_OSABI_DEFAULT
-  if (info->osabi == GDB_OSABI_UNKNOWN)
-    info->osabi = GDB_OSABI_DEFAULT;
+  if (this->osabi == GDB_OSABI_UNKNOWN)
+    this->osabi = GDB_OSABI_DEFAULT;
 #endif
   /* If we still don't know which osabi to pick, pick none.  */
-  if (info->osabi == GDB_OSABI_UNKNOWN)
-    info->osabi = GDB_OSABI_NONE;
+  if (this->osabi == GDB_OSABI_UNKNOWN)
+    this->osabi = GDB_OSABI_NONE;
 
   /* Must have at least filled in the architecture.  */
-  gdb_assert (info->bfd_arch_info != NULL);
+  gdb_assert (this->bfd_arch_info != NULL);
 }
 
 /* Return "current" architecture.  If the target is running, this is

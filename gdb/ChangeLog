@@ -1,5 +1,18 @@
 2018-10-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* arch-utils.c (gdbarch_info_fill): Rename to...
+	(gdbarch_info::fill): ...this, update header comment, replace
+	parameter INFO with references to THIS.
+	* arch-utils.h (gdbarch_info_fill): Delete.
+	* gdbarch.c (gdbarch_find_by_info): Replace call to
+	gdbarch_info_fill with call to fill method.
+	* gdbarch.h: Regenerate.
+	* gdbarch.sh (struct gdbarch_info): Add fill method.
+	* i386-darwin-nat.c (darwin_check_osabi): Replace call to
+	gdbarch_info_fill with call to fill method.
+
+2018-10-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* aarch64-tdep.c (aarch64_analyze_prologue_test): Remove call to
 	gdbarch_info_init.
 	(aarch64_process_record_test): Likewise.

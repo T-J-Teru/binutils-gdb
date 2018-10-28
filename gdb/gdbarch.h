@@ -1673,6 +1673,11 @@ struct gdbarch_info
 
   /* Use default: NULL (ZERO).  */
   const struct target_desc *target_desc = NULL;
+
+  /* Fill in the fields of gdbarch_info with information that is
+     obtained from the global "set ..." options and explicitly
+     initialized INFO fields.  */
+  void fill ();
 };
 
 typedef struct gdbarch *(gdbarch_init_ftype) (struct gdbarch_info info, struct gdbarch_list *arches);

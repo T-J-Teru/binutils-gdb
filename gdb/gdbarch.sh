@@ -1497,6 +1497,11 @@ struct gdbarch_info
 
   /* Use default: NULL (ZERO).  */
   const struct target_desc *target_desc = NULL;
+
+  /* Fill in the fields of gdbarch_info with information that is
+     obtained from the global "set ..." options and explicitly
+     initialized INFO fields.  */
+  void fill ();
 };
 
 typedef struct gdbarch *(gdbarch_init_ftype) (struct gdbarch_info info, struct gdbarch_list *arches);
@@ -2403,7 +2408,7 @@ gdbarch_find_by_info (struct gdbarch_info info)
   /* Fill in missing parts of the INFO struct using a number of
      sources: "set ..."; INFOabfd supplied; and the global
      defaults.  */
-  gdbarch_info_fill (&info);
+  info.fill ();
 
   /* Must have found some sort of architecture.  */
   gdb_assert (info.bfd_arch_info != NULL);
