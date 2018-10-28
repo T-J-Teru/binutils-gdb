@@ -728,7 +728,6 @@ add_inferior_with_spaces (void)
 
   /* Setup the inferior's initial arch, based on information obtained
      from the global "set ..." options.  */
-  gdbarch_info_init (&info);
   inf->gdbarch = gdbarch_find_by_info (info);
   /* The "set ..." options reject invalid settings, so we should
      always have a valid arch by now.  */

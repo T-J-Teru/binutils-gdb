@@ -592,7 +592,6 @@ rs6000_nat_target::create_inferior (const char *exec_file,
 
   bfd_default_set_arch_mach (&abfd, arch, mach);
 
-  gdbarch_info_init (&info);
   info.bfd_arch_info = bfd_get_arch_info (&abfd);
   info.abfd = exec_bfd;
 

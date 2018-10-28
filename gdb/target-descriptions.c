@@ -532,7 +532,6 @@ target_find_description (void)
     {
       struct gdbarch_info info;
 
-      gdbarch_info_init (&info);
       info.target_desc = current_target_desc;
       if (!gdbarch_update_p (info))
 	warning (_("Architecture rejected target-supplied description"));
@@ -568,7 +567,6 @@ target_clear_description (void)
   target_desc_fetched = 0;
   current_target_desc = NULL;
 
-  gdbarch_info_init (&info);
   if (!gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__,
 		    _("Could not remove target-supplied description"));

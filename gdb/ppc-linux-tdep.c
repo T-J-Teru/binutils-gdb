@@ -1979,7 +1979,6 @@ ppu2spu_sniffer (const struct frame_unwind *self,
 
       /* Find gdbarch for SPU.  */
       struct gdbarch_info info;
-      gdbarch_info_init (&info);
       info.bfd_arch_info = bfd_lookup_arch (bfd_arch_spu, bfd_mach_spu);
       info.byte_order = BFD_ENDIAN_BIG;
       info.osabi = GDB_OSABI_LINUX;

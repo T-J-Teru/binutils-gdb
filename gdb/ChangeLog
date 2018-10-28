@@ -1,5 +1,44 @@
 2018-10-28  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* aarch64-tdep.c (aarch64_analyze_prologue_test): Remove call to
+	gdbarch_info_init.
+	(aarch64_process_record_test): Likewise.
+	* arch-utils.c (set_endian): Likewise.
+	(set_architecture): Likewise.
+	(gdbarch_from_bfd): Likewise.
+	(set_gdbarch_from_file): Likewise.
+	(initialize_current_architecture): Likewise.
+	(gdbarch_info_init): Delete.
+	* arch-utils.h (gdbarch_info_init): Delete.
+	* arm-tdep.c (arm_update_current_architecture): Remove call to
+	gdbarch_info_init.
+	(arm_record_test): Likewise.
+	* cris-tdep.c (set_cris_version): Likewise.
+	(set_cris_mode): Likewise.
+	(set_cris_dwarf2_cfi): Likewise.
+	* gdbarch.h: Regenerate.
+	* gdbarch.sh (struct gdbarch_info): Add initialisation values,
+	update comment.
+	* i386-darwin-nat.c (darwin_check_osabi): Remove call to
+	gdbarch_info_init.
+	* inferior.c (add_inferior_with_spaces): Likewise.
+	* mips-tdep.c (set_mips64_transfers_32bit_regs): Likewise.
+	(set_mipsfpu_single_command): Likewise.
+	(set_mipsfpu_double_command): Likewise.
+	(set_mipsfpu_none_command): Likewise.
+	(mips_abi_update): Likewise.
+	* osabi.c (set_osabi): Likewise.
+	* ppc-linux-tdep.c (ppu2spu_sniffer): Likewise.
+	* rs6000-nat.c (rs6000_nat_target::create_inferior): Likewise.
+	* rs6000-tdep.c (powerpc_set_soft_float): Likewise.
+	(powerpc_set_vector_abi): Likewise.
+	* selftest-arch.c (struct gdbarch_selftest): Likewise.
+	* spu-multiarch.c (spu_gdbarch): Likewise.
+	* target-descriptions.c (target_find_description): Likewise.
+	(target_clear_description): Likewise.
+
+2018-10-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* riscv-linux-nat.c (riscv_linux_nat_target::fetch_registers):
 	Add missing braces.  No functional change.
 

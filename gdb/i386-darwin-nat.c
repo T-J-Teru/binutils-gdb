@@ -491,7 +491,6 @@ darwin_check_osabi (darwin_inferior *inf, thread_t thread)
 	  return;
 	}
 
-      gdbarch_info_init (&info);
       gdbarch_info_fill (&info);
       info.byte_order = gdbarch_byte_order (target_gdbarch ());
       info.osabi = GDB_OSABI_DARWIN;

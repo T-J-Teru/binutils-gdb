@@ -3934,7 +3934,6 @@ set_cris_version (const char *ignore_args, int from_tty,
   usr_cmd_cris_version_valid = 1;
   
   /* Update the current architecture, if needed.  */
-  gdbarch_info_init (&info);
   if (!gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__, 
 		    _("cris_gdbarch_update: failed to update architecture."));
@@ -3947,7 +3946,6 @@ set_cris_mode (const char *ignore_args, int from_tty,
   struct gdbarch_info info;
 
   /* Update the current architecture, if needed.  */
-  gdbarch_info_init (&info);
   if (!gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__, 
 		    "cris_gdbarch_update: failed to update architecture.");
@@ -3960,7 +3958,6 @@ set_cris_dwarf2_cfi (const char *ignore_args, int from_tty,
   struct gdbarch_info info;
 
   /* Update the current architecture, if needed.  */
-  gdbarch_info_init (&info);
   if (!gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__, 
 		    _("cris_gdbarch_update: failed to update architecture."));

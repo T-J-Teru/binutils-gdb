@@ -629,7 +629,6 @@ set_osabi (const char *args, int from_tty, struct cmd_list_element *c)
 
   /* NOTE: At some point (true multiple architectures) we'll need to be more
      graceful here.  */
-  gdbarch_info_init (&info);
   if (! gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__, _("Updating OS ABI failed."));
 }

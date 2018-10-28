@@ -1641,22 +1641,22 @@ struct gdbarch_list
 struct gdbarch_info
 {
   /* Use default: NULL (ZERO).  */
-  const struct bfd_arch_info *bfd_arch_info;
+  const struct bfd_arch_info *bfd_arch_info = NULL;
 
   /* Use default: BFD_ENDIAN_UNKNOWN (NB: is not ZERO).  */
-  enum bfd_endian byte_order;
+  enum bfd_endian byte_order = BFD_ENDIAN_UNKNOWN;
 
-  enum bfd_endian byte_order_for_code;
+  enum bfd_endian byte_order_for_code = BFD_ENDIAN_UNKNOWN;
 
   /* Use default: NULL (ZERO).  */
-  bfd *abfd;
+  bfd *abfd = NULL;
 
   /* Use default: NULL (ZERO).  */
   union
     {
       /* Architecture-specific information.  The generic form for targets
 	 that have extra requirements.  */
-      struct gdbarch_tdep_info *tdep_info;
+      struct gdbarch_tdep_info *tdep_info = NULL;
 
       /* Architecture-specific target description data.  Numerous targets
 	 need only this, so give them an easy way to hold it.  */
@@ -1668,11 +1668,11 @@ struct gdbarch_info
       int *id;
     };
 
-  /* Use default: GDB_OSABI_UNINITIALIZED (-1).  */
-  enum gdb_osabi osabi;
+  /* Use default: GDB_OSABI_UNKNOWN (0).  */
+  enum gdb_osabi osabi = GDB_OSABI_UNKNOWN;
 
   /* Use default: NULL (ZERO).  */
-  const struct target_desc *target_desc;
+  const struct target_desc *target_desc = NULL;
 };
 
 typedef struct gdbarch *(gdbarch_init_ftype) (struct gdbarch_info info, struct gdbarch_list *arches);
