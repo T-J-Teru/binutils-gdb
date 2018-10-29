@@ -1,5 +1,12 @@
 2018-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* riscv-tdep.c (riscv_insn::decode): Update header comment.
+	(riscv_frame_this_id): Catch errors thrown while building the
+	frame cache, leave the frame id as the default, which is the outer
+	frame id.
+
+2018-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* regcache.c (reg_buffer::save): When saving the current register
 	state, ignore registers that can't be read.
 
