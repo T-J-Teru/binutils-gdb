@@ -1,3 +1,8 @@
+2018-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* regcache.c (reg_buffer::save): When saving the current register
+	state, ignore registers that can't be read.
+
 2018-02-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* configure.tgt: Add libsim.a as a dependency for riscv.

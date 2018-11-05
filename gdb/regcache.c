@@ -277,7 +277,18 @@ reg_buffer::save (register_read_ftype cooked_read)
       if (gdbarch_register_reggroup_p (gdbarch, regnum, save_reggroup))
 	{
 	  gdb_byte *dst_buf = register_buffer (regnum);
-	  enum register_status status = cooked_read (regnum, dst_buf);
+	  enum register_status status;
+
+	  TRY
+	    {
+	      status = cooked_read (regnum, dst_buf);
+	    }
+	  CATCH (ex, RETURN_MASK_ERROR)
+	    {
+	      raw_supply (regnum, NULL);
+	      status = REG_UNAVAILABLE;
+	    }
+	  END_CATCH
 
 	  gdb_assert (status != REG_UNKNOWN);
 
