@@ -1054,6 +1054,8 @@ tdesc_use_registers (struct gdbarch *gdbarch,
 		     const struct target_desc *target_desc,
 		     struct tdesc_arch_data *early_data)
 {
+  std::vector <struct reggroup*> reggroups;
+  bool new_reggroup_created_p = false;
   int num_regs = gdbarch_num_regs (gdbarch);
   struct tdesc_arch_data *data;
   htab_t reg_hash;
@@ -1080,11 +1082,29 @@ tdesc_use_registers (struct gdbarch *gdbarch,
 	*slot = reg.get ();
 	/* Add reggroup if its new.  */
 	if (!reg->group.empty ())
-	  if (reggroup_find (gdbarch, reg->group.c_str ()) == NULL)
-	    reggroup_add (gdbarch, reggroup_gdbarch_new (gdbarch,
-							 reg->group.c_str (),
-							 USER_REGGROUP));
+          {
+            struct reggroup *reggroup
+              = reggroup_find (gdbarch, reg->group.c_str ());
+            if (reggroup == NULL)
+              {
+                new_reggroup_created_p = true;
+                reggroup = reggroup_gdbarch_new (gdbarch,
+                                                 reg->group.c_str (),
+                                                 USER_REGGROUP);
+                reggroup_add (gdbarch, reggroup);
+              }
+            reggroups.push_back (reggroup);
+          }
       }
+
+  if (new_reggroup_created_p)
+    {
+      for (auto reggroup : reggroups)
+        {
+          if (reggroup_find (gdbarch, reggroup_name (reggroup)) == NULL)
+            reggroup_add (gdbarch, reggroup);
+        }
+    }
 
   /* Remove any registers which were assigned numbers by the
      architecture.  */
