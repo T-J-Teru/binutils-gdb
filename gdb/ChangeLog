@@ -1,3 +1,9 @@
+2018-11-07  Graham Markall  <graham.markall@embecosm.com>
+
+	PR gdb/23718
+	* gdb/python/python.c (execute_gdb_command): Call
+	async_enable_stdin in CATCH block.
+
 2018-11-07  Joel Brobecker  <brobecker@adacore.com>
 
 	* ada-lang.c (read_atcb): Only set task_info->called_task if
