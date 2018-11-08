@@ -60,6 +60,9 @@
 /* The stack must be 16-byte aligned.  */
 #define SP_ALIGNMENT 16
 
+/* The biggest alignment that the target supports.  */
+#define BIGGEST_ALIGNMENT 16
+
 /* Define a series of is_XXX_insn functions to check if the value INSN
    is an instance of instruction XXX.  */
 #define DECLARE_INSN(INSN_NAME, INSN_MATCH, INSN_MASK) \
@@ -1668,6 +1671,10 @@ riscv_type_alignment (struct type *t)
       return TYPE_LENGTH (t);
 
     case TYPE_CODE_ARRAY:
+      if (TYPE_VECTOR (t))
+	return std::min (TYPE_LENGTH (t), (unsigned)BIGGEST_ALIGNMENT);
+      /* FALLTHROUGH */
+
     case TYPE_CODE_COMPLEX:
       return riscv_type_alignment (TYPE_TARGET_TYPE (t));
 
