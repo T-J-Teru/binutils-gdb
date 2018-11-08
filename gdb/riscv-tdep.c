@@ -1896,13 +1896,13 @@ riscv_assign_reg_location (struct riscv_arg_info::location *loc,
 static void
 riscv_assign_stack_location (struct riscv_arg_info::location *loc,
 			     struct riscv_memory_offsets *memory,
-			     int length, int align)
+			     int length, int align, int slot_align)
 {
   loc->loc_type = riscv_arg_info::location::on_stack;
   memory->arg_offset
     = align_up (memory->arg_offset, align);
   loc->loc_data.offset = memory->arg_offset;
-  memory->arg_offset += length;
+  memory->arg_offset += align_up (length, slot_align);
   loc->c_length = length;
 
   /* Offset is always 0, either we're the first location part, in which
@@ -1947,7 +1947,7 @@ riscv_call_arg_scalar_int (struct riscv_arg_info *ainfo,
 				      cinfo->xlen, 0))
 	riscv_assign_stack_location (&ainfo->argloc[1],
 				     &cinfo->memory, cinfo->xlen,
-				     cinfo->xlen);
+				     cinfo->xlen, cinfo->xlen);
     }
   else
     {
@@ -1956,7 +1956,8 @@ riscv_call_arg_scalar_int (struct riscv_arg_info *ainfo,
       if (!riscv_assign_reg_location (&ainfo->argloc[0],
 				      &cinfo->int_regs, len, 0))
 	riscv_assign_stack_location (&ainfo->argloc[0],
-				     &cinfo->memory, len, ainfo->align);
+				     &cinfo->memory, len, ainfo->align,
+				     cinfo->xlen);
 
       if (len < ainfo->length)
 	{
@@ -1965,7 +1966,8 @@ riscv_call_arg_scalar_int (struct riscv_arg_info *ainfo,
 					  &cinfo->int_regs, len,
 					  cinfo->xlen))
 	    riscv_assign_stack_location (&ainfo->argloc[1],
-					 &cinfo->memory, len, cinfo->xlen);
+					 &cinfo->memory, len, cinfo->xlen,
+					 cinfo->xlen);
 	}
     }
 }
