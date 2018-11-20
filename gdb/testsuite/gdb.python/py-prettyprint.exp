@@ -84,6 +84,15 @@ proc run_lang_tests {exefile lang} {
 	gdb_py_test_silent_cmd "set print elements 10" "" 1
 	gdb_test "print ns" "embedded\\\\000n\.\.\.."
 	gdb_py_test_silent_cmd "set print elements 200" "" 1
+
+	gdb_test "print *virtual_base" "pp VirtualBase, x: 123" \
+	    "print using pretty-printers VirtualBase from a pointer"
+	gdb_test "print *virtual_middle_a" "pp VirtualMiddleA, x: 123, y: \\{0 <repeats 300 times>\\}" \
+	    "print using pretty-printers VirtualMiddleA from a pointer"
+	gdb_test "print *virtual_middle_b" "pp VirtualMiddleB, x: 123, y: 456" \
+	    "print using pretty-printers VirtualMiddleB from a pointer"
+	gdb_test "print *virtual_ptr" "pp Virtual, x: 123, z: 789" \
+	    "print using pretty-printers Virtual from a pointer"
     }
 
     if { ![is_address_zero_readable] } {

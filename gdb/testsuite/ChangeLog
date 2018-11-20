@@ -1,3 +1,23 @@
+2018-11-20  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.python/py-prettyprint.c (struct VirtualBase): New.
+	(struct VirtualMiddleA): New.
+	(struct VirtualMiddleB): New.
+	(struct Virtual): New.
+	(virtual_obj): New global.
+	(virtual_middle_b): New global.
+	(virtual_middle_a): New global.
+	(virtual_base): New global.
+	(virtual_ptr): New global.
+	(main): Initialise virtual_obj.
+	* gdb.python/py-prettyprint.exp (run_lang_tests): Test printing
+	new class objects.
+	* gdb.python/py-prettyprint.py (class pp_VirtualBase): New.
+	(class pp_VirtualMiddleA): New.
+	(class pp_VirtualMiddleB): New.
+	(class pp_Virtual): New.
+	(register_pretty_printers): Register new pretty printers.
+
 2018-12-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.base/annota1.exp: Update a test regexp.

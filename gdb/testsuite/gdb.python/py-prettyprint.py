@@ -142,6 +142,41 @@ class pp_vbase1 (object):
     def to_string (self):
         return "pp class name: " + self.val.type.tag
 
+class pp_VirtualBase (object):
+    def __init__ (self, val):
+        self.val = val
+
+    def to_string (self):
+        val_x = self.val['x']
+        return "pp VirtualBase, x: " + str (val_x)
+
+class pp_VirtualMiddleA (object):
+    def __init__ (self, val):
+        self.val = val
+
+    def to_string (self):
+        val_x = self.val['x']
+        val_y = self.val['y']
+        return "pp VirtualMiddleA, x: " + str (val_x) + ", y: " + str (val_y)
+
+class pp_VirtualMiddleB (object):
+    def __init__ (self, val):
+        self.val = val
+
+    def to_string (self):
+        val_x = self.val['x']
+        val_y = self.val['y']
+        return "pp VirtualMiddleB, x: " + str (val_x) + ", y: " + str (val_y)
+
+class pp_Virtual (object):
+    def __init__ (self, val):
+        self.val = val
+
+    def to_string (self):
+        val_x = self.val['x']
+        val_z = self.val['z']
+        return "pp Virtual, x: " + str (val_x) + ", z: " + str (val_z)
+
 class pp_nullstr (object):
     def __init__(self, val):
         self.val = val
@@ -330,6 +365,11 @@ def register_pretty_printers ():
     
     pretty_printers_dict[re.compile ('^VirtualTest$')] =  pp_multiple_virtual
     pretty_printers_dict[re.compile ('^Vbase1$')] =  pp_vbase1
+
+    pretty_printers_dict[re.compile ('^VirtualBase$')] = pp_VirtualBase
+    pretty_printers_dict[re.compile ('^VirtualMiddleA$')] = pp_VirtualMiddleA
+    pretty_printers_dict[re.compile ('^VirtualMiddleB$')] = pp_VirtualMiddleB
+    pretty_printers_dict[re.compile ('^Virtual$')] = pp_Virtual
 
     pretty_printers_dict[re.compile ('^struct nullstr$')] = pp_nullstr
     pretty_printers_dict[re.compile ('^nullstr$')] = pp_nullstr
