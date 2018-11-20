@@ -72,6 +72,33 @@ struct SSS
 };
 SSS::SSS (int x, const S& r) : a(x), b(r) { }
 
+
+struct VirtualBase {
+  int x;
+  virtual ~VirtualBase() {}
+};
+
+struct VirtualMiddleA : public virtual VirtualBase {
+  int y[300];
+  virtual ~VirtualMiddleA() {}
+};
+
+struct VirtualMiddleB : public virtual VirtualBase {
+  int y;
+  virtual ~VirtualMiddleB() {}
+};
+
+struct Virtual : public virtual VirtualMiddleA, public virtual VirtualMiddleB {
+  int z;
+  virtual ~Virtual() {}
+};
+
+Virtual virtual_obj;
+VirtualMiddleB *virtual_middle_b = &virtual_obj;
+VirtualMiddleA *virtual_middle_a = &virtual_obj;
+VirtualBase *virtual_base = &virtual_obj;
+Virtual *virtual_ptr = &virtual_obj;
+
 class VirtualTest 
 { 
  private: 
@@ -352,6 +379,12 @@ main ()
   Derived derived;
   
   Fake fake (42);
+
+  virtual_obj.x = 123;
+  virtual_obj.VirtualMiddleB::y = 456;
+  memset (virtual_obj.VirtualMiddleA::y, 0,
+	  sizeof (virtual_obj.VirtualMiddleA::y));
+  virtual_obj.z = 789;
 #endif
 
   add_item (&c, 23);		/* MI breakpoint here */
