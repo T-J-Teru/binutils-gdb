@@ -575,14 +575,13 @@ cp_print_value (struct type *type, struct type *real_type,
 
 	  /* Attempt to run an extension language pretty-printer on the
 	     baseclass if possible.  */
-	  if (!options->raw)
-	    result
-	      = apply_ext_lang_val_pretty_printer (baseclass,
-						   thisoffset + boffset,
-						   value_address (base_val),
-						   stream, recurse,
-						   base_val, options,
-						   current_language);
+          result
+            = apply_ext_lang_val_pretty_printer (baseclass,
+                                                 thisoffset + boffset,
+                                                 value_address (base_val),
+                                                 stream, recurse,
+                                                 base_val, options,
+                                                 current_language);
 
 	  if (!result)
 	    cp_print_value_fields (baseclass, thistype,

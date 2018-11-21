@@ -1039,14 +1039,11 @@ val_print (struct type *type, LONGEST embedded_offset,
   if (!valprint_check_validity (stream, real_type, embedded_offset, val))
     return;
 
-  if (!options->raw)
-    {
-      ret = apply_ext_lang_val_pretty_printer (type, embedded_offset,
-					       address, stream, recurse,
-					       val, options, language);
-      if (ret)
-	return;
-    }
+  ret = apply_ext_lang_val_pretty_printer (type, embedded_offset,
+                                           address, stream, recurse,
+                                           val, options, language);
+  if (ret)
+    return;
 
   /* Handle summary mode.  If the value is a scalar, print it;
      otherwise, print an ellipsis.  */
@@ -1160,21 +1157,19 @@ void
 value_print (struct value *val, struct ui_file *stream,
 	     const struct value_print_options *options)
 {
+  int r;
+
   if (!value_check_printable (val, stream, options))
     return;
 
-  if (!options->raw)
-    {
-      int r
-	= apply_ext_lang_val_pretty_printer (value_type (val),
-					     value_embedded_offset (val),
-					     value_address (val),
-					     stream, 0,
-					     val, options, current_language);
+  r = apply_ext_lang_val_pretty_printer (value_type (val),
+                                         value_embedded_offset (val),
+                                         value_address (val),
+                                         stream, 0,
+                                         val, options, current_language);
 
-      if (r)
-	return;
-    }
+  if (r)
+    return;
 
   LA_VALUE_PRINT (val, stream, options);
 }

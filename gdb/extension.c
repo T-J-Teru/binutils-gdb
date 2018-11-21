@@ -32,6 +32,7 @@
 #include "cli/cli-script.h"
 #include "python/python.h"
 #include "guile/guile.h"
+#include "valprint.h"
 
 /* Iterate over all external extension languages, regardless of whether the
    support has been compiled in or not.
@@ -494,6 +495,10 @@ apply_ext_lang_val_pretty_printer (struct type *type,
 {
   int i;
   const struct extension_language_defn *extlang;
+
+  /* In some cases pretty-printers can't be used.  */
+  if (options->raw)
+    return 0;
 
   ALL_ENABLED_EXTENSION_LANGUAGES (i, extlang)
     {
