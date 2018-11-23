@@ -1039,6 +1039,7 @@ val_print (struct type *type, LONGEST embedded_offset,
   if (!valprint_check_validity (stream, real_type, embedded_offset, val))
     return;
 
+  apb_debug (">> %s : %d\n", __FILE__, __LINE__);
   ret = apply_ext_lang_val_pretty_printer (type, embedded_offset,
                                            address, stream, recurse,
                                            val, options, language);
@@ -1162,10 +1163,13 @@ value_print (struct value *val, struct ui_file *stream,
   if (!value_check_printable (val, stream, options))
     return;
 
+  apb_debug (">> %s : %d\n", __FILE__, __LINE__);
+
   if (value_type (val) != value_enclosing_type (val) && getenv ("APB_FIX") != NULL)
     {
       int embedded_offset = value_embedded_offset (val);
 
+      apb_debug (">> %s : %d\n", __FILE__, __LINE__);
       r = apply_ext_lang_val_pretty_printer (value_type (val),
                                              embedded_offset,
                                              value_address (val),
@@ -1176,6 +1180,7 @@ value_print (struct value *val, struct ui_file *stream,
     {
       if (getenv ("APB_FIX") != NULL)
         gdb_assert (value_embedded_offset (val) == 0);
+      apb_debug (">> %s : %d\n", __FILE__, __LINE__);
       r = apply_ext_lang_val_pretty_printer (value_type (val),
                                              value_embedded_offset (val),
                                              value_address (val),
@@ -1185,7 +1190,7 @@ value_print (struct value *val, struct ui_file *stream,
 
   if (r)
     {
-      printf_filtered ("\n\n******* PYTHON PRETTY PRINTER USED %s:%d*******\n\n", __FILE__, __LINE__);
+      apb_debug ("\n\n******* PYTHON PRETTY PRINTER USED %s:%d*******\n\n", __FILE__, __LINE__);
       return;
     }
 

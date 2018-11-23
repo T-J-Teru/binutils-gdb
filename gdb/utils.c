@@ -3323,3 +3323,17 @@ _initialize_utils (void)
   selftests::register_test ("gdb_realpath", gdb_realpath_tests);
 #endif
 }
+
+
+void
+apb_debug (const char *fmt, ...)
+{
+  va_list ap;
+
+  if (getenv ("APB_DEBUG") == NULL)
+    return;
+
+  va_start (ap, fmt);
+  vprintf_filtered (fmt, ap);
+  va_end (ap);
+}

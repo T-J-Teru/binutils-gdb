@@ -3588,7 +3588,7 @@ value_from_component (struct value *whole, struct type *type, LONGEST offset)
 {
   struct value *v;
 
-  printf_filtered ("\n\n<<<<<<<<<< { value_from_component\n");
+  apb_debug ("\n\n<<<<<<<<<< { value_from_component\n");
 
   if (has_virtual_baseclass (type) && getenv ("APB_FIX") != NULL)
     {
@@ -3597,27 +3597,27 @@ value_from_component (struct value *whole, struct type *type, LONGEST offset)
 
 
       value *cpy = value_copy (whole);
-      printf_filtered ("creating a copy: %p } >>>>>>>>>>>>>>>\n\n", cpy);
+      apb_debug ("creating a copy: %p } >>>>>>>>>>>>>>>\n\n", cpy);
 
       return cpy;
     }
 
   if (VALUE_LVAL (whole) == lval_memory && value_lazy (whole))
     {
-      printf_filtered ("creating a lazy value\n");
+      apb_debug ("creating a lazy value\n");
       v = allocate_value_lazy (type);
     }
   else
     {
       v = allocate_value (type);
-      printf_filtered ("creating a new value: %p\n", v);
-      printf_filtered ("copy contents to offset: %ld\n",
+      apb_debug ("creating a new value: %p\n", v);
+      apb_debug ("copy contents to offset: %ld\n",
                        value_embedded_offset (v));
-      printf_filtered ("from offset: %ld\t\t(%ld + %ld)\n",
+      apb_debug ("from offset: %ld\t\t(%ld + %ld)\n",
                        (value_embedded_offset (whole) + offset),
                        value_embedded_offset (whole),
                        offset);
-      printf_filtered ("length: %d\n", TYPE_LENGTH (type));
+      apb_debug ("length: %d\n", TYPE_LENGTH (type));
       value_contents_copy (v, value_embedded_offset (v),
 			   whole,
                            value_embedded_offset (whole) + offset,
@@ -3629,14 +3629,14 @@ value_from_component (struct value *whole, struct type *type, LONGEST offset)
 			   TYPE_LENGTH (type));
     }
   v->offset = value_offset (whole) + offset + value_embedded_offset (whole);
-  printf_filtered ("Setting new offset to: %ld\t\t(%ld + %ld + %ld)\n",
+  apb_debug ("Setting new offset to: %ld\t\t(%ld + %ld + %ld)\n",
                    v->offset,
                    value_offset (whole),
                    offset,
                    value_embedded_offset (whole));
   set_value_component_location (v, whole);
 
-  printf_filtered ("return new value } >>>>>>>>>>>>>>>\n\n");
+  apb_debug ("return new value } >>>>>>>>>>>>>>>\n\n");
 
   return v;
 }
@@ -3844,51 +3844,51 @@ value_debug_dump (struct value *val)
 {
 #define BOOL_STRING(flag) ((flag) ? "Yes" : "No")
 
-  printf_filtered ("            Value: %p\n", ((void *) val));
-  printf_filtered ("             Lval: ");
+  apb_debug ("            Value: %p\n", ((void *) val));
+  apb_debug ("             Lval: ");
   switch (val->lval)
     {
     case not_lval:
-      printf_filtered ("not_lval\n");
+      apb_debug ("not_lval\n");
       break;
     case lval_memory:
-      printf_filtered ("lval_memory\n");
-      printf_filtered ("          Address: %s\n",
+      apb_debug ("lval_memory\n");
+      apb_debug ("          Address: %s\n",
                        core_addr_to_string (val->location.address));
       break;
     case lval_register:
-      printf_filtered ("lval_register\n");
-      printf_filtered ("         Register: %d\n", val->location.reg.regnum);
+      apb_debug ("lval_register\n");
+      apb_debug ("         Register: %d\n", val->location.reg.regnum);
       break;
     case lval_internalvar:
-      printf_filtered ("lval_internalvar\n");
+      apb_debug ("lval_internalvar\n");
       break;
     case lval_xcallable:
-      printf_filtered ("lval_xcallable\n");
+      apb_debug ("lval_xcallable\n");
       break;
     case lval_internalvar_component:
-      printf_filtered ("lval_internalvar_component\n");
+      apb_debug ("lval_internalvar_component\n");
       break;
     case lval_computed:
-      printf_filtered ("lval_computed\n");
+      apb_debug ("lval_computed\n");
       break;
     default:
-      printf_filtered ("unknown\n");
+      apb_debug ("unknown\n");
       break;
     }
-  printf_filtered ("     Contents Ptr: %p\n", ((void *) val->contents.get ()));
-  printf_filtered ("             Lazy: %s\n", BOOL_STRING (val->lazy));
-  printf_filtered ("      Initialised: %s\n", BOOL_STRING(val->initialized));
-  printf_filtered ("       From stack: %s\n", BOOL_STRING(val->stack));
-  printf_filtered ("          Bitsize: %ld\n", val->bitsize);
-  printf_filtered ("           Bitpos: %ld\n", val->bitpos);
-  printf_filtered ("           Offset: %ld\n", val->offset);
-  printf_filtered ("  Embedded Offset: %ld\n", val->embedded_offset);
-  printf_filtered ("Pointed to Offset: %ld\n", val->pointed_to_offset);
-  printf_filtered ("             Type: %s\t(Size: %d)\n",
+  apb_debug ("     Contents Ptr: %p\n", ((void *) val->contents.get ()));
+  apb_debug ("             Lazy: %s\n", BOOL_STRING (val->lazy));
+  apb_debug ("      Initialised: %s\n", BOOL_STRING(val->initialized));
+  apb_debug ("       From stack: %s\n", BOOL_STRING(val->stack));
+  apb_debug ("          Bitsize: %ld\n", val->bitsize);
+  apb_debug ("           Bitpos: %ld\n", val->bitpos);
+  apb_debug ("           Offset: %ld\n", val->offset);
+  apb_debug ("  Embedded Offset: %ld\n", val->embedded_offset);
+  apb_debug ("Pointed to Offset: %ld\n", val->pointed_to_offset);
+  apb_debug ("             Type: %s\t(Size: %d)\n",
                    (val->type ? val->type->main_type->name : "NONE"),
                    (val->type ? TYPE_LENGTH (val->type) : 0));
-  printf_filtered ("   Enclosing Type: %s\t(Size: %d)\n",
+  apb_debug ("   Enclosing Type: %s\t(Size: %d)\n",
                    (val->enclosing_type
                     ? val->enclosing_type->main_type->name : "NONE"),
                    (val->enclosing_type
