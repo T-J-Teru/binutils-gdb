@@ -468,6 +468,11 @@ ext_lang_type_printers::~ext_lang_type_printers ()
     }
 }
 
+
+extern bool get_baseclass_offset (struct type *vt, struct type *cls,
+                                  struct value *v, int *boffs, bool *isvirt);
+
+
 /* Try to pretty-print a value of type TYPE located at VAL's contents
    buffer + EMBEDDED_OFFSET, which came from the inferior at address
    ADDRESS + EMBEDDED_OFFSET, onto stdio stream STREAM according to
@@ -504,8 +509,19 @@ apply_ext_lang_val_pretty_printer_1 (struct type *type,
      content buffer.  The problem is when we access VAL's content buffer we
      already apply value_embedded_offset (VAL), which really throws things
      off.  */
-  if (getenv ("APB_FIX") != NULL)
-    embedded_offset -= value_embedded_offset (val);
+  //if (getenv ("APB_FIX") != NULL)
+  //embedded_offset -= value_embedded_offset (val);
+
+  if (value_type (val) == type
+      && value_enclosing_type (val) != value_type (val))
+    {
+      apb_debug ("APB: BUG Detected!!\n\n");
+      apb_debug ("     Correcting embedded offset from %ld to %ld\n",
+                 embedded_offset,
+                 (embedded_offset - value_embedded_offset (val)));
+      gdb_assert (embedded_offset >= value_embedded_offset (val));
+      embedded_offset -= value_embedded_offset (val);
+    }
 
   ALL_ENABLED_EXTENSION_LANGUAGES (i, extlang)
     {
@@ -564,24 +580,24 @@ apply_ext_lang_val_pretty_printer (struct type *type,
 				   const struct value_print_options *options,
 				   const struct language_defn *language)
 {
-  printf_filtered ("\n\n****************************************\n");
-  printf_filtered ("Enter apply_ext_lang_val_pretty_printer:\n\n");
+  apb_debug ("\n\n****************************************\n");
+  apb_debug ("Enter apply_ext_lang_val_pretty_printer:\n\n");
 
   value_debug_dump (val);
-  printf_filtered ("\n\n");
-  printf_filtered ("  Printing Type: %s\t(Size: %d)\n",
+  apb_debug ("\n\n");
+  apb_debug ("  Printing Type: %s\t(Size: %d)\n",
                    type->main_type->name,
                    TYPE_LENGTH (type));
-  printf_filtered ("Embedded Offset: %ld\n", embedded_offset);
-  printf_filtered ("        Address: %s\n", core_addr_to_string (address));
+  apb_debug ("Embedded Offset: %ld\n", embedded_offset);
+  apb_debug ("        Address: %s\n", core_addr_to_string (address));
 
   int result
     = apply_ext_lang_val_pretty_printer_1 (type, embedded_offset, address,
                                            stream, recurse, val, options,
                                            language);
 
-  printf_filtered ("Leave apply_ext_lang_val_pretty_printer: %d\n", result);
-  printf_filtered ("****************************************\n\n\n");
+  apb_debug ("Leave apply_ext_lang_val_pretty_printer: %d\n", result);
+  apb_debug ("****************************************\n\n\n");
 
   return result;
 }

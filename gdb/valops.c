@@ -3290,7 +3290,7 @@ compare_parameters (struct type *t1, struct type *t2, int skip_artificial)
    CLS is non-virtual in *BOFFS, set ISVIRT to indicate if CLS
    is virtual, and return true.  If not found, return false.  */
 
-static bool
+bool
 get_baseclass_offset (struct type *vt, struct type *cls,
 		      struct value *v, int *boffs, bool *isvirt)
 {

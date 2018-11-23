@@ -527,4 +527,6 @@ extern void copy_bitwise (gdb_byte *dest, ULONGEST dest_offset,
 			  const gdb_byte *source, ULONGEST source_offset,
 			  ULONGEST nbits, int bits_big_endian);
 
+extern void apb_debug (const char *fmt, ...);
+
 #endif /* UTILS_H */

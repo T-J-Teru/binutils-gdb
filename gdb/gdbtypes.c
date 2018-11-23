@@ -5628,3 +5628,4 @@ _initialize_gdbtypes (void)
 			   show_strict_type_checking,
 			   &setchecklist, &showchecklist);
 }
+

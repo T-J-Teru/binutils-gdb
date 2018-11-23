@@ -655,6 +655,9 @@ print_children (PyObject *printer, const char *hint,
     }
 }
 
+/* TYPE is the type being printed, which was fetched from the inferior at
+   ADDRESS + EMBEDDED_OFFSET.  VAL is the whole value located at ADDRESS.  */
+
 enum ext_lang_rc
 gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
 				struct value *value,

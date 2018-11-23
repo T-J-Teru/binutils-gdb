@@ -353,6 +353,7 @@ cp_print_value_fields (struct type *type, struct type *real_type,
 		  struct value_print_options opts = *options;
 
 		  opts.deref_ref = 0;
+                  offset -= value_embedded_offset (val);
 		  val_print (TYPE_FIELD_TYPE (type, i),
 			     offset + TYPE_FIELD_BITPOS (type, i) / 8,
 			     address,
@@ -534,6 +535,8 @@ cp_print_value (struct type *type, struct type *real_type,
 		  if (target_read_memory (address + boffset, buf.data (),
 					  TYPE_LENGTH (baseclass)) != 0)
 		    skip = 1;
+
+                  apb_debug ("XXXX>> Creating value for object with virtual base classes\n");
 		  base_val = value_from_contents_and_address (baseclass,
 							      buf.data (),
 							      address + boffset);
@@ -575,6 +578,7 @@ cp_print_value (struct type *type, struct type *real_type,
 
 	  /* Attempt to run an extension language pretty-printer on the
 	     baseclass if possible.  */
+          apb_debug (">> %s : %d\n", __FILE__, __LINE__);
           result
             = apply_ext_lang_val_pretty_printer (baseclass,
                                                  thisoffset + boffset,
