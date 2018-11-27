@@ -1,3 +1,11 @@
+2018-11-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* riscv-tdep.c (riscv_call_arg_struct): Don't adjust size before
+	assigning locations.
+	(riscv_return_value): Take more care not to read/write outside of
+	argument buffer.  Cast return value between the declared type and
+	the abi type.
+
 2018-11-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* regcache.c (reg_buffer::save): When saving the current register
