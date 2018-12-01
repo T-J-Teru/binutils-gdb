@@ -40,6 +40,9 @@ typedef int (CPUREG_STORE_FN) (sim_cpu *, int, unsigned char *, int);
 typedef sim_cia (PC_FETCH_FN) (sim_cpu *);
 typedef void (PC_STORE_FN) (sim_cpu *, sim_cia);
 
+/* Type of function to return the GDB XML target description.  */
+typedef const char * (GDB_TARGET_DESC_FN) (sim_cpu *, const char *);
+
 /* Pseudo baseclass for each cpu.  */
 
 typedef struct {
@@ -120,6 +123,9 @@ typedef struct {
   PC_STORE_FN *pc_store;
 #define CPU_PC_STORE(c) ((c)->base.pc_store)
 
+  /* Return a string which is a GDB XML target description.  */
+  GDB_TARGET_DESC_FN *read_target_desc;
+#define CPU_READ_TARGET_DESC(c) ((c)->base.read_target_desc)
 } sim_cpu_base;
 
 /* Create all cpus.  */

@@ -1,3 +1,14 @@
+2018-12-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* sim-main.c (extend_tdesc): New function.
+	(sim_read_tdesc): New function.
+	(initialize_cpu): Add CPU_READ_TARGET_DESC hook, and initialise
+	tdesc data.
+	(riscv_sim_close): New function.
+	* sim-main.h (_sim_cpu.tdesc): New fields.
+	(riscv_sim_close): Declare.
+	(SIM_CLOSE_HOOK): Define.
+
 2018-02-13  Mike Frysinger  <vapier@gentoo.org>
 
 	* Makefile.in: New file.

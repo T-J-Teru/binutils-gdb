@@ -1,3 +1,9 @@
+2018-12-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* remote-sim.c (gdbsim_xfer_features): New function.
+	(gdbsim_target::xfer_partial): Add support for reading target
+	features.
+
 2018-02-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* configure.tgt: Add libsim.a as a dependency for riscv.
