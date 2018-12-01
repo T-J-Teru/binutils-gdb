@@ -2339,6 +2339,128 @@ reg_store (sim_cpu *cpu, int rn, unsigned char *buf, int len)
     }
 }
 
+/* Add additional content into the target description of CPU.  The
+   additional content is made from the printf like format string FMT, along
+   with the supplied additional arguments.  */
+
+static void
+extend_tdesc (sim_cpu *cpu, const char *fmt, ...)
+{
+  int len, avail;
+  va_list ap;
+
+#define TDESC_BLK_SZ 4
+
+  if (cpu->tdesc.next == NULL)
+    {
+      cpu->tdesc.xml = malloc (TDESC_BLK_SZ);
+      cpu->tdesc.end = cpu->tdesc.xml + TDESC_BLK_SZ;
+      cpu->tdesc.next = cpu->tdesc.xml;
+    }
+
+
+  va_start (ap, fmt);
+  avail = cpu->tdesc.end - cpu->tdesc.next;
+  len = vsnprintf (cpu->tdesc.next, avail, fmt, ap);
+  va_end (ap);
+
+  if (len >= avail)
+    {
+      avail = cpu->tdesc.end - cpu->tdesc.xml;
+      avail += len;
+      avail *= 2;
+      len = cpu->tdesc.next - cpu->tdesc.xml;
+      cpu->tdesc.xml = realloc (cpu->tdesc.xml, avail);
+      cpu->tdesc.next = cpu->tdesc.xml + len;
+      cpu->tdesc.end = cpu->tdesc.xml + avail;
+
+      va_start (ap, fmt);
+      avail = cpu->tdesc.end - cpu->tdesc.next;
+      len = vsnprintf (cpu->tdesc.next, avail, fmt, ap);
+      va_end (ap);
+
+      if (len >= avail)
+        abort ();
+    }
+
+  cpu->tdesc.next += len;
+
+#undef TDESC_BLK_SZ
+}
+
+/* Return a string that is the GDB XML target description, or NULL to
+   indicate that no target description is available.  */
+
+static const char *
+sim_read_tdesc (sim_cpu *cpu, const char *annex)
+{
+  if (strcmp (annex, "target.xml") != 0)
+    return NULL;
+
+  if (cpu->tdesc.xml != NULL)
+    return cpu->tdesc.xml;
+
+  extend_tdesc (cpu, "\
+<?xml version=\"1.0\"?>\n\
+<!DOCTYPE target SYSTEM \"gdb-target.dtd\">\n\
+<target>\n\
+  <architecture>riscv:rv%d</architecture>\n",
+                RISCV_XLEN (cpu));
+
+  extend_tdesc (cpu, "  <feature name=\"org.gnu.gdb.riscv.cpu\">\n");
+
+  for (int i = SIM_RISCV_ZERO_REGNUM; i <= SIM_RISCV_T6_REGNUM; ++i)
+    {
+      const char *type_str;
+
+      if (i == SIM_RISCV_SP_REGNUM
+          || i == SIM_RISCV_GP_REGNUM
+          || i == SIM_RISCV_TP_REGNUM
+          || i == SIM_RISCV_FP_REGNUM)
+        type_str = "data_ptr";
+      else if (i == SIM_RISCV_RA_REGNUM)
+        type_str = "code_ptr";
+      else
+        type_str = "int";
+
+      extend_tdesc (cpu, "    <reg name=\"%s\" bitsize=\"%d\" type=\"%s\" regnum=\"%d\" />\n",
+                    riscv_gpr_names_abi [i - SIM_RISCV_ZERO_REGNUM],
+                    RISCV_XLEN (cpu), type_str, i);
+    }
+  extend_tdesc (cpu, "    <reg name=\"pc\" bitsize=\"%d\" type=\"code_ptr\" regnum=\"%d\" />\n",
+                RISCV_XLEN (cpu), SIM_RISCV_PC_REGNUM);
+
+  extend_tdesc (cpu, "  </feature>\n");
+
+  extend_tdesc (cpu,
+                "  <feature name=\"org.gnu.gdb.riscv.fpu\">\n"
+                "    <union id=\"riscv_double\">\n"
+                "      <field name=\"float\" type=\"ieee_single\"/>\n"
+                "      <field name=\"double\" type=\"ieee_double\"/>\n"
+                "    </union>\n\n");
+
+  for (int i = SIM_RISCV_FIRST_FP_REGNUM; i <= SIM_RISCV_LAST_FP_REGNUM; ++i)
+    extend_tdesc (cpu, "    <reg name=\"%s\" bitsize=\"%d\" type=\"%s\" regnum=\"%d\" />\n",
+                  riscv_fpr_names_abi [i - SIM_RISCV_FIRST_FP_REGNUM],
+                  RISCV_XLEN (cpu),
+                  ((RISCV_XLEN (cpu) == 64)
+                   ? "riscv_double" : "ieee_single"), i);
+
+  extend_tdesc (cpu, "    <reg name=\"fcsr\" bitsize=\"32\" type=\"int\" regnum=\"%d\" />\n",
+                SIM_RISCV_CSR_FCSR_REGNUM);
+  extend_tdesc (cpu, "    <reg name=\"fflags\" bitsize=\"32\" type=\"int\" regnum=\"%d\" />\n",
+                SIM_RISCV_CSR_FFLAGS_REGNUM);
+  extend_tdesc (cpu, "    <reg name=\"frm\" bitsize=\"32\" type=\"int\" regnum=\"%d\" />\n",
+                SIM_RISCV_CSR_FRM_REGNUM);
+
+  extend_tdesc (cpu, "  </feature>\n");
+
+  extend_tdesc (cpu, "</target>\n");
+
+  // fprintf (stderr, "%s, annex = %s:\n%s\n\n", __PRETTY_FUNCTION__, annex, cpu->tdesc.xml);
+  return cpu->tdesc.xml;
+}
+
 /* Initialize the state for a single cpu.  Usuaully this involves clearing all
    registers back to their reset state.  Should also hook up the fetch/store
    helper functions too.  */
@@ -2353,6 +2475,7 @@ void initialize_cpu (SIM_DESC sd, SIM_CPU *cpu, int mhartid)
   CPU_PC_STORE (cpu) = pc_set;
   CPU_REG_FETCH (cpu) = reg_fetch;
   CPU_REG_STORE (cpu) = reg_store;
+  CPU_READ_TARGET_DESC (cpu) = sim_read_tdesc;
 
   if (!riscv_hash[0])
     {
@@ -2396,6 +2519,10 @@ void initialize_cpu (SIM_DESC sd, SIM_CPU *cpu, int mhartid)
   cpu->csr.cycleh = 0;
   cpu->csr.instret = 0;
   cpu->csr.instreth = 0;
+
+  cpu->tdesc.xml = NULL;
+  cpu->tdesc.end = NULL;
+  cpu->tdesc.next = NULL;
 }
 
 /* Some utils don't like having a NULL environ.  */
@@ -2480,3 +2607,18 @@ void initialize_env (SIM_DESC sd, const char * const *argv,
       sp += sizeof (address_word);
     }
 }
+
+/* Sim close hook function, handle freeing up memory resources.  */
+
+void
+riscv_sim_close (SIM_DESC sd, int quitting)
+{
+  SIM_CPU *cpu = STATE_CPU (sd, 0);
+
+  if (cpu->tdesc.xml != NULL)
+    {
+      free (cpu->tdesc.xml);
+      memset (&cpu->tdesc, 0, sizeof (cpu->tdesc));
+    }
+}
+

@@ -271,6 +271,12 @@ enum sim_stop { sim_running, sim_polling, sim_exited, sim_stopped, sim_signalled
 
 void sim_stop_reason (SIM_DESC sd, enum sim_stop *reason, int *sigrc);
 
+/* Read the part of the target description found in ANNEX from the
+   simulator.  If target descriptions are not supported, or ANNEX is
+   invalid, return NULL.  ANNEX should never be NULL, and should be the
+   string "target.xml" for the top-level description.  */
+
+const char *sim_read_target_description (SIM_DESC sd, const char *annex);
 
 /* Passthru for other commands that the simulator might support.
    Simulators should be prepared to deal with any combination of NULL

@@ -1124,6 +1124,36 @@ gdbsim_xfer_memory (struct target_ops *target,
     return TARGET_XFER_E_IO;
 }
 
+/* Helper to read target description features XML from simulator.  */
+
+static enum target_xfer_status
+gdbsim_xfer_features (struct target_ops *target, const char *annex,
+                      gdb_byte *readbuf, ULONGEST offset, ULONGEST len,
+                      ULONGEST *xfered_len)
+{
+  struct sim_inferior_data *sim_data
+    = get_sim_inferior_data (current_inferior (), SIM_INSTANCE_NOT_NEEDED);
+
+  const char *xml = sim_read_target_description (sim_data->gdbsim_desc,
+                                                 annex);
+  if (xml == NULL)
+    return TARGET_XFER_E_IO;
+
+  /* Add 1 so we include the trailing null character in the output we copy
+     into READBUF.  */
+  size_t xml_len = strlen (xml) + 1;
+
+  if (offset >= xml_len)
+    return TARGET_XFER_EOF;
+
+  if ((offset + len) >= xml_len)
+    len = xml_len - offset;
+
+  memcpy (readbuf, xml + offset, len);
+  *xfered_len = len;
+  return TARGET_XFER_OK;
+}
+
 /* Target to_xfer_partial implementation.  */
 
 enum target_xfer_status
@@ -1137,6 +1167,14 @@ gdbsim_target::xfer_partial (enum target_object object,
     case TARGET_OBJECT_MEMORY:
       return gdbsim_xfer_memory (this, readbuf, writebuf, offset, len,
 				 xfered_len);
+
+    case TARGET_OBJECT_AVAILABLE_FEATURES:
+      /* We only support reading target features.  */
+      if (readbuf != NULL)
+        return gdbsim_xfer_features (this, annex, readbuf, offset,
+                                     len, xfered_len);
+      else
+        return TARGET_XFER_E_IO;
 
     default:
       return TARGET_XFER_E_IO;

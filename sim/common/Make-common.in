@@ -187,6 +187,7 @@ SIM_NEW_COMMON_OBJS = \
 	sim-signal.o \
 	sim-stop.o \
 	sim-syscall.o \
+	sim-tdesc.o \
 	sim-trace.o \
 	sim-utils.o \
 	sim-watch.o \

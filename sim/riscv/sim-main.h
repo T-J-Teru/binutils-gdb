@@ -71,6 +71,13 @@ struct _sim_cpu {
 #undef DECLARE_CSR
   } csr;
 
+  struct
+  {
+    char *xml;
+    char *next;
+    char *end;
+  } tdesc;
+
   sim_cpu_base base;
 };
 
@@ -87,6 +94,9 @@ struct sim_state {
   /* ... simulator specific members ... */
   sim_state_base base;
 };
+
+extern void riscv_sim_close (SIM_DESC sd, int quitting);
+#define SIM_CLOSE_HOOK(...) riscv_sim_close (__VA_ARGS__)
 
 extern void step_once (SIM_CPU *);
 extern void initialize_cpu (SIM_DESC, SIM_CPU *, int);
