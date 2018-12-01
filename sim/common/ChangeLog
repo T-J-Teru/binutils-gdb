@@ -1,3 +1,11 @@
+2018-12-01  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* sim-tdesc.c: New file.
+	* Make-common.in (SIM_NEW_COMMON_OBJS): Add sim-tdesc.o.
+	* sim-cpu.h (GDB_TARGET_DESC_FN): New.
+	(sim_cpu_base.read_target_desc): New.
+	(CPU_READ_TARGET_DESC): New define.
+
 2018-02-13  Mike Frysinger  <vapier@gentoo.org>
 
 	* nltvals.def: Add riscv syscall names/numbers.
