@@ -259,6 +259,10 @@ gnuv2_value_rtti_type (struct value *v, int *full, LONGEST *top, int *using_enc)
   if (rtti_type == NULL)
     return NULL;
 
+  apb_debug ("~~~~~~~~~~~~~~~~~~~~~ START ~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+
+  apb_debug ("rtti_type = %s\n", TYPE_NAME (rtti_type));
+  
   if (TYPE_N_BASECLASSES(rtti_type) > 1 &&  full && (*full) != 1)
     {
       if (top)
@@ -283,6 +287,8 @@ gnuv2_value_rtti_type (struct value *v, int *full, LONGEST *top, int *using_enc)
       if (full)
         *full=1;
     }
+
+  apb_debug ("~~~~~~~~~~~~~~~~~~~~~~ END ~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
 
   return rtti_type;
 }
