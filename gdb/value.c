@@ -1485,6 +1485,17 @@ void
 set_value_embedded_offset (struct value *value, LONGEST val)
 {
   value->embedded_offset = val;
+
+  gdb_assert (value->type != NULL);
+  gdb_assert (value->enclosing_type != NULL);
+
+  if (value->embedded_offset + TYPE_LENGTH (value->type)
+      > TYPE_LENGTH (value->enclosing_type))
+    {
+      warning (_("APB: Setting problematic embedded offset %ld, length = %d, enclosing_length = %d"),
+	       value->embedded_offset, TYPE_LENGTH (value->type),
+	       TYPE_LENGTH (value->enclosing_type));
+    }
 }
 
 LONGEST
