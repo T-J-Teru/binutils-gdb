@@ -513,9 +513,10 @@ apply_ext_lang_val_pretty_printer_1 (struct type *type,
   //embedded_offset -= value_embedded_offset (val);
 
   if (value_type (val) == type
-      && value_enclosing_type (val) != value_type (val))
+      && value_enclosing_type (val) != value_type (val)
+      && embedded_offset != 0)
     {
-      apb_debug ("APB: BUG Detected!!\n\n");
+      apb_debug ("APB: BUG Detected - embedded offset passed in is wrong:\n");
       apb_debug ("     Correcting embedded offset from %ld to %ld\n",
                  embedded_offset,
                  (embedded_offset - value_embedded_offset (val)));

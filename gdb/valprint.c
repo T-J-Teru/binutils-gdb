@@ -1182,7 +1182,7 @@ value_print (struct value *val, struct ui_file *stream,
         gdb_assert (value_embedded_offset (val) == 0);
       apb_debug (">> %s : %d\n", __FILE__, __LINE__);
       r = apply_ext_lang_val_pretty_printer (value_type (val),
-                                             value_embedded_offset (val),
+                                             0, /* value_embedded_offset (val), */
                                              value_address (val),
                                              stream, 0,
                                              val, options, current_language);

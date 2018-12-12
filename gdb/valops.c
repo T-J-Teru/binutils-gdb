@@ -3758,6 +3758,30 @@ value_full_object (struct value *argp,
       return argp;
     }
 
+  {
+    int i;
+    int min_off = 0;
+
+    for (i = 0; i < TYPE_N_BASECLASSES (value_type (argp)); ++i)
+      {
+	apb_debug ("Baseclass %d (%s) for %s\n",
+		   i,
+		   TYPE_NAME (TYPE_BASECLASS (value_type (argp), i)),
+		   TYPE_NAME (value_type (argp)));
+	int boff = baseclass_offset (value_type (argp), i,
+				     value_contents_raw (argp),
+				     value_embedded_offset (argp),
+				     value_address (argp),
+				     argp);
+	apb_debug ("\tBase offset %d\n", boff);
+
+	min_off = std::min (min_off, boff);
+      }
+
+    apb_debug ("Minimum offset to start of embedded type is %d\n",
+	       min_off);
+  }
+
   /* All other cases -- retrieve the complete object.  */
   /* Go back by the computed top_offset from the beginning of the
      object, adjusting for the embedded offset of argp if that's what
