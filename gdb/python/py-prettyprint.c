@@ -657,31 +657,19 @@ print_children (PyObject *printer, const char *hint,
 
 enum ext_lang_rc
 gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
-				struct type *type,
-				LONGEST embedded_offset, CORE_ADDR address,
+				struct value *value,
 				struct ui_file *stream, int recurse,
-				struct value *val,
 				const struct value_print_options *options,
 				const struct language_defn *language)
 {
-  struct gdbarch *gdbarch = get_type_arch (type);
-  struct value *value;
+  struct gdbarch *gdbarch = get_value_arch (value);
   enum string_repr_result print_result;
 
   gdb_assert (gdb_python_initialized);
 
-  if (value_lazy (val))
-    value_fetch_lazy (val);
-
-  /* No pretty-printer support for unavailable values.  */
-  if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
-    return EXT_LANG_RC_NOP;
-
   gdbpy_enter enter_py (gdbarch, language);
 
-  /* Instantiate the printer.  */
-  value = value_from_component (val, type, embedded_offset);
-
+  /* Instantiate the value to print.  */
   gdbpy_ref<> val_obj (value_to_value_object (value));
   if (val_obj == NULL)
     {
@@ -689,7 +677,7 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
       return EXT_LANG_RC_ERROR;
     }
 
-  /* Find the constructor.  */
+  /* Find the pretty-printer.  */
   gdbpy_ref<> printer (find_pretty_printer (val_obj.get ()));
   if (printer == NULL)
     {

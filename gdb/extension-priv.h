@@ -161,10 +161,9 @@ struct extension_language_ops
      is not recognized, and EXT_LANG_RC_ERROR if an error was encountered.  */
   enum ext_lang_rc (*apply_val_pretty_printer)
     (const struct extension_language_defn *,
-     struct type *type,
-     LONGEST embedded_offset, CORE_ADDR address,
+     struct value *value,
      struct ui_file *stream, int recurse,
-     struct value *val, const struct value_print_options *options,
+     const struct value_print_options *options,
      const struct language_defn *language);
 
   /* GDB access to the "frame filter" feature.

@@ -509,9 +509,29 @@ apply_ext_lang_val_pretty_printer (struct type *type,
       if (!ext_lang_initialized_p (extlang))
 	continue;
 
-      rc = extlang->ops->apply_val_pretty_printer (extlang, type,
-						   embedded_offset, address,
-						   stream, recurse, val,
+      /* We do this here rather than outside the loop as we only want to
+	 perform this fetch if we have an extension language available to
+	 print the value.  */
+      if (value_lazy (val))
+	value_fetch_lazy (val);
+
+      /* TODO: This is wrong in the case where TYPE has virtual base classes
+	 then the place where we start counting from might be at a negative
+	 offset from EMBEDDED_OFFSET.
+
+	 If the bytes are not available then non of the extension language
+	 can be expected to display this value.  */
+      if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
+	break;
+
+      struct value *value;
+      if (getenv ("APB_NEW") != NULL)
+	value = value_from_component_2 (val, type, embedded_offset);
+      else
+	value = value_from_component (val, type, embedded_offset);
+
+      rc = extlang->ops->apply_val_pretty_printer (extlang, value,
+						   stream, recurse,
 						   options, language);
       switch (rc)
 	{

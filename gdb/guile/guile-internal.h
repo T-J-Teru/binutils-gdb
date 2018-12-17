@@ -601,10 +601,8 @@ extern void gdbscm_preserve_values
 
 extern enum ext_lang_rc gdbscm_apply_val_pretty_printer
   (const struct extension_language_defn *,
-   struct type *type,
-   LONGEST embedded_offset, CORE_ADDR address,
+   struct value *value,
    struct ui_file *stream, int recurse,
-   struct value *val,
    const struct value_print_options *options,
    const struct language_defn *language);
 
