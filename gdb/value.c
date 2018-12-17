@@ -334,6 +334,7 @@ struct value
   struct type *enclosing_type;
   LONGEST embedded_offset = 0;
   LONGEST pointed_to_offset = 0;
+  LONGEST start_of_object_offset = 0;
 
   /* Actual contents of the value.  Target byte-order.  NULL or not
      valid if lazy is nonzero.  */
@@ -1497,6 +1498,29 @@ set_value_embedded_offset (struct value *value, LONGEST val)
 	       TYPE_LENGTH (value->enclosing_type));
     }
 }
+
+void
+set_value_start_offset (struct value *value, LONGEST val)
+{
+  value->start_of_object_offset = val;
+
+  gdb_assert (value->type != NULL);
+  gdb_assert (value->enclosing_type != NULL);
+
+  if (value->start_of_object_offset > 0)
+    warning (_("APB: Start of object offset is greater than zero"));
+  else if (value->start_of_object_offset < 0)
+    {
+      if (value->embedded_offset + value->start_of_object_offset < 0)
+	warning (_("APB: Start of object outside of object content"));
+    }
+
+  if (value->embedded_offset + value->start_of_object_offset +
+      TYPE_LENGTH (value->type)
+      > TYPE_LENGTH (value->enclosing_type))
+    warning (_("APB: Even after applying start offset, content overflowed"));
+}
+
 
 LONGEST
 value_pointed_to_offset (const struct value *value)

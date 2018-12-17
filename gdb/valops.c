@@ -3758,6 +3758,7 @@ value_full_object (struct value *argp,
       return argp;
     }
 
+  int start_of_object_offset = 0;
   {
     int i;
     int min_off = 0;
@@ -3780,6 +3781,7 @@ value_full_object (struct value *argp,
 
     apb_debug ("Minimum offset to start of embedded type is %d\n",
 	       min_off);
+    start_of_object_offset = min_off;
   }
 
   /* All other cases -- retrieve the complete object.  */
@@ -3792,6 +3794,7 @@ value_full_object (struct value *argp,
   set_value_embedded_offset (new_val, (using_enc
 				       ? top + value_embedded_offset (argp)
 				       : top));
+  set_value_start_offset (new_val, start_of_object_offset);
   return new_val;
 }
 
