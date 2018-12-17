@@ -1,3 +1,9 @@
+2018-12-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* c-exp.y (base_ptr_operator): New rule, with non-recursive
+	content taken from...
+	(ptr_operator): ...here, leaving just the recursion here.
+
 2018-12-24  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* c-exp.y (field_name): Allow DOUBLE_KEYWORD, INT_KEYWORD, LONG,

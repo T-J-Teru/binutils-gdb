@@ -1137,21 +1137,19 @@ const_or_volatile_or_space_identifier:
 	|
 	;
 
-ptr_operator:
-		ptr_operator '*'
+base_ptr_operator
+	:	'*'
 			{ insert_type (tp_pointer); }
-		const_or_volatile_or_space_identifier
-	|	'*'
-			{ insert_type (tp_pointer); }
-		const_or_volatile_or_space_identifier
+			const_or_volatile_or_space_identifier
 	|	'&'
-			{ insert_type (tp_reference); }
-	|	'&' ptr_operator
 			{ insert_type (tp_reference); }
 	|       ANDAND
 			{ insert_type (tp_rvalue_reference); }
-	|       ANDAND ptr_operator
-			{ insert_type (tp_rvalue_reference); }
+	;
+
+ptr_operator
+	:	base_ptr_operator
+	|	base_ptr_operator base_ptr_operator
 	;
 
 ptr_operator_ts: ptr_operator
