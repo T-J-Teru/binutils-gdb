@@ -506,6 +506,9 @@ apply_ext_lang_val_pretty_printer (struct type *type,
 
       if (extlang->ops->apply_val_pretty_printer == NULL)
 	continue;
+      if (!ext_lang_initialized_p (extlang))
+	continue;
+
       rc = extlang->ops->apply_val_pretty_printer (extlang, type,
 						   embedded_offset, address,
 						   stream, recurse, val,

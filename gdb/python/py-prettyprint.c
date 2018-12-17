@@ -668,14 +668,13 @@ gdbpy_apply_val_pretty_printer (const struct extension_language_defn *extlang,
   struct value *value;
   enum string_repr_result print_result;
 
+  gdb_assert (gdb_python_initialized);
+
   if (value_lazy (val))
     value_fetch_lazy (val);
 
   /* No pretty-printer support for unavailable values.  */
   if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
-    return EXT_LANG_RC_NOP;
-
-  if (!gdb_python_initialized)
     return EXT_LANG_RC_NOP;
 
   gdbpy_enter enter_py (gdbarch, language);
