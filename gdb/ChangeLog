@@ -1,3 +1,12 @@
+2018-12-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* extension.c (apply_ext_lang_val_pretty_printer): Check extension
+	langauge is initialised before calling pretty printer method.
+	* guile/scm-pretty-print.c (gdbscm_apply_val_pretty_printer):
+	Assert that the extension language is initialised, and remove
+	check.
+	* python/py-prettyprint.c (gdbpy_apply_val_pretty_printer): Likewise.
+
 2018-11-21  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* cp-valprint.c (cp_print_value): Don't check raw flag here.
