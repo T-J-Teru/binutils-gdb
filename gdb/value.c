@@ -3919,6 +3919,7 @@ value_debug_dump (struct value *val)
   apb_debug ("           Bitpos: %ld\n", val->bitpos);
   apb_debug ("           Offset: %ld\n", val->offset);
   apb_debug ("  Embedded Offset: %ld\n", val->embedded_offset);
+  apb_debug ("     Start offset: %ld\n", val->start_of_object_offset);
   apb_debug ("Pointed to Offset: %ld\n", val->pointed_to_offset);
   apb_debug ("             Type: %s\t(Size: %d)\n",
                    (val->type ? val->type->main_type->name : "NONE"),
