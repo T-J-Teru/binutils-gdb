@@ -237,6 +237,7 @@ extern LONGEST value_pointed_to_offset (const struct value *value);
 extern void set_value_pointed_to_offset (struct value *value, LONGEST val);
 extern LONGEST value_embedded_offset (const struct value *value);
 extern void set_value_embedded_offset (struct value *value, LONGEST val);
+extern void set_value_start_offset (struct value *value, LONGEST val);
 
 /* For lval_computed values, this structure holds functions used to
    retrieve and set the value (or portions of the value).
