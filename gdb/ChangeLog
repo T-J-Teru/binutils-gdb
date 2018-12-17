@@ -1,5 +1,22 @@
 2018-12-17  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* extension-priv.h (struct extension_language_ops): Change
+	signature of apply_val_pretty_printer method.
+	* extension.c (apply_ext_lang_val_pretty_printer): Build value
+	before calling language specific pretty printer.  Update call to
+	language pretty printer.
+	* guile/guile-internal.h: Update signature of value pretty printer
+	method.
+	* guile/scm-pretty-print.c (gdbscm_apply_val_pretty_printer):
+	Update signature of value pretty printer method, and remove value
+	preparation code.
+	* python/py-prettyprint.c (gdbpy_apply_val_pretty_printer):
+	Likewise.
+	* python/python-internal.h: Update signature of value pretty printer
+	method.
+
+2018-12-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* extension.c (apply_ext_lang_val_pretty_printer): Check extension
 	langauge is initialised before calling pretty printer method.
 	* guile/scm-pretty-print.c (gdbscm_apply_val_pretty_printer):

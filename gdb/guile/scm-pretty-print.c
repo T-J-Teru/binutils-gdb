@@ -934,35 +934,24 @@ ppscm_print_children (SCM printer, enum display_hint hint,
 
 enum ext_lang_rc
 gdbscm_apply_val_pretty_printer (const struct extension_language_defn *extlang,
-				 struct type *type,
-				 LONGEST embedded_offset, CORE_ADDR address,
+				 struct value *value,
 				 struct ui_file *stream, int recurse,
-				 struct value *val,
 				 const struct value_print_options *options,
 				 const struct language_defn *language)
 {
-  struct gdbarch *gdbarch = get_type_arch (type);
+  struct gdbarch *gdbarch = get_value_arch (value);
   SCM exception = SCM_BOOL_F;
   SCM printer = SCM_BOOL_F;
   SCM val_obj = SCM_BOOL_F;
-  struct value *value;
   enum display_hint hint;
   enum ext_lang_rc result = EXT_LANG_RC_NOP;
   enum string_repr_result print_result;
 
   gdb_assert (gdb_scheme_initialized);
 
-  if (value_lazy (val))
-    value_fetch_lazy (val);
-
-  /* No pretty-printer support for unavailable values.  */
-  if (!value_bytes_available (val, embedded_offset, TYPE_LENGTH (type)))
-    return EXT_LANG_RC_NOP;
-
-  /* Instantiate the printer.  */
-  value = value_from_component (val, type, embedded_offset);
-
+  /* Instantiate the value to print.  */
   val_obj = vlscm_scm_from_value (value);
+
   if (gdbscm_is_exception (val_obj))
     {
       exception = val_obj;
@@ -970,6 +959,7 @@ gdbscm_apply_val_pretty_printer (const struct extension_language_defn *extlang,
       goto done;
     }
 
+  /* Instantiate the printer.  */
   printer = ppscm_find_pretty_printer (val_obj);
 
   if (gdbscm_is_exception (printer))
