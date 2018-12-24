@@ -58,12 +58,18 @@ struct DoublyDerived : public VirtuallyDerived,
 int
 main (int argc, char **argv)
 {
+  void *v_ptr1;
+
   A *a = new B (42, 1729);
   B *b = (B *) a;
   A &ar = *b;
   B &br = (B&)ar;
   A &&arr = std::move (A (42));
   B &&brr = std::move (B (42, 1729));
+
+  A *&&aprr = std::move (a);
+  //A &&*arrp = std::move (a);
+  v_ptr1 = static_cast <void *> (aprr);
 
   Derived derived;
   DoublyDerived doublyderived;
