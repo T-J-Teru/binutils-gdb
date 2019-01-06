@@ -1,3 +1,19 @@
+2019-01-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* breakpoint.c (bpstat_clear_actions): Rename to...
+	(scoped_bpstat_clear_actions::do_bpstat_clear_actions): ...this.
+	(bpstat_do_actions): Switch from using
+	make_bpstat_clear_actions_cleanup to use
+	scoped_bpstat_clear_actions.
+	* breakpoint.h (class scoped_bpstat_clear_actions): New.
+	* infrun.c (fetch_inferior_event): Switch from using
+	make_bpstat_clear_actions_cleanup to use
+	scoped_bpstat_clear_actions.
+	* top.c (execute_command): Likewise.
+	* utils.c (do_bpstat_clear_actions_cleanup): Delete.
+	(make_bpstat_clear_actions_cleanup): Delete.
+	* utils.h (make_bpstat_clear_actions_cleanup): Delete.
+
 2019-01-06  Tom Tromey  <tom@tromey.com>
 
 	* c-exp.y (struct c_parse_state) <macro_original_text,

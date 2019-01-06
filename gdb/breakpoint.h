@@ -1682,4 +1682,37 @@ extern void print_breakpoint (breakpoint *bp);
 /* Command element for the 'commands' command.  */
 extern cmd_list_element *commands_cmd_element;
 
+/* Create an instance of this class in order to clear bpstat actions if an
+   exception is thrown.  Call the RELEASE member function in the clean
+   return case.  */
+
+class scoped_bpstat_clear_actions
+{
+public:
+  scoped_bpstat_clear_actions ()
+  { /* Nothing.  */ }
+
+  /* Destructor.  Clears partial bpstat actions if an exception occurs.  */
+  ~scoped_bpstat_clear_actions ()
+  {
+    if (!m_released)
+      do_bpstat_clear_actions ();
+  }
+
+  /* Called once the clearing is no longer needed.  */
+  void release ()
+  {
+    m_released = true;
+  }
+
+  DISABLE_COPY_AND_ASSIGN (scoped_bpstat_clear_actions);
+
+private:
+  /* Set true when the clear is no longer needed.  */
+  bool m_released = false;
+
+  /* Worker function that does the actual clear, called from destructor.  */
+  void do_bpstat_clear_actions ();
+};
+
 #endif /* !defined (BREAKPOINT_H) */

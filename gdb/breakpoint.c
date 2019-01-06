@@ -4320,7 +4320,7 @@ bpstat_num (bpstat *bsp, int *num)
 /* See breakpoint.h.  */
 
 void
-bpstat_clear_actions (void)
+scoped_bpstat_clear_actions::do_bpstat_clear_actions (void)
 {
   bpstat bs;
 
@@ -4473,7 +4473,7 @@ get_bpstat_thread ()
 void
 bpstat_do_actions (void)
 {
-  struct cleanup *cleanup_if_error = make_bpstat_clear_actions_cleanup ();
+  scoped_bpstat_clear_actions bpstat_clear_actions;
   thread_info *tp;
 
   /* Do any commands attached to breakpoint we are stopped at.  */
@@ -4487,7 +4487,7 @@ bpstat_do_actions (void)
 	break;
     }
 
-  discard_cleanups (cleanup_if_error);
+  bpstat_clear_actions.release ();
 }
 
 /* Print out the (old or new) value associated with a watchpoint.  */
