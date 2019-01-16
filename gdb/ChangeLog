@@ -1,3 +1,11 @@
+2019-02-12  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* f-exp.y (struct f77_boolean_val): Add comments.
+	(boolean_values): Remove uppercase versions, and end marker.
+	(yylex): Use ARRAY_SIZE for iterating over boolean_values array,
+	and use strncasecmp to achieve case insensitivity.  Additionally,
+	perform whitespace cleanup around this code.
+
 2019-02-11  Alan Hayward  <alan.hayward@arm.com>
 
 	* aarch64-linux-tdep.c (aarch64_linux_get_syscall_number): Check
