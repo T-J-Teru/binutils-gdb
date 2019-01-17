@@ -24,12 +24,36 @@ if { [skip_fortran_tests] } { continue }
 # Test parsing of `(kind=N)` type modifiers.
 proc test_basic_parsing_of_type_kinds {} {
     gdb_test "p ((character (kind=1)) 1)" " = 1"
+
+    gdb_test "p ((complex (kind=4)) 1)" " = \\(1,0\\)"
+    gdb_test "p ((complex (kind=8)) 1)" " = \\(1,0\\)"
+    gdb_test "p ((complex (kind=16)) 1)" " = \\(1,0\\)"
+
+    gdb_test "p ((real (kind=4)) 1)" " = 1"
+    gdb_test "p ((real (kind=8)) 1)" " = 1"
+    gdb_test "p ((real (kind=16)) 1)" " = 1"
+
+    gdb_test "p ((logical (kind=1)) 1)" " = \\.TRUE\\."
+    gdb_test "p ((logical (kind=4)) 1)" " = \\.TRUE\\."
+    gdb_test "p ((logical (kind=8)) 1)" " = \\.TRUE\\."
+
+    gdb_test "p ((integer (kind=2)) 1)" " = 1"
+    gdb_test "p ((integer (kind=4)) 1)" " = 1"
+}
+
+proc test_parsing_invalid_type_kinds {} {
+    foreach typename {complex real logical integer} {
+	foreach typesize {3 5 7 9} {
+	    gdb_test "p (($typename (kind=$typesize)) 1)" "unsupported kind $typesize for type $typename.*"
+	}
+    }
 }
 
 clean_restart
 
 if [set_lang_fortran] then {
     test_basic_parsing_of_type_kinds
+    test_parsing_invalid_type_kinds
 } else {
     warning "$test_name tests suppressed." 0
 }
