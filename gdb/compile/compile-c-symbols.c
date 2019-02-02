@@ -162,7 +162,7 @@ convert_one_symbol (compile_c_instance *context,
 		     SYMBOL_PRINT_NAME (sym.symbol));
 
 	    kind = GCC_C_SYMBOL_VARIABLE;
-	    addr = value_address (val);
+	    addr = value_address_zzz (val);
 	  }
 	  break;
 

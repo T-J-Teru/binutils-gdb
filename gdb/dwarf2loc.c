@@ -440,7 +440,7 @@ locexpr_get_frame_base (struct symbol *framefunc, struct frame_info *frame)
      dwarf2_evaluate_loc_desc returns a value representing a variable at
      that address.  The frame base address is thus this variable's
      address.  */
-  return value_address (result);
+  return value_address_zzz (result);
 }
 
 /* Vector for inferior functions as represented by LOC_BLOCK, if the inferior
@@ -497,7 +497,7 @@ loclist_get_frame_base (struct symbol *framefunc, struct frame_info *frame)
      dwarf2_evaluate_loc_desc returns a value representing a variable at
      that address.  The frame base address is thus this variable's
      address.  */
-  return value_address (result);
+  return value_address_zzz (result);
 }
 
 /* Vector for inferior functions as represented by LOC_BLOCK, if the inferior
@@ -826,7 +826,7 @@ call_site_to_target_addr (struct gdbarch *call_site_gdbarch,
 					dwarf_block->per_cu);
 	/* DW_AT_call_target is a DWARF expression, not a DWARF location.  */
 	if (VALUE_LVAL (val) == lval_memory)
-	  return value_address (val);
+	  return value_address_zzz (val);
 	else
 	  return value_as_address (val);
       }

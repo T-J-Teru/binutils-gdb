@@ -134,7 +134,7 @@ f77_print_array_1 (int nss, int ndimensions, struct type *type,
 	  f77_print_array_1 (nss + 1, ndimensions, value_type (subarray),
 			     value_contents_for_printing (subarray),
 			     value_embedded_offset (subarray),
-			     value_address (subarray),
+			     value_address_zzz (subarray),
 			     stream, recurse, subarray, options, elts);
 	  offs += dim_size;
 	  fprintf_filtered (stream, ") ");
@@ -151,7 +151,7 @@ f77_print_array_1 (int nss, int ndimensions, struct type *type,
 
 	  val_print (value_type (elt),
 		     value_embedded_offset (elt),
-		     value_address (elt), stream, recurse,
+		     value_address_zzz (elt), stream, recurse,
 		     elt, options, current_language);
 
 	  if (i != upperbound)
@@ -340,7 +340,7 @@ f_val_print (struct type *type, int embedded_offset,
 
 	      val_print (value_type (field),
 			 value_embedded_offset (field),
-			 value_address (field), stream, recurse + 1,
+			 value_address_zzz (field), stream, recurse + 1,
 			 field, options, current_language);
 
 	      ++printed_field;

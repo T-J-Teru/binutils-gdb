@@ -1531,7 +1531,7 @@ info_frame_command_core (struct frame_info *fi, bool selected_frame_p)
 	    else if (VALUE_LVAL (value) == lval_memory)
 	      {
 		printf_filtered (" Previous frame's sp at ");
-		fputs_filtered (paddress (gdbarch, value_address (value)),
+		fputs_filtered (paddress (gdbarch, value_address_zzz (value)),
 				gdb_stdout);
 		printf_filtered ("\n");
 	      }

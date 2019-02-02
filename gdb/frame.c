@@ -1107,7 +1107,7 @@ frame_register_unwind (frame_info *next_frame, int regnum,
   *optimizedp = value_optimized_out (value);
   *unavailablep = !value_entirely_available (value);
   *lvalp = VALUE_LVAL (value);
-  *addrp = value_address (value);
+  *addrp = value_address_zzz (value);
   if (*lvalp == lval_register)
     *realnump = VALUE_REGNUM (value);
   else
@@ -1217,7 +1217,7 @@ frame_unwind_register_value (frame_info *next_frame, int regnum)
 	  else if (VALUE_LVAL (value) == lval_memory)
 	    fprintf_unfiltered (gdb_stdlog, " address=%s",
 				paddress (gdbarch,
-					  value_address (value)));
+					  value_address_zzz (value)));
 	  else
 	    fprintf_unfiltered (gdb_stdlog, " computed");
 

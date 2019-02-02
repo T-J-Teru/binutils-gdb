@@ -1411,7 +1411,7 @@ encode_actions_1 (struct command_line *action,
 		    case UNOP_MEMVAL:
 		      /* Safe because we know it's a simple expression.  */
 		      tempval = evaluate_expression (exp.get ());
-		      addr = value_address (tempval);
+		      addr = value_address_zzz (tempval);
 		      /* Initialize the TYPE_LENGTH if it is a typedef.  */
 		      check_typedef (exp->elts[1].type);
 		      collect->add_memrange (target_gdbarch (),

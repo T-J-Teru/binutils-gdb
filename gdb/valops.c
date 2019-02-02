@@ -252,7 +252,7 @@ value_cast_structs (struct type *type, struct value *v2)
       if (real_type)
 	{
 	  v = value_full_object (v2, real_type, full, top, using_enc);
-	  v = value_at_lazy (real_type, value_address (v));
+	  v = value_at_lazy (real_type, value_address_zzz (v));
 	  real_type = value_type (v);
 
 	  /* We might be trying to cast to the outermost enclosing
@@ -274,9 +274,9 @@ value_cast_structs (struct type *type, struct value *v2)
       if (v)
 	{
 	  /* Downcasting is possible (t1 is superclass of v2).  */
-	  CORE_ADDR addr2 = value_address (v2);
+	  CORE_ADDR addr2 = value_address_zzz (v2);
 
-	  addr2 -= value_address (v) + value_embedded_offset (v);
+	  addr2 -= value_address_xxx (v);
 	  return value_at (type, addr2);
 	}
     }
@@ -552,7 +552,7 @@ value_cast (struct type *type, struct value *arg2)
       return arg2;
     }
   else if (VALUE_LVAL (arg2) == lval_memory)
-    return value_at_lazy (to_type, value_address (arg2));
+    return value_at_lazy (to_type, value_address_zzz (arg2));
   else
     {
       error (_("Invalid cast."));
@@ -773,7 +773,7 @@ value_dynamic_cast (struct type *type, struct value *arg)
     error (_("Couldn't determine value's most derived type for dynamic_cast"));
 
   /* Compute the most derived object's address.  */
-  addr = value_address (arg);
+  addr = value_address_zzz (arg);
   if (full)
     {
       /* Done.  */
@@ -801,7 +801,7 @@ value_dynamic_cast (struct type *type, struct value *arg)
       if (dynamic_cast_check_1 (TYPE_TARGET_TYPE (resolved_type),
 				value_contents_for_printing (tem),
 				value_embedded_offset (tem),
-				value_address (tem), tem,
+				value_address_zzz (tem), tem,
 				rtti_type, addr,
 				arg_type,
 				&result) == 1)
@@ -817,7 +817,7 @@ value_dynamic_cast (struct type *type, struct value *arg)
       && dynamic_cast_check_2 (TYPE_TARGET_TYPE (resolved_type),
 			       value_contents_for_printing (tem),
 			       value_embedded_offset (tem),
-			       value_address (tem), tem,
+			       value_address_zzz (tem), tem,
 			       rtti_type, &result) == 1)
     return value_cast (type,
 		       is_ref
@@ -1050,7 +1050,7 @@ value_assign (struct value *toval, struct value *fromval)
 	  {
 	    struct value *parent = value_parent (toval);
 
-	    changed_addr = value_address (parent) + value_offset (toval);
+	    changed_addr = value_address_zzz (parent) + value_offset (toval);
 	    changed_len = (value_bitpos (toval)
 			   + value_bitsize (toval)
 			   + HOST_CHAR_BIT - 1)
@@ -1077,7 +1077,7 @@ value_assign (struct value *toval, struct value *fromval)
 	  }
 	else
 	  {
-	    changed_addr = value_address (toval);
+	    changed_addr = value_address_zzz (toval);
 	    changed_len = type_length_units (type);
 	    dest_buffer = value_contents (fromval);
 	  }
@@ -1272,9 +1272,9 @@ value_repeat (struct value *arg1, int count)
   val = allocate_repeat_value (value_enclosing_type (arg1), count);
 
   VALUE_LVAL (val) = lval_memory;
-  set_value_address (val, value_address (arg1));
+  set_value_address (val, value_address_zzz (arg1));
 
-  read_value_memory (val, 0, value_stack (val), value_address (val),
+  read_value_memory (val, 0, value_stack (val), value_address_zzz (val),
 		     value_contents_all_raw (val),
 		     type_length_units (value_enclosing_type (val)));
 
@@ -1307,7 +1307,7 @@ address_of_variable (struct symbol *var, const struct block *b)
   if ((VALUE_LVAL (val) == lval_memory && value_lazy (val))
       || TYPE_CODE (type) == TYPE_CODE_FUNC)
     {
-      CORE_ADDR addr = value_address (val);
+      CORE_ADDR addr = value_address_zzz (val);
 
       return value_from_pointer (lookup_pointer_type (type), addr);
     }
@@ -1425,7 +1425,7 @@ value_coerce_array (struct value *arg1)
     error (_("Attempt to take address of value not located in memory."));
 
   return value_from_pointer (lookup_pointer_type (TYPE_TARGET_TYPE (type)),
-			     value_address (arg1));
+			     value_address_zzz (arg1));
 }
 
 /* Given a value which is a function, return a value which is a pointer
@@ -1440,7 +1440,7 @@ value_coerce_function (struct value *arg1)
     error (_("Attempt to take address of value not located in memory."));
 
   retval = value_from_pointer (lookup_pointer_type (value_type (arg1)),
-			       value_address (arg1));
+			       value_address_zzz (arg1));
   return retval;
 }
 
@@ -1490,8 +1490,7 @@ value_addr (struct value *arg1)
 
   /* Get target memory address.  */
   arg2 = value_from_pointer (lookup_pointer_type (value_type (arg1)),
-			     (value_address (arg1)
-			      + value_embedded_offset (arg1)));
+			     (value_address_xxx (arg1)));
 
   /* This may be a pointer to a base subobject; so remember the
      full derived object's type ...  */
@@ -1890,7 +1889,7 @@ do_search_struct_field (const char *name, struct value *arg1, LONGEST offset,
 	  boffset = baseclass_offset (type, i,
 				      value_contents_for_printing (arg1),
 				      value_embedded_offset (arg1) + offset,
-				      value_address (arg1),
+				      value_address_zzz (arg1),
 				      arg1);
 
 	  /* The virtual base class pointer might have been clobbered
@@ -1903,7 +1902,7 @@ do_search_struct_field (const char *name, struct value *arg1, LONGEST offset,
 	    {
 	      CORE_ADDR base_addr;
 
-	      base_addr = value_address (arg1) + boffset;
+	      base_addr = value_address_zzz (arg1) + boffset;
 	      v2 = value_at_lazy (basetype, base_addr);
 	      if (target_read_memory (base_addr, 
 				      value_contents_raw (v2),
@@ -2045,7 +2044,7 @@ search_struct_method (const char *name, struct value **arg1p,
 	      CORE_ADDR address;
 
 	      gdb::byte_vector tmp (TYPE_LENGTH (baseclass));
-	      address = value_address (*arg1p);
+	      address = value_address_zzz (*arg1p);
 
 	      if (target_read_memory (address + offset,
 				      tmp.data (), TYPE_LENGTH (baseclass)) != 0)
@@ -2065,7 +2064,7 @@ search_struct_method (const char *name, struct value **arg1p,
 	    }
 
 	  base_offset = baseclass_offset (type, i, base_valaddr,
-					  this_offset, value_address (base_val),
+					  this_offset, value_address_zzz (base_val),
 					  base_val);
 	}
       else
@@ -2361,7 +2360,7 @@ find_method_list (struct value **argp, const char *method,
 	  base_offset = baseclass_offset (type, i,
 					  value_contents_for_printing (*argp),
 					  value_offset (*argp) + offset,
-					  value_address (*argp), *argp);
+					  value_address_zzz (*argp), *argp);
 	}
       else /* Non-virtual base, simply use bit position from debug
 	      info.  */
@@ -3519,7 +3518,7 @@ value_struct_elt_for_reference (struct type *domain, int offset,
 		  result = allocate_value (lookup_methodptr_type (TYPE_FN_FIELD_TYPE (f, j)));
 		  cplus_make_method_ptr (value_type (result),
 					 value_contents_writeable (result),
-					 value_address (v), 0);
+					 value_address_zzz (v), 0);
 		}
 	    }
 	  return result;
@@ -3730,7 +3729,7 @@ value_full_object (struct value *argp,
   /* Go back by the computed top_offset from the beginning of the
      object, adjusting for the embedded offset of argp if that's what
      value_rtti_type used for its computation.  */
-  new_val = value_at_lazy (real_type, value_address (argp) - top +
+  new_val = value_at_lazy (real_type, value_address_zzz (argp) - top +
 			   (using_enc ? 0 : value_embedded_offset (argp)));
   deprecated_set_value_type (new_val, value_type (argp));
   set_value_embedded_offset (new_val, (using_enc

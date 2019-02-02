@@ -244,7 +244,7 @@ dump_value_to_file (const char *cmd, const char *mode, const char *file_format)
 
       if (VALUE_LVAL (val))
 	{
-	  vaddr = value_address (val);
+	  vaddr = value_address_zzz (val);
 	}
       else
 	{

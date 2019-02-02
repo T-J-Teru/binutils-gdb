@@ -1503,19 +1503,20 @@ value_lval_const (const struct value *value)
 }
 
 CORE_ADDR
-value_address (const struct value *value)
+value_address_xxx (const struct value *value)
 {
   if (value->lval != lval_memory)
     return 0;
   if (value->parent != NULL)
-    return value_address (value->parent.get ()) + value->offset;
+    return (value_address_zzz (value->parent.get ()) + value->offset
+	    + value->embedded_offset);
   if (NULL != TYPE_DATA_LOCATION (value_type (value)))
     {
       gdb_assert (PROP_CONST == TYPE_DATA_LOCATION_KIND (value_type (value)));
       return TYPE_DATA_LOCATION_ADDR (value_type (value));
     }
 
-  return value->location.address + value->offset;
+  return value->location.address + value->offset + value->embedded_offset;
 }
 
 CORE_ADDR
@@ -2671,7 +2672,7 @@ value_as_address (struct value *val)
      function, just return its address directly.  */
   if (TYPE_CODE (value_type (val)) == TYPE_CODE_FUNC
       || TYPE_CODE (value_type (val)) == TYPE_CODE_METHOD)
-    return value_address (val);
+    return value_address_zzz (val);
 
   val = coerce_array (val);
 
@@ -2948,7 +2949,7 @@ value_primitive_field (struct value *arg1, LONGEST offset,
 	boffset = baseclass_offset (arg_type, fieldno,
 				    value_contents (arg1),
 				    value_embedded_offset (arg1),
-				    value_address (arg1),
+				    value_address_zzz (arg1),
 				    arg1);
       else
 	boffset = TYPE_FIELD_BITPOS (arg_type, fieldno) / 8;
@@ -3752,7 +3753,7 @@ value_fetch_lazy_memory (struct value *val)
 {
   gdb_assert (VALUE_LVAL (val) == lval_memory);
 
-  CORE_ADDR addr = value_address (val);
+  CORE_ADDR addr = value_address_zzz (val);
   struct type *type = check_typedef (value_enclosing_type (val));
 
   if (TYPE_LENGTH (type))
@@ -3862,7 +3863,7 @@ value_fetch_lazy_register (struct value *val)
 	  else if (VALUE_LVAL (new_val) == lval_memory)
 	    fprintf_unfiltered (gdb_stdlog, " address=%s",
 				paddress (gdbarch,
-					  value_address (new_val)));
+					  value_address_zzz (new_val)));
 	  else
 	    fprintf_unfiltered (gdb_stdlog, " computed");
 

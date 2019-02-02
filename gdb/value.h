@@ -449,7 +449,15 @@ extern enum lval_type value_lval_const (const struct value *value);
    lval == lval_register, return the byte offset into the registers
    structure.  Otherwise, return 0.  The returned address
    includes the offset, if any.  */
-extern CORE_ADDR value_address (const struct value *);
+extern CORE_ADDR value_address_xxx (const struct value *);
+
+/* Use this temporarily when a call to the old value_address wasn't
+   obviously associated with an addition of value_embedded_offset.  */
+inline CORE_ADDR value_address_zzz (const struct value *v)
+{
+  gdb_assert (value_embedded_offset (v) == 0);
+  return value_address_xxx (v);
+}
 
 /* Like value_address, except the result does not include value's
    offset.  */

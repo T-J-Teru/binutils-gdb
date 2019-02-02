@@ -279,7 +279,7 @@ print_formatted (struct value *val, int size,
   int len = TYPE_LENGTH (type);
 
   if (VALUE_LVAL (val) == lval_memory)
-    next_address = value_address (val) + len;
+    next_address = value_address_zzz (val) + len;
 
   if (size)
     {
@@ -289,9 +289,9 @@ print_formatted (struct value *val, int size,
 	  {
 	    struct type *elttype = value_type (val);
 
-	    next_address = (value_address (val)
+	    next_address = (value_address_zzz (val)
 			    + val_print_string (elttype, NULL,
-						value_address (val), -1,
+						value_address_zzz (val), -1,
 						stream, options) * len);
 	  }
 	  return;
@@ -299,9 +299,9 @@ print_formatted (struct value *val, int size,
 	case 'i':
 	  /* We often wrap here if there are long symbolic names.  */
 	  wrap_here ("    ");
-	  next_address = (value_address (val)
+	  next_address = (value_address_zzz (val)
 			  + gdb_print_insn (get_type_arch (type),
-					    value_address (val), stream,
+					    value_address_zzz (val), stream,
 					    &branch_delay_insns));
 	  return;
 	}
@@ -1639,7 +1639,7 @@ x_command (const char *exp, int from_tty)
       if (/* last_format == 'i'  && */ 
 	  TYPE_CODE (value_type (val)) == TYPE_CODE_FUNC
 	   && VALUE_LVAL (val) == lval_memory)
-	next_address = value_address (val);
+	next_address = value_address_zzz (val);
       else
 	next_address = value_as_address (val);
 

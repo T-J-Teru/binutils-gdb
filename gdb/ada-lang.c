@@ -673,7 +673,7 @@ coerce_unspec_val_to_type (struct value *val, struct type *type)
       set_value_bitsize (result, value_bitsize (val));
       set_value_bitpos (result, value_bitpos (val));
       if (VALUE_LVAL (result) == lval_memory)
-	set_value_address (result, value_address (val));
+	set_value_address (result, value_address_zzz (val));
       return result;
     }
 }
@@ -1629,7 +1629,7 @@ thin_data_pntr (struct value *val)
   if (TYPE_CODE (type) == TYPE_CODE_PTR)
     return value_cast (data_type, value_copy (val));
   else
-    return value_from_longest (data_type, value_address (val));
+    return value_from_longest (data_type, value_address_zzz (val));
 }
 
 /* True iff TYPE indicates a "thick" array pointer type.  */
@@ -1695,7 +1695,7 @@ desc_bounds (struct value *arr)
       if (TYPE_CODE (type) == TYPE_CODE_PTR)
         addr = value_as_long (arr);
       else
-        addr = value_address (arr);
+        addr = value_address_zzz (arr);
 
       return
         value_from_longest (lookup_pointer_type (bounds_type),
@@ -2591,9 +2591,9 @@ ada_value_primitive_packed_val (struct value *obj, const gdb_byte *valaddr,
       int src_len = (bit_size + bit_offset + HOST_CHAR_BIT - 1) / 8;
       gdb_byte *buf;
 
-      v = value_at (type, value_address (obj) + offset);
+      v = value_at (type, value_address_zzz (obj) + offset);
       buf = (gdb_byte *) alloca (src_len);
-      read_memory (value_address (v), buf, src_len);
+      read_memory (value_address_zzz (v), buf, src_len);
       src = buf;
     }
   else
@@ -2677,7 +2677,7 @@ ada_value_assign (struct value *toval, struct value *fromval)
       int from_size;
       gdb_byte *buffer = (gdb_byte *) alloca (len);
       struct value *val;
-      CORE_ADDR to_addr = value_address (toval);
+      CORE_ADDR to_addr = value_address_zzz (toval);
 
       if (TYPE_CODE (type) == TYPE_CODE_FLT)
         fromval = value_cast (type, fromval);
@@ -2724,7 +2724,7 @@ value_assign_to_component (struct value *container, struct value *component,
 			   struct value *val)
 {
   LONGEST offset_in_container =
-    (LONGEST)  (value_address (component) - value_address (container));
+    (LONGEST)  (value_address_zzz (component) - value_address_zzz (container));
   int bit_offset_in_container =
     value_bitpos (component) - value_bitpos (container);
   int bits;
@@ -4522,7 +4522,7 @@ value_pointer (struct value *value, struct type *type)
   gdb_byte *buf = (gdb_byte *) alloca (len);
   CORE_ADDR addr;
 
-  addr = value_address (value);
+  addr = value_address_zzz (value);
   gdbarch_address_to_pointer (gdbarch, type, buf, addr);
   addr = extract_unsigned_integer (buf, len, gdbarch_byte_order (gdbarch));
   return addr;
@@ -6765,7 +6765,7 @@ ada_tag_value_at_base_address (struct value *obj)
   if (offset_to_top > 0)
     offset_to_top = -offset_to_top;
 
-  base_address = value_address (obj) + offset_to_top;
+  base_address = value_address_zzz (obj) + offset_to_top;
   tag = value_tag_from_contents_and_address (obj_type, NULL, base_address);
 
   /* Make sure that we have a proper tag at the new address.
@@ -7569,9 +7569,9 @@ ada_value_struct_elt (struct value *arg, const char *name, int no_err)
       CORE_ADDR address;
 
       if (TYPE_CODE (t) == TYPE_CODE_PTR)
-	address = value_address (ada_value_ind (arg));
+	address = value_address_zzz (ada_value_ind (arg));
       else
-	address = value_address (ada_coerce_ref (arg));
+	address = value_address_zzz (ada_coerce_ref (arg));
 
       /* Check to see if this is a tagged type.  We also need to handle
          the case where the type is a reference to a tagged type, but
@@ -9057,7 +9057,7 @@ ada_to_fixed_type_1 (struct type *type, const gdb_byte *valaddr,
             if (real_type != NULL)
               return to_fixed_record_type
 		(real_type, NULL,
-		 value_address (ada_tag_value_at_base_address (obj)), NULL);
+		 value_address_zzz (ada_tag_value_at_base_address (obj)), NULL);
           }
 
         /* Check to see if there is a parallel ___XVZ variable.
@@ -9326,7 +9326,7 @@ struct value *
 ada_to_fixed_value (struct value *val)
 {
   val = unwrap_value (val);
-  val = ada_to_fixed_value_create (value_type (val), value_address (val), val);
+  val = ada_to_fixed_value_create (value_type (val), value_address_zzz (val), val);
   return val;
 }
 
@@ -9676,7 +9676,7 @@ unwrap_value (struct value *val)
       return
         coerce_unspec_val_to_type
         (val, ada_to_fixed_type (raw_real_type, 0,
-                                 value_address (val),
+                                 value_address_zzz (val),
                                  NULL, 1));
     }
 }
@@ -12348,7 +12348,7 @@ ada_exception_message_1 (void)
     return NULL;
 
   gdb::unique_xmalloc_ptr<char> e_msg ((char *) xmalloc (e_msg_len + 1));
-  read_memory_string (value_address (e_msg_val), e_msg.get (), e_msg_len + 1);
+  read_memory_string (value_address_zzz (e_msg_val), e_msg.get (), e_msg_len + 1);
   e_msg.get ()[e_msg_len] = '\0';
 
   return e_msg;
