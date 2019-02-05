@@ -1788,7 +1788,6 @@ fputs_maybe_filtered (const char *linebuffer, struct ui_file *stream,
 	      if (wrap_column)
 		{
 		  emit_style_escape (ui_file_style ());
-		  flush_wrap_buffer (stream);
 		  fputc_unfiltered ('\n', stream);
 		}
 

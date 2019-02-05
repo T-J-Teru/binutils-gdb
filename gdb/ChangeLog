@@ -1,3 +1,8 @@
+2019-02-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* utils.c (fputs_maybe_filtered): Don't flush the line wrap buffer
+	before inserting a newline for line-wrapping.
+
 2019-01-30  Tom Tromey  <tom@tromey.com>
 
 	PR python/23615:
