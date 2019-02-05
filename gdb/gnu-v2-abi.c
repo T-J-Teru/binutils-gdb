@@ -340,7 +340,7 @@ vb_match (struct type *type, int index, struct type *basetype)
 
 static int
 gnuv2_baseclass_offset (struct type *type, int index,
-			const bfd_byte *valaddr, LONGEST embedded_offset,
+			const bfd_byte *valaddr,
 			CORE_ADDR address, const struct value *val)
 {
   struct type *basetype = TYPE_BASECLASS (type, index);
@@ -366,15 +366,15 @@ gnuv2_baseclass_offset (struct type *type, int index,
 	      field_offset = TYPE_FIELD_BITPOS (type, i) / 8;
 	      field_length = TYPE_LENGTH (field_type);
 
-	      if (!value_bytes_available (val, embedded_offset + field_offset,
+	      if (!value_bytes_available (val, field_offset,
 					  field_length))
 		throw_error (NOT_AVAILABLE_ERROR,
 			     _("Virtual baseclass pointer is not available"));
 
 	      addr = unpack_pointer (field_type,
-				     valaddr + embedded_offset + field_offset);
+				     valaddr + field_offset);
 
-	      return addr - (LONGEST) address + embedded_offset;
+	      return addr - (LONGEST) address;
 	    }
 	}
       /* Not in the fields, so try looking through the baseclasses.  */
@@ -384,8 +384,7 @@ gnuv2_baseclass_offset (struct type *type, int index,
 	     exceptions, thus, inner exceptions would be wrapped more
 	     than once.  */
 	  int boffset =
-	    gnuv2_baseclass_offset (type, i, valaddr,
-				    embedded_offset, address, val);
+	    gnuv2_baseclass_offset (type, i, valaddr, address, val);
 
 	  if (boffset)
 	    return boffset;

@@ -635,9 +635,9 @@ dynamic_cast_check_1 (struct type *desired_type,
 
   for (i = 0; i < TYPE_N_BASECLASSES (search_type) && result_count < 2; ++i)
     {
-      LONGEST offset = baseclass_offset (search_type, i, valaddr,
-					 embedded_offset,
-					 address, val);
+      fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+      LONGEST offset = baseclass_offset (search_type, i, valaddr + embedded_offset,
+					 address + embedded_offset, val);
 
       if (class_types_same_p (desired_type, TYPE_BASECLASS (search_type, i)))
 	{
@@ -686,8 +686,9 @@ dynamic_cast_check_2 (struct type *desired_type,
       if (! BASETYPE_VIA_PUBLIC (search_type, i))
 	continue;
 
-      offset = baseclass_offset (search_type, i, valaddr, embedded_offset,
-				 address, val);
+      fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+      offset = baseclass_offset (search_type, i, valaddr + embedded_offset,
+				 address + embedded_offset, val);
       if (class_types_same_p (desired_type, TYPE_BASECLASS (search_type, i)))
 	{
 	  ++result_count;
@@ -1887,9 +1888,8 @@ do_search_struct_field (const char *name, struct value *arg1, LONGEST offset,
 	  struct value *v2;
 
 	  boffset = baseclass_offset (type, i,
-				      value_contents_for_printing (arg1),
-				      value_embedded_offset (arg1) + offset,
-				      value_address_zzz (arg1),
+				      value_contents (arg1) + offset,
+				      value_address_xxx (arg1) + offset,
 				      arg1);
 
 	  /* The virtual base class pointer might have been clobbered
@@ -2063,8 +2063,9 @@ search_struct_method (const char *name, struct value **arg1p,
 	      this_offset = offset;
 	    }
 
-	  base_offset = baseclass_offset (type, i, base_valaddr,
-					  this_offset, value_address_zzz (base_val),
+	  fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+	  base_offset = baseclass_offset (type, i, base_valaddr + this_offset,
+					  value_address_zzz (base_val) + this_offset,
 					  base_val);
 	}
       else
@@ -2357,10 +2358,10 @@ find_method_list (struct value **argp, const char *method,
 
       if (BASETYPE_VIA_VIRTUAL (type, i))
 	{
+	  fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
 	  base_offset = baseclass_offset (type, i,
-					  value_contents_for_printing (*argp),
-					  value_offset (*argp) + offset,
-					  value_address_zzz (*argp), *argp);
+					  value_contents (*argp) + value_offset (*argp) + offset,
+					  value_address_zzz (*argp) + value_offset (*argp) + offset, *argp);
 	}
       else /* Non-virtual base, simply use bit position from debug
 	      info.  */
@@ -3282,8 +3283,9 @@ get_baseclass_offset (struct type *vt, struct type *cls,
           if (BASETYPE_VIA_VIRTUAL (vt, i))
             {
 	      const gdb_byte *adr = value_contents_for_printing (v);
-	      *boffs = baseclass_offset (vt, i, adr, value_offset (v),
-					 value_as_long (v), v);
+	      fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+	      *boffs = baseclass_offset (vt, i, adr + value_offset (v),
+					 value_as_long (v) + value_offset (v), v);
 	      *isvirt = true;
             }
           else
@@ -3296,8 +3298,9 @@ get_baseclass_offset (struct type *vt, struct type *cls,
 	  if (*isvirt == false)	/* Add non-virtual base offset.  */
 	    {
 	      const gdb_byte *adr = value_contents_for_printing (v);
-	      *boffs += baseclass_offset (vt, i, adr, value_offset (v),
-					  value_as_long (v), v);
+	      fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+	      *boffs += baseclass_offset (vt, i, adr + value_offset (v),
+					  value_as_long (v) + value_offset (v), v);
 	    }
 	  return true;
 	}

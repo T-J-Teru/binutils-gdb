@@ -3294,8 +3294,9 @@ is_unique_ancestor_worker (struct type *base, struct type *dclass,
 
       iter = check_typedef (TYPE_BASECLASS (dclass, i));
 
-      this_offset = baseclass_offset (dclass, i, valaddr, embedded_offset,
-				      address, val);
+      fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+      this_offset = baseclass_offset (dclass, i, valaddr + embedded_offset,
+				      address + embedded_offset, val);
 
       if (class_types_same_p (base, iter))
 	{

@@ -518,7 +518,8 @@ cp_print_value (struct type *type, struct type *real_type,
 
       try
 	{
-	  boffset = baseclass_offset (type, i, valaddr, offset, address, val);
+	  fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+	  boffset = baseclass_offset (type, i, valaddr + offset, address + offset, val);
 	}
       catch (const gdb_exception_error &ex)
 	{

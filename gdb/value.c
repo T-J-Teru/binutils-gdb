@@ -2946,11 +2946,13 @@ value_primitive_field (struct value *arg1, LONGEST offset,
 	 requires access to the contents, which we would rather avoid
 	 for references to ordinary fields of unavailable values.  */
       if (BASETYPE_VIA_VIRTUAL (arg_type, fieldno))
-	boffset = baseclass_offset (arg_type, fieldno,
-				    value_contents (arg1),
-				    value_embedded_offset (arg1),
-				    value_address_zzz (arg1),
-				    arg1);
+	{
+	  fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+	  boffset = baseclass_offset (arg_type, fieldno,
+				      value_contents (arg1),
+				      value_address_xxx (arg1),
+				      arg1);
+	}
       else
 	boffset = TYPE_FIELD_BITPOS (arg_type, fieldno) / 8;
 

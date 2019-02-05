@@ -66,8 +66,7 @@ is_operator_name (const char *name)
 
 int
 baseclass_offset (struct type *type, int index, const gdb_byte *valaddr,
-		  LONGEST embedded_offset, CORE_ADDR address,
-		  const struct value *val)
+		  CORE_ADDR address, const struct value *val)
 {
   int res = 0;
 
@@ -76,7 +75,6 @@ baseclass_offset (struct type *type, int index, const gdb_byte *valaddr,
   try
     {
       res = (*current_cp_abi.baseclass_offset) (type, index, valaddr,
-						embedded_offset,
 						address, val);
     }
   catch (const gdb_exception_error &ex)

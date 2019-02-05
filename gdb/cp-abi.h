@@ -138,15 +138,13 @@ extern struct type *value_rtti_type (struct value *value,
                                      int *full, LONGEST *top,
 				     int *using_enc);
 
-/* Compute the offset of the baseclass which is the INDEXth baseclass
-   of class TYPE, for value at VALADDR (in host) at ADDRESS (in
-   target), offset by EMBEDDED_OFFSET.  VALADDR points to the raw
-   contents of VAL.  The result is the offset of the baseclass value
-   relative to (the address of)(ARG) + OFFSET.  */
+/* Compute the offset of the baseclass which is the INDEXth baseclass of
+   class TYPE, for value at VALADDR (in host) at ADDRESS (in target).
+   VALADDR points to the raw contents of VAL.  The result is the offset of
+   the baseclass value relative to (the address of)(ARG) + OFFSET.  */
 
 extern int baseclass_offset (struct type *type,
 			     int index, const gdb_byte *valaddr,
-			     LONGEST embedded_offset,
 			     CORE_ADDR address,
 			     const struct value *val);
 
@@ -230,7 +228,7 @@ struct cp_abi_ops
   struct type *(*rtti_type) (struct value *v, int *full,
 			     LONGEST *top, int *using_enc);
   int (*baseclass_offset) (struct type *type, int index,
-			   const bfd_byte *valaddr, LONGEST embedded_offset,
+			   const bfd_byte *valaddr,
 			   CORE_ADDR address, const struct value *val);
   void (*print_method_ptr) (const gdb_byte *contents,
 			    struct type *type,

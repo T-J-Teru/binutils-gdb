@@ -753,7 +753,8 @@ pascal_object_print_value (struct type *type, const gdb_byte *valaddr,
 
       try
 	{
-	  boffset = baseclass_offset (type, i, valaddr, offset, address, val);
+	  fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
+	  boffset = baseclass_offset (type, i, valaddr + offset, address + offset, val);
 	}
       catch (const gdb_exception_error &ex)
 	{

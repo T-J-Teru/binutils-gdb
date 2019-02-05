@@ -440,7 +440,7 @@ gnuv3_virtual_fn_field (struct value **value_p,
 
 static int
 gnuv3_baseclass_offset (struct type *type, int index,
-			const bfd_byte *valaddr, LONGEST embedded_offset,
+			const bfd_byte *valaddr,
 			CORE_ADDR address, const struct value *val)
 {
   struct gdbarch *gdbarch;
@@ -472,7 +472,7 @@ gnuv3_baseclass_offset (struct type *type, int index,
     error (_("Misaligned vbase offset."));
   cur_base_offset = cur_base_offset / ((int) TYPE_LENGTH (ptr_type));
 
-  vtable = gnuv3_get_vtable (gdbarch, type, address + embedded_offset);
+  vtable = gnuv3_get_vtable (gdbarch, type, address);
   gdb_assert (vtable != NULL);
   vbase_array = value_field (vtable, vtable_field_vcall_and_vbase_offsets);
   base_offset = value_as_long (value_subscript (vbase_array, cur_base_offset));
