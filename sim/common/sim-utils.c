@@ -258,7 +258,7 @@ sim_analyze_program (SIM_DESC sd, const char *prog_name, bfd *prog_bfd)
 
   /* update the sim structure */
   if (STATE_PROG_BFD (sd) != NULL)
-    bfd_close (STATE_PROG_BFD (sd));
+    sim_close_bfd (sd);
   STATE_PROG_BFD (sd) = prog_bfd;
   STATE_START_ADDR (sd) = bfd_get_start_address (prog_bfd);
 
@@ -401,4 +401,20 @@ transfer_to_str (unsigned transfer)
     case write_transfer: return "write";
     default: return "(error)";
     }
+}
+
+/* See sim-utils.h.  */
+void
+sim_close_bfd (SIM_DESC sd)
+{
+  if (STATE_PROG_BFD (sd) != NULL)
+    bfd_close (STATE_PROG_BFD (sd));
+
+  STATE_PROG_BFD (sd) = NULL;
+  STATE_START_ADDR (sd) = 0;
+  STATE_TEXT_SECTION (sd) = NULL;
+  STATE_TEXT_START (sd) = 0;
+  STATE_TEXT_END (sd) = 0;
+  STATE_PROG_SYMS (sd) = NULL;
+  STATE_PROG_SYMS_COUNT (sd) = 0;
 }
