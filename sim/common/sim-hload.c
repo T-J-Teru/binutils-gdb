@@ -50,8 +50,7 @@ sim_load (SIM_DESC sd, const char *prog_name, struct bfd *prog_bfd, int from_tty
 			      sim_write);
   if (result_bfd == NULL)
     {
-      bfd_close (STATE_PROG_BFD (sd));
-      STATE_PROG_BFD (sd) = NULL;
+      sim_close_bfd (sd);
       return SIM_RC_FAIL;
     }
   return SIM_RC_OK;
