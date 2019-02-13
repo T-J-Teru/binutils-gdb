@@ -84,4 +84,8 @@ const char *map_to_str (unsigned map);
 const char *access_to_str (unsigned access);
 const char *transfer_to_str (unsigned transfer);
 
+
+/* Close the bfd object on SD and discard any cached bfd data.  */
+void sim_close_bfd (SIM_DESC sd);
+
 #endif
