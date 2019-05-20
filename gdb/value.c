@@ -1505,6 +1505,7 @@ value_lval_const (const struct value *value)
 CORE_ADDR
 value_address_xxx (const struct value *value)
 {
+  gdb_assert (!(value_offset (value) != 0 && value_embedded_offset (value) != 0));
   if (value->lval != lval_memory)
     return 0;
   if (value->parent != NULL)
@@ -3755,7 +3756,7 @@ value_fetch_lazy_memory (struct value *val)
 {
   gdb_assert (VALUE_LVAL (val) == lval_memory);
 
-  CORE_ADDR addr = value_address_zzz (val);
+  CORE_ADDR addr = value_address_qqq (val);
   struct type *type = check_typedef (value_enclosing_type (val));
 
   if (TYPE_LENGTH (type))

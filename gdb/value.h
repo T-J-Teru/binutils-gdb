@@ -455,6 +455,7 @@ extern CORE_ADDR value_address_xxx (const struct value *);
    obviously associated with an addition of value_embedded_offset.  */
 inline CORE_ADDR value_address_zzz (const struct value *v)
 {
+  gdb_assert (!(value_offset (v) != 0 && value_embedded_offset (v) != 0));
   gdb_assert (value_embedded_offset (v) == 0);
   return value_address_xxx (v);
 }
@@ -462,6 +463,25 @@ inline CORE_ADDR value_address_zzz (const struct value *v)
 /* Like value_address, except the result does not include value's
    offset.  */
 extern CORE_ADDR value_raw_address (const struct value *);
+
+/* The value_raw_address plus the value_offset.  My current thinking is
+   that _either_ the value_offset is non-zero or the embedded_offset is
+   non-zero (or both are zero)., but importantly, I don't think that they
+   are both non-zero.  */
+inline CORE_ADDR value_address_qqq (const struct value *v)
+{
+  gdb_assert (!(value_offset (v) != 0 && value_embedded_offset (v) != 0));
+  return value_raw_address (v) + value_offset (v);
+}
+
+/* Used in places where value_raw_address could be called because we know
+   the offset is 0.  The embedded_offset might not be zero, we might be
+   trying to get the start of the enclosing type.  */
+inline CORE_ADDR value_address_kkk (const struct value *v)
+{
+  gdb_assert (value_offset (v) == 0);
+  return value_raw_address (v);
+}
 
 /* Set the address of a value.  */
 extern void set_value_address (struct value *, CORE_ADDR);

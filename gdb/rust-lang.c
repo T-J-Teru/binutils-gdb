@@ -385,7 +385,7 @@ val_print_struct (struct type *type, int embedded_offset,
 	 However, RUST_VAL_PRINT_STR looks up the fields of the string
 	 inside VAL, assuming that VAL is the string.
 	 So, recreate VAL as a value representing just the string.  */
-      val = value_at_lazy (type, value_address (val) + embedded_offset);
+      val = value_at_lazy (type, value_address_zzz (val) + embedded_offset);
       rust_val_print_str (stream, val, options);
       return;
     }

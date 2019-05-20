@@ -279,7 +279,9 @@ print_formatted (struct value *val, int size,
   int len = TYPE_LENGTH (type);
 
   if (VALUE_LVAL (val) == lval_memory)
-    next_address = value_address_zzz (val) + len;
+    {
+      next_address = value_address_qqq (val) + len;
+    }
 
   if (size)
     {

@@ -1201,7 +1201,7 @@ value_print (struct value *val, struct ui_file *stream,
       int r
 	= apply_ext_lang_val_pretty_printer (value_type (val),
 					     value_embedded_offset (val),
-					     value_address_zzz (val),
+					     value_address_qqq (val),
 					     stream, 0,
 					     val, options, current_language);
 

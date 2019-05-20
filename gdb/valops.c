@@ -252,7 +252,7 @@ value_cast_structs (struct type *type, struct value *v2)
       if (real_type)
 	{
 	  v = value_full_object (v2, real_type, full, top, using_enc);
-	  v = value_at_lazy (real_type, value_address_zzz (v));
+	  v = value_at_lazy (real_type, value_address_kkk (v));
 	  real_type = value_type (v);
 
 	  /* We might be trying to cast to the outermost enclosing

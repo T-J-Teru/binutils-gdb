@@ -599,7 +599,7 @@ cp_print_value (struct type *type, struct type *real_type,
 		result
 		  = apply_ext_lang_val_pretty_printer (baseclass,
 						       thisoffset + boffset,
-						       value_address_zzz (base_val),
+						       value_address_qqq (base_val),
 						       stream, recurse,
 						       base_val, options,
 						       current_language);
@@ -607,7 +607,7 @@ cp_print_value (struct type *type, struct type *real_type,
 	      if (!result)
 		cp_print_value_fields (baseclass, thistype,
 				       thisoffset + boffset,
-				       value_address_zzz (base_val),
+				       value_address_qqq (base_val),
 				       stream, recurse, base_val, options,
 				       ((struct type **)
 					obstack_base (&dont_print_vb_obstack)),

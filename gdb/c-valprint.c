@@ -676,7 +676,7 @@ c_value_print (struct value *val, struct ui_file *stream,
 	     full.  */
 	  val_print (value_enclosing_type (val),
 		     0,
-		     value_address_zzz (val), stream, 0,
+		     value_address_kkk (val), stream, 0,
 		     val, &opts, current_language);
 	  return;
           /* Note: When we look up RTTI entries, we don't get any
@@ -698,7 +698,7 @@ c_value_print (struct value *val, struct ui_file *stream,
 
   val_print (val_type,
 	     value_embedded_offset (val),
-	     value_address_zzz (val),
+	     value_address_qqq (val),
 	     stream, 0,
 	     val, &opts, current_language);
 }
