@@ -1520,6 +1520,26 @@ value_address_xxx (const struct value *value)
   return value->location.address + value->offset + value->embedded_offset;
 }
 
+
+CORE_ADDR
+value_address_qqq (const struct value *value)
+{
+  gdb_assert (!(value_offset (value) != 0 && value_embedded_offset (value) != 0));
+  if (value->lval != lval_memory)
+    return 0;
+  if (value->parent != NULL)
+    return (value_address_zzz (value->parent.get ()) + value->offset
+	    + value->embedded_offset);
+  if (NULL != TYPE_DATA_LOCATION (value_type (value)))
+    {
+      gdb_assert (PROP_CONST == TYPE_DATA_LOCATION_KIND (value_type (value)));
+      return TYPE_DATA_LOCATION_ADDR (value_type (value));
+    }
+
+  return value->location.address + value->offset;
+}
+
+
 CORE_ADDR
 value_raw_address (const struct value *value)
 {

@@ -2361,7 +2361,7 @@ find_method_list (struct value **argp, const char *method,
 	  fprintf (stderr, "APB: %s:%d - Invalid offset here\n", __FILE__, __LINE__);
 	  base_offset = baseclass_offset (type, i,
 					  value_contents (*argp) + value_offset (*argp) + offset,
-					  value_address_zzz (*argp) + value_offset (*argp) + offset, *argp);
+					  value_address_kkk (*argp) + value_offset (*argp) + offset, *argp);
 	}
       else /* Non-virtual base, simply use bit position from debug
 	      info.  */
