@@ -1142,7 +1142,7 @@ value_contents_raw (struct value *value)
   int unit_size = gdbarch_addressable_memory_unit_size (arch);
 
   allocate_value_contents (value);
-  return value->contents.get () + value->embedded_offset * unit_size;
+  return value->contents.get () + value_embedded_offset (value) * unit_size;
 }
 
 gdb_byte *
@@ -1510,14 +1510,14 @@ value_address_xxx (const struct value *value)
     return 0;
   if (value->parent != NULL)
     return (value_address_zzz (value->parent.get ()) + value->offset
-	    + value->embedded_offset);
+	    + value_embedded_offset (value));
   if (NULL != TYPE_DATA_LOCATION (value_type (value)))
     {
       gdb_assert (PROP_CONST == TYPE_DATA_LOCATION_KIND (value_type (value)));
       return TYPE_DATA_LOCATION_ADDR (value_type (value));
     }
 
-  return value->location.address + value->offset + value->embedded_offset;
+  return value->location.address + value->offset + value_embedded_offset (value);
 }
 
 
@@ -1529,7 +1529,7 @@ value_address_qqq (const struct value *value)
     return 0;
   if (value->parent != NULL)
     return (value_address_zzz (value->parent.get ()) + value->offset
-	    + value->embedded_offset);
+	    + value_embedded_offset (value));
   if (NULL != TYPE_DATA_LOCATION (value_type (value)))
     {
       gdb_assert (PROP_CONST == TYPE_DATA_LOCATION_KIND (value_type (value)));
@@ -1694,7 +1694,7 @@ value_copy (struct value *arg)
   val->bitpos = arg->bitpos;
   val->bitsize = arg->bitsize;
   val->lazy = arg->lazy;
-  val->embedded_offset = value_embedded_offset (arg);
+  set_value_embedded_offset (val, value_embedded_offset (arg));
   val->pointed_to_offset = arg->pointed_to_offset;
   val->modifiable = arg->modifiable;
   if (!value_lazy (val))
@@ -2987,7 +2987,8 @@ value_primitive_field (struct value *arg1, LONGEST offset,
 	}
       v->type = type;
       v->offset = value_offset (arg1);
-      v->embedded_offset = offset + value_embedded_offset (arg1) + boffset;
+      set_value_embedded_offset (v, (offset + value_embedded_offset (arg1)
+				     + boffset));
     }
   else if (NULL != TYPE_DATA_LOCATION (type))
     {
