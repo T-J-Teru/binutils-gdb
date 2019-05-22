@@ -1541,7 +1541,7 @@ value_address_qqq (const struct value *value)
 
 
 CORE_ADDR
-value_raw_address (const struct value *value)
+value_raw_address_jjj (const struct value *value)
 {
   if (value->lval != lval_memory)
     return 0;
