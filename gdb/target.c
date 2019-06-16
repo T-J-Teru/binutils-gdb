@@ -4467,6 +4467,73 @@ static bool may_insert_tracepoints_1 = true;
 static bool may_insert_fast_tracepoints_1 = true;
 static bool may_stop_1 = true;
 
+/* Show function for 'show may-write-registers'.  */
+
+static void
+show_target_may_write_registers (struct ui_file *file, int from_tty,
+				 struct cmd_list_element *c,
+				 const char *value)
+{
+  gdb_printf (file, _("Permission to write into target registers is %s.\n"),
+	      value);
+}
+
+/* Show function for 'show may-write-memory'.  */
+
+static void
+show_target_may_write_memory (struct ui_file *file, int from_tty,
+			      struct cmd_list_element *c,
+			      const char *value)
+{
+  gdb_printf (file, _("Permission to write into target memory is %s.\n"),
+	      value);
+}
+
+/* Show function for 'show may-insert-breakpoints'.  */
+
+static void
+show_target_may_insert_breakpoints (struct ui_file *file, int from_tty,
+				    struct cmd_list_element *c,
+				    const char *value)
+{
+  gdb_printf (file, _("Permission insert breakpoints in the target is %s.\n"),
+	      value);
+}
+
+/* Show function for 'show may-insert-tracepoints'.  */
+
+static void
+show_target_may_insert_tracepoints (struct ui_file *file, int from_tty,
+				    struct cmd_list_element *c,
+				    const char *value)
+{
+  gdb_printf (file, _("Permission insert tracepoints in the target is %s.\n"),
+	      value);
+}
+
+/* Show function for 'show may-insert-fast-tracepoints'.  */
+
+static void
+show_target_may_insert_fast_tracepoints (struct ui_file *file, int from_tty,
+					 struct cmd_list_element *c,
+					 const char *value)
+{
+  gdb_printf (file,
+	      _("Permission insert fast tracepoints in the target is %s.\n"),
+	      value);
+}
+
+/* Show function for 'show may-interrupt'.  */
+
+static void
+show_target_may_interrupt (struct ui_file *file, int from_tty,
+			   struct cmd_list_element *c,
+			   const char *value)
+{
+  gdb_printf (file, _("Permission to interrupt or signal the target is %s.\n"),
+	      value);
+}
+
 /* Make the user-set values match the real values again.  */
 
 void
@@ -4574,11 +4641,12 @@ Tells gdb whether to control the inferior in non-stop mode."),
 
   add_setshow_boolean_cmd ("may-write-registers", class_support,
 			   &may_write_registers_1, _("\
-Set permission to write into registers."), _("\
-Show permission to write into registers."), _("\
+Set permission to write into target registers."), _("\
+Show permission to write into target registers."), _("\
 When this permission is on, GDB may write into the target's registers.\n\
 Otherwise, any sort of write attempt will result in an error."),
-			   set_target_permissions, NULL,
+			   set_target_permissions,
+			   show_target_may_write_registers,
 			   &setlist, &showlist);
 
   add_setshow_boolean_cmd ("may-write-memory", class_support,
@@ -4587,7 +4655,8 @@ Set permission to write into target memory."), _("\
 Show permission to write into target memory."), _("\
 When this permission is on, GDB may write into the target's memory.\n\
 Otherwise, any sort of write attempt will result in an error."),
-			   set_write_memory_permission, NULL,
+			   set_write_memory_permission,
+			   show_target_may_write_memory,
 			   &setlist, &showlist);
 
   add_setshow_boolean_cmd ("may-insert-breakpoints", class_support,
@@ -4596,7 +4665,8 @@ Set permission to insert breakpoints in the target."), _("\
 Show permission to insert breakpoints in the target."), _("\
 When this permission is on, GDB may insert breakpoints in the program.\n\
 Otherwise, any sort of insertion attempt will result in an error."),
-			   set_target_permissions, NULL,
+			   set_target_permissions,
+			   show_target_may_insert_breakpoints,
 			   &setlist, &showlist);
 
   add_setshow_boolean_cmd ("may-insert-tracepoints", class_support,
@@ -4605,7 +4675,8 @@ Set permission to insert tracepoints in the target."), _("\
 Show permission to insert tracepoints in the target."), _("\
 When this permission is on, GDB may insert tracepoints in the program.\n\
 Otherwise, any sort of insertion attempt will result in an error."),
-			   set_target_permissions, NULL,
+			   set_target_permissions,
+			   show_target_may_insert_tracepoints,
 			   &setlist, &showlist);
 
   add_setshow_boolean_cmd ("may-insert-fast-tracepoints", class_support,
@@ -4614,7 +4685,8 @@ Set permission to insert fast tracepoints in the target."), _("\
 Show permission to insert fast tracepoints in the target."), _("\
 When this permission is on, GDB may insert fast tracepoints.\n\
 Otherwise, any sort of insertion attempt will result in an error."),
-			   set_target_permissions, NULL,
+			   set_target_permissions,
+			   show_target_may_insert_fast_tracepoints,
 			   &setlist, &showlist);
 
   add_setshow_boolean_cmd ("may-interrupt", class_support,
@@ -4623,7 +4695,8 @@ Set permission to interrupt or signal the target."), _("\
 Show permission to interrupt or signal the target."), _("\
 When this permission is on, GDB may interrupt/stop the target's execution.\n\
 Otherwise, any attempt to interrupt or stop will be ignored."),
-			   set_target_permissions, NULL,
+			   set_target_permissions,
+			   show_target_may_interrupt,
 			   &setlist, &showlist);
 
   add_com ("flash-erase", no_class, flash_erase_command,
