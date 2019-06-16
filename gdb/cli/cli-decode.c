@@ -507,6 +507,8 @@ add_setshow_cmd_full (const char *name,
 
   show = add_set_or_show_cmd (name, show_cmd, theclass, var_type, var,
 			      full_show_doc, show_list);
+  if (getenv ("APB_FIND_BUGS") != NULL)
+    gdb_assert (show_func != NULL);
   show->doc_allocated = 1;
   show->show_value_func = show_func;
   /* Disable the default symbol completer.  Doesn't make much sense
