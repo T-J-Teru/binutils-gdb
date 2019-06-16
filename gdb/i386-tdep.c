@@ -9126,7 +9126,30 @@ i386_mpx_set_bounds (const char *args, int from_tty)
 
 static struct cmd_list_element *mpx_set_cmdlist, *mpx_show_cmdlist;
 
+/* Show function for 'show disassembly-flavor'.  */
+
+static void
+show_disassembly_flavor (struct ui_file *file, int from_tty,
+			 struct cmd_list_element *c,
+			 const char *value)
+{
+  gdb_printf (file, _("The disassembly flavor is \"%s\".\n"), value);
+}
+
+/* Show function for 'show struct-convention'.  */
+
+static void
+show_struct_convention (struct ui_file *file, int from_tty,
+			struct cmd_list_element *c,
+			const char *value)
+{
+  gdb_printf (file,
+	      _("The convention for returning small structs is \"%s\".\n"),
+	      value);
+}
+
 void _initialize_i386_tdep ();
+
 void
 _initialize_i386_tdep ()
 {
@@ -9139,7 +9162,7 @@ Set the disassembly flavor."), _("\
 Show the disassembly flavor."), _("\
 The valid values are \"att\" and \"intel\", and the default value is \"att\"."),
 			NULL,
-			NULL, /* FIXME: i18n: */
+			show_disassembly_flavor,
 			&setlist, &showlist);
 
   /* Add the variable that controls the convention for returning
@@ -9151,7 +9174,7 @@ Show the convention for returning small structs."), _("\
 Valid values are \"default\", \"pcc\" and \"reg\", and the default value\n\
 is \"default\"."),
 			NULL,
-			NULL, /* FIXME: i18n: */
+			show_struct_convention,
 			&setlist, &showlist);
 
   /* Add "mpx" prefix for the set and show commands.  */
