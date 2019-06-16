@@ -1,5 +1,12 @@
 2019-06-16  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* ser-tcp.c (show_tcp_auto_retry): New function.
+	(show_tcp_connect_timeout): New function.
+	(_initialize_ser_tcp): Pass show function to all set/show
+	variables.
+
+2019-06-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* i386-tdep.c (show_disassembly_flavor): New function.
 	(show_struct_convention): New function.
 	(_initialize_i386_tdep): Pass show function to all set/show

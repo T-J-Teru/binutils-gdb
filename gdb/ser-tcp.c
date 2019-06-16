@@ -438,6 +438,28 @@ show_tcp_cmd (const char *args, int from_tty)
   help_list (tcp_show_cmdlist, "show tcp ", all_commands, gdb_stdout);
 }
 
+/* Show function for 'show tcp auto-retry'.  */
+
+static void
+show_tcp_auto_retry (struct ui_file *file, int from_tty,
+		     struct cmd_list_element *c,
+		     const char *value)
+{
+  fprintf_filtered (file, _("Auto-retry on socket connect %s.\n"),
+		    value);
+}
+
+/* Show function for 'show tcp connect_timeout'.  */
+
+static void
+show_tcp_connect_timeout (struct ui_file *file, int from_tty,
+			  struct cmd_list_element *c,
+			  const char *value)
+{
+  fprintf_filtered (file, _("Timeout limit in seconds for socket "
+			    "connection is %s.\n"), value);
+}
+
 #ifndef USE_WIN32API
 
 /* The TCP ops.  */
@@ -493,8 +515,12 @@ Configure variables specific to remote TCP connections"),
   add_setshow_boolean_cmd ("auto-retry", class_obscure,
 			   &tcp_auto_retry, _("\
 Set auto-retry on socket connect"), _("\
-Show auto-retry on socket connect"), 
-			   NULL, NULL, NULL,
+Show auto-retry on socket connect"), _("\
+When auto-retry is enabled, if the initial attempt to connect fails,\n\
+GDB reattempts to establish the connection using the timeout specified\n\
+by 'set tcp connect-timeout'.\n\
+The default for auto-retry is on."),
+			   NULL, show_tcp_auto_retry,
 			   &tcp_set_cmdlist, &tcp_show_cmdlist);
 
   add_setshow_uinteger_cmd ("connect-timeout", class_obscure,
@@ -504,6 +530,6 @@ Show timeout limit in seconds for socket connection"), _("\
 If set to \"unlimited\", GDB will keep attempting to establish a\n\
 connection forever, unless interrupted with Ctrl-c.\n\
 The default is 15 seconds."),
-			    NULL, NULL,
+			    NULL, show_tcp_connect_timeout,
 			    &tcp_set_cmdlist, &tcp_show_cmdlist);
 }
