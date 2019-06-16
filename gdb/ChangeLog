@@ -1,3 +1,14 @@
+2019-06-16  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* target.c (show_target_may_write_registers): New function.
+	(show_target_may_write_memory): New function.
+	(show_target_may_insert_breakpoints): New function.
+	(show_target_may_insert_tracepoints): New function.
+	(show_target_may_insert_fast_tracepoints): New function.
+	(show_target_may_interrupt): New function.
+	(initialize_targets): Pass show function to all set/show
+	variables.
+
 2019-07-25  Christian Biesinger  <cbiesinger@google.com>
 
 	* python/py-objfile.c (add_separate_debug_file): Fix comment about
