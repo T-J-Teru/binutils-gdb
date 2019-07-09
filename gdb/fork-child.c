@@ -154,16 +154,30 @@ show_startup_with_shell (struct ui_file *file, int from_tty,
 	      value);
 }
 
+/* Handle 'show exec-wrapper'.  */
+
+static void
+show_exec_wrapper (struct ui_file *file, int from_tty,
+			 struct cmd_list_element *c, const char *value)
+{
+  if (strcmp (value, "") == 0)
+    gdb_printf (file, _("No wrapper is being used to run programs.\n"));
+  else
+    gdb_printf (file, _("The wrapper for running programs is %s.\n"),
+		value);
+}
+
 void _initialize_fork_child ();
+
 void
 _initialize_fork_child ()
 {
   add_setshow_filename_cmd ("exec-wrapper", class_run, &exec_wrapper, _("\
-Set a wrapper for running programs.\n\
-The wrapper prepares the system and environment for the new program."),
+Set a wrapper for running programs."),
 			    _("\
-Show the wrapper for running programs."), NULL,
-			    NULL, NULL,
+Show the wrapper for running programs."), _("\
+The wrapper prepares the system and environment for the new program."),
+			    NULL, show_exec_wrapper,
 			    &setlist, &showlist);
 
   add_cmd ("exec-wrapper", class_run, unset_exec_wrapper_command,
