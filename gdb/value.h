@@ -455,8 +455,8 @@ extern CORE_ADDR value_address_xxx (const struct value *);
    obviously associated with an addition of value_embedded_offset.  */
 inline CORE_ADDR value_address_zzz (const struct value *v)
 {
-  gdb_assert (!(value_offset (v) != 0 && value_embedded_offset (v) != 0));
-  gdb_assert (value_embedded_offset (v) == 0);
+  // gdb_assert (!(value_offset (v) != 0 && value_embedded_offset (v) != 0));
+  // gdb_assert (value_embedded_offset (v) == 0);
   return value_address_xxx (v);
 }
 
@@ -475,7 +475,7 @@ CORE_ADDR value_address_qqq (const struct value *v);
    trying to get the start of the enclosing type.  */
 inline CORE_ADDR value_address_kkk (const struct value *v)
 {
-  gdb_assert (value_offset (v) == 0);
+  // gdb_assert (value_offset (v) == 0);
   return value_raw_address_jjj (v);
 }
 

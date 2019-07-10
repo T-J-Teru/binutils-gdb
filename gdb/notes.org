@@ -1,0 +1,60 @@
+#+BEGIN_EXAMPLE
+
+  |----------------|   <--- Offset to base address.
+
+  |--------|           <--- Offset to content start.
+
+  |----------------|   <--- Length of enclosing type.
+
+           |-------|   <--- Length of value type.
+
+  |~~~~~~~~|=======|
+
+  ^        ^       ^
+  |        |       |
+  |        |       Base address for this object.    (value_base_address)
+  |        |
+  |        Start of content for just this value.    (value_content_address)
+
+  Start of all conent associated with this value.   (value_enclosing_address)
+
+#+END_EXAMPLE
+
+
+
+#+BEGIN_EXAMPLE
+
+  |~~~~~~~~|====B===|
+
+#+END_EXAMPLE
+
+
+* Current API
+
+  | Function              | Uses |
+  |-----------------------+------|
+  | value_address_xxx     |   14 |
+  | value_address_zzz     |   82 |
+  | value_address_qqq     |    6 |
+  | value_address_kkk     |    3 |
+  | value_raw_address_jjj |    1 |
+
+  + =value_address_xxx= - Returns the value plus the offset, plus the
+    embedded offset.
+
+  + =value_address_zzz= - Is the same as =value_address_xxx=, but we
+    assert that the embedded offset is zero.
+
+  + =value_address_qqq= - Returns the raw value address plus the offset,
+    but NOT the embedded offset.
+
+  + =value_address_kkk= - Returns the raw value address, but we also
+    assert that the offset is zero
+
+  + =value_raw_address_jjj= - The raw value address.
+
+* New API
+
+  + =value_base_address=
+
+    Return the base address of a value, this would usually be the

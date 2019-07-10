@@ -332,7 +332,7 @@ struct value
      `type', and `embedded_offset' is zero, so everything works
      normally.  */
   struct type *enclosing_type;
-  LONGEST embedded_offset = 0;
+  // LONGEST embedded_offset = 0;
   LONGEST pointed_to_offset = 0;
 
   /* Actual contents of the value.  Target byte-order.  NULL or not
@@ -1453,13 +1453,13 @@ value_bits_synthetic_pointer (const struct value *value,
 LONGEST
 value_embedded_offset (const struct value *value)
 {
-  return value->embedded_offset;
+  return value->offset;
 }
 
 void
 set_value_embedded_offset (struct value *value, LONGEST val)
 {
-  value->embedded_offset = val;
+  value->offset = val;
 }
 
 LONGEST
@@ -1471,6 +1471,9 @@ value_pointed_to_offset (const struct value *value)
 void
 set_value_pointed_to_offset (struct value *value, LONGEST val)
 {
+  if (val != 0)
+    fprintf (stderr, "ABP: Setting pointed_to_offset to 0x%lx\n",
+	     val);
   value->pointed_to_offset = val;
 }
 
@@ -1505,7 +1508,7 @@ value_lval_const (const struct value *value)
 CORE_ADDR
 value_address_xxx (const struct value *value)
 {
-  gdb_assert (!(value_offset (value) != 0 && value_embedded_offset (value) != 0));
+  // gdb_assert (!(value_offset (value) != 0 && value_embedded_offset (value) != 0));
   if (value->lval != lval_memory)
     return 0;
   if (value->parent != NULL)
@@ -1524,7 +1527,7 @@ value_address_xxx (const struct value *value)
 CORE_ADDR
 value_address_qqq (const struct value *value)
 {
-  gdb_assert (!(value_offset (value) != 0 && value_embedded_offset (value) != 0));
+  // gdb_assert (!(value_offset (value) != 0 && value_embedded_offset (value) != 0));
   if (value->lval != lval_memory)
     return 0;
   if (value->parent != NULL)
