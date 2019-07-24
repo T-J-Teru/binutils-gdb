@@ -29,6 +29,174 @@ foreach l $lang {
     remote_exec host "mkdir -p [standard_output_file ${dir}]"
 }
 
+namespace eval ::InfoCmd {
+
+    # The command that was used to generate these results.
+    variable _cmd ""
+
+    # The header line(s) joined with '\r\n', except that there is no
+    # trailing '\r\n'.
+    variable _header_lines ""
+
+    # List of all entries found.  Each entry is itself a list of three
+    # things: { LINENO FILENAME ITEM }.
+    variable _all_entries
+
+    proc run {cmd {testname ""}} {
+	global gdb_prompt
+	variable _cmd
+
+	if {${testname} == ""} {
+	    set testname ${cmd}
+	}
+
+	set _cmd ${cmd}
+
+	# Run the command, and parse the results into the local
+	# variables.
+	send_gdb "${cmd}\n"
+
+	gdb_expect {
+	    -re "\[^\r\n\]+\r\n" {
+		# Skip the echo of the command.
+	    }
+	}
+
+	# Now process the header line or lines.
+	gdb_expect {
+	    -re "^\r\n" {
+		# Blank line between header and content.
+	    }
+	    -re "^(\[^\r\n\]+)\r\n" {
+		set line $expect_out(1,string)
+		_header ${line}
+		exp_continue
+	    }
+	}
+
+	set seen_start_of_non_debug 0
+	set current_filename ""
+
+	# Now process the command output.
+	gdb_expect {
+	    -re "^File (\[^:\r\n\]+):\r\n" {
+		set filename $expect_out(1,string)
+		set current_filename ${filename}
+		exp_continue
+	    }
+	    -re "^(\[0-9\]+):\[ \t\]+(\[^\r\n\]+)\r\n" {
+		set lineno $expect_out(1,string)
+		set result $expect_out(2,string)
+		_record ${lineno} ${current_filename} ${result}
+		exp_continue
+	    }
+	    -re "^\[ \t\]+(\[^\r\n\]+)\r\n" {
+		set result $expect_out(1,string)
+		_record "" ${current_filename} ${result}
+		exp_continue
+	    }
+	    -re "^\r\n" {
+		# Skip blank lines.
+		exp_continue
+	    }
+	    -re "^Non-debugging symbols:\r\n" {
+		set seen_start_of_non_debug 1
+		exp_continue
+	    }
+	    -re "^(0x\[0-9a-f\]+)\[ \t\]+(\[^\r\n\]+)\r\n" {
+		set addr $expect_out(1,string)
+		set sym $expect_out(2,string)
+
+		if {${seen_start_of_non_debug} == 0} {
+		    verbose -log \
+			"Found non-debug symbol '${sym}' before 'Non-debugging symbols' header"
+		    fail $testname
+		    return -1
+		}
+
+		# For now we don't track the non-debugging symbols.
+		exp_continue
+	    }
+	    -re "^${gdb_prompt} $" {
+		pass $testname
+	    }
+	}
+    }
+
+    proc _header {line} {
+	variable _header_lines
+
+	if {$_header_lines == ""} {
+	    set _header_lines $line
+	} else {
+	    set _header_lines \
+		[join [list $_header_lines $line] "\r\n"]
+	}
+    }
+
+    proc _record {lineno filename record} {
+	variable _all_entries
+
+	set entry [list ${lineno} ${filename} ${record}]
+	verbose -log "APB: Add record: ${entry}"
+	lappend _all_entries ${entry}
+    }
+
+    proc check_header {pattern {testname ""}} {
+	variable _cmd
+	variable _header_lines
+
+	if {${testname} == ""} {
+	    set testname "check header for ${_cmd}"
+	}
+
+	if {[regexp ${pattern} ${_header_lines}]} {
+	    pass $testname
+	} else {
+	    fail $testname
+	}
+    }
+
+    proc check_entry {item {lineno ""} {filename ".*"} {testname ""}} {
+	variable _all_entries
+
+	if {$testname == ""} {
+	    set testname "check for ${item}"
+	}
+
+	set idx 0
+	foreach entry $_all_entries {
+	    if {[lindex ${entry} 0] == $lineno
+		&& [regexp ${filename} [lindex ${entry} 1]]
+		&& [regexp ${item} [lindex ${entry} 2]]} {
+		pass $testname
+		set _all_entries [lreplace ${_all_entries} $idx $idx]
+		return 1
+	    }
+	    set idx [incr idx]
+	}
+
+	verbose -log "APB: Failed to find match in:\n${_all_entries}\n\n"
+
+	fail $testname
+	return 0
+    }
+
+    proc all_entries_matched {{testname ""}} {
+	variable _all_entries
+
+	if {$testname == ""} {
+	    set testname "check all entries matched"
+	}
+
+	if {[llength ${_all_entries}] == 0} {
+	    pass ${testname}
+	} else {
+	    fail ${testname}
+	}
+    }
+}
+
 # Run 'info types' test, compiling the test file for language LANG,
 # which should be either 'c' or 'c++'.
 proc run_test { lang } {
@@ -51,75 +219,61 @@ proc run_test { lang } {
 	return 0
     }
 
+    InfoCmd::run  "info types"
+    InfoCmd::check_header "All defined types:"
+
     if { $lang == "c++" } {
-	set output_re \
-	    [multi_line \
-		 "All defined types:" \
-		 "" \
-		 "File .*:" \
-		 "98:\[\t \]+CL;" \
-		 "42:\[\t \]+anon_struct_t;" \
-		 "65:\[\t \]+anon_union_t;" \
-		 "21:\[\t \]+baz_t;" \
-		 "33:\[\t \]+enum_t;" \
-		 "56:\[\t \]+union_t;" \
-		 "52:\[\t \]+typedef enum {\\.\\.\\.} anon_enum_t;" \
-		 "45:\[\t \]+typedef anon_struct_t anon_struct_t;" \
-		 "68:\[\t \]+typedef anon_union_t anon_union_t;" \
-		 "28:\[\t \]+typedef baz_t baz;" \
-		 "31:\[\t \]+typedef baz_t \\* baz_ptr;" \
-		 "27:\[\t \]+typedef baz_t baz_t;" \
-		 "\[\t \]+double" \
-		 "\[\t \]+float" \
-		 "\[\t \]+int" \
-		 "103:\[\t \]+typedef CL my_cl;" \
-		 "38:\[\t \]+typedef enum_t my_enum_t;" \
-		 "17:\[\t \]+typedef float my_float_t;" \
-		 "16:\[\t \]+typedef int my_int_t;" \
-		 "104:\[\t \]+typedef CL \\* my_ptr;" \
-		 "54:\[\t \]+typedef enum {\\.\\.\\.} nested_anon_enum_t;" \
-		 "47:\[\t \]+typedef anon_struct_t nested_anon_struct_t;" \
-		 "70:\[\t \]+typedef anon_union_t nested_anon_union_t;" \
-		 "30:\[\t \]+typedef baz_t nested_baz;" \
-		 "29:\[\t \]+typedef baz_t nested_baz_t;" \
-		 "39:\[\t \]+typedef enum_t nested_enum_t;" \
-		 "19:\[\t \]+typedef float nested_float_t;" \
-		 "18:\[\t \]+typedef int nested_int_t;" \
-		 "62:\[\t \]+typedef union_t nested_union_t;" \
-		 "\[\t \]+unsigned int"]
+	InfoCmd::check_entry "baz_t;" "21"
+	InfoCmd::check_entry "typedef baz_t baz_t;" "27"
+	InfoCmd::check_entry "typedef baz_t baz;" "28"
+	InfoCmd::check_entry "typedef baz_t nested_baz_t;" "29"
+	InfoCmd::check_entry "typedef baz_t nested_baz;" "30"
+	InfoCmd::check_entry "typedef baz_t \\* baz_ptr;" "31"
+	InfoCmd::check_entry "enum_t;" "33"
+	InfoCmd::check_entry "typedef enum_t my_enum_t;" "38"
+	InfoCmd::check_entry "typedef enum_t nested_enum_t;" "39"
+	InfoCmd::check_entry "anon_struct_t;" "42"
+	InfoCmd::check_entry "typedef anon_struct_t anon_struct_t;" "45"
+	InfoCmd::check_entry "typedef anon_struct_t nested_anon_struct_t;" "47"
+	InfoCmd::check_entry "union_t;" "56"
+	InfoCmd::check_entry "typedef union_t nested_union_t;" "62"
+	InfoCmd::check_entry "anon_union_t;" "65"
+	InfoCmd::check_entry "typedef anon_union_t anon_union_t;" "68"
+	InfoCmd::check_entry "typedef anon_union_t nested_anon_union_t;" "70"
+	InfoCmd::check_entry "CL;" "98"
+	InfoCmd::check_entry "typedef CL my_cl;" "103"
+	InfoCmd::check_entry "typedef CL \\* my_ptr;" "104"
     } else {
-	set output_re \
-	    [multi_line \
-		 "All defined types:" \
-		 "" \
-		 "File .*:" \
-		 "52:\[\t \]+typedef enum {\\.\\.\\.} anon_enum_t;" \
-		 "45:\[\t \]+typedef struct {\\.\\.\\.} anon_struct_t;" \
-		 "68:\[\t \]+typedef union {\\.\\.\\.} anon_union_t;" \
-		 "28:\[\t \]+typedef struct baz_t baz;" \
-		 "31:\[\t \]+typedef struct baz_t \\* baz_ptr;" \
-		 "21:\[\t \]+struct baz_t;" \
-		 "\[\t \]+double" \
-		 "33:\[\t \]+enum enum_t;" \
-		 "\[\t \]+float" \
-		 "\[\t \]+int" \
-		 "38:\[\t \]+typedef enum enum_t my_enum_t;" \
-		 "17:\[\t \]+typedef float my_float_t;" \
-		 "16:\[\t \]+typedef int my_int_t;" \
-		 "54:\[\t \]+typedef enum {\\.\\.\\.} nested_anon_enum_t;" \
-		 "47:\[\t \]+typedef struct {\\.\\.\\.} nested_anon_struct_t;" \
-		 "70:\[\t \]+typedef union {\\.\\.\\.} nested_anon_union_t;" \
-		 "30:\[\t \]+typedef struct baz_t nested_baz;" \
-		 "29:\[\t \]+typedef struct baz_t nested_baz_t;" \
-		 "39:\[\t \]+typedef enum enum_t nested_enum_t;" \
-		 "19:\[\t \]+typedef float nested_float_t;" \
-		 "18:\[\t \]+typedef int nested_int_t;" \
-		 "62:\[\t \]+typedef union union_t nested_union_t;" \
-		 "56:\[\t \]+union union_t;" \
-		 "\[\t \]+unsigned int" ]
+	InfoCmd::check_entry "struct baz_t;" "21"
+	InfoCmd::check_entry "typedef struct baz_t baz;" "28"
+	InfoCmd::check_entry "typedef struct baz_t nested_baz_t;" "29"
+	InfoCmd::check_entry "typedef struct baz_t nested_baz;" "30"
+	InfoCmd::check_entry "typedef struct baz_t \\* baz_ptr;" "31"
+	InfoCmd::check_entry "enum enum_t;" "33"
+	InfoCmd::check_entry "typedef enum enum_t my_enum_t;" "38"
+	InfoCmd::check_entry "typedef enum enum_t nested_enum_t;" "39"
+	InfoCmd::check_entry "typedef struct {\\.\\.\\.} anon_struct_t;" "45"
+	InfoCmd::check_entry "typedef struct {\\.\\.\\.} nested_anon_struct_t;" "47"
+	InfoCmd::check_entry "union union_t;" "56"
+	InfoCmd::check_entry "typedef union union_t nested_union_t;" "62"
+	InfoCmd::check_entry "typedef union {\\.\\.\\.} anon_union_t;" "68"
+	InfoCmd::check_entry "typedef union {\\.\\.\\.} nested_anon_union_t;" "70"
     }
 
-    gdb_test "info types" $output_re
+    InfoCmd::check_entry "typedef int my_int_t;" "16"
+    InfoCmd::check_entry "typedef float my_float_t;" "17"
+    InfoCmd::check_entry "typedef int nested_int_t;" "18"
+    InfoCmd::check_entry "typedef float nested_float_t;" "19"
+
+    InfoCmd::check_entry "typedef enum {\\.\\.\\.} anon_enum_t;" "52"
+    InfoCmd::check_entry "typedef enum {\\.\\.\\.} nested_anon_enum_t;" "54"
+
+    InfoCmd::check_entry "double"
+    InfoCmd::check_entry "float"
+    InfoCmd::check_entry "int"
+    InfoCmd::check_entry "unsigned int"
+
+    InfoCmd::all_entries_matched
 }
 
 foreach_with_prefix l $lang {
