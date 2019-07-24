@@ -4520,8 +4520,9 @@ search_symbols (const char *regexp, enum search_domain kind,
 			   || preg->exec (SYMBOL_NATURAL_NAME (sym), 0,
 					  NULL, 0) == 0)
 			  && ((kind == VARIABLES_DOMAIN
+			       && !(SYMBOL_CLASS (sym) == LOC_UNRESOLVED
+				    && SYMBOL_IS_DECLARATION (sym))
 			       && SYMBOL_CLASS (sym) != LOC_TYPEDEF
-			       && SYMBOL_CLASS (sym) != LOC_UNRESOLVED
 			       && SYMBOL_CLASS (sym) != LOC_BLOCK
 			       /* LOC_CONST can be used for more than
 				  just enums, e.g., c++ static const

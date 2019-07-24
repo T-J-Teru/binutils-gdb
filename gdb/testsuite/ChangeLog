@@ -1,3 +1,7 @@
+2019-07-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.fortran/module.exp: Extend with 'info variables' test.
+
 2019-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.base/info-fun.exp: Extend to test the -n flag for 'info
