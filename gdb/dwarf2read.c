@@ -21503,6 +21503,9 @@ new_symbol (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 				   dwarf2_full_name (name, die, cu),
 	                           NULL);
 
+      if (die_is_declaration (die, cu))
+	SYMBOL_IS_DECLARATION (sym) = 1;
+
       /* Default assumptions.
          Use the passed type or decode it from the die.  */
       SYMBOL_DOMAIN (sym) = VAR_DOMAIN;

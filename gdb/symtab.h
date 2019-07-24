@@ -1110,6 +1110,9 @@ struct symbol
   /* Whether this is an inlined function (class LOC_BLOCK only).  */
   unsigned is_inlined : 1;
 
+  /* Is this symbol a declaration?  */
+  unsigned is_declaration : 1;
+
   /* The concrete type of this symbol.  */
 
   ENUM_BITFIELD (symbol_subclass_kind) subclass : 2;
@@ -1171,6 +1174,7 @@ extern const struct symbol_impl *symbol_impls;
 #define SYMBOL_INLINED(symbol)		(symbol)->is_inlined
 #define SYMBOL_IS_CPLUS_TEMPLATE_FUNCTION(symbol) \
   (((symbol)->subclass) == SYMBOL_TEMPLATE)
+#define SYMBOL_IS_DECLARATION(symbol)	(symbol)->is_declaration
 #define SYMBOL_TYPE(symbol)		(symbol)->type
 #define SYMBOL_LINE(symbol)		(symbol)->line
 #define SYMBOL_COMPUTED_OPS(symbol)	(SYMBOL_IMPL (symbol).ops_computed)

@@ -1,3 +1,10 @@
+2019-07-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dwarf2read.c (new_symbol): Mark symbol as declaration when
+	appropriate.
+	* symtab.h (struct symbol): Add 'is_declaration' flag.
+	(SYMBOL_IS_DECLARATION): Define.
+
 2019-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* cli/cli-utils.c (info_print_options_defs): Delete.
