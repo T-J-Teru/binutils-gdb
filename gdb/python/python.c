@@ -1739,6 +1739,17 @@ do_start_initialization ()
 
 #endif /* HAVE_PYTHON */
 
+/* Show function for 'show python print-stack'.  */
+
+static void
+show_python_print_stack (struct ui_file *file, int from_tty,
+			 struct cmd_list_element *c,
+			 const char *value)
+{
+  fprintf_filtered (file, _("The mode of Python stack printing on error "
+			    "is \"%s\".\n"), value);
+}
+
 /* See python.h.  */
 cmd_list_element *python_cmd_element = nullptr;
 
@@ -1810,7 +1821,8 @@ Show the mode of Python stack printing on error."), _("\
 none  == no stack or message will be printed.\n\
 full == a message and a stack will be printed.\n\
 message == an error message without a stack will be printed."),
-			NULL, NULL,
+			NULL,
+			show_python_print_stack,
 			&user_set_python_list,
 			&user_show_python_list);
 

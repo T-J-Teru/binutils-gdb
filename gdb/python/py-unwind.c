@@ -630,6 +630,16 @@ pyuw_on_new_gdbarch (struct gdbarch *newarch)
     }
 }
 
+/* Show function for 'show python print-stack'.  */
+
+static void
+show_debug_py_unwind (struct ui_file *file, int from_tty,
+		      struct cmd_list_element *c,
+		      const char *value)
+{
+  fprintf_filtered (file, _("Python unwinder debugging is %s.\n"), value);
+}
+
 /* Initialize unwind machinery.  */
 
 int
@@ -642,7 +652,7 @@ gdbpy_initialize_unwind (void)
         _("Show Python unwinder debugging."),
         _("When non-zero, Python unwinder debugging is enabled."),
         NULL,
-        NULL,
+        show_debug_py_unwind,
         &setdebuglist, &showdebuglist);
   pyuw_gdbarch_data
       = gdbarch_data_register_post_init (pyuw_gdbarch_data_init);

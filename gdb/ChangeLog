@@ -1,5 +1,17 @@
 2019-07-26  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* guile/guile.c (show_guile_print_stack): New function.
+	(install_gdb_commands): Pass a show function for all set/show
+	variables.
+	* python/py-unwind.c (show_debug_py_unwind): New function.
+	(gdbpy_initialize_unwind): Pass a show function for all set/show
+	variables.
+	* python/python.c (show_python_print_stack): New function.
+	(_initialize_python): Pass a show function for all set/show
+	variables.
+
+2019-07-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* x86-nat.c (show_show_debug_regs): New function.
 	(add_show_debug_regs_command): Pass a show function for all
 	set/show variables.
