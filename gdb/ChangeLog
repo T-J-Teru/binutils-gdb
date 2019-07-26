@@ -1,3 +1,9 @@
+2019-07-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* linux-nat.c (show_debug_linux_namespaces): New function.
+	(_initialize_linux_nat): Pass a show function for all set/show
+	variables.
+
 2019-07-09  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* fork-child.c (show_exec_wrapper): New function.
