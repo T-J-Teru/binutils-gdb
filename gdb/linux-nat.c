@@ -4467,7 +4467,19 @@ current_lwp_ptid (void)
   return inferior_ptid;
 }
 
+/* Show function for 'show debug linux-namespaces'.  */
+
+static void
+show_debug_linux_namespaces (struct ui_file *file, int from_tty,
+			     struct cmd_list_element *c,
+			     const char *value)
+{
+  gdb_printf (file, _("Debugging of GNU/Linux namespaces module is \"%s\".\n"),
+	      value);
+}
+
 void _initialize_linux_nat ();
+
 void
 _initialize_linux_nat ()
 {
@@ -4486,7 +4498,7 @@ Set debugging of GNU/Linux namespaces module."), _("\
 Show debugging of GNU/Linux namespaces module."), _("\
 Enables printf debugging output."),
 			   NULL,
-			   NULL,
+			   show_debug_linux_namespaces,
 			   &setdebuglist, &showdebuglist);
 
   /* Install a SIGCHLD handler.  */
