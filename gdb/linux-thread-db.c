@@ -1952,6 +1952,28 @@ maintenance_check_libthread_db (const char *args, int from_tty)
   check_thread_db (info, true);
 }
 
+/* Show function for 'show libthread-db-search-path'.  */
+
+static void
+show_libthread_db_search_path (struct ui_file *file, int from_tty,
+			       struct cmd_list_element *c,
+			       const char *value)
+{
+  fprintf_filtered (file, _("The current search path or libthread_db "
+			    "is \"%s\".\n"), value);
+}
+
+/* Show function for 'maintenance show check-libthread-db'.  */
+
+static void
+show_check_libthread_db (struct ui_file *file, int from_tty,
+			 struct cmd_list_element *c,
+			 const char *value)
+{
+  fprintf_filtered (file, _("Whether to check libthread_db at load time "
+			    "is \"%s\".\n"), value);
+}
+
 void
 _initialize_thread_db (void)
 {
@@ -1973,7 +1995,7 @@ gdb itself.\n\
 Its value is a colon (':') separate list of directories to search.\n\
 Setting the search path to an empty list resets it to its default value."),
 			    set_libthread_db_search_path,
-			    NULL,
+			    show_libthread_db_search_path,
 			    &setlist, &showlist);
 
   add_setshow_zuinteger_cmd ("libthread-db", class_maintenance,
@@ -2015,7 +2037,7 @@ Show whether to check libthread_db at load time."), _("\
 If enabled GDB will run integrity checks on inferior specific libthread_db\n\
 as they are loaded."),
 			   NULL,
-			   NULL,
+			   show_check_libthread_db,
 			   &maintenance_set_cmdlist,
 			   &maintenance_show_cmdlist);
 
