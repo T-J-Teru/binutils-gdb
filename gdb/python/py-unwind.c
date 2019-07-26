@@ -976,7 +976,7 @@ _initialize_py_unwind ()
 	_("Show Python unwinder debugging."),
 	_("When on, Python unwinder debugging is enabled."),
 	NULL,
-	show_pyuw_debug,
+       show_pyuw_debug,
 	&setdebuglist, &showdebuglist);
 }
 

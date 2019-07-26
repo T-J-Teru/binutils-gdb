@@ -732,6 +732,18 @@ gdbscm_set_backtrace (int enable)
 
 #endif /* HAVE_GUILE */
 
+/* Show function for 'show guile print-stack'.  */
+
+static void
+show_guile_print_stack (struct ui_file *file, int from_tty,
+			struct cmd_list_element *c,
+			const char *value)
+{
+  gdb_printf (file,
+	      _("The mode of Guile exception printing on error is \"%s\".\n"),
+	      value);
+}
+
 /* See guile.h.  */
 cmd_list_element *guile_cmd_element = nullptr;
 
@@ -821,7 +833,7 @@ Show the mode of Guile exception printing on error."), _("\
 none  == no stack or message will be printed.\n\
 full == a message and a stack will be printed.\n\
 message == an error message without a stack will be printed."),
-			NULL, NULL,
+			NULL, show_guile_print_stack,
 			&set_guile_list, &show_guile_list);
 }
 
