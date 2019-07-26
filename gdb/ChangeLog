@@ -1,5 +1,11 @@
 2019-07-26  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* x86-nat.c (show_show_debug_regs): New function.
+	(add_show_debug_regs_command): Pass a show function for all
+	set/show variables.
+
+2019-07-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* linux-thread-db.c (show_libthread_db_search_path): New function.
 	(show_check_libthread_db): New function.
 	(_initialize_thread_db): Pass a show function for all set/show
