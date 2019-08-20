@@ -474,6 +474,9 @@ iterate_over_minimal_symbols
     (struct objfile *objf, const lookup_name_info &lookup_name,
      gdb::function_view<bool (struct minimal_symbol *)> callback)
 {
+  if (symbol_lookup_debug)
+    apb.push ("iterate_over_minimal_symbols (?)\n");
+
   /* The first pass is over the ordinary hash table.  */
     {
       const char *name = linkage_name_str (lookup_name);
@@ -489,7 +492,11 @@ iterate_over_minimal_symbols
 	{
 	  if (mangled_cmp (MSYMBOL_LINKAGE_NAME (iter), name) == 0)
 	    if (callback (iter))
-	      return;
+	      {
+		if (symbol_lookup_debug)
+		  apb.pop ("iterate_over_minimal_symbols (...)\n");
+		return;
+	      }
 	}
     }
 
@@ -503,6 +510,10 @@ iterate_over_minimal_symbols
 
       enum language lang = (enum language) liter;
       const language_defn *lang_def = language_def (lang);
+
+      if (symbol_lookup_debug)
+	apb.msg ("language loop %d: %s\n", liter, lang_def->la_name);
+
       symbol_name_matcher_ftype *name_match
 	= get_symbol_name_matcher (lang_def, lookup_name);
 
@@ -513,8 +524,15 @@ iterate_over_minimal_symbols
 	   iter = iter->demangled_hash_next)
 	if (name_match (MSYMBOL_SEARCH_NAME (iter), lookup_name, NULL))
 	  if (callback (iter))
-	    return;
+	    {
+	      if (symbol_lookup_debug)
+		apb.pop ("iterate_over_minimal_symbols (...)\n");
+	      return;
+	    }
     }
+
+  if (symbol_lookup_debug)
+    apb.pop ("iterate_over_minimal_symbols (...)\n");
 }
 
 /* See minsyms.h.  */
@@ -1346,7 +1364,6 @@ minimal_symbol_reader::install ()
       /* Attach the minimal symbol table to the specified objfile.
          The strings themselves are also located in the storage_obstack
          of this objfile.  */
-
       m_objfile->per_bfd->minimal_symbol_count = mcount;
       m_objfile->per_bfd->msymbols = std::move (msym_holder);
 

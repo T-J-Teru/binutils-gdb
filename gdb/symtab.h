@@ -75,6 +75,10 @@ enum class symbol_name_match_type
   /* Expression matching.  The same as FULL matching in most
      languages.  The same as WILD matching in Ada.  */
   EXPRESSION,
+
+  /* Match like FULL, except on the final part of the symbol's search
+     name.  */
+  ENDING,
 };
 
 /* Hash the given symbol search name according to LANGUAGE's
@@ -2103,6 +2107,27 @@ extern unsigned int symtab_create_debug;
 extern unsigned int symbol_lookup_debug;
 
 extern bool basenames_may_differ;
+
+class apb_debug_t
+{
+public:
+  void push (const char *fmt, ...);
+  void pop (const char *fmt, ...);
+  void msg (const char *fmt, ...);
+
+  apb_debug_t ()
+    : m_depth (0)
+  { /* Nothing.  */ }
+
+private:
+  int m_depth = 0;
+
+  void whitespace ();
+
+  apb_debug_t (const apb_debug_t &) = delete;
+};
+
+extern apb_debug_t apb;
 
 bool compare_filenames_for_search (const char *filename,
 				   const char *search_name);

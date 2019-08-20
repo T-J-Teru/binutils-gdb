@@ -487,6 +487,9 @@ dict_iter_match_first (const struct dictionary *dict,
 		       const lookup_name_info &name,
 		       struct dict_iterator *iterator)
 {
+  if (symbol_lookup_debug)
+    apb.msg ("dict_iter_match_first, dict = %s\n",
+	     host_address_to_string (dict));
   return (DICT_VECTOR (dict))->iter_match_first (dict, name, iterator);
 }
 
@@ -573,7 +576,7 @@ iterator_hashed_advance (struct dict_iterator *iterator)
   for (i = DICT_ITERATOR_INDEX (iterator) + 1; i < nbuckets; ++i)
     {
       struct symbol *sym = DICT_HASHED_BUCKET (dict, i);
-      
+
       if (sym != NULL)
 	{
 	  DICT_ITERATOR_INDEX (iterator) = i;
@@ -590,9 +593,16 @@ iter_match_first_hashed (const struct dictionary *dict,
 			 const lookup_name_info &name,
 			 struct dict_iterator *iterator)
 {
+  if (symbol_lookup_debug)
+    apb.push ("iter_match_first_hashed (?)\n");
+
   const language_defn *lang = DICT_LANGUAGE (dict);
   unsigned int hash_index = (name.search_name_hash (lang->la_language)
 			     % DICT_HASHED_NBUCKETS (dict));
+
+  if (symbol_lookup_debug)
+    apb.msg ("symbol lookup name hash index is %d\n", hash_index);
+
   symbol_name_matcher_ftype *matches_name
     = get_symbol_name_matcher (lang, name);
   struct symbol *sym;
@@ -602,7 +612,7 @@ iter_match_first_hashed (const struct dictionary *dict,
   /* Loop through the symbols in the given bucket, breaking when SYM
      first matches.  If SYM never matches, it will be set to NULL;
      either way, we have the right return value.  */
-  
+
   for (sym = DICT_HASHED_BUCKET (dict, hash_index);
        sym != NULL;
        sym = sym->hash_next)
@@ -613,6 +623,15 @@ iter_match_first_hashed (const struct dictionary *dict,
     }
 
   DICT_ITERATOR_CURRENT (iterator) = sym;
+
+  if (symbol_lookup_debug)
+    {
+      if (sym)
+	apb.pop ("iter_match_first_hashed (...) = %s\n",
+		 SYMBOL_PRINT_NAME (sym));
+      else
+	apb.pop ("iter_match_first_hashed (...) = nullptr\n");
+    }
   return sym;
 }
 
@@ -656,6 +675,10 @@ insert_symbol_hashed (struct dictionary *dict,
   hash_index = hash % DICT_HASHED_NBUCKETS (dict);
   sym->hash_next = buckets[hash_index];
   buckets[hash_index] = sym;
+
+  if (symbol_lookup_debug > 5)
+    apb.msg("insert_symbol_hashed for %s, index %d\n",
+	    SYMBOL_PRINT_NAME (sym), hash_index);
 }
 
 static int
@@ -825,10 +848,23 @@ iter_match_first_linear (const struct dictionary *dict,
 			 const lookup_name_info &name,
 			 struct dict_iterator *iterator)
 {
+  if (symbol_lookup_debug)
+    apb.push ("iter_match_first_linear (?)\n");
+
   DICT_ITERATOR_DICT (iterator) = dict;
   DICT_ITERATOR_INDEX (iterator) = -1;
 
-  return iter_match_next_linear (name, iterator);
+  auto sym = iter_match_next_linear (name, iterator);
+
+  if (symbol_lookup_debug)
+    {
+      if (sym)
+	apb.pop ("iter_match_first_linear (...) = %s\n",
+		 SYMBOL_PRINT_NAME (sym));
+      else
+	apb.pop ("iter_match_first_linear (...) = nullptr\n");
+    }
+  return sym;
 }
 
 static struct symbol *
@@ -1224,6 +1260,9 @@ mdict_iter_match_first (const struct multidictionary *mdict,
 			const lookup_name_info &name,
 			struct mdict_iterator *miterator)
 {
+  if (symbol_lookup_debug)
+    apb.push ("mdict_iter_match_first (?)\n");
+
   miterator->mdict = mdict;
   miterator->current_idx = 0;
 
@@ -1235,9 +1274,16 @@ mdict_iter_match_first (const struct multidictionary *mdict,
 				 &miterator->iterator);
 
       if (result != nullptr)
-	return result;
+	{
+	  if (symbol_lookup_debug)
+	    apb.pop ("mdict_iter_match_first (...) = %s\n",
+		     SYMBOL_PRINT_NAME (result));
+	  return result;
+	}
     }
 
+  if (symbol_lookup_debug)
+    apb.pop ("mdict_iter_match_first (...) = nullptr\n");
   return nullptr;
 }
 

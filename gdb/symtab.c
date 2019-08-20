@@ -233,6 +233,57 @@ unsigned int symtab_create_debug = 0;
 /* When non-zero, print debugging messages related to symbol lookup.  */
 unsigned int symbol_lookup_debug = 0;
 
+apb_debug_t apb;
+
+void
+apb_debug_t::push (const char *fmt, ...)
+{
+  va_list ap;
+
+  whitespace ();
+
+  va_start (ap, fmt);
+  vfprintf_filtered (gdb_stdlog, fmt, ap);
+  va_end (ap);
+
+  m_depth++;
+}
+
+void
+apb_debug_t::pop (const char *fmt, ...)
+{
+  va_list ap;
+
+  m_depth--;
+  if (m_depth < 0)
+    m_depth = 0;
+
+  whitespace ();
+
+  va_start (ap, fmt);
+  vfprintf_filtered (gdb_stdlog, fmt, ap);
+  va_end (ap);
+
+}
+
+void
+apb_debug_t::msg (const char *fmt, ...)
+{
+  va_list ap;
+
+  whitespace ();
+
+  va_start (ap, fmt);
+  vfprintf_filtered (gdb_stdlog, fmt, ap);
+  va_end (ap);
+}
+
+void
+apb_debug_t::whitespace ()
+{
+  fprintf_filtered (gdb_stdlog, "%*s", m_depth, "");
+}
+
 /* The size of the cache is staged here.  */
 static unsigned int new_symbol_cache_size = DEFAULT_SYMBOL_CACHE_SIZE;
 
@@ -1328,12 +1379,11 @@ symbol_cache_lookup (struct symbol_cache *cache,
   if (eq_symbol_entry (slot, objfile_context, name, domain))
     {
       if (symbol_lookup_debug)
-	fprintf_unfiltered (gdb_stdlog,
-			    "%s block symbol cache hit%s for %s, %s\n",
-			    block == GLOBAL_BLOCK ? "Global" : "Static",
-			    slot->state == SYMBOL_SLOT_NOT_FOUND
-			    ? " (not found)" : "",
-			    name, domain_name (domain));
+	apb.msg ("%s block symbol cache hit%s for %s, %s\n",
+		 block == GLOBAL_BLOCK ? "Global" : "Static",
+		 slot->state == SYMBOL_SLOT_NOT_FOUND
+		 ? " (not found)" : "",
+		 name, domain_name (domain));
       ++bsc->hits;
       if (slot->state == SYMBOL_SLOT_NOT_FOUND)
 	return SYMBOL_LOOKUP_FAILED;
@@ -1344,10 +1394,9 @@ symbol_cache_lookup (struct symbol_cache *cache,
 
   if (symbol_lookup_debug)
     {
-      fprintf_unfiltered (gdb_stdlog,
-			  "%s block symbol cache miss for %s, %s\n",
-			  block == GLOBAL_BLOCK ? "Global" : "Static",
-			  name, domain_name (domain));
+      apb.msg ("%s block symbol cache miss for %s, %s\n",
+	       block == GLOBAL_BLOCK ? "Global" : "Static",
+	       name, domain_name (domain));
     }
   ++bsc->misses;
   return {};
@@ -1918,10 +1967,9 @@ lookup_language_this (const struct language_defn *lang,
     {
       struct objfile *objfile = lookup_objfile_from_block (block);
 
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_language_this (%s, %s (objfile %s))",
-			  lang->la_name, host_address_to_string (block),
-			  objfile_debug_name (objfile));
+      apb.push ("lookup_language_this (%s, %s (objfile %s))\n",
+	       lang->la_name, host_address_to_string (block),
+	       objfile_debug_name (objfile));
     }
 
   while (block)
@@ -1935,10 +1983,10 @@ lookup_language_this (const struct language_defn *lang,
 	{
 	  if (symbol_lookup_debug > 1)
 	    {
-	      fprintf_unfiltered (gdb_stdlog, " = %s (%s, block %s)\n",
-				  SYMBOL_PRINT_NAME (sym),
-				  host_address_to_string (sym),
-				  host_address_to_string (block));
+	      apb.pop ( "lookup_language_this (...) = %s (%s, block %s)\n",
+			SYMBOL_PRINT_NAME (sym),
+			host_address_to_string (sym),
+			host_address_to_string (block));
 	    }
 	  return (struct block_symbol) {sym, block};
 	}
@@ -1948,7 +1996,7 @@ lookup_language_this (const struct language_defn *lang,
     }
 
   if (symbol_lookup_debug > 1)
-    fprintf_unfiltered (gdb_stdlog, " = NULL\n");
+    apb.pop ( "lookup_language_this (...) = NULL\n");
   return {};
 }
 
@@ -2013,12 +2061,11 @@ lookup_symbol_aux (const char *name, symbol_name_match_type match_type,
     {
       struct objfile *objfile = lookup_objfile_from_block (block);
 
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_symbol_aux (%s, %s (objfile %s), %s, %s)\n",
-			  name, host_address_to_string (block),
-			  objfile != NULL
-			  ? objfile_debug_name (objfile) : "NULL",
-			  domain_name (domain), language_str (language));
+      apb.push ("lookup_symbol_aux (%s, %s (objfile %s), %s, %s)\n",
+		name, host_address_to_string (block),
+		objfile != NULL
+		? objfile_debug_name (objfile) : "NULL",
+		domain_name (domain), language_str (language));
     }
 
   /* Make sure we do something sensible with is_a_field_of_this, since
@@ -2035,10 +2082,9 @@ lookup_symbol_aux (const char *name, symbol_name_match_type match_type,
   if (result.symbol != NULL)
     {
       if (symbol_lookup_debug)
-	{
-	  fprintf_unfiltered (gdb_stdlog, "lookup_symbol_aux (...) = %s\n",
-			      host_address_to_string (result.symbol));
-	}
+	apb.pop ( "lookup_symbol_aux (...) = { %s, %s }\n",
+		  SYMBOL_PRINT_NAME (result.symbol),
+		  host_address_to_string (result.block));
       return result;
     }
 
@@ -2073,8 +2119,7 @@ lookup_symbol_aux (const char *name, symbol_name_match_type match_type,
 	    {
 	      if (symbol_lookup_debug)
 		{
-		  fprintf_unfiltered (gdb_stdlog,
-				      "lookup_symbol_aux (...) = NULL\n");
+		  apb.pop ("lookup_symbol_aux (...) = { }\n");
 		}
 	      return {};
 	    }
@@ -2088,10 +2133,9 @@ lookup_symbol_aux (const char *name, symbol_name_match_type match_type,
   if (result.symbol != NULL)
     {
       if (symbol_lookup_debug)
-	{
-	  fprintf_unfiltered (gdb_stdlog, "lookup_symbol_aux (...) = %s\n",
-			      host_address_to_string (result.symbol));
-	}
+	apb.pop ( "lookup_symbol_aux (...) = { %s, %s }\n",
+		  SYMBOL_PRINT_NAME (result.symbol),
+		  host_address_to_string (result.block));
       return result;
     }
 
@@ -2101,10 +2145,12 @@ lookup_symbol_aux (const char *name, symbol_name_match_type match_type,
   result = lookup_static_symbol (name, domain);
   if (symbol_lookup_debug)
     {
-      fprintf_unfiltered (gdb_stdlog, "lookup_symbol_aux (...) = %s\n",
-			  result.symbol != NULL
-			    ? host_address_to_string (result.symbol)
-			    : "NULL");
+      if (result.symbol == NULL)
+	apb.pop ( "lookup_symbol_aux (...) = { }\n");
+      else
+	apb.pop ( "lookup_symbol_aux (...) = { %s, %s }\n",
+		  SYMBOL_PRINT_NAME (result.symbol),
+		  host_address_to_string (result.block));
     }
   return result;
 }
@@ -2119,20 +2165,37 @@ lookup_local_symbol (const char *name,
 		     const domain_enum domain,
 		     enum language language)
 {
+  if (symbol_lookup_debug > 5)
+    apb.push ("lookup_local_symbol (%s, ???, %s, %s, %s)\n",
+	     name,
+	     host_address_to_string (block),
+	     domain_name (domain),
+	     language_str (language));
+
   struct symbol *sym;
   const struct block *static_block = block_static_block (block);
   const char *scope = block_scope (block);
-  
+
   /* Check if either no block is specified or it's a global block.  */
 
   if (static_block == NULL)
-    return {};
+    {
+      if (symbol_lookup_debug > 5)
+	apb.pop ("lookup_local_symbol (...) = {}\n");
+      return {};
+    }
 
   while (block != static_block)
     {
       sym = lookup_symbol_in_block (name, match_type, block, domain);
       if (sym != NULL)
-	return (struct block_symbol) {sym, block};
+	{
+	  if (symbol_lookup_debug > 5)
+	    apb.pop ("lookup_local_symbol (...) = {%s, %s}\n",
+		     SYMBOL_PRINT_NAME (sym),
+		     host_address_to_string (block));
+	  return (struct block_symbol) {sym, block};
+	}
 
       if (language == language_cplus || language == language_fortran)
         {
@@ -2141,7 +2204,13 @@ lookup_local_symbol (const char *name,
 						    domain);
 
           if (blocksym.symbol != NULL)
-            return blocksym;
+	    {
+	      if (symbol_lookup_debug > 5)
+		apb.pop ("lookup_local_symbol (...) = {%s, %s}\n",
+			 SYMBOL_PRINT_NAME (blocksym.symbol),
+			 host_address_to_string (blocksym.block));
+	      return blocksym;
+	    }
         }
 
       if (BLOCK_FUNCTION (block) != NULL && block_inlined_p (block))
@@ -2151,6 +2220,8 @@ lookup_local_symbol (const char *name,
 
   /* We've reached the end of the function without finding a result.  */
 
+  if (symbol_lookup_debug > 5)
+    apb.pop ("lookup_local_symbol (...) = {}\n");
   return {};
 }
 
@@ -2193,11 +2264,10 @@ lookup_symbol_in_block (const char *name, symbol_name_match_type match_type,
     {
       struct objfile *objfile = lookup_objfile_from_block (block);
 
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_symbol_in_block (%s, %s (objfile %s), %s)",
-			  name, host_address_to_string (block),
-			  objfile_debug_name (objfile),
-			  domain_name (domain));
+      apb.push ("lookup_symbol_in_block (%s, %s (objfile %s), %s)\n",
+		name, host_address_to_string (block),
+		objfile_debug_name (objfile),
+		domain_name (domain));
     }
 
   sym = block_lookup_symbol (block, name, match_type, domain);
@@ -2205,14 +2275,15 @@ lookup_symbol_in_block (const char *name, symbol_name_match_type match_type,
     {
       if (symbol_lookup_debug > 1)
 	{
-	  fprintf_unfiltered (gdb_stdlog, " = %s\n",
-			      host_address_to_string (sym));
+	  apb.pop ("lookup_symbol_in_block (...) = %s (%s)\n",
+		   SYMBOL_PRINT_NAME (sym),
+		   host_address_to_string (sym));
 	}
       return fixup_symbol_section (sym, NULL);
     }
 
   if (symbol_lookup_debug > 1)
-    fprintf_unfiltered (gdb_stdlog, " = NULL\n");
+    apb.pop ("lookup_symbol_in_block (...) = NULL\n");
   return NULL;
 }
 
@@ -2252,12 +2323,11 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile,
 
   if (symbol_lookup_debug > 1)
     {
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_symbol_in_objfile_symtabs (%s, %s, %s, %s)",
-			  objfile_debug_name (objfile),
-			  block_index == GLOBAL_BLOCK
-			  ? "GLOBAL_BLOCK" : "STATIC_BLOCK",
-			  name, domain_name (domain));
+      apb.push ("lookup_symbol_in_objfile_symtabs (%s, %s, %s, %s)\n",
+		objfile_debug_name (objfile),
+		block_index == GLOBAL_BLOCK
+		? "GLOBAL_BLOCK" : "STATIC_BLOCK",
+		name, domain_name (domain));
     }
 
   for (compunit_symtab *cust : objfile->compunits ())
@@ -2274,9 +2344,9 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile,
 	{
 	  if (symbol_lookup_debug > 1)
 	    {
-	      fprintf_unfiltered (gdb_stdlog, " = %s (block %s)\n",
-				  host_address_to_string (result.symbol),
-				  host_address_to_string (block));
+	      apb.pop ("lookup_symbol_in_objfile_symtabs (...) = %s (block %s)\n",
+		       host_address_to_string (result.symbol),
+		       host_address_to_string (block));
 	    }
 	  result.symbol = fixup_symbol_section (result.symbol, objfile);
 	  return result;
@@ -2285,7 +2355,7 @@ lookup_symbol_in_objfile_symtabs (struct objfile *objfile,
     }
 
   if (symbol_lookup_debug > 1)
-    fprintf_unfiltered (gdb_stdlog, " = NULL\n");
+    apb.pop ("lookup_symbol_in_objfile_symtabs (...)  = NULL\n");
   return {};
 }
 
@@ -2365,7 +2435,7 @@ lookup_symbol_via_quick_fns (struct objfile *objfile,
 
   if (symbol_lookup_debug > 1)
     {
-      fprintf_unfiltered (gdb_stdlog,
+      apb.msg (
 			  "lookup_symbol_via_quick_fns (%s, %s, %s, %s)\n",
 			  objfile_debug_name (objfile),
 			  block_index == GLOBAL_BLOCK
@@ -2378,7 +2448,7 @@ lookup_symbol_via_quick_fns (struct objfile *objfile,
     {
       if (symbol_lookup_debug > 1)
 	{
-	  fprintf_unfiltered (gdb_stdlog,
+	  apb.msg (
 			      "lookup_symbol_via_quick_fns (...) = NULL\n");
 	}
       return {};
@@ -2393,7 +2463,7 @@ lookup_symbol_via_quick_fns (struct objfile *objfile,
 
   if (symbol_lookup_debug > 1)
     {
-      fprintf_unfiltered (gdb_stdlog,
+      apb.msg (
 			  "lookup_symbol_via_quick_fns (...) = %s (block %s)\n",
 			  host_address_to_string (result.symbol),
 			  host_address_to_string (block));
@@ -2463,13 +2533,9 @@ lookup_symbol_in_static_block (const char *name,
     {
       struct objfile *objfile = lookup_objfile_from_block (static_block);
 
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_symbol_in_static_block (%s, %s (objfile %s),"
-			  " %s)\n",
-			  name,
-			  host_address_to_string (block),
-			  objfile_debug_name (objfile),
-			  domain_name (domain));
+      apb.push ("lookup_symbol_in_static_block (%s, %s (objfile %s), %s)\n",
+		name, host_address_to_string (block),
+		objfile_debug_name (objfile), domain_name (domain));
     }
 
   sym = lookup_symbol_in_block (name,
@@ -2477,9 +2543,12 @@ lookup_symbol_in_static_block (const char *name,
 				static_block, domain);
   if (symbol_lookup_debug)
     {
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_symbol_in_static_block (...) = %s\n",
-			  sym != NULL ? host_address_to_string (sym) : "NULL");
+      if (sym == NULL)
+	apb.pop ("lookup_symbol_in_static_block (...) = { }\n");
+      else
+	apb.pop ("lookup_symbol_in_static_block (...) = { %s, %s }\n",
+		 SYMBOL_PRINT_NAME (sym),
+		 host_address_to_string (static_block));
     }
   return (struct block_symbol) {sym, static_block};
 }
@@ -2499,12 +2568,11 @@ lookup_symbol_in_objfile (struct objfile *objfile, enum block_enum block_index,
 
   if (symbol_lookup_debug)
     {
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_symbol_in_objfile (%s, %s, %s, %s)\n",
-			  objfile_debug_name (objfile),
-			  block_index == GLOBAL_BLOCK
-			  ? "GLOBAL_BLOCK" : "STATIC_BLOCK",
-			  name, domain_name (domain));
+      apb.push ("lookup_symbol_in_objfile (%s, %s, %s, %s)\n",
+		objfile_debug_name (objfile),
+		block_index == GLOBAL_BLOCK
+		? "GLOBAL_BLOCK" : "STATIC_BLOCK",
+		name, domain_name (domain));
     }
 
   result = lookup_symbol_in_objfile_symtabs (objfile, block_index,
@@ -2513,10 +2581,8 @@ lookup_symbol_in_objfile (struct objfile *objfile, enum block_enum block_index,
     {
       if (symbol_lookup_debug)
 	{
-	  fprintf_unfiltered (gdb_stdlog,
-			      "lookup_symbol_in_objfile (...) = %s"
-			      " (in symtabs)\n",
-			      host_address_to_string (result.symbol));
+	  apb.pop ("lookup_symbol_in_objfile (...) = %s (in symtabs)\n",
+		   host_address_to_string (result.symbol));
 	}
       return result;
     }
@@ -2525,12 +2591,11 @@ lookup_symbol_in_objfile (struct objfile *objfile, enum block_enum block_index,
 					name, domain);
   if (symbol_lookup_debug)
     {
-      fprintf_unfiltered (gdb_stdlog,
-			  "lookup_symbol_in_objfile (...) = %s%s\n",
-			  result.symbol != NULL
-			  ? host_address_to_string (result.symbol)
-			  : "NULL",
-			  result.symbol != NULL ? " (via quick fns)" : "");
+      apb.pop ("lookup_symbol_in_objfile (...) = %s%s\n",
+	       result.symbol != NULL
+	       ? host_address_to_string (result.symbol)
+	       : "NULL",
+	       result.symbol != NULL ? " (via quick fns)" : "");
     }
   return result;
 }
@@ -2586,6 +2651,10 @@ lookup_global_or_static_symbol (const char *name,
 				struct objfile *objfile,
 				const domain_enum domain)
 {
+  if (symbol_lookup_debug)
+    apb.push ("lookup_global_symbol (%s, block %s, domain = %s)\n",
+	      name, host_address_to_string (block), domain_name (domain));
+
   struct symbol_cache *cache = get_symbol_cache (current_program_space);
   struct block_symbol result;
   struct global_or_static_sym_lookup_data lookup_data;
@@ -2602,7 +2671,16 @@ lookup_global_or_static_symbol (const char *name,
   if (result.symbol != NULL)
     {
       if (SYMBOL_LOOKUP_FAILED_P (result))
-	return {};
+	{
+	  if (symbol_lookup_debug)
+	    apb.pop ("lookup_global_symbol (...) = { }\n");
+	  return {};
+	}
+
+      if (symbol_lookup_debug)
+	apb.pop ("lookup_global_symbol (...) = { %s, %s }\n",
+		 SYMBOL_PRINT_NAME (result.symbol),
+		 host_address_to_string (result.block));
       return result;
     }
 
@@ -2623,6 +2701,17 @@ lookup_global_or_static_symbol (const char *name,
     symbol_cache_mark_found (bsc, slot, objfile, result.symbol, result.block);
   else
     symbol_cache_mark_not_found (bsc, slot, objfile, name, domain);
+
+
+  if (symbol_lookup_debug)
+    {
+      if (result.symbol == NULL)
+	apb.pop ("lookup_global_symbol (...) = { }\n");
+      else
+	apb.pop ("lookup_global_symbol (...) = { %s, %s }\n",
+		 SYMBOL_PRINT_NAME (result.symbol),
+		 host_address_to_string (result.block));
+    }
 
   return result;
 }
@@ -2808,20 +2897,33 @@ iterate_over_symbols (const struct block *block,
 		      const domain_enum domain,
 		      gdb::function_view<symbol_found_callback_ftype> callback)
 {
+  if (symbol_lookup_debug)
+    apb.push ("iterate_over_symbols (%s, ?)\n",
+	      host_address_to_string (block));
+
   struct block_iterator iter;
   struct symbol *sym;
 
   ALL_BLOCK_SYMBOLS_WITH_NAME (block, name, iter, sym)
     {
+      if (symbol_lookup_debug)
+	apb.msg ("checking symbol %s\n", SYMBOL_PRINT_NAME (sym));
+
       if (symbol_matches_domain (SYMBOL_LANGUAGE (sym),
 				 SYMBOL_DOMAIN (sym), domain))
 	{
 	  struct block_symbol block_sym = {sym, block};
 
 	  if (!callback (&block_sym))
-	    return false;
+	    {
+	      if (symbol_lookup_debug)
+		apb.pop ("iterate_over_symbols (...) [EARLY]\n");
+	      return false;
+	    }
 	}
     }
+  if (symbol_lookup_debug)
+    apb.pop ("iterate_over_symbols (...)\n");
   return true;
 }
 
@@ -4386,7 +4488,7 @@ treg_matches_sym_type_name (const compiled_regex &treg,
 
   if (symbol_lookup_debug > 1)
     {
-      fprintf_unfiltered (gdb_stdlog,
+      apb.msg (
 			  "treg_matches_sym_type_name\n     sym %s\n",
 			  SYMBOL_NATURAL_NAME (sym));
     }
@@ -4404,7 +4506,7 @@ treg_matches_sym_type_name (const compiled_regex &treg,
 
   if (symbol_lookup_debug > 1)
     {
-      fprintf_unfiltered (gdb_stdlog,
+      apb.msg (
 			  "     sym_type_name %s\n",
 			  printed_sym_type_name.c_str ());
     }

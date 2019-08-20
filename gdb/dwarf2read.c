@@ -8835,6 +8835,7 @@ partial_die_parent_scope (struct partial_die_info *pdi,
       || parent->tag == DW_TAG_union_type
       || parent->tag == DW_TAG_enumeration_type
       || (cu->language == language_fortran
+	  && getenv ("APB_DISABLE_1") == NULL
 	  && parent->tag == DW_TAG_subprogram
 	  && pdi->tag == DW_TAG_subprogram))
     {
@@ -9684,6 +9685,8 @@ psymtab_to_symtab_1 (struct partial_symtab *pst)
       /* It's an include file, no symbols to read for it.
          Everything is in the parent symtab.  */
       pst->readin = 1;
+      fprintf (stderr, "APB>> psymtab_to_symtab_1, have read in partial_symtab %s\n",
+	       host_address_to_string (pst));
       return;
     }
 
@@ -10464,6 +10467,8 @@ process_full_comp_unit (struct dwarf2_per_cu_data *per_cu,
       struct partial_symtab *pst = per_cu->v.psymtab;
       pst->compunit_symtab = cust;
       pst->readin = 1;
+      fprintf (stderr, "APB>> process_full_comp_unit, have read in partial_symtab %s\n",
+	       host_address_to_string (pst));
     }
 
   /* Push it for inclusion processing later.  */
@@ -10544,6 +10549,8 @@ process_full_type_unit (struct dwarf2_per_cu_data *per_cu,
       struct partial_symtab *pst = per_cu->v.psymtab;
       pst->compunit_symtab = cust;
       pst->readin = 1;
+      fprintf (stderr, "APB>> process_full_type_unit, have read in partial_symtab %s\n",
+	       host_address_to_string (pst));
     }
 
   /* Not needed any more.  */
@@ -10636,6 +10643,7 @@ process_die (struct die_info *die, struct dwarf2_cu *cu)
     case DW_TAG_subprogram:
       /* Nested subprograms in Fortran get a prefix.  */
       if (cu->language == language_fortran
+	  && getenv ("APB_DISABLE_2") == NULL
 	  && die->parent != NULL
 	  && die->parent->tag == DW_TAG_subprogram)
 	cu->processing_has_namespace_info = true;
@@ -21657,7 +21665,10 @@ new_symbol (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	  attr2 = dwarf2_attr (die, DW_AT_external, cu);
 	  if ((attr2 && (DW_UNSND (attr2) != 0))
 	      || cu->language == language_ada
-	      || cu->language == language_fortran)
+	      || (cu->language == language_fortran
+		  && die->parent
+		  && die->parent->tag == DW_TAG_subprogram))
+
 	    {
               /* Subprograms marked external are stored as a global symbol.
                  Ada and Fortran subprograms, whether marked external or
@@ -22667,8 +22678,15 @@ determine_prefix (struct die_info *die, struct dwarf2_cu *cu)
 	if (cu->language == language_fortran)
 	  {
 	    if ((die->tag ==  DW_TAG_subprogram)
+		&& getenv ("APB_DISABLE_3") == NULL
+		&& parent->tag == DW_TAG_subprogram
 		&& (dwarf2_name (parent, cu) != NULL))
-	      return dwarf2_name (parent, cu);
+	      {
+		const char *pf = dwarf2_name (parent, cu);
+		fprintf (stderr, "APB: Prefix is `%s` for `%s'\n", pf,
+			 dwarf2_name (die, cu));
+		return dwarf2_name (parent, cu);
+	      }
 	  }
 	return determine_prefix (parent, cu);
       case DW_TAG_enumeration_type:

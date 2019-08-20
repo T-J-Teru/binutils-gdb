@@ -1117,18 +1117,14 @@ language_lookup_primitive_type_as_symbol (const struct language_defn *la,
   struct symbol *sym;
 
   if (symbol_lookup_debug)
-    {
-      fprintf_unfiltered (gdb_stdlog,
-			  "language_lookup_primitive_type_as_symbol"
-			  " (%s, %s, %s)",
-			  la->la_name, host_address_to_string (gdbarch), name);
-    }
+    apb.push ("language_lookup_primitive_type_as_symbol (%s, %s, %s)\n",
+	      la->la_name, host_address_to_string (gdbarch), name);
 
   typep = language_lookup_primitive_type_1 (lai, name);
   if (typep == NULL)
     {
       if (symbol_lookup_debug)
-	fprintf_unfiltered (gdb_stdlog, " = NULL\n");
+	apb.pop ("language_lookup_primitive_type_as_symbol (...) = NULL\n");
       return NULL;
     }
 
@@ -1139,7 +1135,8 @@ language_lookup_primitive_type_as_symbol (const struct language_defn *la,
   sym = lai->primitive_type_symbols[typep - lai->primitive_type_vector];
 
   if (symbol_lookup_debug)
-    fprintf_unfiltered (gdb_stdlog, " = %s\n", host_address_to_string (sym));
+    apb.pop ("language_lookup_primitive_type_as_symbol (...) = %s\n",
+	     SYMBOL_PRINT_NAME (sym));
   return sym;
 }
 

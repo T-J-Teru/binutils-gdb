@@ -136,6 +136,9 @@ add_symbol_to_list (struct symbol *symbol, struct pending **listhead)
 {
   struct pending *link;
 
+  if (symbol_lookup_debug > 5)
+    apb.msg ("APB: Adding symbol `%s`\n", SYMBOL_PRINT_NAME (symbol));
+
   /* If this is an alias for another symbol, don't add it.  */
   if (symbol->ginfo.name && symbol->ginfo.name[0] == '#')
     return;

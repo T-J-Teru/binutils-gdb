@@ -2040,6 +2040,9 @@ cp_demangled_name_to_comp (const char *demangled_name,
   std::unique_ptr<demangle_parse_info> result (new demangle_parse_info);
   result->info = state.demangle_info;
 
+  scoped_restore restore_yydebug = make_scoped_restore (&yydebug,
+							parser_debug);
+
   if (yyparse (&state))
     {
       if (state.global_errmsg && errmsg)

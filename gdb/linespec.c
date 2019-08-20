@@ -204,7 +204,13 @@ collect_info::add_symbol (block_symbol *bsym)
   /* In list mode, add all matching symbols, regardless of class.
      This allows the user to type "list a_global_variable".  */
   if (SYMBOL_CLASS (bsym->symbol) == LOC_BLOCK || this->state->list_mode)
-    this->result.symbols->push_back (*bsym);
+    {
+      if (symbol_lookup_debug)
+	apb.msg ("add_symbol ( { %s, %s } )\n",
+		 SYMBOL_PRINT_NAME (bsym->symbol),
+		 host_address_to_string (bsym->block));
+      this->result.symbols->push_back (*bsym);
+    }
 
   /* Continue iterating.  */
   return true;
@@ -217,6 +223,11 @@ struct symbol_searcher_collect_info
 {
   bool add_symbol (block_symbol *bsym) override
   {
+    if (symbol_lookup_debug)
+      apb.msg ("add_symbol ( { %s, %s } )\n",
+	       SYMBOL_PRINT_NAME (bsym->symbol),
+	       host_address_to_string (bsym->block));
+
     /* Add everything.  */
     this->result.symbols->push_back (*bsym);
 
@@ -1133,6 +1144,9 @@ iterate_over_all_matching_symtabs
    struct program_space *search_pspace, bool include_inline,
    gdb::function_view<symbol_found_callback_ftype> callback)
 {
+  if (symbol_lookup_debug)
+    apb.push ("iterate_over_all_matching_symtabs (?)\n");
+
   struct program_space *pspace;
 
   ALL_PSPACES (pspace)
@@ -1146,6 +1160,10 @@ iterate_over_all_matching_symtabs
 
     for (objfile *objfile : current_program_space->objfiles ())
       {
+	if (symbol_lookup_debug)
+	  apb.msg ("iterate_over_all_matching_symtabs, objfile = %s\n",
+		   objfile_name (objfile));
+
 	if (objfile->sf)
 	  objfile->sf->qf->expand_symtabs_matching (objfile,
 						    NULL,
@@ -1155,6 +1173,10 @@ iterate_over_all_matching_symtabs
 
 	for (compunit_symtab *cu : objfile->compunits ())
 	  {
+	    if (symbol_lookup_debug)
+	      apb.msg ("iterate_over_all_matching_symtabs, cu = %s\n",
+		       host_address_to_string (cu));
+
 	    struct symtab *symtab = COMPUNIT_FILETABS (cu);
 
 	    iterate_over_file_blocks (symtab, lookup_name, name_domain,
@@ -1185,6 +1207,9 @@ iterate_over_all_matching_symtabs
 	  }
       }
   }
+
+  if (symbol_lookup_debug)
+    apb.pop ("iterate_over_all_matching_symtabs (...)\n");
 }
 
 /* Returns the block to be used for symbol searches from
@@ -1211,7 +1236,12 @@ iterate_over_file_blocks
   for (block = BLOCKVECTOR_BLOCK (SYMTAB_BLOCKVECTOR (symtab), STATIC_BLOCK);
        block != NULL;
        block = BLOCK_SUPERBLOCK (block))
-    LA_ITERATE_OVER_SYMBOLS (block, name, domain, callback);
+    {
+      if (symbol_lookup_debug)
+	apb.msg ("iterate_over_file_blocks, block = %s\n",
+		 host_address_to_string (block));
+      LA_ITERATE_OVER_SYMBOLS (block, name, domain, callback);
+    }
 }
 
 /* A helper for find_method.  This finds all methods in type T of
@@ -1763,6 +1793,9 @@ set_completion_after_number (linespec_parser *parser,
 static void
 linespec_parse_basic (linespec_parser *parser)
 {
+  if (symbol_lookup_debug)
+    apb.push ("linespec_parse_basic (?)\n");
+
   gdb::unique_xmalloc_ptr<char> name;
   linespec_token token;
   std::vector<block_symbol> symbols;
@@ -1799,6 +1832,8 @@ linespec_parse_basic (linespec_parser *parser)
       if (token.type == LSTOKEN_COMMA)
 	{
 	  parser->complete_what = linespec_complete_what::NOTHING;
+	  if (symbol_lookup_debug)
+	    apb.pop ("linespec_parse_basic (...) = ?\n");
 	  return;
 	}
 
@@ -1809,7 +1844,11 @@ linespec_parse_basic (linespec_parser *parser)
     }
 
   if (token.type == LSTOKEN_KEYWORD || token.type == LSTOKEN_EOI)
-    return;
+    {
+      if (symbol_lookup_debug)
+	apb.pop ("linespec_parse_basic (...) = ?\n");
+      return;
+    }
 
   /* Next token must be LSTOKEN_STRING.  */
   if (token.type != LSTOKEN_STRING)
@@ -1821,6 +1860,9 @@ linespec_parse_basic (linespec_parser *parser)
   /* The current token will contain the name of a function, method,
      or label.  */
   name = copy_token_string (token);
+
+  if (symbol_lookup_debug)
+    apb.msg ("name is %s\n", name.get ());
 
   if (parser->completion_tracker != NULL)
     {
@@ -1861,14 +1903,22 @@ linespec_parse_basic (linespec_parser *parser)
 	}
 
       PARSER_EXPLICIT (parser)->function_name = name.release ();
+      if (symbol_lookup_debug)
+	apb.msg ("name is now %s\n", PARSER_EXPLICIT (parser)->function_name);
     }
   else
     {
+      if (symbol_lookup_debug)
+	apb.push ("linespec_parse_basic: before calling find_linespec_symbols\n");
+
       /* Try looking it up as a function/method.  */
       find_linespec_symbols (PARSER_STATE (parser),
 			     PARSER_RESULT (parser)->file_symtabs, name.get (),
 			     PARSER_EXPLICIT (parser)->func_name_match_type,
 			     &symbols, &minimal_symbols);
+
+      if (symbol_lookup_debug)
+	apb.pop ("linespec_parse_basic: after calling find_linespec_symbols\n");
 
       if (!symbols.empty () || !minimal_symbols.empty ())
 	{
@@ -1881,10 +1931,17 @@ linespec_parse_basic (linespec_parser *parser)
 	}
       else
 	{
+	  if (symbol_lookup_debug)
+	    apb.push ("linespec_parse_basic: before calling find_label_symbols\n");
+
 	  /* NAME was not a function or a method.  So it must be a label
 	     name or user specified variable like "break foo.c:$zippo".  */
 	  labels = find_label_symbols (PARSER_STATE (parser), NULL,
 				       &symbols, name.get ());
+
+	  if (symbol_lookup_debug)
+	    apb.pop ("linespec_parse_basic: after calling find_label_symbols\n");
+
 	  if (labels != NULL)
 	    {
 	      PARSER_RESULT (parser)->labels.label_symbols = labels;
@@ -1904,6 +1961,8 @@ linespec_parse_basic (linespec_parser *parser)
 		  /* The user-specified variable was not valid.  Do not
 		     throw an error here.  parse_linespec will do it for us.  */
 		  PARSER_EXPLICIT (parser)->function_name = name.release ();
+		  if (symbol_lookup_debug)
+		    apb.pop ("linespec_parse_basic (...) = ?\n");
 		  return;
 		}
 	    }
@@ -1914,6 +1973,8 @@ linespec_parse_basic (linespec_parser *parser)
 
 	      /* Save a copy of the name we were trying to lookup.  */
 	      PARSER_EXPLICIT (parser)->function_name = name.release ();
+	      if (symbol_lookup_debug)
+		apb.pop ("linespec_parse_basic (...) = ?\n");
 	      return;
 	    }
 	}
@@ -2034,6 +2095,9 @@ linespec_parse_basic (linespec_parser *parser)
 	  unexpected_linespec_error (parser);
 	}
     }
+
+  if (symbol_lookup_debug)
+    apb.pop ("linespec_parse_basic (...) = ?\n");
 }
 
 /* Canonicalize the linespec contained in LS.  The result is saved into
@@ -3871,6 +3935,9 @@ find_function_symbols (struct linespec_state *state,
 		       std::vector<block_symbol> *symbols,
 		       std::vector<bound_minimal_symbol> *minsyms)
 {
+  if (symbol_lookup_debug)
+    apb.push ("find_function_symbols (?)\n");
+
   struct collect_info info;
   std::vector<const char *> symbol_names;
 
@@ -3887,6 +3954,9 @@ find_function_symbols (struct linespec_state *state,
   else
     add_matching_symbols_to_info (name, name_match_type, FUNCTIONS_DOMAIN,
 				  &info, state->search_pspace);
+
+  if (symbol_lookup_debug)
+    apb.pop ("find_function_symbols (...)\n");
 }
 
 /* Find all symbols named NAME in FILE_SYMTABS, returning debug symbols
@@ -3900,6 +3970,9 @@ find_linespec_symbols (struct linespec_state *state,
 		       std::vector <block_symbol> *symbols,
 		       std::vector<bound_minimal_symbol> *minsyms)
 {
+  if (symbol_lookup_debug)
+    apb.push ("find_linespec_symbols (?)\n");
+
   std::string canon = cp_canonicalize_string_no_typedefs (lookup_name);
   if (!canon.empty ())
     lookup_name = canon.c_str ();
@@ -3912,6 +3985,10 @@ find_linespec_symbols (struct linespec_state *state,
      *then* call find_method.  This handles two important cases:
      1) break (anonymous namespace)::foo
      2) break class::method where method is in class (and not a baseclass)  */
+
+
+  if (symbol_lookup_debug)
+    apb.msg ("In find_linespec_symbols, lookup_name is now %s\n", lookup_name);
 
   find_function_symbols (state, file_symtabs, lookup_name,
 			 name_match_type, symbols, minsyms);
@@ -3940,7 +4017,11 @@ find_linespec_symbols (struct linespec_state *state,
 	 we already attempted to lookup the entire name as a symbol
 	 and failed.  */
       if (last == NULL)
-	return;
+	{
+	  if (symbol_lookup_debug)
+	    apb.pop ("find_linespec_symbols (...)\n");
+	  return;
+	}
 
       /* LOOKUP_NAME points to the class name.
 	 LAST points to the method name.  */
@@ -3972,6 +4053,9 @@ find_linespec_symbols (struct linespec_state *state,
 	    }
 	}
     }
+
+  if (symbol_lookup_debug)
+    apb.pop ("find_linespec_symbols (...)\n");
 }
 
 /* Helper for find_label_symbols.  Find all labels that match name
@@ -4037,6 +4121,10 @@ find_label_symbols (struct linespec_state *self,
 		    const char *name,
 		    bool completion_mode)
 {
+
+  if (symbol_lookup_debug > 3)
+    apb.push ("find_label_symbols (%s)\n", name);
+
   const struct block *block;
   struct symbol *fn_sym;
   std::vector<block_symbol> result;
@@ -4051,7 +4139,11 @@ find_label_symbols (struct linespec_state *self,
 	   block = BLOCK_SUPERBLOCK (block))
 	;
       if (!block)
-	return NULL;
+	{
+	  if (symbol_lookup_debug > 3)
+	    apb.pop ("find_label_symbols (...) = NULL\n");
+	  return NULL;
+	}
       fn_sym = BLOCK_FUNCTION (block);
 
       find_label_symbols_in_block (block, name, fn_sym, completion_mode,
@@ -4071,7 +4163,24 @@ find_label_symbols (struct linespec_state *self,
     }
 
   if (!result.empty ())
-    return new std::vector<block_symbol> (std::move (result));
+    {
+      if (symbol_lookup_debug > 3)
+	{
+	  apb.pop ("find_label_symbols (...) = { ");
+	  for (auto t : result)
+	    {
+	      fprintf_filtered (gdb_stdlog,
+				"{ %s, %s } ",
+				SYMBOL_PRINT_NAME (t.symbol),
+				host_address_to_string (t.block));
+	    }
+	  fprintf_filtered (gdb_stdlog, "}\n");
+	}
+      return new std::vector<block_symbol> (std::move (result));
+    }
+
+  if (symbol_lookup_debug > 3)
+    apb.pop ("find_label_symbols (...) = NULL\n");
   return nullptr;
 }
 
@@ -4331,6 +4440,9 @@ search_minsyms_for_name (struct collect_info *info,
 			 struct program_space *search_pspace,
 			 struct symtab *symtab)
 {
+  if (symbol_lookup_debug)
+    apb.push ("search_minsyms_for_name (?)\n");
+
   std::vector<struct bound_minimal_symbol> minsyms;
 
   if (symtab == NULL)
@@ -4394,6 +4506,9 @@ search_minsyms_for_name (struct collect_info *info,
 	  info->result.minimal_symbols->push_back (item);
 	}
     }
+
+  if (symbol_lookup_debug)
+    apb.pop ("search_minsyms_for_name (...) = ???\n");
 }
 
 /* A helper function to add all symbols matching NAME to INFO.  If
@@ -4407,21 +4522,28 @@ add_matching_symbols_to_info (const char *name,
 			      struct collect_info *info,
 			      struct program_space *pspace)
 {
+  if (symbol_lookup_debug)
+    apb.push ("add_matching_symbols_to_info (?)\n");
+
   lookup_name_info lookup_name (name, name_match_type);
 
   for (const auto &elt : *info->file_symtabs)
     {
       if (elt == nullptr)
 	{
+	  apb.msg ("APB: Hunting out matching symbols\n");
 	  iterate_over_all_matching_symtabs (info->state, lookup_name,
 					     VAR_DOMAIN, search_domain,
 					     pspace, true,
 					     [&] (block_symbol *bsym)
 	    { return info->add_symbol (bsym); });
+
+	  apb.msg ("APB: Hunting out matching msymbols\n");
 	  search_minsyms_for_name (info, lookup_name, pspace, NULL);
 	}
       else if (pspace == NULL || pspace == SYMTAB_PSPACE (elt))
 	{
+	  apb.msg ("APB: Pulling matching symbols from specific symtab\n");
 	  int prev_len = info->result.symbols->size ();
 
 	  /* Program spaces that are executing startup should have
@@ -4438,9 +4560,15 @@ add_matching_symbols_to_info (const char *name,
 	     this case.  */
 	  if (prev_len == info->result.symbols->size ()
 	      && elt->language == language_asm)
-	    search_minsyms_for_name (info, lookup_name, pspace, elt);
+	    {
+	      apb.msg ("APB: Looking for matching minsyms\n");
+	      search_minsyms_for_name (info, lookup_name, pspace, elt);
+	    }
 	}
     }
+
+  if (symbol_lookup_debug)
+    apb.pop ("add_matching_symbols_to_info (...) = ???\n");
 }
 
 

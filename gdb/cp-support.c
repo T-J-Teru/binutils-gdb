@@ -516,15 +516,30 @@ cp_canonicalize_string_full (const char *string,
   std::unique_ptr<demangle_parse_info> info;
 
   estimated_len = strlen (string) * 2;
+
+  if (symbol_lookup_debug)
+    apb.msg ("cp_canonicalize_string_full, line %d\n", __LINE__);
   info = cp_demangled_name_to_comp (string, NULL);
+  if (symbol_lookup_debug)
+    apb.msg ("cp_canonicalize_string_full, line %d\n", __LINE__);
   if (info != NULL)
     {
+      if (symbol_lookup_debug)
+	apb.msg ("cp_canonicalize_string_full, line %d\n", __LINE__);
+
       /* Replace all the typedefs in the tree.  */
       replace_typedefs (info.get (), info->tree, finder, data);
+
+      if (symbol_lookup_debug)
+	apb.msg ("cp_canonicalize_string_full, line %d\n", __LINE__);
 
       /* Convert the tree back into a string.  */
       gdb::unique_xmalloc_ptr<char> us = cp_comp_to_string (info->tree,
 							    estimated_len);
+
+      if (symbol_lookup_debug)
+	apb.msg ("cp_canonicalize_string_full, line %d\n", __LINE__);
+
       gdb_assert (us);
 
       ret = us.get ();
@@ -533,6 +548,8 @@ cp_canonicalize_string_full (const char *string,
       if (ret == string)
 	return std::string ();
     }
+  if (symbol_lookup_debug)
+    apb.msg ("cp_canonicalize_string_full, line %d\n", __LINE__);
 
   return ret;
 }

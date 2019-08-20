@@ -531,10 +531,18 @@ static bool
 psymbol_name_matches (partial_symbol *psym,
 		      const lookup_name_info &lookup_name)
 {
+  if (symbol_lookup_debug)
+    apb.push ("psymbol_name_matches (?)\n");
+
   const language_defn *lang = language_def (psym->ginfo.language);
   symbol_name_matcher_ftype *name_match
     = get_symbol_name_matcher (lang, lookup_name);
-  return name_match (symbol_search_name (&psym->ginfo), lookup_name, NULL);
+  bool ans = name_match (symbol_search_name (&psym->ginfo), lookup_name, NULL);
+
+  if (symbol_lookup_debug)
+    apb.pop ("psymbol_name_matches (...) = %d\n", ans);
+
+  return ans;
 }
 
 /* Look in PST for a symbol in DOMAIN whose name matches NAME.  Search
@@ -1214,12 +1222,22 @@ recursively_search_psymtabs
    const lookup_name_info &lookup_name,
    gdb::function_view<expand_symtabs_symbol_matcher_ftype> sym_matcher)
 {
+  if (symbol_lookup_debug)
+    apb.push ("recursively_search_psymtabs (%s, %s, ?)\n",
+	      host_address_to_string (ps),
+	      objfile_name (objfile));
+
   int keep_going = 1;
   enum psymtab_search_status result = PST_SEARCHED_AND_NOT_FOUND;
   int i;
 
   if (ps->searched_flag != PST_NOT_SEARCHED)
-    return ps->searched_flag == PST_SEARCHED_AND_FOUND;
+    {
+      if (symbol_lookup_debug)
+	apb.pop ("recursively_search_psymtabs (...) = %d\n",
+		 (ps->searched_flag == PST_SEARCHED_AND_FOUND));
+      return ps->searched_flag == PST_SEARCHED_AND_FOUND;
+    }
 
   /* Recurse into shared psymtabs first, because they may have already
      been searched, and this could save some time.  */
@@ -1237,6 +1255,9 @@ recursively_search_psymtabs
       if (r != 0)
 	{
 	  ps->searched_flag = PST_SEARCHED_AND_FOUND;
+	  if (symbol_lookup_debug)
+	    apb.pop ("recursively_search_psymtabs (...) = %d\n",
+		     (true));
 	  return true;
 	}
     }
@@ -1271,6 +1292,9 @@ recursively_search_psymtabs
 	{
 	  QUIT;
 
+	  if (symbol_lookup_debug)
+	    apb.msg ("recursively_search_psymtabs, checking symbol %s\n",
+		     symbol_search_name (&(*psym)->ginfo));
 	  if ((domain == ALL_DOMAIN
 	       || (domain == VARIABLES_DOMAIN
 		   && (*psym)->aclass != LOC_TYPEDEF
@@ -1292,6 +1316,9 @@ recursively_search_psymtabs
     }
 
   ps->searched_flag = result;
+  if (symbol_lookup_debug)
+    apb.pop ("recursively_search_psymtabs (...) = %d\n",
+	     (result == PST_SEARCHED_AND_FOUND));
   return result == PST_SEARCHED_AND_FOUND;
 }
 
@@ -1307,6 +1334,9 @@ psym_expand_symtabs_matching
    gdb::function_view<expand_symtabs_exp_notify_ftype> expansion_notify,
    enum search_domain domain)
 {
+  if (symbol_lookup_debug)
+    apb.push ("psym_expand_symtabs_matching (?)\n");
+
   lookup_name_info lookup_name = lookup_name_in.make_ignore_params ();
 
   /* Clear the search flags.  */
@@ -1315,10 +1345,18 @@ psym_expand_symtabs_matching
 
   for (partial_symtab *ps : objfile->psymtabs ())
     {
+      if (symbol_lookup_debug)
+	apb.msg ("psym_expand_symtabs_matching, partial_symtab = %s\n",
+		 host_address_to_string (ps));
+
       QUIT;
 
       if (ps->readin)
-	continue;
+	{
+	  if (symbol_lookup_debug)
+	    apb.msg ("psym_expand_symtabs_matching, already read in\n");
+	  continue;
+	}
 
       /* We skip shared psymtabs because file-matching doesn't apply
 	 to them; but we search them later in the loop.  */
@@ -1345,6 +1383,8 @@ psym_expand_symtabs_matching
 	    continue;
 	}
 
+      if (symbol_lookup_debug)
+	apb.msg ("psym_expand_symtabs_matching, searching psymtab for matches\n");
       if (recursively_search_psymtabs (ps, objfile, domain,
 				       lookup_name, symbol_matcher))
 	{
@@ -1355,6 +1395,9 @@ psym_expand_symtabs_matching
 	    expansion_notify (symtab);
 	}
     }
+
+  if (symbol_lookup_debug)
+    apb.pop ("psym_expand_symtabs_matching (...)\n");
 }
 
 /* Psymtab version of has_symbols.  See its definition in

@@ -731,8 +731,23 @@ struct symbol *
 block_lookup_symbol_primary (const struct block *block, const char *name,
 			     const domain_enum domain)
 {
+  if (symbol_lookup_debug > 5)
+    apb.push ("block_lookup_symbol_primary (%s, %s, domain = %s)\n",
+	      host_address_to_string (block),
+	      name, domain_name (domain));
+
   struct symbol *sym, *other;
   struct mdict_iterator mdict_iter;
+
+
+  if (symbol_lookup_debug > 10)
+    for (sym = mdict_iterator_first (block->multidict, &mdict_iter);
+	 sym != NULL;
+	 sym = mdict_iterator_next (&mdict_iter))
+      apb.msg ("APB: Symbol %s (%s), Domain %s\n",
+	       SYMBOL_PRINT_NAME (sym),
+	       host_address_to_string (sym),
+	       domain_name (SYMBOL_DOMAIN (sym)));
 
   lookup_name_info lookup_name (name, symbol_name_match_type::FULL);
 
@@ -747,7 +762,14 @@ block_lookup_symbol_primary (const struct block *block, const char *name,
        sym = mdict_iter_match_next (lookup_name, &mdict_iter))
     {
       if (SYMBOL_DOMAIN (sym) == domain)
-	return sym;
+	{
+	  if (symbol_lookup_debug > 10)
+	    apb.msg ( "APB: Found = %p\n", sym);
+	  if (symbol_lookup_debug > 5)
+	    apb.pop ("block_lookup_symbol_primary (...) = %s\n",
+		     SYMBOL_PRINT_NAME (sym));
+	  return sym;
+	}
 
       /* This is a bit of a hack, but symbol_matches_domain might ignore
 	 STRUCT vs VAR domain symbols.  So if a matching symbol is found,
@@ -758,6 +780,9 @@ block_lookup_symbol_primary (const struct block *block, const char *name,
 	other = sym;
     }
 
+  if (symbol_lookup_debug > 5)
+    apb.pop ("block_lookup_symbol_primary (...) = %s\n",
+	     (other ? SYMBOL_PRINT_NAME (other) : "NULL"));
   return other;
 }
 

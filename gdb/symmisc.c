@@ -346,6 +346,9 @@ dump_symtab_1 (struct symtab *symtab, struct ui_file *outfile)
 				SYMBOL_DEMANGLED_NAME (BLOCK_FUNCTION (b)));
 		}
 	    }
+	  if (block_scope (b) != NULL)
+	    fprintf_filtered (outfile, ", scope %s",
+			      block_scope (b));
 	  fprintf_filtered (outfile, "\n");
 	  /* Now print each symbol in this block (in no particular order, if
 	     we're using a hashtable).  Note that we only want this
