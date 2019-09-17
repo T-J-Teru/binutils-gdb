@@ -997,6 +997,7 @@ walk_wild_add_match (struct lang_filename_spec *filename_spec,
 {
   if (filename_spec->matches->tail == filename_spec->matches->end)
     {
+      fprintf (stderr, "APB: Grow list\n");
       int curr_size =
         filename_spec->matches->end - filename_spec->matches->head;
       int new_size = curr_size * 2;
@@ -1021,7 +1022,7 @@ walk_wild_add_match (struct lang_filename_spec *filename_spec,
 static void
 walk_wild_init_matches (struct lang_filename_spec *filename_spec)
 {
-  const int init_size = 10;
+  const int init_size = 1;
   filename_spec->matches
     = xmalloc (sizeof (struct lang_input_statement_list)
                + sizeof (lang_input_statement_type *) * init_size);
