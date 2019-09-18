@@ -292,6 +292,10 @@ walk_wild_consider_section (lang_wild_statement_type *ptr,
   if (walk_wild_file_in_exclude_list (sec->spec.exclude_name_list, file))
     return;
 
+  //fprintf (stderr, "Callback for `%s' from `%s'\n",
+  //       bfd_get_section_name (file->the_bfd, s),
+  //       file->the_bfd->filename);
+
   (*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
 }
 
@@ -310,62 +314,16 @@ walk_wild_section_general_old (lang_wild_statement_type *ptr,
 
   for (s = file->the_bfd->sections; s != NULL; s = s->next)
     {
-      sec = ptr->section_list;
-      if (sec == NULL)
-	(*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
+      //fprintf (stderr, "\t checking section `%s'\n",
+      //       bfd_get_section_name (file->the_bfd, s));
 
-      while (sec != NULL)
-	{
-	  bfd_boolean skip = FALSE;
-
-	  if (sec->spec.name != NULL)
-	    {
-	      const char *sname = bfd_get_section_name (file->the_bfd, s);
-
-	      skip = name_match (sec->spec.name, sname) != 0;
-	    }
-
-	  if (!skip)
-            {
-              /* Don't process sections from files which were excluded.  */
-              if (walk_wild_file_in_exclude_list (sec->spec.exclude_name_list, file))
-                return;
-
-              (*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
-              //walk_wild_consider_section (ptr, file, s, sec, callback, data);
-            }
-
-	  sec = sec->next;
-	}
-    }
-}
-
-static void
-walk_wild_section_general_process (lang_wild_statement_type *ptr,
-                                   lang_input_statement_type *file,
-                                   callback_t callback,
-                                   void *data)
-{
-  asection *s;
-  struct wildcard_list *sec;
-
-  (void) callback;
-  (void) data;
-
-  ASSERT (ptr->section_spec == NULL);
-  ptr->section_spec = xmalloc (sizeof (struct section_spec));
-  ptr->section_spec->size = 0;
-  ptr->section_spec->head = NULL;
-  ptr->section_spec->tail = NULL;
-  ptr->section_spec->end = NULL;
-
-  for (s = file->the_bfd->sections; s != NULL; s = s->next)
-    {
       sec = ptr->section_list;
       if (sec == NULL)
         {
-          abort ();
-          //(*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
+          //fprintf (stderr, "Callback for `%s' from `%s' - no pattern case\n",
+          //       bfd_get_section_name (file->the_bfd, s),
+          //       file->the_bfd->filename);
+          (*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
         }
 
       while (sec != NULL)
@@ -380,72 +338,10 @@ walk_wild_section_general_process (lang_wild_statement_type *ptr,
 	    }
 
 	  if (!skip)
-            {
-              /* Don't process sections from files which were excluded.  */
-              if (walk_wild_file_in_exclude_list (sec->spec.exclude_name_list, file))
-                return;
-
-              if (ptr->section_spec->head == NULL)
-                {
-                  #define APB_SZ 1000
-                  ptr->section_spec->head
-                    = xmalloc (sizeof (struct section_and_wildcard_spec) * APB_SZ);
-                  ptr->section_spec->tail = ptr->section_spec->head;
-                  ptr->section_spec->end = ptr->section_spec->head + APB_SZ;
-                  ptr->section_spec->size = APB_SZ;
-                }
-
-              ptr->section_spec->tail->list = sec;
-              ptr->section_spec->tail->section = s;
-
-              ptr->section_spec->tail++;
-              if (ptr->section_spec->tail == ptr->section_spec->end)
-                abort (); /* Grow list.  */
-
-              //(*callback) (ptr, sec, s, ptr->section_flag_list, file, data);
-              //walk_wild_consider_section (ptr, file, s, sec, callback, data);
-            }
+            walk_wild_consider_section (ptr, file, s, sec, callback, data);
 
 	  sec = sec->next;
 	}
-    }
-}
-
-
-/* Lowest common denominator routine that can handle everything correctly,
-   but slowly.  */
-
-static void
-walk_wild_section_general_new (lang_wild_statement_type *ptr,
-                               lang_input_statement_type *file,
-                               callback_t callback,
-                               void *data)
-{
-  if (ptr->section_spec == NULL)
-    walk_wild_section_general_process (ptr, file, callback, data);
-
-  ASSERT (ptr->section_spec != NULL);
-
-  if (ptr->section_spec->head == NULL)
-    {
-      /* There's no matches.  */
-    }
-  /* Now walk the list of cached sections.  */
-  else if (ptr->section_spec->head == ptr->section_spec->tail)
-    {
-      /* All sections in FILE's bfd, with a NULL wildcard_spec.  */
-      //(*callback) (ptr, NULL, s, ptr->section_flag_list, file, data);
-      abort ();
-    }
-  else
-    {
-      struct section_and_wildcard_spec *s;
-
-      for (s = ptr->section_spec->head;
-           s != ptr->section_spec->tail;
-           s++)
-        (*callback) (ptr, s->list, s->section,
-                     ptr->section_flag_list, file, data);
     }
 }
 
@@ -455,10 +351,7 @@ walk_wild_section_general (lang_wild_statement_type *ptr,
 			   callback_t callback,
 			   void *data)
 {
-  if (getenv ("APB_OLD"))
-    return walk_wild_section_general_old (ptr, file, callback, data);
-  else
-    return walk_wild_section_general_new (ptr, file, callback, data);
+  return walk_wild_section_general_old (ptr, file, callback, data);
 }
 
 /* Routines to find a single section given its name.  If there's more
@@ -892,7 +785,8 @@ walk_wild_section (lang_wild_statement_type *ptr,
   if (file->flags.just_syms)
     return;
 
-  (*ptr->walk_wild_section_handler) (ptr, file, callback, data);
+  // (*ptr->walk_wild_section_handler) (ptr, file, callback, data);
+  walk_wild_section_general (ptr, file, callback, data);
 }
 
 /* Returns TRUE when name1 is a wildcard spec that might match
@@ -1022,6 +916,9 @@ walk_wild_file (lang_wild_statement_type *s,
   if (walk_wild_file_in_exclude_list (s->exclude_name_list, f))
     return;
 
+  //fprintf (stderr, "walk_wild_file, f = %s\n",
+  //       f->the_bfd->filename);
+
   if (f->the_bfd == NULL
       || !bfd_check_format (f->the_bfd, bfd_archive))
     walk_wild_section (s, f, callback, data);
@@ -1051,116 +948,6 @@ walk_wild_file (lang_wild_statement_type *s,
     }
 }
 
-/* Add matching lang_input_statement_type F to the
-   lang_input_statement_list of matches held inside FILENAME_SPEC.  This
-   can potentially cause the list to fill up and then be reallocated, which
-   can change the contents of FILENAME_SPEC.  */
-
-static void
-walk_wild_add_match (struct lang_filename_spec *filename_spec,
-                     lang_input_statement_type *f)
-{
-  if (filename_spec->matches->tail == filename_spec->matches->end)
-    {
-      /* Compute a new size for the matches list, remember that the list
-         originally starts out at size 0.  The base size of 10 is just a
-         random starting size picked out of the air.  */
-      int old_size =
-        filename_spec->matches->end - filename_spec->matches->head;
-      int new_size = old_size * 2;
-      if (new_size == 0)
-        new_size = 10;
-
-      /* We reallocate the list header and the list content block in a
-         single allocation, the three list pointers are then updated to
-         point into the second part of this memory region.  */
-      filename_spec->matches
-        = xrealloc (filename_spec->matches,
-                    sizeof (struct lang_input_statement_list)
-                    + sizeof (lang_input_statement_type *) * new_size);
-      filename_spec->matches->head
-        = ((lang_input_statement_type **)
-           ((uintptr_t) filename_spec->matches
-            + sizeof (struct lang_input_statement_list)));
-      filename_spec->matches->tail
-        = filename_spec->matches->head + old_size;
-      filename_spec->matches->end
-        = filename_spec->matches->head + new_size;
-    }
-
-  (*filename_spec->matches->tail) = f;
-  filename_spec->matches->tail++;
-}
-
-/* Initialise the lang_input_statement_list held inside FILENAME_SPEC.  */
-
-static void
-walk_wild_init_matches (struct lang_filename_spec *filename_spec)
-{
-  /* Start by allocating space for no matching entries.  The most common
-     pattern for file names is '*' which is handled as a special case and
-     doesn't require inserting anything into the matches list.
-
-     We do still allocate the list header though, this is what tells
-     WALK_WILD that we have gone through the process of looking for
-     matches.  */
-  filename_spec->matches
-    = xmalloc (sizeof (struct lang_input_statement_list));
-  filename_spec->matches->tail = NULL;
-  filename_spec->matches->head = NULL;
-  filename_spec->matches->end = NULL;
-}
-
-/* Iterate over all lang_input_statement_type structures, and find the ones
-   that match the lang_filename_spec held inside S.  The matching input
-   statements are cached inside the file name spec.  */
-
-static void
-walk_wild_populate_matches (lang_wild_statement_type *s)
-{
-  struct lang_filename_spec *file_spec = &s->filename_spec;
-  char *p;
-
-  ASSERT (file_spec->matches == NULL);
-
-  /* We expect only some input statements to match our file name spec
-     pattern, so setup a list to hold the matching ones.  */
-  walk_wild_init_matches (file_spec);
-
-  /* Special case which matches against all files.  There's no point
-     copying all input statements into a new list, we mark this case by
-     setting the tail pointer to be NULL (but otherwise we leave the list
-     allocated and empty.  We then handle this special case differently in
-     WALK_WILD.  */
-  if (file_spec->filename == NULL)
-      file_spec->matches->tail = NULL;
-  else if ((p = archive_path (file_spec->filename)) != NULL)
-    {
-      LANG_FOR_EACH_INPUT_STATEMENT (f)
-        {
-          if (input_statement_is_archive_path (file_spec->filename, p, f))
-            walk_wild_add_match (file_spec, f);
-        }
-    }
-  else if (wildcardp (file_spec->filename))
-    {
-      LANG_FOR_EACH_INPUT_STATEMENT (f)
-        {
-          if (fnmatch (file_spec->filename, f->filename, 0) == 0)
-            walk_wild_add_match (file_spec, f);
-        }
-    }
-  else
-    {
-      lang_input_statement_type *f;
-
-      /* Perform the iteration over a single file.  */
-      f = lookup_name (file_spec->filename);
-      if (f)
-        walk_wild_add_match (file_spec, f);
-    }
-}
-
 /* Walk over all lang_input_statement_type structures and call
    WALK_WILD_FILE for any that match in the filename specification in S,
    passing CALLBACK and DATA on to WALK_WILD_FILE.  */
@@ -1168,31 +955,76 @@ walk_wild_populate_matches (lang_wild_statement_type *s)
 static void
 walk_wild (lang_wild_statement_type *s, callback_t callback, void *data)
 {
-  struct lang_filename_spec *file_spec = &s->filename_spec;
-
-  if (file_spec->matches == NULL)
-    walk_wild_populate_matches (s);
-  ASSERT (file_spec->matches != NULL);
-
-  /* We have a list of cached results which we can now iterate over
-     invoking the callback.  */
-  if (file_spec->matches->tail == NULL)
+  if (getenv ("APB_OLD") == NULL)
     {
-      /* Special case, iterate over all files.  */
-      LANG_FOR_EACH_INPUT_STATEMENT (f)
-      {
-        walk_wild_file (s, f, callback, data);
-      }
+      int i;
+      for (i = 0; i < s->m_list.count; ++i)
+        {
+          //fprintf (stderr, "Callback for `%s' from `%s'\n",
+          //       bfd_get_section_name (s->m_list.content[i].input_statement->the_bfd,
+          //                           s->m_list.content[i].section),
+          //       s->m_list.content[i].input_statement->the_bfd->filename);
+          (*callback) (s,
+                       s->m_list.content[i].wildcard_list,
+                       s->m_list.content[i].section,
+                       s->section_flag_list,
+                       s->m_list.content[i].input_statement,
+                       data);
+        }
     }
   else
     {
-      lang_input_statement_type **f_ptr;
+      const char *file_spec = s->filename_spec.filename;
+      char *p;
 
-      for (f_ptr = file_spec->matches->head;
-           f_ptr != file_spec->matches->tail;
-           ++f_ptr)
+#if 0
+      fprintf (stderr, "Matching: %s (",
+               file_spec);
+      {
+        struct wildcard_list *tmp = s->section_list;
+
+        while (tmp != NULL)
+          {
+            fprintf (stderr, " %s", tmp->spec.name);
+            tmp = tmp->next;
+          }
+
+        fprintf (stderr, " )\n");
+      }
+#endif
+
+      if (file_spec == NULL)
         {
-          walk_wild_file (s, (*f_ptr), callback, data);
+          /* Perform the iteration over all files in the list.  */
+          LANG_FOR_EACH_INPUT_STATEMENT (f)
+            {
+              walk_wild_file (s, f, callback, data);
+            }
+        }
+      else if ((p = archive_path (file_spec)) != NULL)
+        {
+          LANG_FOR_EACH_INPUT_STATEMENT (f)
+            {
+              if (input_statement_is_archive_path (file_spec, p, f))
+                walk_wild_file (s, f, callback, data);
+            }
+        }
+      else if (wildcardp (file_spec))
+        {
+          LANG_FOR_EACH_INPUT_STATEMENT (f)
+            {
+              if (fnmatch (file_spec, f->filename, 0) == 0)
+                walk_wild_file (s, f, callback, data);
+            }
+        }
+      else
+        {
+          lang_input_statement_type *f;
+
+          /* Perform the iteration over a single file.  */
+          f = lookup_name (file_spec);
+          if (f)
+            walk_wild_file (s, f, callback, data);
         }
     }
 }
@@ -4045,7 +3877,7 @@ update_wild_statements (lang_statement_union_type *s)
 /* Open input files and attach to output sections.  */
 
 static void
-map_input_to_output_sections
+map_input_to_output_sections_1
   (lang_statement_union_type *s, const char *target,
    lang_output_section_statement_type *os)
 {
@@ -4060,7 +3892,7 @@ map_input_to_output_sections
 	  wild (&s->wild_statement, target, os);
 	  break;
 	case lang_constructors_statement_enum:
-	  map_input_to_output_sections (constructor_list.head,
+	  map_input_to_output_sections_1 (constructor_list.head,
 					target,
 					os);
 	  break;
@@ -4079,7 +3911,7 @@ map_input_to_output_sections
 		  break;
 		}
 	    }
-	  map_input_to_output_sections (tos->children.head,
+	  map_input_to_output_sections_1 (tos->children.head,
 					target,
 					tos);
 	  break;
@@ -4089,7 +3921,7 @@ map_input_to_output_sections
 	  target = s->target_statement.target;
 	  break;
 	case lang_group_statement_enum:
-	  map_input_to_output_sections (s->group_statement.children.head,
+	  map_input_to_output_sections_1 (s->group_statement.children.head,
 					target,
 					os);
 	  break;
@@ -4171,6 +4003,14 @@ map_input_to_output_sections
 	  break;
 	}
     }
+}
+
+static void
+map_input_to_output_sections (void)
+{
+  //fprintf (stderr, "\n\n============================================\n\n");
+
+  map_input_to_output_sections_1 (statement_list.head, NULL, NULL);
 }
 
 /* An insert statement snips out all the linker statements from the
@@ -7643,6 +7483,118 @@ lang_check_relocs (void)
     }
 }
 
+/* TODO: Document.  */
+static void
+walk_wild_record_section_callback (lang_wild_statement_type *ptr ATTRIBUTE_UNUSED,
+                                   struct wildcard_list *sec ATTRIBUTE_UNUSED,
+                                   asection *section ATTRIBUTE_UNUSED,
+                                   struct flag_info *sflag_info ATTRIBUTE_UNUSED,
+                                   lang_input_statement_type *file ATTRIBUTE_UNUSED,
+                                   void *data ATTRIBUTE_UNUSED)
+{
+  //fprintf (stderr, "APB: Record `%s' from `%s'\n",
+  //       bfd_get_section_name (file->the_bfd, section),
+  //       file->the_bfd->filename);
+
+  // (ptr, sec, s, ptr->section_flag_list, file, data);
+  // ptr			- What we iterate over.			NO
+  // sec			(1)
+  // s				(2)
+  // ptr->section_flag_list	- Based on what we iterate over.	NO
+  // file			(3)
+  // data			- Passed by user.			NO
+
+  const int init_num = 1000000;
+  if (ptr->m_list.content == NULL)
+    {
+      /* TODO: This is a hack for now, allocate bags of space.  */
+      ptr->m_list.content = xmalloc (init_num * sizeof (struct apb_magic_match));
+      ptr->m_list.count = 0;
+    }
+
+  ASSERT (ptr->m_list.count < init_num);
+
+  ptr->m_list.content[ptr->m_list.count].wildcard_list = sec;
+  ptr->m_list.content[ptr->m_list.count].section = section;
+  ptr->m_list.content[ptr->m_list.count].input_statement = file;
+  ptr->m_list.count++;
+}
+
+/* TODO: Document.  */
+static void
+walk_wild_first (lang_wild_statement_type *s)
+{
+  const char *file_spec = s->filename_spec.filename;
+  char *p;
+
+  if (file_spec == NULL)
+    {
+      /* Perform the iteration over all files in the list.  */
+      LANG_FOR_EACH_INPUT_STATEMENT (f)
+	{
+	  walk_wild_file (s, f, walk_wild_record_section_callback, NULL);
+	}
+    }
+  else if ((p = archive_path (file_spec)) != NULL)
+    {
+      LANG_FOR_EACH_INPUT_STATEMENT (f)
+	{
+	  if (input_statement_is_archive_path (file_spec, p, f))
+	    walk_wild_file (s, f, walk_wild_record_section_callback, NULL);
+	}
+    }
+  else if (wildcardp (file_spec))
+    {
+      LANG_FOR_EACH_INPUT_STATEMENT (f)
+	{
+	  if (fnmatch (file_spec, f->filename, 0) == 0)
+	    walk_wild_file (s, f, walk_wild_record_section_callback, NULL);
+	}
+    }
+  else
+    {
+      lang_input_statement_type *f;
+
+      /* Perform the iteration over a single file.  */
+      f = lookup_name (file_spec);
+      if (f)
+	walk_wild_file (s, f, walk_wild_record_section_callback, NULL);
+    }
+}
+
+/* TODO: Document.  */
+static void
+map_input_sections_to_wild_statements_1 (lang_statement_union_type *s)
+{
+  for (; s != NULL; s = s->header.next)
+    {
+      switch (s->header.type)
+	{
+	case lang_wild_statement_enum:
+	  walk_wild_first (&s->wild_statement);
+	  break;
+	case lang_constructors_statement_enum:
+	  map_input_sections_to_wild_statements_1 (constructor_list.head);
+	  break;
+	case lang_output_section_statement_enum:
+	  map_input_sections_to_wild_statements_1 (s->output_section_statement.children.head);
+	  break;
+	case lang_group_statement_enum:
+	  map_input_sections_to_wild_statements_1 (s->group_statement.children.head);
+	  break;
+	default:
+	  break;
+	}
+    }
+}
+
+/* TODO: Document.  */
+static void
+map_input_sections_to_wild_statements (void)
+{
+  map_input_sections_to_wild_statements_1 (statement_list.head);
+}
+
 /* Look through all output sections looking for places where we can
    propagate forward the lma region.  */
 
@@ -7857,21 +7809,49 @@ lang_process (void)
   /* Size up the common data.  */
   lang_common ();
 
-  /* Remove unreferenced sections if asked to.  */
-  lang_gc_sections ();
+  if (getenv ("CHECK_EARLY") != NULL)
+    {
+      /* Check relocations.  */
+      lang_check_relocs ();
 
-  /* Check relocations.  */
-  lang_check_relocs ();
+      ldemul_after_check_relocs ();
+    }
 
-  ldemul_after_check_relocs ();
+  // fprintf (stderr, "APB: Step 1 update wild statements.\n");
+  update_wild_statements (statement_list.head);
+
+  // fprintf (stderr, "APB: Step 2 map input section into output sections.\n");
+  map_input_sections_to_wild_statements();
+
+  if (getenv ("NO_GC") == NULL)
+    {
+      /* Remove unreferenced sections if asked to.  */
+      lang_gc_sections ();
+    }
+
+  if (getenv ("CHECK_EARLY") == NULL)
+    {
+      /* Check relocations.  */
+      lang_check_relocs ();
+
+      ldemul_after_check_relocs ();
+    }
 
   /* Update wild statements.  */
-  update_wild_statements (statement_list.head);
+  // fprintf (stderr, "APB: Step 99 no longer updating wild statements here.\n");
+  // APB: This will need to move earlier to be useful.
+  // update_wild_statements (statement_list.head);
 
   /* Run through the contours of the script and attach input sections
      to the correct output sections.  */
   lang_statement_iteration++;
-  map_input_to_output_sections (statement_list.head, NULL, NULL);
+  map_input_to_output_sections ();
+
+  if (getenv ("LATE_GC") != NULL)
+    {
+      /* Remove unreferenced sections if asked to.  */
+      lang_gc_sections ();
+    }
 
   /* Start at the statement immediately after the special abs_section
      output statement, so that it isn't reordered.  */
@@ -7990,6 +7970,8 @@ lang_add_wild (struct wildcard_spec *filespec,
   new_stmt = new_stat (lang_wild_statement, stat_ptr);
   new_stmt->filename_spec.filename = NULL;
   new_stmt->filename_spec.matches = NULL;
+  new_stmt->m_list.count = 0;
+  new_stmt->m_list.content = NULL;
   new_stmt->section_spec = NULL;
   new_stmt->filenames_sorted = FALSE;
   new_stmt->section_flag_list = NULL;

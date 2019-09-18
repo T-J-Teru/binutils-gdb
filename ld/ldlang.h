@@ -404,9 +404,27 @@ struct lang_filename_spec
   struct lang_input_statement_list *matches;
 };
 
+struct apb_magic_match
+{
+  struct wildcard_list *wildcard_list;
+
+  asection *section;
+
+  lang_input_statement_type *input_statement;
+};
+
+struct apb_magic_matches_list
+{
+  int count;
+
+  struct apb_magic_match* content;
+};
+
 struct lang_wild_statement_struct
 {
   lang_statement_header_type header;
+
+  struct apb_magic_matches_list m_list;
 
   /* Information used for matching filenames of objects against the filename
      patterns in the linker script.  */
