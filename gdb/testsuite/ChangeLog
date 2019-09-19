@@ -1,5 +1,12 @@
 2019-09-18  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.base/store.exp (check_set): Use gdb_test_ext instead of
+	gdb_test_multiple.
+	(up_set): Likewise.
+	* lib/gdb.exp (gdb_test_ext): New procedure.
+
+2019-09-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.base/source-dir.exp: Avoid having directory names in test
 	names.
 

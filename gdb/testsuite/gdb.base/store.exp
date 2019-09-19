@@ -43,27 +43,25 @@ proc check_set { t l r new add } {
     set prefix "var ${t} l"
     gdb_test "tbreak wack_${t}"
 
-    set test "continue to wack_${t}"
-    gdb_test_multiple "continue" $test {
-	-re "register ${t} l = u, r = v;\r\n$gdb_prompt $" {
+    gdb_test_ext "continue" "continue to wack_${t}" {
+	"register ${t} l = u, r = v;" {
 	    # See GCC PR debug/53948.
 	    send_gdb "next\n"
 	    exp_continue
 	}
-	-re "l = add_${t} .l, r.;\r\n$gdb_prompt $" {
-	    pass $test
+	"l = add_${t} .l, r.;" {
+	    pass $gdb_test_ext_name
 	}
     }
 
     set supported 1
-    set test "${prefix}; print old l, expecting ${l}"
-    gdb_test_multiple "print l" "$test"  {
-	-re " = <optimized out>\r\n$gdb_prompt $" {
-	    unsupported $test
-	    set supported 0
+    gdb_test_ext "print l" "${prefix}; print old l, expecting ${l}" {
+	" = ${l}" {
+	    pass $gdb_test_ext_name
 	}
-	-re " = ${l}\r\n$gdb_prompt $" {
-	    pass $test
+	" = <optimized out>" {
+	    unsupported $gdb_test_ext_name
+	    set supported 0
 	}
     }
     if { $supported } {
@@ -102,14 +100,13 @@ proc up_set { t l r new } {
 	"${prefix}; up"
 
     set supported 1
-    set test "${prefix}; print old l, expecting ${l}"
-    gdb_test_multiple "print l" "$test"  {
-	-re " = <optimized out>\r\n$gdb_prompt $" {
-	    unsupported $test
-	    set supported 0
+    gdb_test_ext "print l" "${prefix}; print old l, expecting ${l}" {
+	" = ${l}" {
+	    pass $gdb_test_ext_name
 	}
-	-re " = ${l}\r\n$gdb_prompt $" {
-	    pass $test
+	" = <optimized out>" {
+	    unsupported $gdb_test_ext_name
+	    set supported 0
 	}
     }
     if { $supported } {

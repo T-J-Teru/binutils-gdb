@@ -1103,6 +1103,70 @@ proc gdb_test { args } {
      }]
 }
 
+# A cross between gdb_test_multiple and gdb_test.  The first
+# parameter, COMMAND, is the command to send to GDB, and the second
+# parameter, TESTNAME, is the name of the test.  The ARGS is a list of
+# items which should alternate between patterns and action bodies.
+# Unlike gdb_test_multiple each pattern will automatically have the
+# gdb_prompt pattern added to it.
+#
+# In addition, within the action bodies a new variable is available
+# for use, this is gdb_test_ext_name.  This variable will have the
+# value of TESTNAME.  This can be used like this:
+#
+# gdb_test_ext "some command" "a helpful test name" {
+#      "pattern1" {
+#          pass $gdb_test_ext_name
+#      }
+#      "pattern2" {
+#          fail $gdb_test_ext_name
+#      }
+# }
+proc gdb_test_ext { command testname args } {
+    global gdb_prompt
+    upvar timeout timeout
+
+    # Setup a default testname if the user was feeling lazy.
+    if { "$testname" == "" } {
+	set testname ${cmd}
+    }
+
+    # In order to support the gdb_test_ext_name variable we need to
+    # push the variable into the parent scope.  Before we blindly do
+    # that check the user hasn't already defined that variable.  If
+    # they haven't, go ahead and create it for them.
+    if { [uplevel { info exists gdb_test_ext_name }] } {
+	perror "variable gdb_test_ext_name unexpectedly exists"
+	return 1
+    }
+    uplevel " set gdb_test_ext_name \"$testname\" "
+
+    # Build up the user code.  We need to make use of some extra
+    # uplevel calls in here as gdb_test_multiple evaluates action
+    # bodies in the parent scope, so we add the extra uplevel to push
+    # things back to our parents scope.
+    set user_code {}
+    set args [lindex $args 0]
+    for { set index 0 } { [expr $index + 1] < [llength $args] } { incr index 2 } {
+	set pattern [uplevel [list subst [lindex $args ${index}]]]
+	set body [lindex $args [expr $index + 1]]
+
+	lappend user_code " -re "
+	lappend user_code "\"\\\[\\r\\n\\\]*(?:$pattern)\\\[\\r\\n\\\]+\$gdb_prompt $\""
+	lappend user_code " { uplevel { $body } } "
+    }
+    set user_code [join $user_code " "]
+
+    # Now we can actually run the test.
+    set result [gdb_test_multiple $command $testname $user_code]
+
+    # Don't drop litter!  Clean up the gdb_test_ext_name variable we
+    # created in the parent scope.
+    uplevel " unset gdb_test_ext_name "
+
+    return $result
+}
+
 # Return 1 if version MAJOR.MINOR is at least AT_LEAST_MAJOR.AT_LEAST_MINOR.
 proc version_at_least { major minor at_least_major at_least_minor} {
     if { $major > $at_least_major } {
