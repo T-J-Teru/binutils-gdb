@@ -87,6 +87,10 @@ if ![runto_main] then {
 
 global hex decimal
 
+# Grab the value of $pc, we'll use this later.
+set pc_val_file_1 [get_integer_valueof "\$pc" 0 \
+		       "get value of \$pc in main file"]
+
 gdb_breakpoint [gdb_get_line_number "Block break here."]
 gdb_continue_to_breakpoint "Block break here."
 gdb_py_test_silent_cmd "python frame = gdb.selected_frame()" "Get Frame" 0
@@ -116,7 +120,18 @@ gdb_test "python print (func.addr_class == gdb.SYMBOL_LOC_BLOCK)" "True" "test f
 gdb_breakpoint "function_in_other_file"
 gdb_continue_to_breakpoint "function_in_other_file"
 gdb_test "python print (gdb.lookup_static_symbol ('rr').value ())" "99" \
-    "print value of rr from other file"
+    "print value of rr from other file, don't pass a block value"
+gdb_test "python print (gdb.lookup_static_symbol ('rr', None).value ())" "99" \
+    "print value of rr from other file, pass block value of None"
+
+# Test gdb.lookup_static_symbol passing a block parameter
+set pc_val_file_2 [get_integer_valueof "\$pc" 0 \
+		       "get \$pc in other file"]
+gdb_test "python print (gdb.lookup_static_symbol ('rr', gdb.current_progspace ().block_for_pc (${pc_val_file_2})).value ())" "99" \
+    "print value of rr from other file, pass block for other file"
+gdb_test "python print (gdb.lookup_static_symbol ('rr', gdb.current_progspace ().block_for_pc (${pc_val_file_1})).value ())" "42" \
+    "print value of rr from other file, pass block for main file"
+
 gdb_test "python print (gdb.lookup_static_symbols ('rr')\[0\].value ())" "99" \
     "print value of gdb.lookup_static_symbols ('rr')\[0\], from the other file"
 gdb_test "python print (gdb.lookup_static_symbols ('rr')\[1\].value ())" "42" \
@@ -131,7 +146,14 @@ gdb_py_test_silent_cmd "python frame = gdb.selected_frame()" "Get Frame" 0
 # Check that we find the static sybol local to this file over the
 # static symbol from the second source file.
 gdb_test "python print (gdb.lookup_static_symbol ('rr').value ())" "42" \
-    "print value of rr from main file"
+    "print value of rr from main file, passing no block parameter"
+gdb_test "python print (gdb.lookup_static_symbol ('rr', None).value ())" "42" \
+    "print value of rr from main file, passing None block parameter"
+gdb_test "python print (gdb.lookup_static_symbol ('rr', gdb.current_progspace ().block_for_pc (${pc_val_file_2})).value ())" "99" \
+    "print value of rr from main file, pass block for other file"
+gdb_test "python print (gdb.lookup_static_symbol ('rr', gdb.current_progspace ().block_for_pc (${pc_val_file_1})).value ())" "42" \
+    "print value of rr from main file, pass block for main file"
+
 gdb_test "python print (gdb.lookup_static_symbols ('rr')\[0\].value ())" "99" \
     "print value of gdb.lookup_static_symbols ('rr')\[0\], from the main file"
 gdb_test "python print (gdb.lookup_static_symbols ('rr')\[1\].value ())" "42" \

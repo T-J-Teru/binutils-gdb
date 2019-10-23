@@ -473,19 +473,20 @@ gdbpy_lookup_global_symbol (PyObject *self, PyObject *args, PyObject *kw)
 }
 
 /* Implementation of
-   gdb.lookup_static_symbol (name [, domain]) -> symbol or None.  */
+   gdb.lookup_static_symbol (name [, block] [, domain]) -> symbol or None.  */
 
 PyObject *
 gdbpy_lookup_static_symbol (PyObject *self, PyObject *args, PyObject *kw)
 {
   const char *name;
   int domain = VAR_DOMAIN;
-  static const char *keywords[] = { "name", "domain", NULL };
+  static const char *keywords[] = { "name", "block", "domain", NULL };
   struct symbol *symbol = NULL;
+  PyObject *block_obj = NULL;
   PyObject *sym_obj;
 
-  if (!gdb_PyArg_ParseTupleAndKeywords (args, kw, "s|i", keywords, &name,
-					&domain))
+  if (!gdb_PyArg_ParseTupleAndKeywords (args, kw, "s|O|i", keywords, &name,
+					&block_obj, &domain))
     return NULL;
 
   /* In order to find static symbols associated with the "current" object
@@ -493,16 +494,22 @@ gdbpy_lookup_static_symbol (PyObject *self, PyObject *args, PyObject *kw)
      we can acquire a current block.  If this fails however, then we still
      want to search all static symbols, so don't throw an exception just
      yet.  */
-  const struct block *block = NULL;
-  try
+  const struct block *block = nullptr;
+  if (block_obj)
+    block = block_object_to_block (block_obj);
+
+  if (block == nullptr)
     {
-      struct frame_info *selected_frame
-	= get_selected_frame (_("No frame selected."));
-      block = get_frame_block (selected_frame, NULL);
-    }
-  catch (const gdb_exception &except)
-    {
-      /* Nothing.  */
+      try
+	{
+	  struct frame_info *selected_frame
+	    = get_selected_frame (_("No frame selected."));
+	  block = get_frame_block (selected_frame, NULL);
+	}
+      catch (const gdb_exception &except)
+	{
+	  /* Nothing.  */
+	}
     }
 
   try

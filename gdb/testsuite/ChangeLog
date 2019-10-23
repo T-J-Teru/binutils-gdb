@@ -1,3 +1,8 @@
+2019-10-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.python/py-symbol.exp: Add tests for passing a block
+	parameter to gdb.lookup_static_symbol.
+
 2019-11-10  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.python/py-symbol.exp: Add test for

@@ -4856,31 +4856,41 @@ is not found.
 @end defun
 
 @findex gdb.lookup_static_symbol
-@defun gdb.lookup_static_symbol (name @r{[}, domain@r{]})
-This function searches for a global symbol with static linkage by name.
-The search scope can be restricted to by the domain argument.
+@defun gdb.lookup_static_symbol (name @r{[}, block @r{[}, domain@r{]]})
+This function searches for a global symbol with static linkage by
+name.
 
 @var{name} is the name of the symbol.  It must be a string.
-The optional @var{domain} argument restricts the search to the domain type.
-The @var{domain} argument must be a domain constant defined in the @code{gdb}
-module and described later in this chapter.
-
-The result is a @code{gdb.Symbol} object or @code{None} if the symbol
-is not found.
-
-Note that this function will not find function-scoped static variables. To look
-up such variables, iterate over the variables of the function's
-@code{gdb.Block} and check that @code{block.addr_class} is
-@code{gdb.SYMBOL_LOC_STATIC}.
 
 There can be multiple global symbols with static linkage with the same
 name.  This function will only return the first matching symbol that
 it finds.  Which symbol is found depends on where @value{GDBN} is
 currently stopped, as @value{GDBN} will first search for matching
-symbols in the current object file, and then search all other object
-files.  If the application is not yet running then @value{GDBN} will
-search all object files in the order they appear in the debug
-information.
+symbols in the global static scope of the current object file, and
+then search all other object files.  This corresponds to the behaviour
+you would see from the CLI if you tried to print the symbol by name.
+
+If the application is not yet running then @value{GDBN} will search
+all object files in the order they appear in the debug information.
+
+The optional @var{domain} argument restricts the search to the domain
+type.  The @var{domain} argument must be a domain constant defined in
+the @code{gdb} module and described later in this chapter.
+
+The optional @var{block} argument can be used to change which global
+static scope @value{GDBN} will search first.  If @var{block} is not
+given, or is passed the value @code{None} then @value{GDBN} will first
+search the global static scope corresponding to the current block.  If
+@var{block} is passed a @code{gdb.Block} then @value{GDBN} will first
+search the global static scope corresponding to the supplied block.
+
+The result is a @code{gdb.Symbol} object or @code{None} if the symbol
+is not found.
+
+Note that this function will not find function-scoped static
+variables. To look up such variables, iterate over the variables of
+the function's @code{gdb.Block} and check that @code{block.addr_class}
+is @code{gdb.SYMBOL_LOC_STATIC}.
 @end defun
 
 @findex gdb.lookup_global_symbol
