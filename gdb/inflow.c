@@ -413,7 +413,7 @@ child_terminal_ours_1 (int output_only)
   if (tinfo->run_terminal != NULL || gdb_has_a_terminal () == 0)
     return;
 
-    {
+  {
 #ifdef SIGTTOU
       /* Ignore this signal since it will happen when we try to set the
          pgrp.  */
