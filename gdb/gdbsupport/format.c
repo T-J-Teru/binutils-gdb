@@ -375,6 +375,40 @@ format_pieces::format_pieces (const char **arg, bool gdb_extensions)
 	    strcpy (current_substring + length_before_ls, "s");
 	    current_substring += length_before_ls + 2;
 	  }
+#if defined __MINGW32__ && !defined __USE_MINGW_ANSI_STDIO
+	else if (this_argclass == size_t_arg)
+	  {
+	    /* Some versions of MinGW don't support the %z size format, so
+	       lets change to use some appropriate alternative.  */
+	    *current_substring++ = '%';
+	    if (sizeof (size_t) == sizeof (int))
+	      {
+		*current_substring++ = *(percent_loc + 2);
+		this_argclass = int_arg;
+	      }
+	    else if (sizeof (size_t) == sizeof (long))
+	      {
+		*current_substring++ = 'l';
+		*current_substring++ = *(percent_loc + 2);
+		this_argclass = long_arg;
+	      }
+	    else if (sizeof (size_t) == sizeof (long long))
+	      {
+		if (USE_PRINTF_I64)
+		  {
+		    strcpy (current_substring, "I64");
+		    current_substring += 3;
+		  }
+		else
+		  {
+		    strcpy (current_substring, "ll");
+		    current_substring += 2;
+		  }
+		*current_substring++ = *(percent_loc + 2);
+		this_argclass = long_long_arg;
+	      }
+	  }
+#endif	/* defined __MINGW32__ && !defined __USE_MINGW_ANSI_STDIO */
 	else
 	  {
 	    strncpy (current_substring, percent_loc, f - percent_loc);
