@@ -1,3 +1,32 @@
+2019-12-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* dwarf2read.c (dwarf2_has_info): Move header comment to header
+	file, and replace with short header comment.  Change return type
+	to bool, update return statements as needed.
+	(section_is_p): Change return type to bool, update comments and
+	return statements as needed.
+	(dw2_map_expand_apply): Likewise.
+	(create_all_type_units): Likewise.
+	(init_cu_die_reader): Likewise.
+	(read_cutu_die_from_dwo): Likewise.
+	(maybe_queue_comp_unit): Likewise.
+	(die_needs_namespace): Likewise.
+	(read_namespace_alias): Likewise.
+	(create_dwp_hash_table): Likewise.
+	(locate_v1_virtual_dwo_sections): Likewise.
+	(dwarf2_ranges_process): Likewise.
+	(dwarf2_ranges_read): Likewise.
+	(dwarf2_is_constructor): Likewise.
+	(is_vtable_name): Likewise.
+	(prototyped_function_p): Likewise.
+	(attr_to_dynamic_prop): Likewise.
+	(is_type_tag_for_partial): Likewise.
+	(dwarf_record_line_p): Likewise.
+	(attr_form_is_constant): Likewise.
+	(attr_form_is_ref): Likewise.
+	* symfile.h (dwarf2_has_info): Add comment, name argument in
+	declaration, and change return type to bool.
+
 2019-12-01  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* dwarf2read.c (read_tag_string_type): Read the fields required to

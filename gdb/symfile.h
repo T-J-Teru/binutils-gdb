@@ -584,9 +584,17 @@ struct dwarf2_debug_sections {
   int sentinel;
 };
 
-extern int dwarf2_has_info (struct objfile *,
-                            const struct dwarf2_debug_sections *,
-			    bool = false);
+
+/* Try to locate the sections we need for DWARF 2 debugging
+   information and return true if we have enough to do something.
+   NAMES points to the dwarf2 section names, or is NULL if the standard
+   ELF names are used.  CAN_COPY is true for formats where symbol
+   interposition is possible and so symbol values must follow copy
+   relocation rules.  */
+
+extern bool dwarf2_has_info (struct objfile *objfile,
+			     const struct dwarf2_debug_sections *names,
+			     bool can_copy = false);
 
 /* Dwarf2 sections that can be accessed by dwarf2_get_section_info.  */
 enum dwarf2_section_enum {
