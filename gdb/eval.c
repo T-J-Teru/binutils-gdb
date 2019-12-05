@@ -2003,6 +2003,24 @@ evaluate_subexp_standard (struct type *expect_type,
 	    return eval_skip_value (exp);
 	  return eval_call (exp, noside, nargs, argvec, NULL, expect_type);
 
+	case TYPE_CODE_COMPLEX:
+	  {
+	    /* Allow the components of a complex value to be accessed using
+	       array index notation.  */
+	    if (nargs != 1)
+	      error(_("incorrect number of indices for accessing "
+		      "complex value components"));
+	    arg2 = evaluate_subexp_with_coercion (exp, pos, noside);
+	    long index = value_as_long (arg2);
+	    if (index < 1 || index > 2)
+	      error(_("invalid index for accessing complex value component"));
+
+	    int offset = ((index == 1)
+			  ? 0 : TYPE_LENGTH (TYPE_TARGET_TYPE (type)));
+	    struct type *target_type = TYPE_TARGET_TYPE (type);
+	    return value_from_component (arg1, target_type, offset);
+	  }
+
 	default:
 	  error (_("Cannot perform substring on this type"));
 	}

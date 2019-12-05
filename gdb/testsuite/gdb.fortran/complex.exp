@@ -15,7 +15,8 @@
 
 standard_testfile .f90
 
-if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug f90 quiet}]} {
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile \
+	 {debug f90 quiet}]} {
     return -1
 }
 
@@ -28,30 +29,26 @@ if ![runto MAIN__] then {
 gdb_breakpoint [gdb_get_line_number "stop"]
 gdb_continue_to_breakpoint "continue"
 
-gdb_test "print c" " = \\(1000,-50\\)"
-gdb_test "print c4" " = \\(1000,-50\\)"
-gdb_test "print c8" " = \\(321,-22\\)"
-gdb_test "print dc" " = \\(321,-22\\)"
+# Print the inferior variable VAR_NAME which is a complex value, and
+# then print its component parts.  Check the type of VAR_NAME is
+# FULL_TYPE, and the type of all the parts is COMPONENT_TYPE.
+proc test_complex_value { var_name real_val imag_val full_type \
+			      component_type } {
+    gdb_test "print ${var_name}" " = \\(${real_val},${imag_val}\\)"
+    gdb_test "whatis ${var_name}" " = ${full_type}"
+    gdb_test "print \$_creal (${var_name})" " = ${real_val}"
+    gdb_test "whatis \$" " = ${component_type}"
+    gdb_test "print ${var_name} (1)" " = ${real_val}"
+    gdb_test "whatis \$" " = ${component_type}"
+    gdb_test "print \$_cimag (${var_name})" " = ${imag_val}"
+    gdb_test "whatis \$" " = ${component_type}"
+    gdb_test "print ${var_name} (2)" " = ${imag_val}"
+    gdb_test "whatis \$" " = ${component_type}"
 
-gdb_test "print c16" " = \\(-874,19\\)"
+}
 
-gdb_test "whatis c" "type = complex\\(kind=4\\)"
-gdb_test "print \$_creal (c)" " = 1000"
-gdb_test "whatis \$" " = real"
-
-gdb_test "whatis c4" "type = complex\\(kind=4\\)"
-gdb_test "print \$_creal (c4)" " = 1000"
-gdb_test "whatis \$" " = real"
-
-gdb_test "whatis c8" "type = complex\\(kind=8\\)"
-gdb_test "print \$_creal (c8)" " = 321"
-gdb_test "whatis \$" " = real\\*8"
-
-gdb_test "whatis dc" "type = complex\\(kind=8\\)"
-gdb_test "print \$_creal (dc)" " = 321"
-gdb_test "whatis \$" " = real\\*8"
-
-gdb_test "whatis c16" "type = complex\\(kind=16\\)"
-gdb_test "print \$_creal (c16)" " = -874"
-gdb_test "whatis \$" " = real\\*16"
-
+test_complex_value "c" "1000" "-50" "complex\\(kind=4\\)" "real"
+test_complex_value "c4" "1000" "-50" "complex\\(kind=4\\)" "real"
+test_complex_value "c8" "321" "-22" "complex\\(kind=8\\)" "real\\*8"
+test_complex_value "dc" "321" "-22" "complex\\(kind=8\\)" "real\\*8"
+test_complex_value "c16" "-874" "19" "complex\\(kind=16\\)" "real\\*16"

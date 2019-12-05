@@ -1,3 +1,8 @@
+2019-12-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.fortran/complex.exp: Rewrite to use the new proc.
+	(test_complex_value): New proc.
+
 2019-12-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* lib/gdb.exp (gdb_compile): Add -J compiler option when building

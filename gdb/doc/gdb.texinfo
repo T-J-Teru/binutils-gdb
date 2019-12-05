@@ -16678,6 +16678,32 @@ to set breakpoints on subroutines nested in modules or in other
 subroutines (internal subroutines).
 @end table
 
+@node Fortran Complex Numbers
+@subsubsection Fortran Complex Numbers
+
+@cindex Fortran complex numbers
+
+The real and imaginary parts of a complex number can be accessed using
+array syntax, with index 1 being the real part and index 2 being the
+imaginary part, this is an alternative to @code{$_creal} and
+@code{$_cimag} respectively (@pxref{Convenience Funs,, Convenience
+Functions}).
+
+@smallexample
+(@value{GDBP}) ptype v1
+type = complex(kind=4)
+(@value{GDBP}) p v1
+$1 = (1,2)
+(@value{GDBP}) p v1(1)
+$2 = 1
+(@value{GDBP}) p v1(2)
+$3 = 2
+(@value{GDBP}) ptype v1(1)
+type = real
+(@value{GDBP}) ptype v1(2)
+type = real
+@end smallexample
+
 @node Fortran Defaults
 @subsubsection Fortran Defaults
 

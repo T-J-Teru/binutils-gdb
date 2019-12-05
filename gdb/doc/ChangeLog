@@ -1,3 +1,8 @@
+2019-12-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Fortran Complex Numbers): New node describing array
+	subscript accesses to complex numbers.
+
 2019-12-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* doc/gdb.texinfo (GDB/MI Symbol Query): Add documentation of
