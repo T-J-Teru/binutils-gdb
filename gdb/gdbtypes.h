@@ -1625,6 +1625,14 @@ extern void set_type_vptr_basetype (struct type *, struct type *);
 #define TYPE_ERROR_NAME(type) \
   (TYPE_NAME (type) ? TYPE_NAME (type) : _("<error type>"))
 
+/* Returns a pointer to the obstack on which auxiliary data for this type
+   should be allocated.  */
+
+#define TYPE_OBSTACK(type)				\
+  (TYPE_OBJFILE_OWNED(type)				\
+   ? &TYPE_OBJFILE (type) -> objfile_obstack		\
+   : gdbarch_obstack (TYPE_OWNER (type).gdbarch))
+
 /* Given TYPE, return its floatformat.  */
 const struct floatformat *floatformat_from_type (const struct type *type);
 

@@ -285,11 +285,7 @@ alloc_type_instance (struct type *oldtype)
 
   /* Allocate the structure.  */
 
-  if (! TYPE_OBJFILE_OWNED (oldtype))
-    type = GDBARCH_OBSTACK_ZALLOC (get_type_arch (oldtype), struct type);
-  else
-    type = OBSTACK_ZALLOC (&TYPE_OBJFILE (oldtype)->objfile_obstack,
-			   struct type);
+  type = OBSTACK_ZALLOC (TYPE_OBSTACK (oldtype), struct type);
 
   TYPE_MAIN_TYPE (type) = TYPE_MAIN_TYPE (oldtype);
 
@@ -5120,26 +5116,22 @@ copy_type_recursive (struct objfile *objfile,
 }
 
 /* Make a copy of the given TYPE, except that the pointer & reference
-   types are not preserved.
-   
-   This function assumes that the given type has an associated objfile.
-   This objfile is used to allocate the new type.  */
+   types are not preserved.  */
 
 struct type *
 copy_type (const struct type *type)
 {
   struct type *new_type;
 
-  gdb_assert (TYPE_OBJFILE_OWNED (type));
-
   new_type = alloc_type_copy (type);
   TYPE_INSTANCE_FLAGS (new_type) = TYPE_INSTANCE_FLAGS (type);
   TYPE_LENGTH (new_type) = TYPE_LENGTH (type);
   memcpy (TYPE_MAIN_TYPE (new_type), TYPE_MAIN_TYPE (type),
 	  sizeof (struct main_type));
+
   if (TYPE_DYN_PROP_LIST (type) != NULL)
     TYPE_DYN_PROP_LIST (new_type)
-      = copy_dynamic_prop_list (&TYPE_OBJFILE (type) -> objfile_obstack,
+      = copy_dynamic_prop_list (TYPE_OBSTACK (type),
 				TYPE_DYN_PROP_LIST (type));
 
   return new_type;

@@ -1,3 +1,10 @@
+2019-12-27  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdbtypes.c (alloc_type_instance): Use TYPE_OBSTACK.
+	(copy_type): Use TYPE_OBSTACK, remove assertion, and update header
+	comment.
+	* gdbtypes.h (TYPE_OBSTACK): Define.
+
 2019-12-26  Ruslan Kabatsayev  <b7.10110111@gmail.com>
 
 	* dwarf2read.c (is_valid_DW_AT_defaulted)
