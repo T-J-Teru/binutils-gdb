@@ -174,6 +174,19 @@ static void decref_bp_location (struct bp_location **loc);
 
 static struct bp_location *allocate_bp_location (struct breakpoint *bpt);
 
+/* Control variable for overlay debugging.  When this is non-zero overlay
+   debugging is displayed.  */
+unsigned int debug_overlay = 0;
+
+/* Handle 'show debug overlay'.  */
+
+static void
+show_debug_overlay (struct ui_file *file, int from_tty,
+		   struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Overlay debugging is %s.\n"), value);
+}
+
 /* update_global_location_list's modes of operation wrt to whether to
    insert locations now.  */
 enum ugll_insert_mode
@@ -3172,6 +3185,11 @@ create_overlay_event_breakpoint (void)
 {
   const char *const func_name = "_ovly_debug_event";
 
+  if (debug_overlay)
+    fprintf_unfiltered (gdb_stdlog,
+                        "looking for overlay event symbol: %s\n",
+                        func_name);
+
   for (objfile *objfile : current_program_space->objfiles ())
     {
       struct breakpoint *b;
@@ -3181,8 +3199,16 @@ create_overlay_event_breakpoint (void)
 
       bp_objfile_data = get_breakpoint_objfile_data (objfile);
 
+      if (debug_overlay)
+	fprintf_unfiltered (gdb_stdlog, "checking objfile `%s': ",
+			    objfile_name (objfile));
+
       if (msym_not_found_p (bp_objfile_data->overlay_msym.minsym))
-	continue;
+	{
+	  if (debug_overlay)
+	    fprintf_unfiltered (gdb_stdlog, "symbol already not found\n");
+	  continue;
+	}
 
       if (bp_objfile_data->overlay_msym.minsym == NULL)
 	{
@@ -3193,9 +3219,13 @@ create_overlay_event_breakpoint (void)
 	    {
 	      /* Avoid future lookups in this objfile.  */
 	      bp_objfile_data->overlay_msym.minsym = &msym_not_found;
+	      if (debug_overlay)
+		fprintf_unfiltered (gdb_stdlog, "symbol not found\n");
 	      continue;
 	    }
 	  bp_objfile_data->overlay_msym = m;
+	  if (debug_overlay)
+	    fprintf_unfiltered (gdb_stdlog, "symbol found\n");
 	}
 
       addr = BMSYMBOL_VALUE_ADDRESS (bp_objfile_data->overlay_msym);
@@ -3216,6 +3246,11 @@ create_overlay_event_breakpoint (void)
          b->enable_state = bp_disabled;
          overlay_events_enabled = 0;
        }
+
+      if (debug_overlay)
+        fprintf_unfiltered (gdb_stdlog, "breakpoint created %s\n",
+                            ((overlay_debugging == ovly_auto)
+                             ? "and enabled" : "disabled"));
     }
 }
 
@@ -15966,6 +16001,14 @@ This supports most C printf format specifications, like %s, %d, etc.\n\
 This is useful for formatted output in user-defined commands."));
 
   automatic_hardware_breakpoints = true;
+
+  add_setshow_zuinteger_cmd ("overlay", class_maintenance, &debug_overlay, _("\
+Set overlay management debugging."), _("\
+Show overlay management debugging."), _("\
+When non-zero, overlay management debugging is enabled."),
+			     NULL,
+			     show_debug_overlay,
+			     &setdebuglist, &showdebuglist);
 
   gdb::observers::about_to_proceed.attach (breakpoint_about_to_proceed);
   gdb::observers::thread_exit.attach (remove_threaded_breakpoints);
