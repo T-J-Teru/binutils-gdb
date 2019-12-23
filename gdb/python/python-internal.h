@@ -543,6 +543,11 @@ int gdbpy_initialize_xmethods (void)
   CPYCHECKER_NEGATIVE_RESULT_SETS_EXCEPTION;
 int gdbpy_initialize_unwind (void)
   CPYCHECKER_NEGATIVE_RESULT_SETS_EXCEPTION;
+int gdbpy_initialize_overlay (void)
+  CPYCHECKER_NEGATIVE_RESULT_SETS_EXCEPTION;
+
+/* Cleanup overlay manager state during python shutdown.  */
+extern void py_overlay_manager_finalize (void);
 
 /* A wrapper for PyErr_Fetch that handles reference counting for the
    caller.  */

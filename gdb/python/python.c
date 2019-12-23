@@ -1546,6 +1546,8 @@ finalize_python (void *ignore)
   python_gdbarch = target_gdbarch ();
   python_language = current_language;
 
+  py_overlay_manager_finalize ();
+
   Py_Finalize ();
 
   restore_active_ext_lang (previous_active);
@@ -1682,6 +1684,7 @@ do_start_initialization ()
       || gdbpy_initialize_thread () < 0
       || gdbpy_initialize_inferior () < 0
       || gdbpy_initialize_eventregistry () < 0
+      || gdbpy_initialize_overlay () < 0
       || gdbpy_initialize_py_events () < 0
       || gdbpy_initialize_event () < 0
       || gdbpy_initialize_arch () < 0

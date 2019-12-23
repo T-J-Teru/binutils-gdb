@@ -390,6 +390,7 @@ SUBDIR_PYTHON_SRCS = \
 	python/py-linetable.c \
 	python/py-newobjfileevent.c \
 	python/py-objfile.c \
+	python/py-overlay.c \
 	python/py-param.c \
 	python/py-prettyprint.c \
 	python/py-progspace.c \
@@ -1098,6 +1099,7 @@ COMMON_SFILES = \
 	opencl-lang.c \
 	osabi.c \
 	osdata.c \
+	overlay.c \
 	p-lang.c \
 	p-typeprint.c \
 	p-valprint.c \
@@ -1354,6 +1356,7 @@ HFILES_NO_SRCDIR = \
 	obsd-tdep.h \
 	osabi.h \
 	osdata.h \
+	overlay.h \
 	p-lang.h \
 	parser-defs.h \
 	ppc-fbsd-tdep.h \

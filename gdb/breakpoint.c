@@ -67,6 +67,7 @@
 #include "thread-fsm.h"
 #include "tid-parse.h"
 #include "cli/cli-style.h"
+#include "overlay.h"
 
 /* readline include files */
 #include "readline/tilde.h"
@@ -3125,8 +3126,16 @@ static const char *const longjmp_names[] =
 /* Per-objfile data private to breakpoint.c.  */
 struct breakpoint_objfile_data
 {
-  /* Minimal symbol for "_ovly_debug_event" (if any).  */
-  struct bound_minimal_symbol overlay_msym {};
+  /* State required to support overlay debugging.  */
+  struct
+  {
+    /* Minimal symbol for something like "_ovly_debug_event", a location
+       at which overlay activity can be seen to have happened.  */
+    struct bound_minimal_symbol msym {};
+
+    /* The breakpoint inserted at the above symbol.  */
+    struct breakpoint *breakpoint = nullptr;
+  } overlay;
 
   /* Minimal symbol(s) for "longjmp", "siglongjmp", etc. (if any).  */
   struct bound_minimal_symbol longjmp_msym[NUM_LONGJMP_NAMES] {};
@@ -3180,15 +3189,40 @@ get_breakpoint_objfile_data (struct objfile *objfile)
   return bp_objfile_data;
 }
 
-static void
+/* See breakpoint.h.  */
+
+void
+delete_overlay_event_breakpoint (void)
+{
+  /* For all breakpoints, if it is an overlay breakpoint then delete it.  */
+  for (objfile *objfile : current_program_space->objfiles ())
+    {
+      struct breakpoint_objfile_data *bp_objfile_data
+	= get_breakpoint_objfile_data (objfile);
+
+      if (bp_objfile_data->overlay.breakpoint != nullptr)
+	delete_breakpoint (bp_objfile_data->overlay.breakpoint);
+
+      bp_objfile_data->overlay.breakpoint = nullptr;
+      bp_objfile_data->overlay.msym.minsym = nullptr;
+    }
+
+  overlay_events_enabled = 0;
+}
+
+/* See breakpoint.h.  */
+
+void
 create_overlay_event_breakpoint (void)
 {
-  const char *const func_name = "_ovly_debug_event";
+  std::string func_name = overlay_manager_event_symbol_name ();
+  if (func_name.empty ())
+    return;
 
   if (debug_overlay)
     fprintf_unfiltered (gdb_stdlog,
                         "looking for overlay event symbol: %s\n",
-                        func_name);
+                        func_name.c_str ());
 
   for (objfile *objfile : current_program_space->objfiles ())
     {
@@ -3203,37 +3237,38 @@ create_overlay_event_breakpoint (void)
 	fprintf_unfiltered (gdb_stdlog, "checking objfile `%s': ",
 			    objfile_name (objfile));
 
-      if (msym_not_found_p (bp_objfile_data->overlay_msym.minsym))
+      if (msym_not_found_p (bp_objfile_data->overlay.msym.minsym))
 	{
 	  if (debug_overlay)
 	    fprintf_unfiltered (gdb_stdlog, "symbol already not found\n");
 	  continue;
 	}
 
-      if (bp_objfile_data->overlay_msym.minsym == NULL)
+      if (bp_objfile_data->overlay.msym.minsym == NULL)
 	{
 	  struct bound_minimal_symbol m;
 
-	  m = lookup_minimal_symbol_text (func_name, objfile);
+	  m = lookup_minimal_symbol_text (func_name.c_str (), objfile);
 	  if (m.minsym == NULL)
 	    {
 	      /* Avoid future lookups in this objfile.  */
-	      bp_objfile_data->overlay_msym.minsym = &msym_not_found;
+	      bp_objfile_data->overlay.msym.minsym = &msym_not_found;
 	      if (debug_overlay)
 		fprintf_unfiltered (gdb_stdlog, "symbol not found\n");
 	      continue;
 	    }
-	  bp_objfile_data->overlay_msym = m;
+	  bp_objfile_data->overlay.msym = m;
 	  if (debug_overlay)
 	    fprintf_unfiltered (gdb_stdlog, "symbol found\n");
 	}
 
-      addr = BMSYMBOL_VALUE_ADDRESS (bp_objfile_data->overlay_msym);
+      addr = BMSYMBOL_VALUE_ADDRESS (bp_objfile_data->overlay.msym);
       b = create_internal_breakpoint (get_objfile_arch (objfile), addr,
                                       bp_overlay_event,
 				      &internal_breakpoint_ops);
+      bp_objfile_data->overlay.breakpoint = b;
       initialize_explicit_location (&explicit_loc);
-      explicit_loc.function_name = ASTRDUP (func_name);
+      explicit_loc.function_name = ASTRDUP (func_name.c_str ());
       b->location = new_explicit_location (&explicit_loc);
 
       if (overlay_debugging == ovly_auto)
@@ -3252,6 +3287,17 @@ create_overlay_event_breakpoint (void)
                             ((overlay_debugging == ovly_auto)
                              ? "and enabled" : "disabled"));
     }
+}
+
+/* Called when we hit the overlay event breakpoint.  */
+static void
+handle_overlay_bp_event (void)
+{
+  target_terminal::scoped_restore_terminal_state term_state;
+  target_terminal::ours_for_output ();
+
+  /* Call into the overlay manager to process the event breakpoint.  */
+  overlay_manager_hit_event_breakpoint ();
 }
 
 static void
@@ -5710,6 +5756,9 @@ bpstat_run_callbacks (bpstat bs_head)
 	  break;
 	case bp_gnu_ifunc_resolver_return:
 	  gnu_ifunc_resolver_return_stop (b);
+	  break;
+	case bp_overlay_event:
+	  handle_overlay_bp_event ();
 	  break;
 	}
     }

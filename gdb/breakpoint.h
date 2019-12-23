@@ -1717,4 +1717,14 @@ extern void catch_exception_event (enum exception_event_kind ex_event,
 				   const char *regex, bool tempflag,
 				   int from_tty);
 
+/* Possibly create a breakpoint in each object file at the overlay event
+   label.  Information about the symbol and breakpoint used are stored on
+   to each object file.  */
+void create_overlay_event_breakpoint (void);
+
+/* Delete the overlay breakpoints created by
+   create_overlay_event_breakpoint and clean up state stored on the object
+   file.  */
+extern void delete_overlay_event_breakpoint (void);
+
 #endif /* !defined (BREAKPOINT_H) */
