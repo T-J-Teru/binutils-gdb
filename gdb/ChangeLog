@@ -1,3 +1,7 @@
+2019-12-31  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* configure: Regenerate.
+
 2020-01-21  Simon Marchi  <simon.marchi@efficios.com>
 
 	* gdbarch.sh: Add declaration for _initialize_gdbarch.

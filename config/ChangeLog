@@ -1,3 +1,9 @@
+2019-12-31  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* lib-link.m4 (AC_LIB_LINKFLAGS_BODY): Add new
+	--with-libXXX-type=... option.  Use this to guide the selection of
+	either a shared library or a static library.
+
 2020-01-18  Nick Clifton  <nickc@redhat.com>
 
 	Binutils 2.34 branch created.
