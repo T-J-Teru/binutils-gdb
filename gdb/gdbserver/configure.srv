@@ -384,6 +384,11 @@ case "${target}" in
 			srv_linux_regsets=yes
 			srv_linux_thread_db=yes
 			;;
+  riscv*-*linux*)	srv_regobj="riscv32-linux.o riscv64-linux.o"
+			srv_tgtobj="$srv_linux_obj linux-riscv-low.o"
+			srv_linux_regsets=yes
+			srv_linux_thread_db=yes
+			;;
   *)			echo "Error: target not supported by gdbserver."
 			exit 1
 			;;
