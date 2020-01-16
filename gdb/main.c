@@ -153,9 +153,8 @@ relocate_path (const char *progname, const char *initial, bool relocatable)
 {
   if (relocatable)
     {
-      gdb::unique_xmalloc_ptr<char> str (make_relative_prefix (progname,
-							       BINDIR,
-							       initial));
+      gdb::unique_xmalloc_ptr<char> str
+	(make_relative_prefix_ignore_links (progname, BINDIR, initial));
       if (str != nullptr)
 	return str.get ();
       return std::string ();
