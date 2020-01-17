@@ -891,6 +891,16 @@ else
   fi
 fi
 
+AC_ARG_WITH(python-libdir,
+  AS_HELP_STRING([--with-python-libdir@<:@=DIR@:>@], [search for python's libraries in DIR]),
+  [],[
+    # If no python libdir is specified then select one based on
+    # python's prefix path.
+    if test -n "${python_prefix}"; then
+      with_python_libdir=${python_prefix}/lib
+    fi
+  ])
+
 if test "${have_libpython}" != no; then
   AC_DEFINE(HAVE_PYTHON, 1, [Define if Python interpreter is being linked in.])
   CONFIG_OBS="$CONFIG_OBS \$(SUBDIR_PYTHON_OBS)"
@@ -898,6 +908,12 @@ if test "${have_libpython}" != no; then
   CONFIG_SRCS="$CONFIG_SRCS \$(SUBDIR_PYTHON_SRCS)"
   CONFIG_INSTALL="$CONFIG_INSTALL install-python"
   ENABLE_CFLAGS="$ENABLE_CFLAGS \$(SUBDIR_PYTHON_CFLAGS)"
+
+  if test -n "${with_python_libdir}"; then
+    AC_DEFINE_UNQUOTED(WITH_PYTHON_LIBDIR, "${with_python_libdir}",
+		       [Define with a path to search in for Python's standard libraries, either from --with-python-libdir, or from python-config.py.])
+    GDB_AC_DEFINE_RELOCATABLE(PYTHON_LIBDIR, [python lib], ${with_python_libdir})
+  fi
 
   # Flags needed to compile Python code (taken from python-config --cflags).
   # We cannot call python-config directly because it will output whatever was

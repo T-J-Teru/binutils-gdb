@@ -1,3 +1,10 @@
+2020-01-17  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: Add --with-python-libdir option.
+	* main.c: Use WITH_PYTHON_LIBDIR.
+
 2019-12-31  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* configure: Regenerate.
