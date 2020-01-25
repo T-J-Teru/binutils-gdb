@@ -487,6 +487,46 @@ maintenance_info_sections (const char *arg, int from_tty)
     }
 }
 
+/* ... */
+
+static void
+print_bfd_section_offset (bfd *abfd,
+			  asection *asect,
+			  void *datum)
+{
+  maint_print_section_data *print_data = (maint_print_section_data *) datum;
+  objfile *ofile = print_data->objfile;
+
+  unsigned int idx = asect->index;
+  const char *addr;
+
+  if (idx < ofile->section_offsets.size ())
+    addr = core_addr_to_string (ofile->section_offsets[idx]);
+  else
+    addr = "None";
+
+  print_section_index (abfd, asect, print_data->index_digits);
+  printf_filtered ("%s %s\n", addr, bfd_section_name (asect));
+}
+
+/* Implement the "maintenance info section-offsets" command.  */
+
+static void
+maintenance_info_section_offsets (const char *arg, int from_tty)
+{
+  for (objfile *ofile : current_program_space->objfiles ())
+    {
+      printf_filtered (_("  Object file: %s\n"),
+		       bfd_get_filename (ofile->obfd));
+
+      maint_print_section_data print_data (ofile, nullptr, ofile->obfd);
+      bfd_map_over_sections (ofile->obfd,
+			     print_bfd_section_offset,
+			     (void *) &print_data);
+    }
+}
+
+
 static void
 maintenance_print_statistics (const char *args, int from_tty)
 {
@@ -1166,6 +1206,11 @@ Sections matching any argument will be listed (no argument\n\
 implies all sections).  In addition, the special argument\n\
 	ALLOBJ\n\
 lists all sections from all object files, including shared libraries."),
+	   &maintenanceinfolist);
+
+  add_cmd ("section-offsets", class_maintenance,
+	   maintenance_info_section_offsets, _("\
+List the relocation offsets applied to each section."),
 	   &maintenanceinfolist);
 
   add_prefix_cmd ("print", class_maintenance, maintenance_print_command,
