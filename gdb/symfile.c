@@ -2553,6 +2553,7 @@ reread_symbols (void)
 	  objfile->compunit_symtabs = NULL;
 	  objfile->template_symbols = NULL;
 	  objfile->static_links.reset (nullptr);
+	  objfile->section_offsets.clear ();
 
 	  /* obstack_init also initializes the obstack so it is
 	     empty.  We could use obstack_specify_allocation but
@@ -2572,6 +2573,16 @@ reread_symbols (void)
 	     based on whether .gdb_index is present, and we need it to
 	     start over.  PR symtab/15885  */
 	  objfile_set_sym_fns (objfile, find_sym_fns (objfile->obfd));
+
+	  /* In syms_from_objfile_1 after calling objfile_set_sym_fns we
+	     handle the possibility that objfile->sf might be NULL, which
+	     can happen for some obscure objfile formats.  We've never
+	     handled the NULL case here before, but */
+	  if (objfile->sf == nullptr)
+	    error (_("unable to reload object file with format `%s'"),
+		   bfd_get_target (objfile->obfd));
+
+	  gdb_assert (objfile->sf != nullptr);
 
 	  build_objfile_section_table (objfile);
 
@@ -2603,6 +2614,14 @@ reread_symbols (void)
 	     again.  */
 
 	  objfiles_changed ();
+
+	  /* Setup the section offsets structure for this objfile.  We use
+	     zero section address information here, though it's not clear
+	     this will always be correct.  If the user originally loaded
+	     this objfile with non-zero address information then we're
+	     going to loose that here.  */
+	  section_addr_info local_addr;
+	  (*objfile->sf->sym_offsets) (objfile, local_addr);
 
 	  read_symbols (objfile, 0);
 

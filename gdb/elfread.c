@@ -218,6 +218,10 @@ record_minimal_symbol (minimal_symbol_reader &reader,
   if ((bfd_section_flags (bfd_section) & SEC_ALLOC) == SEC_ALLOC)
     section_index = gdb_bfd_section_index (objfile->obfd, bfd_section);
 
+  /* The section_offsets vector should have been initialised by now, and
+     there should be one entry for each section in objfile.  */
+  gdb_assert (section_index < objfile->section_offsets.size ());
+
   struct minimal_symbol *result
     = reader.record_full (name, copy_name, address, ms_type, section_index);
   if ((objfile->flags & OBJF_MAINLINE) == 0

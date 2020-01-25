@@ -1,3 +1,10 @@
+2020-01-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* elfread.c (record_minimal_symbol): Add an assertion.
+	* symfile.c (reread_symbols): Clear the section_offsets vector,
+	and reinitialize it during reload.  Add an error if objfile->sf is
+	NULL.
+
 2020-01-24  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* frame.c (find_frame_sal): Move call to get_next_frame into more
