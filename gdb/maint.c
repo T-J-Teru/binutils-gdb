@@ -227,12 +227,16 @@ print_bfd_flags (flagword flags)
 static void
 maint_print_section_info (const char *name, flagword flags,
 			  CORE_ADDR addr, CORE_ADDR endaddr,
-			  unsigned long filepos, int addr_size)
+			  unsigned long filepos, int addr_size,
+			  bool show_offsets, CORE_ADDR offset)
 {
   gdb_printf ("    %s", hex_string_custom (addr, addr_size));
   gdb_printf ("->%s", hex_string_custom (endaddr, addr_size));
   gdb_printf (" at %s",
 	      hex_string_custom ((unsigned long) filepos, 8));
+  if (show_offsets)
+    gdb_printf (", offset %s",
+		hex_string_custom (offset, addr_size));
   gdb_printf (": %s", name);
   print_bfd_flags (flags);
   gdb_printf ("\n");
@@ -274,7 +278,7 @@ print_section_index (bfd *abfd,
 
 static void
 print_bfd_section_info (bfd *abfd, asection *asect, const char *arg,
-			int index_digits)
+			int index_digits, bool show_offset, CORE_ADDR offset)
 {
   flagword flags = bfd_section_flags (asect);
   const char *name = bfd_section_name (asect);
@@ -290,8 +294,8 @@ print_bfd_section_info (bfd *abfd, asection *asect, const char *arg,
       addr = bfd_section_vma (asect);
       endaddr = addr + bfd_section_size (asect);
       print_section_index (abfd, asect, index_digits);
-      maint_print_section_info (name, flags, addr, endaddr,
-				asect->filepos, addr_size);
+      maint_print_section_info (name, flags, addr, endaddr, asect->filepos,
+				addr_size, show_offset, offset);
     }
 }
 
@@ -305,7 +309,8 @@ print_bfd_section_info (bfd *abfd, asection *asect, const char *arg,
 
 static void
 print_objfile_section_info (bfd *abfd, struct obj_section *asect,
-			    const char *arg, int index_digits)
+			    const char *arg, int index_digits,
+			    bool show_offset, CORE_ADDR offset)
 {
   flagword flags = bfd_section_flags (asect->the_bfd_section);
   const char *name = bfd_section_name (asect->the_bfd_section);
@@ -318,10 +323,10 @@ print_objfile_section_info (bfd *abfd, struct obj_section *asect,
       int addr_size = gdbarch_addr_bit (gdbarch) / 8;
 
       print_section_index (abfd, asect->the_bfd_section, index_digits);
-      maint_print_section_info (name, flags,
-				asect->addr (), asect->endaddr (),
+      maint_print_section_info (name, flags, asect->addr (),
+				asect->endaddr (),
 				asect->the_bfd_section->filepos,
-				addr_size);
+				addr_size, show_offset, offset);
     }
 }
 
@@ -361,7 +366,7 @@ maint_obj_section_from_bfd_section (bfd *abfd,
 
 static void
 maint_print_all_sections (const char *header, bfd *abfd, objfile *objfile,
-			  const char *arg)
+			  const char *arg, bool show_offsets)
 {
   gdb_puts (header);
   gdb_stdout->wrap_here (8);
@@ -385,10 +390,15 @@ maint_print_all_sections (const char *header, bfd *abfd, objfile *objfile,
 	    osect = nullptr;
 	}
 
+      unsigned int idx = sect->index;
+      CORE_ADDR offset = objfile->section_offsets[idx];
+
       if (osect == nullptr)
-	print_bfd_section_info (abfd, sect, arg, digits);
+	print_bfd_section_info (abfd, sect, arg, digits, show_offsets,
+				offset);
       else
-	print_objfile_section_info (abfd, osect, arg, digits);
+	print_objfile_section_info (abfd, osect, arg, digits, show_offsets,
+				    offset);
     }
 }
 
@@ -398,6 +408,9 @@ struct maint_info_sections_opts
 {
   /* For "-all-objects".  */
   bool all_objects = false;
+
+  /* For "-section-offsets".  */
+  bool show_offsets = false;
 };
 
 static const gdb::option::option_def maint_info_sections_option_defs[] = {
@@ -406,6 +419,12 @@ static const gdb::option::option_def maint_info_sections_option_defs[] = {
     "all-objects",
     [] (maint_info_sections_opts *opts) { return &opts->all_objects; },
     N_("Display information from all loaded object files."),
+  },
+
+  gdb::option::flag_option_def<maint_info_sections_opts> {
+    "section-offsets",
+    [] (maint_info_sections_opts *opts) { return &opts->show_offsets; },
+    N_("Display information about the section offsets."),
   },
 };
 
@@ -455,13 +474,16 @@ maintenance_info_sections (const char *arg, int from_tty)
   for (objfile *ofile : current_program_space->objfiles ())
     {
       if (ofile->obfd == current_program_space->exec_bfd ())
-	maint_print_all_sections (_("Exec file: "), ofile->obfd, ofile, arg);
+	maint_print_all_sections (_("Exec file: "), ofile->obfd, ofile, arg,
+				  opts.show_offsets);
       else if (opts.all_objects)
-	maint_print_all_sections (_("Object file: "), ofile->obfd, ofile, arg);
+	maint_print_all_sections (_("Object file: "), ofile->obfd, ofile, arg,
+				  opts.show_offsets);
     }
 
   if (core_bfd)
-    maint_print_all_sections (_("Core file: "), core_bfd, nullptr, arg);
+    maint_print_all_sections (_("Core file: "), core_bfd, nullptr, arg,
+			      opts.show_offsets);
 }
 
 /* Implement the "maintenance info target-sections" command.  */
@@ -500,10 +522,8 @@ maintenance_info_target_sections (const char *arg, int from_tty)
 	  gdb_printf (_("From '%s', file type %s:\n"),
 		      bfd_get_filename (abfd), bfd_get_target (abfd));
 	}
-      print_bfd_section_info (abfd,
-			      sec.the_bfd_section,
-			      nullptr,
-			      digits);
+      print_bfd_section_info (abfd, sec.the_bfd_section, nullptr, digits,
+			      false, 0);
       /* The magic '8 + digits' here ensures that the 'Start' is aligned
 	 with the output of print_bfd_section_info.  */
       gdb_printf ("%*sStart: %s, End: %s, Owner token: %p\n",
