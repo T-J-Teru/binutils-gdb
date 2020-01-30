@@ -1,3 +1,8 @@
+2020-01-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* remote.c (remote_target::process_stop_reply): Don't use
+	inferior_ptid, instead ask the remote for the current thread.
+
 2018-12-01  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* remote-sim.c (gdbsim_xfer_features): New function.

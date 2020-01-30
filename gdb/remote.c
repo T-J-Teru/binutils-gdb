@@ -7668,10 +7668,22 @@ remote_target::process_stop_reply (struct stop_reply *stop_reply,
   *status = stop_reply->ws;
   ptid = stop_reply->ptid;
 
-  /* If no thread/process was reported by the stub, assume the current
-     inferior.  */
+  /* If no thread/process was reported by the stub then use the first
+     thread in the current inferior.  */
   if (ptid == null_ptid)
-    ptid = inferior_ptid;
+    {
+      ptid = remote_current_thread (null_ptid);
+      if (ptid == null_ptid)
+	{
+	  /* We didn't get a useful answer back from the remote target so
+	     we need to pick something - we can't just report null_ptid.
+	     Lets just pick the first thread in GDB's current inferior.  */
+	  struct thread_info *thread
+	    = first_thread_of_inferior (current_inferior ());
+	  gdb_assert (thread != nullptr);
+	  ptid = thread->ptid;
+	}
+    }
 
   if (status->kind != TARGET_WAITKIND_EXITED
       && status->kind != TARGET_WAITKIND_SIGNALLED
