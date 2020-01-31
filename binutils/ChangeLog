@@ -1,3 +1,8 @@
+2020-01-31  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* objdump.c (print_jump_visualisation): New function.
+	(disassemble_bytes): Call new function. 
+
 2020-01-28  Nick Clifton  <nickc@redhat.com>
 
 	* readelf.c (get_build_id): Simplify warning message about corrupt
