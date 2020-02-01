@@ -327,7 +327,7 @@ frame_show_address (struct frame_info *frame,
 	gdb_assert (inline_skipped_frames (inferior_thread ()) > 0);
       else
 	gdb_assert (get_frame_type (get_next_frame (frame)) == INLINE_FRAME);
-      return false;
+      return frame_relative_level (frame) > 0;
     }
 
   return get_frame_pc (frame) != sal.pc;

@@ -30,11 +30,11 @@ if ![runto main] then {
 }
 
 gdb_breakpoint [gdb_get_line_number "break-here"]
-gdb_continue_to_breakpoint "Block break here."
+gdb_continue_to_breakpoint "continue to 'break here', first time"
 
 gdb_test "info frame" "inlined into frame 1\r\n.*"
 
-gdb_test "up" "#1  g .*"
+gdb_test "up" "#1  $hex in g .*"
 
 gdb_test "python print (gdb.selected_frame().read_var('l'))" "\r\n42"
 
@@ -48,7 +48,7 @@ gdb_test "python print (gdb.selected_frame().read_var('l'))" "\r\n42"
 # the frame cache is flushed somehow after setting the limit, to force
 # frame id recomputation.
 gdb_test_no_output "set backtrace limit 1"
-gdb_continue_to_breakpoint "Block break here."
+gdb_continue_to_breakpoint "continue to 'break here', second time"
 
 gdb_test "python print (gdb.newest_frame())" ".*"
 

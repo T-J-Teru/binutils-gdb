@@ -1,3 +1,11 @@
+2020-03-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.dwarf2/dw2-inline-many-frames.exp: Update expected results.
+	* gdb.dwarf2/dw2-inline-param.exp: Likewise.
+	* gdb.guile/scm-frame-inline.exp: Likewise.
+	* gdb.opt/inline-cmds.exp: Likewise.
+	* gdb.python/py-frame-inline.exp: Likewise.
+
 2020-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.fortran/logical.exp: Add tests that any non-zero value is

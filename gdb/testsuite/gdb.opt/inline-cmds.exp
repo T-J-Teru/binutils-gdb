@@ -288,15 +288,15 @@ gdb_test_multiple "finish" "finish from marker" {
 }
 gdb_test "bt" "#0  main.*" "backtrace at main of outer_inline"
 gdb_test "step" "outer_inline2 \\\(\\\) at .*" "enter outer_inline2"
-gdb_test "bt" "#0  outer_inline2.*#1  main.*" "backtrace at outer_inline2"
+gdb_test "bt" "#0  outer_inline2.*#1  $hex in main.*" "backtrace at outer_inline2 xx"
 gdb_test "step" "outer_inline1 \\\(\\\) at .*" "enter outer_inline1 from outer_inline2"
 
 set msg "backtrace at outer_inline1"
 gdb_test_multiple "bt" $msg {
-    -re "#0  outer_inline1.*#1  outer_inline2.*#2  main.*$gdb_prompt $" {
+    -re "#0  outer_inline1.*#1  $hex in outer_inline2.*#2  $hex in main.*$gdb_prompt $" {
 	pass $msg
     }
-    -re "#0  $hex in outer_inline1.*#1  outer_inline2.*#2  main.*$gdb_prompt $" {
+    -re "#0  $hex in outer_inline1.*#1  $hex in outer_inline2.*#2  $hex in main.*$gdb_prompt $" {
 	# Binutils PR gas/6717.  Gas moves .loc past .p2align and the
 	# leading nop of the inlined call appears to be on the same line
 	# as main's call to marker.
@@ -306,17 +306,17 @@ gdb_test_multiple "bt" $msg {
 }
 
 gdb_test "step" "noinline \\\(\\\) at .*" "enter noinline from outer_inline1"
-gdb_test "bt" "#0  noinline.*#1  .*outer_inline1.*#2  .*outer_inline2.*#3  main.*" "backtrace at noinline from outer_inline1"
+gdb_test "bt" "#0  noinline.*#1  .*outer_inline1.*#2  .*outer_inline2.*#3  $hex in main.*" "backtrace at noinline from outer_inline1"
 gdb_test "step" "inlined_fn \\\(\\\) at .*" "enter inlined_fn from noinline"
-gdb_test "bt" "#0  inlined_fn.*#1  noinline.*#2  .*outer_inline1.*#3  .*outer_inline2.*#4  main.*" "backtrace at inlined_fn from noinline"
+gdb_test "bt" "#0  inlined_fn.*#1  $hex in noinline.*#2  .*outer_inline1.*#3  .*outer_inline2.*#4  $hex in main.*" "backtrace at inlined_fn from noinline"
 gdb_test "info frame" ".*inlined into frame.*" "inlined_fn from noinline inlined"
-gdb_test "up" "#1  noinline.*" "up to noinline"
+gdb_test "up" "#1  $hex in noinline.*" "up to noinline"
 gdb_test "info frame" ".*\n called by frame.*" "noinline from outer_inline1 not inlined"
 gdb_test "up" "#2  .*outer_inline1.*" "up to outer_inline1"
 gdb_test "info frame" ".*inlined into frame.*" "outer_inline1 inlined"
 gdb_test "up" "#3  .*outer_inline2.*" "up to outer_inline2"
 gdb_test "info frame" ".*inlined into frame.*" "outer_inline2 inlined"
-gdb_test "up" "#4  main.*" "up from outer_inline2"
+gdb_test "up" "#4  $hex in main.*" "up from outer_inline2"
 gdb_test "info frame" ".*\n caller of frame.*" "main not inlined"
 
 gdb_exit

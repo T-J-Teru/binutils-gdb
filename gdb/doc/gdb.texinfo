@@ -8013,6 +8013,24 @@ If you need to display the values of such optimized-out arguments,
 either deduce that from other variables whose values depend on the one
 you are interested in, or recompile without optimizations.
 
+If your compiler has performed the function inlining optimisation
+(@pxref{Inline Functions}) then this will be reflected in the program
+counter addresses displayed in the backtrace.  In the following
+modified example the function @code{expand_macro} has been inlined
+within @code{expand_token}, as a result the program counter values for
+frame 1 and frame 2 are the same.
+
+@smallexample
+@group
+#0  m4_traceon (obs=0x24eb0, argc=1, argv=0x2b8c8)
+    at builtin.c:993
+#1  0x6e38 in expand_macro (sym=<optimized out>) at macro.c:242
+#2  0x6e38 in expand_token (obs=0x0, t=<optimized out>, td=0xf7fffb08)
+    at macro.c:71
+(More stack frames follow...)
+@end group
+@end smallexample
+
 @cindex backtrace beyond @code{main} function
 @cindex program entry point
 @cindex startup code, and backtrace

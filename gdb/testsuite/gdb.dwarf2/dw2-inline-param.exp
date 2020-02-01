@@ -55,4 +55,6 @@ if ![runto "*${break_at}"] {
     return -1
 }
 
-gdb_test "bt" "#0  (0x\[0-9a-f\]+ in )?func \\(funcparam=<optimized out>\\)\r\n#1  main \\(mainparam=<optimized out>\\)\[^\r\n\]*"
+gdb_test "bt" [multi_line \
+		   "#0  ($hex in )?func \\(funcparam=<optimized out>\\)" \
+		   "#1  $hex in main \\(mainparam=<optimized out>\\)\[^\r\n\]*" ]

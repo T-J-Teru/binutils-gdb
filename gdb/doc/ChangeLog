@@ -1,3 +1,8 @@
+2020-03-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Backtrace): Mention duplicate addresses in the
+	backtrace.
+
 2020-03-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.texinfo (Command History): Extend description for

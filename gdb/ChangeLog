@@ -1,3 +1,8 @@
+2020-03-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* stack.c (frame_show_address): Show the frame address for all but
+	the inner-most inlined frame.
+
 2020-03-03  Andrew Burgess  <andrew.burgess@embecosm.com>
 	    Alok Kumar Sharma  <AlokKumar.Sharma@amd.com>
 
