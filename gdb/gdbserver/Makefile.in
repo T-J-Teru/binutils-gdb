@@ -181,6 +181,7 @@ SFILES = \
 	$(srcdir)/linux-mips-low.c \
 	$(srcdir)/linux-nios2-low.c \
 	$(srcdir)/linux-ppc-low.c \
+	$(srcdir)/linux-riscv-low.c \
 	$(srcdir)/linux-s390-low.c \
 	$(srcdir)/linux-sh-low.c \
 	$(srcdir)/linux-sparc-low.c \
@@ -207,6 +208,7 @@ SFILES = \
 	$(srcdir)/../arch/arm-get-next-pcs.c \
 	$(srcdir)/../arch/arm-linux.c \
 	$(srcdir)/../arch/ppc-linux-common.c \
+	$(srcdir)/../arch/riscv.c \
 	$(srcdir)/../../gdbsupport/btrace-common.c \
 	$(srcdir)/../../gdbsupport/buffer.c \
 	$(srcdir)/../../gdbsupport/cleanups.c \
@@ -240,6 +242,7 @@ SFILES = \
 	$(srcdir)/../nat/linux-personality.c \
 	$(srcdir)/../nat/mips-linux-watch.c \
 	$(srcdir)/../nat/ppc-linux.c \
+	$(srcdir)/../nat/riscv-linux-tdesc.c \
 	$(srcdir)/../nat/fork-inferior.c \
 	$(srcdir)/../target/waitstatus.c
 

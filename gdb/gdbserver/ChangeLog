@@ -1,3 +1,12 @@
+2020-02-08  Maciej W. Rozycki  <macro@wdc.com>
+
+	* linux-riscv-low.c: New file.
+	* Makefile.in (SFILES): Add linux-riscv-low.c, arch/riscv.c, and
+	nat/riscv-linux-tdesc.c.
+	* configure.srv <riscv*-*-linux*> (srv_tgtobj)
+	(srv_linux_regsets, srv_linux_usrregs, srv_linux_thread_db):
+	Define.
+
 2020-01-29  Maciej W. Rozycki  <macro@wdc.com>
 
 	* configure.srv <i[34567]86-*-mingw*>: Fix whitespace damage.
