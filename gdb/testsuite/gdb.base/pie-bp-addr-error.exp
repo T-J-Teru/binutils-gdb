@@ -1,0 +1,61 @@
+# Copyright 2020 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check that, if the user places a breakpoint on an address within a
+# PIE before relocation, then we get a suitable error.
+
+global inferior_spawn_id
+global gdb_spawn_id
+
+if ![istarget *-linux*] {
+    continue
+}
+
+standard_testfile .c
+
+set opts [list debug additional_flags=-fPIE ldflags=-pie]
+if { [prepare_for_testing "failed to prepare" $testfile $srcfile $opts] } {
+    return -1
+}
+
+# Figure out the address of main before sectionns are relocated.
+set main_addr_before_reloc \
+    [get_hexadecimal_valueof "&main" 0 "address of main"]
+
+# Start the inferior and run to main, this will relocate the sections.
+if ![runto_main] {
+    return -1
+}
+
+# First confirm that main has moved.
+set main_relocated_address \
+    [get_hexadecimal_valueof "&main" 0 "runtime address of main"]
+gdb_assert { ${main_addr_before_reloc} != ${main_relocated_address} } \
+    "address of main has changed"
+
+# Now place a breakpoint using the before relocation address.
+gdb_breakpoint "*${main_addr_before_reloc}"
+
+# Continue the inferior, inserting all breakpoints - which should
+# error due to our use of an invalid address.
+gdb_test "continue" \
+    [multi_line \
+	 "Cannot insert breakpoint $decimal." \
+	 "Cannot access memory at address $hex" \
+	 "The address is located within a code region of `\[^\r\n\]+' which was dynamically" \
+	 "relocated at run time.  The code region `$hex ... $hex' is now located" \
+	 "at `$hex ... $hex', you may need to adjust your breakpoints." \
+	 "" \
+	 "Command aborted." ]

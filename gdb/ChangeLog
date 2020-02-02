@@ -1,3 +1,8 @@
+2020-01-31  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* breakpoint.c (pic_code_error_check): New function.
+	(insert_bp_location): Call new function.
+
 2020-02-01  Shahab Vahedi  <shahab@synopsys.com>
 
 	* target-descriptions.c (tdesc_register_in_reggroup_p): Return 0

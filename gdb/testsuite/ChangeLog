@@ -1,3 +1,8 @@
+2020-01-31  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/pie-bp-addr-error.c: New file.
+	* gdb.base/pie-bp-addr-error.exp: New file.
+
 2020-02-01  Tom de Vries  <tdevries@suse.de>
 
 	* gdb.server/server-kill-python.exp: Fix $gdb_tst_name typo.
