@@ -957,5 +957,73 @@ extern void set_frame_previous_pc_masked (struct frame_info *frame);
 
 extern bool get_frame_pc_masked (const struct frame_info *frame);
 
+/* Try to find a previously selected frame described by A_FRAME_ID and
+   select it.  If no matching frame can be found then the innermost frame
+   will be selected and a warning printed.  FRAME_LEVEL is the level at
+   which A_FRAME_ID was previously found, and can be -1 to indicate no
+   frame was previously selected, in which case the innermost frame will
+   be selected (without a warning).  */
+
+extern void restore_selected_frame (struct frame_id a_frame_id, int frame_level);
+
+/* When GDB needs to backup and then later restore the currently selected
+   frame this is done by storing the frame id, and then looking up a frame
+   with that stored frame id.
+
+   However, if the previously selected frame can't be restored then GDB
+   should give the user a warning in most cases.  If the previously
+   selected frame was level 0 then GDB will just reselect the innermost
+   frame silently without a warning.
+
+   And so, when we backup and restore the currently selected frame we need
+   to track both the frame id, and the frame level, so GDB knows if a
+   warning should be given or not.  */
+
+struct frame_id_and_level
+{
+  /* Setup this structure to track FI as the previously selected frame.  */
+  void reset (struct frame_info *fi)
+  {
+    try
+      {
+	m_id = get_frame_id (fi);
+	m_level = frame_relative_level (fi);
+      }
+    catch (const gdb_exception_error &ex)
+      {
+	m_id = null_frame_id;
+	m_level = -1;
+      }
+  }
+
+  /* Reset this structure to indicate there was no previously selected
+     frame.  */
+  void reset ()
+  {
+    m_level = -1;
+  }
+
+  /* The frame id of the previously selected frame.  This value is only
+     defined when LEVEL() is greater than -1.  */
+  struct frame_id id () const
+  {
+    return m_id;
+  }
+
+  /* The level of the previously selected frame, or -1 if no frame was
+     previously selected.  */
+  int level () const
+  {
+    return m_level;
+  }
+
+private:
+  /* The frame id.  */
+  struct frame_id m_id;
+
+  /* The level at which ID was found.  Set to -1 to indicate that this
+     structure is uninitialised.  */
+  int m_level = -1;
+};
 
 #endif /* !defined (FRAME_H)  */

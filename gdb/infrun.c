@@ -9177,8 +9177,9 @@ struct infcall_control_state
   enum stop_stack_kind stop_stack_dummy = STOP_NONE;
   int stopped_by_random_signal = 0;
 
-  /* ID if the selected frame when the inferior function call was made.  */
-  struct frame_id selected_frame_id {};
+  /* ID and level of the selected frame when the inferior function call was
+     made.  */
+  struct frame_id_and_level selected_frame_info;
 };
 
 /* Save all of the information associated with the inferior<==>gdb
@@ -9207,25 +9208,9 @@ save_infcall_control_state ()
   inf_status->stop_stack_dummy = stop_stack_dummy;
   inf_status->stopped_by_random_signal = stopped_by_random_signal;
 
-  inf_status->selected_frame_id = get_frame_id (get_selected_frame (NULL));
+  inf_status->selected_frame_info.reset (get_selected_frame (NULL));
 
   return inf_status;
-}
-
-static void
-restore_selected_frame (const frame_id &fid)
-{
-  frame_info *frame = frame_find_by_id (fid);
-
-  /* If inf_status->selected_frame_id is NULL, there was no previously
-     selected frame.  */
-  if (frame == NULL)
-    {
-      warning (_("Unable to restore previously selected frame."));
-      return;
-    }
-
-  select_frame (frame);
 }
 
 /* Restore inferior session state to INF_STATUS.  */
@@ -9260,7 +9245,8 @@ restore_infcall_control_state (struct infcall_control_state *inf_status)
          error() trying to dereference it.  */
       try
 	{
-	  restore_selected_frame (inf_status->selected_frame_id);
+	  restore_selected_frame (inf_status->selected_frame_info.id (),
+				  inf_status->selected_frame_info.level ());
 	}
       catch (const gdb_exception_error &ex)
 	{

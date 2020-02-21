@@ -1,3 +1,22 @@
+2020-02-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* frame.c (restore_selected_frame): Moved from thread.c.
+	* frame.h (restore_selected_frame): Declare.
+	(struct frame_id_and_level): New struct.
+	* gdbthread.h (scoped_restore_current_thread)
+	<m_selected_frame_id>: Delete.  <m_selected_frame_level>: Delete.
+	<m_selected_frame_info>: New member variable.
+	* infrun.c (infcall_control_state) <selected_frame_id>: Delete.
+	<selected_frame_info>: New member variable.
+	(save_infcall_control_state): Update to use selected_frame_info.
+	(restore_selected_frame): Delete.
+	(restore_infcall_control_state): Update to use selected_frame_info.
+	* thread.c (restore_selected_frame): Delete.
+	(scoped_restore_current_thread::restore): Update for changes to
+	member variables.
+	(scoped_restore_current_thread::scoped_restore_current_thread):
+	Likewise.
+
 2020-04-22  Tom de Vries  <tdevries@suse.de>
 
 	PR symtab/25764

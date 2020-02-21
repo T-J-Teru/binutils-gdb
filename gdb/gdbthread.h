@@ -681,8 +681,7 @@ private:
      function in the Darwin API.  */
   class thread_info *m_thread;
   inferior *m_inf;
-  frame_id m_selected_frame_id;
-  int m_selected_frame_level;
+  struct frame_id_and_level m_selected_frame_info;
   bool m_was_stopped;
 };
 
