@@ -3459,7 +3459,12 @@ the user (see @code{thread name}, below), or, in some cases, by the
 program itself.
 
 @item
-the current stack frame summary for that thread
+the current stack frame summary for that thread, this is the currently
+selected stack frame (@pxref{Frames, ,Frames}, for a description of
+stack frames) in this thread.  When @code{restore-selected-frame} is
+@code{off} (@pxref{set restore-selected-frame}) then all threads
+except the currently selected thread will display their innermost
+frame.
 @end enumerate
 
 @noindent
@@ -3527,6 +3532,14 @@ thread you selected, and its current stack frame summary:
 As with the @samp{[New @dots{}]} message, the form of the text after
 @samp{Switching to} depends on your system's conventions for identifying
 threads.
+
+@value{GDBN} will track the last frame selected (@pxref{Frames,
+,Frames}, for a description of stack frames) in each thread and will
+restore the frame when switching back to a thread.  Any time that a
+thread executes then the currently selected frame will be reset to the
+inner most frame (@pxref{set restore-selected-frame,,set
+restore-selected-frame} for how to disable restoring the last selected
+frame).
 
 @anchor{thread apply all}
 @kindex thread apply
@@ -8227,6 +8240,24 @@ respectively; they differ in that they do their work silently, without
 causing display of the new frame.  They are intended primarily for use
 in @value{GDBN} command scripts, where the output might be unnecessary and
 distracting.
+@end table
+
+@anchor{set restore-selected-frame}
+@value{GDBN} remembers the currently selected frame for each thread
+(@pxref{Threads, ,Threads}, for a description of threads) in the
+inferior.  When switching thread the previously selected frame in each
+thread is restored.
+
+@table @code
+@item set restore-selected-frame @r{[}on|off@r{]}
+@itemx show restore-selected-frame
+When @code{restore-selected-frame} is on, which it is by default,
+@value{GDBN} will restore the previously selected frame when switching
+to a different thread.
+
+If a thread has been running then when it stops the previously
+selected frame is discarded, and the inner most frame is again
+selected.
 @end table
 
 @node Frame Info

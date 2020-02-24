@@ -698,7 +698,7 @@ thread_alive (thread_info *tp)
    switched, false otherwise.  */
 
 static bool
-switch_to_thread_if_alive (thread_info *thr)
+switch_to_thread_if_alive (thread_info *thr, bool restore_previous_frame)
 {
   scoped_restore_current_thread restore_thread;
 
@@ -708,7 +708,7 @@ switch_to_thread_if_alive (thread_info *thr)
 
   if (thread_alive (thr))
     {
-      switch_to_thread (thr);
+      switch_to_thread (thr, restore_previous_frame);
       restore_thread.dont_restore ();
       return true;
     }
@@ -880,7 +880,10 @@ set_executing_thread (thread_info *thr, bool executing)
 {
   thr->executing = executing;
   if (executing)
-    thr->suspend.stop_pc = ~(CORE_ADDR) 0;
+    {
+      thr->suspend.stop_pc = ~(CORE_ADDR) 0;
+      thr->selected_frame_info.reset ();
+    }
 }
 
 void
@@ -1043,6 +1046,23 @@ thread_target_id_str (thread_info *tp)
     return target_id;
 }
 
+/* When this is true GDB restore the threads previously selected frame
+   each time the current thread is changed (when possible).  */
+
+static bool restore_selected_frame_per_thread = true;
+
+/* Implement 'show restore-selected-frame'.  */
+
+static void
+show_restore_selected_frame_per_thread (struct ui_file *file, int from_tty,
+					struct cmd_list_element *c,
+					const char *value)
+{
+  fprintf_filtered (file,
+		    _("Restoring the selected frame is currently %s.\n"),
+		    value);
+}
+
 /* Like print_thread_info, but in addition, GLOBAL_IDS indicates
    whether REQUESTED_THREADS is a list of global or per-inferior
    thread ids.  */
@@ -1155,7 +1175,8 @@ print_thread_info_1 (struct ui_out *uiout, const char *requested_threads,
 	    uiout->field_signed ("id", tp->global_num);
 
 	  /* Switch to the thread (and inferior / target).  */
-	  switch_to_thread (tp);
+	  switch_to_thread (tp, (tp == current_thread
+				 || restore_selected_frame_per_thread));
 
 	  /* For the CLI, we stuff everything into the target-id field.
 	     This is a gross hack to make the output come out looking
@@ -1335,7 +1356,7 @@ switch_to_no_thread ()
 /* See gdbthread.h.  */
 
 void
-switch_to_thread (thread_info *thr)
+switch_to_thread (thread_info *thr, bool restore_previous_frame)
 {
   gdb_assert (thr != NULL);
 
@@ -1345,6 +1366,10 @@ switch_to_thread (thread_info *thr)
   switch_to_thread_no_regs (thr);
 
   reinit_frame_cache ();
+
+  if (restore_previous_frame && thr->selected_frame_info.level () > -1)
+    restore_selected_frame (thr->selected_frame_info.id (),
+			    thr->selected_frame_info.level ());
 }
 
 /* See gdbsupport/common-gdbthread.h.  */
@@ -1368,13 +1393,16 @@ scoped_restore_current_thread::restore ()
 	 in the mean time exited (or killed, detached, etc.), then don't revert
 	 back to it, but instead simply drop back to no thread selected.  */
       && m_inf->pid != 0)
-    switch_to_thread (m_thread);
+    switch_to_thread (m_thread, restore_selected_frame_per_thread);
   else
     switch_to_inferior_no_thread (m_inf);
 
   /* The running state of the originally selected thread may have
-     changed, so we have to recheck it here.  */
+     changed, so we have to recheck it here.  We only restore the frame
+     here if we didn't restore the threads selected frame when switching
+     thread above (see use of RESTORE_SELECTED_FRAME_PER_THREAD).  */
   if (inferior_ptid != null_ptid
+      && !restore_selected_frame_per_thread
       && m_was_stopped
       && m_thread->state == THREAD_STOPPED
       && target_has_registers
@@ -1643,7 +1671,7 @@ thread_apply_all_command (const char *cmd, int from_tty)
       scoped_restore_current_thread restore_thread;
 
       for (thread_info *thr : thr_list_cpy)
-	if (switch_to_thread_if_alive (thr))
+	if (switch_to_thread_if_alive (thr, restore_selected_frame_per_thread))
 	  thr_try_catch_cmd (thr, cmd, from_tty, flags);
     }
 }
@@ -1800,7 +1828,7 @@ thread_apply_command (const char *tidlist, int from_tty)
 	  continue;
 	}
 
-      if (!switch_to_thread_if_alive (tp))
+      if (!switch_to_thread_if_alive (tp, restore_selected_frame_per_thread))
 	{
 	  warning (_("Thread %s has terminated."), print_thread_id (tp));
 	  continue;
@@ -1968,7 +1996,7 @@ show_print_thread_events (struct ui_file *file, int from_tty,
 void
 thread_select (const char *tidstr, thread_info *tp)
 {
-  if (!switch_to_thread_if_alive (tp))
+  if (!switch_to_thread_if_alive (tp, restore_selected_frame_per_thread))
     error (_("Thread ID %s has terminated."), tidstr);
 
   annotate_thread_changed ();
@@ -2234,6 +2262,19 @@ Show printing of thread events (such as thread start and exit)."), NULL,
 			   NULL,
 			   show_print_thread_events,
 			   &setprintlist, &showprintlist);
+
+  add_setshow_boolean_cmd ("restore-selected-frame",
+			   class_stack, &restore_selected_frame_per_thread,
+			   _("\
+Set whether GDB restores the selected frame when switching threads."), _("\
+Show whether GDB restores the selected frame when switching threads."), _("\
+When this option is on GDB will record the currently selected frame for\n\
+each thread, and restore the selected frame whenever GDB switches thread.\n\
+Causing a thread to execute will invalidate the selected frame."),
+			   nullptr,
+			   show_restore_selected_frame_per_thread,
+			   &setlist,
+			   &showlist);
 
   create_internalvar_type_lazy ("_thread", &thread_funcs, NULL);
   create_internalvar_type_lazy ("_gthread", &gthread_funcs, NULL);

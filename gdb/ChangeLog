@@ -1,5 +1,28 @@
 2020-02-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* NEWS: Describe new feature.
+	* frame.c (cache_selected_frame_on_thread): New function.
+	(select_frame): Call new function.
+	* gdbthread.h (class thread_info) <selected_frame_info>: New
+	member variable.
+	(switch_to_thread): Extra parameter.
+	* thread.c (switch_to_thread_if_alive): Extra parameter, passed to
+	switch_to_thread.
+	(scoped_restore_current_thread::restore): Restore the frame either
+	from the thread, or from the local object.
+	(set_executing_thread): Reset the currently selected frame.
+	(restore_selected_frame_per_thread): New file level static variable.
+	(show_restore_selected_frame_per_thread): New function.
+	(print_thread_info_1): Pass extra parameter to switch_to_thread.
+	(switch_to_thread): Take extra parameter, restore the previous
+	frame if appropriate.
+	(thread_apply_all_command): Pass extra parameter to switch_to_thread.
+	(thread_apply_command): Likewise.
+	(thread_select): Pass extra parameter to switch_to_thread_if_alive.
+	(_initialize_thread): Add new set/show variable.
+
+2020-02-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* frame.c (restore_selected_frame): Moved from thread.c.
 	* frame.h (restore_selected_frame): Declare.
 	(struct frame_id_and_level): New struct.

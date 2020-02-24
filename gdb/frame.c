@@ -1704,12 +1704,38 @@ deprecated_safe_get_selected_frame (void)
   return get_selected_frame (NULL);
 }
 
+/* When RESTORE_SELECTED_FRAME_PER_THREAD is true, then update in the
+   current thread the information required to identify frame FI so the
+   frame can be selected again later if we switch threads.  */
+
+static void
+cache_selected_frame_on_thread ()
+{
+  struct frame_info *fi = selected_frame;
+  struct thread_info *tp
+    = find_thread_ptid (current_inferior (), inferior_ptid);
+  if (fi != nullptr && tp != nullptr)
+    {
+      /* We only record the selected frame if the level is greater than 0,
+	 this avoids having to calculate the frame id when selecting the
+	 innermost frame.  When the cached selected frame is cleared then
+	 we select the innermost frame anyway, so calculating the frame id
+	 for frame #0 adds no value.  */
+      if (frame_relative_level (fi) > 0)
+	tp->selected_frame_info.reset (fi);
+      else
+	tp->selected_frame_info.reset ();
+    }
+}
+
 /* Select frame FI (or NULL - to invalidate the current frame).  */
 
 void
 select_frame (struct frame_info *fi)
 {
   selected_frame = fi;
+  cache_selected_frame_on_thread ();
+
   /* NOTE: cagney/2002-05-04: FI can be NULL.  This occurs when the
      frame is being invalidated.  */
 

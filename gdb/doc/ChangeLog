@@ -1,3 +1,12 @@
+2020-02-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Threads): Extend description of 'Frame' field in
+	info threads output.  Add description of how GDB tracks the
+	previous frame.
+	(Selection): Add description of how GDB tracks the selected frame
+	per thread, and describe the new commands to disable this
+	tracking.
+
 2020-04-15  Artur Shepilko  <nomadbyte@gmail.com>
 
 	* gdb.texinfo: Transform @var{[host]} to [@var{host}]; this

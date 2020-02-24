@@ -888,8 +888,8 @@ proc_with_prefix test_mi_thread_select { mode } {
 	# running on non-stop.
 
 	if { $mode == "all-stop" } {
-	    set mi_re [make_mi_re $mode 3 0 response]
-	    set cli_re [make_cli_re $mode -1 1.3 0]
+	    set mi_re [make_mi_re $mode 3 1 response]
+	    set cli_re [make_cli_re $mode -1 1.3 1]
 	} else {
 	    set mi_re [make_mi_re $mode 3 -1 response]
 	    set cli_re [make_cli_re $mode -1 1.3 -1]
@@ -1056,8 +1056,8 @@ proc_with_prefix test_cli_in_mi_thread { mode cli_in_mi_mode } {
 	# Do the 'thread' command to select a stopped thread.
 
 	set command [make_cli_in_mi_command $cli_in_mi_mode "thread 1.2"]
-	set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 1 -1 1.2 2 0]
-	set cli_re [make_cli_re $mode -1 1.2 0]
+	set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 1 -1 1.2 2 1]
+	set cli_re [make_cli_re $mode -1 1.2 1]
 
 	with_spawn_id $mi_spawn_id {
 	    mi_gdb_test $command $mi_re "select thread"
@@ -1070,7 +1070,7 @@ proc_with_prefix test_cli_in_mi_thread { mode cli_in_mi_mode } {
 	# Do the 'thread' command to select the same thread.  We shouldn't
 	# receive an event on CLI, since we won't actually switch thread.
 
-	set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 0 -1 1.2 2 0]
+	set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 0 -1 1.2 2 1]
 	set cli_re ""
 
 	with_spawn_id $mi_spawn_id {
@@ -1103,8 +1103,8 @@ proc_with_prefix test_cli_in_mi_thread { mode cli_in_mi_mode } {
 
 	set command [make_cli_in_mi_command $cli_in_mi_mode "thread 1.3"]
 	if { $mode == "all-stop" } {
-	    set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 1 -1 1.3 3 0]
-	    set cli_re [make_cli_re $mode -1 "1.3" 0]
+	    set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 1 -1 1.3 3 1]
+	    set cli_re [make_cli_re $mode -1 "1.3" 1]
 	} else {
 	    set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 1 -1 1.3 3 -1]
 	    set cli_re [make_cli_re $mode -1 "1.3" -1]
@@ -1122,7 +1122,7 @@ proc_with_prefix test_cli_in_mi_thread { mode cli_in_mi_mode } {
 	# shouldn't receive an event on MI.
 
 	if { $mode == "all-stop" } {
-	    set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 0 -1 1.3 3 0]
+	    set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 0 -1 1.3 3 1]
 	} else {
 	    set mi_re [make_cli_in_mi_re $command $cli_in_mi_mode $mode 0 -1 1.3 3 -1]
 	}

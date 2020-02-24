@@ -42,6 +42,13 @@
 * On Windows targets, it is now possible to debug 32-bit programs with a
   64-bit GDB.
 
+* GDB now tracks the currently selected frame for each thread.  When
+  switching threads the last frame selected in that thread will be
+  restored.  Executing a thread will cause the GDB to discard any
+  previously selected frame (GDB will select the inner most frame the
+  next time the thread stops).  The 'info threads' commands now shows
+  the selected frame in its 'frame' field.
+
 * New commands
 
 set exec-file-mismatch -- Set exec-file-mismatch handling (ask|warn|off).
@@ -58,6 +65,11 @@ show exec-file-mismatch -- Show exec-file-mismatch handling (ask|warn|off).
 tui new-layout NAME WINDOW WEIGHT [WINDOW WEIGHT]...
   Define a new TUI layout, specifying its name and the windows that
   will be displayed.
+
+set restore-selected-frame [on|off]
+show restore-selected-frame
+  When switching threads, restore the previously selected frame in the
+  thread being switched too.  This is on by default.
 
 * New targets
 
