@@ -56,6 +56,17 @@ show restore-selected-thread
   available, then GDB falls back to selecting the first non-exited
   thread.
 
+set restore-selected-frame [on|off]
+show restore-selected-frame
+
+  When turned on, GDB will record the currently selected frame in each
+  thread.  When switching between threads, GDB will attempt to restore
+  the previously selected frame in the thread being switched too.
+  Executing a thread will cause GDB to discard any previously selected
+  frame (GDB will select the inner most frame the next time the thread
+  stops).  The 'info threads' command will show the selected frame in
+  its 'frame' field.
+
 * Changed commands
 
 break [PROBE_MODIFIER] [LOCATION] [thread THREADNUM]

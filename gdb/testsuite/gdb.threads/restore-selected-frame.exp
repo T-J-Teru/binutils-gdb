@@ -1,0 +1,336 @@
+# Copyright 2020 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This tests GDB's tracking of the currently selected frame on a
+# per-thread basis.
+#
+# We setup a couple of inferiors, each with mutliple theads, we then
+# switch between threads and modify the current frame.  We use 'info
+# threads' to check that GDB is correctly tracking the current frame.
+#
+# Toward the end of the test we check that when a thread executes the
+# currently selected frame is reset.
+#
+# Finally we disable tracking of the currently selected frame and
+# ensure GDB no longer restores the current frame.
+
+standard_testfile
+
+set options { debug pthreads }
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile \
+	 $options] == -1} {
+    return -1
+}
+
+# Run the 'info threads' command, and check that the frame part of
+# each threads output matches the corresponding pattern in FRAME_INFO,
+# with thread 1 using entry 0 from FRAME_INFO, thread 2 using entry 1,
+# and so on.
+proc test_info_threads { testname frame_info } {
+    global decimal hex gdb_prompt
+
+    set thread_count 0
+    gdb_test_multiple "info threads" ${testname} {
+	-re ".*  Id\\s+Target Id\\s+Frame\\s*\r\n" {
+	    # Discard the info threads header line as well as any
+	    # output before it in the expect buffer.
+	    exp_continue
+	}
+
+	-re "^\[* \]\\s+(($decimal)\.)?($decimal)\\s+Thread $hex \\(LWP $decimal\\) \"\[^\"\]+\"\\s+(\[^\r\n\]*)\r\n" {
+	    if {[info exists expect_out(2,string)]} {
+		set id "$expect_out(2,string).$expect_out(3,string)"
+		set index [expr [expr [expr $expect_out(2,string) - 1] * 4] \
+			       + [expr $expect_out(3,string) - 1]]
+	    } else {
+		set id $expect_out(3,string)
+		set index [expr $id - 1]
+	    }
+	    set frame $expect_out(4,string)
+	    set pattern [lindex $frame_info $index]
+	    gdb_assert {[regexp -- $pattern $frame]} \
+		"$testname: thread $id matches"
+	    incr thread_count
+	    exp_continue
+	}
+	-re "^$gdb_prompt " {
+	}
+    }
+    gdb_assert {$thread_count == [llength $frame_info]} \
+	"$testname: all threads seen"
+}
+
+# Run 'thread THREAD_NUM' and check that we switch thread.
+proc switch_thread { thread_num } {
+    gdb_test "thread ${thread_num}" \
+	"Switching to thread (2\.)?${thread_num} .*"
+}
+
+# Used during startup, continue the inferior and wait for all threads
+# to stop at the breakpoint.
+proc run_all_threads_to_breakpoint { } {
+    global gdb_prompt
+
+    set stopped_thread_count 0
+    gdb_test_multiple "continue" "wait for worker threads to stop" {
+	-re "Thread (2\.)?\[234\] \"\[^\"\]+\" hit Breakpoint" {
+	    incr stopped_thread_count
+	    if {$stopped_thread_count < 3} {
+		exp_continue
+	    }
+	}
+
+	-re "$gdb_prompt" {
+	    exp_continue
+	}
+    }
+
+    gdb_assert {$stopped_thread_count == 3} \
+	"all worker threads stopped"
+}
+
+# Switch to thread #1, and interrupt it.
+proc switch_to_and_stop_thread_1 {} {
+    global gdb_prompt
+    # There's a bit of a wart here in that after sending "interrupt"
+    # the output seems to appear out of order this is probably a
+    # consequence of being in non-stop mode, so this is what I'd like
+    # to see:
+    #
+    #   (gdb) interrupt
+    #   Thread 1 "...." stopped.
+    #   (gdb)
+    #
+    # But what we actually see is:
+    #
+    #   (gdb) interrupt
+    #   (gdb)
+    #   Thread 1 "...." stopped.
+    #
+    # What happens of course is that GDB processes the interrupt,
+    # sends a SIGSTOP to the inferior and then returns to the prompt,
+    # at this point we process the stop event from the inferior and
+    # print the stopped message.
+    #
+    # It would be nice if GDB could be smart enough to reprint the
+    # prompt after the stop message though.
+    #
+    # The first 'interrupt\n' here causes the interior to stop, while
+    # the following lone '\n' causes the prompt to be reprinted.  This
+    # allows us to match all the output up to the final prompt,
+    # ensuring we don't leave any stray output in expect's output
+    # buffer.
+    switch_thread 1
+    gdb_test_multiple "interrupt\\n" "interrupt thread 1" {
+	-re "^interrupt\\\\n\\r\\n$gdb_prompt " {
+	    pass $gdb_test_name
+	}
+    }
+    gdb_test_multiple "" "wait for thread 1 to stop" {
+	-re "Thread (2\.)?1 \"\[^\"\]+\" stopped\." {
+	    send_gdb "\n"
+	    gdb_test_multiple "" \
+		"wait for prompt after thread 1 stopped" {
+		-re ".*$gdb_prompt " {
+		    pass $gdb_test_name
+		}
+	    }
+	}
+    }
+}
+
+# Setup for this test.  Place GDB in non-stop mode, create an initial
+# breakpoint, run all of the threads to the breakpoint, then stop
+# thread 1 (which doesn't hit the breakpoint).
+proc setup_for_test {} {
+    gdb_test_no_output "set non-stop on"
+
+    if ![runto_main] {
+	fail "runto main"
+	return
+    }
+
+    gdb_test_no_output "set restore-selected-frame on"
+
+    gdb_breakpoint "thread_level_5"
+
+    with_test_prefix "setup inferior 1" {
+	# Now run the inferior, and wait for all of the expected threads
+	# to hit the thread_level_5 breakpoint.
+	run_all_threads_to_breakpoint
+
+	# The main thread will still be running at this point, waiting for
+	# the stopped threads to finish so it can join with them.  Lets go
+	# and interrupt it.
+	switch_to_and_stop_thread_1
+    }
+}
+
+setup_for_test
+
+# We can't rely on frames being within 'pthread_join' actually being
+# in a frame called pthread_join.  Different versions of pthreads
+# might call the function something different.  So, just have a
+# match all pattern.
+set pthread_join_pattern ".*"
+
+set frame_info [list "$hex in ${pthread_join_pattern}" \
+		    "thread_level_5" \
+		    "thread_level_5" \
+		    "thread_level_5" ]
+
+
+# We now have all threads stopped in known locations.  Lets check that
+# everyone is where we expect them to be.
+test_info_threads "info threads #1" $frame_info
+
+# First, lets move thread 1.  Then check that the info threads output
+# reflects this.
+gdb_test "up" ".*"
+set frame_info [lreplace $frame_info 0 0 "$hex in main"]
+test_info_threads "info threads #2" $frame_info
+
+# Now lets change the other threads, one at a time, checking the
+# output of info threads after each change.
+foreach spec [list [list 2 5 "$hex in thread_worker"] \
+		  [list 3 3 "$hex in thread_level_2"] \
+		  [list 4 1 "$hex in thread_level_4"] ] {
+    set thr [lindex $spec 0]
+    with_test_prefix "change frame for thread $thr" {
+	switch_thread $thr
+	gdb_test "frame [lindex $spec 1]" ".*"
+	set idx [expr $thr - 1]
+	set frame_info [lreplace $frame_info $idx $idx [lindex $spec 2]]
+	test_info_threads "info threads #3" $frame_info
+    }
+}
+
+# Start a new inferior, and runto main.
+gdb_test "add-inferior" "Added inferior 2 .*" \
+    "add empty inferior 2"
+gdb_test "inferior 2" "Switching to inferior 2 .*" \
+    "switch to inferior 2"
+gdb_test "file ${binfile}" ".*" "load file in inferior 2"
+
+with_test_prefix "start inferior 2" {
+    # Disable deleting of breakpoints.
+    proc delete_breakpoints {} {}
+    runto_main
+}
+
+with_test_prefix "setup inferior 2" {
+    run_all_threads_to_breakpoint
+    switch_to_and_stop_thread_1
+}
+
+set frame_info [concat $frame_info [list "$hex in ${pthread_join_pattern}" \
+					"thread_level_5" \
+					"thread_level_5" \
+					"thread_level_5" ]]
+test_info_threads "info threads #4" $frame_info
+
+# Now lets change the other threads, one at a time, checking the
+# output of info threads after each change.
+foreach spec [list [list 2 2 "$hex in thread_level_3"] \
+		  [list 3 2 "$hex in thread_level_3"] \
+		  [list 4 2 "$hex in thread_level_3"] ] {
+    set thr [lindex $spec 0]
+    with_test_prefix "change frame for thread $thr" {
+	switch_thread "2.$thr"
+	gdb_test "frame [lindex $spec 1]" ".*"
+	set idx [expr 4 + $thr - 1]
+	set frame_info [lreplace $frame_info $idx $idx [lindex $spec 2]]
+	test_info_threads "info threads #5" $frame_info
+    }
+}
+
+# Now step one of the threads.  The thread that is stepped should
+# discard its stored selected frame, but all other threads should
+# retain their selected frame.
+switch_thread "2.2"
+gdb_test "step" ".*" \
+    "step in thread 2.2"
+set frame_info [lreplace $frame_info 5 5 "thread_level_5"]
+test_info_threads "info threads #6" $frame_info
+
+# Same again for a thread in inferior #1.
+switch_thread "1.3"
+gdb_test "step" ".*" \
+    "step in thread 1.3"
+set frame_info [lreplace $frame_info 2 2 "thread_level_5"]
+test_info_threads "info threads #7" $frame_info
+
+# Now switch to another thread that already has a frame other than its
+# innermost selected.
+switch_thread "1.2"
+
+# Now disable restoring of the selected frame.
+gdb_test_no_output "set restore-selected-frame off"
+
+# And check to see which frame each thread has selected.  Our current
+# thread shouldn't change.
+set frame_info [list "$hex in ${pthread_join_pattern}" \
+		    "thread_worker" \
+		    "thread_level_5" \
+		    "thread_level_5" \
+		    "$hex in ${pthread_join_pattern}" \
+		    "thread_level_5" \
+		    "thread_level_5" \
+		    "thread_level_5"]
+test_info_threads "info threads #8" $frame_info
+
+# Now switch to some other thread, at this point GDB should forget the
+# selected frame for thread 1.2.
+switch_thread "1.4"
+set frame_info [lreplace $frame_info 1 1 "thread_level_5"]
+test_info_threads "info threads #9" $frame_info
+
+# A new test that will cover 'thread apply all'.  This test ensures
+# that any changes to the selected thread in 'thread apply all' are
+# sticky outside of the 'thread apply all'.
+with_test_prefix "thr apply all" {
+    clean_restart $binfile
+    setup_for_test
+
+    # Move all threads up a frame.
+    gdb_test "thread apply all -- up" ".*" \
+	"all threads up, first time"
+    set frame_info [list "$hex in main" \
+			"$hex in thread_level_4" \
+			"$hex in thread_level_4" \
+			"$hex in thread_level_4" ]
+    test_info_threads "info threads #10" $frame_info
+
+    # Move every thread back to frame 0.
+    gdb_test "thread apply all -- frame 0" ".*"
+    set frame_info [list "$hex in ${pthread_join_pattern}" \
+			"thread_level_5" \
+			"thread_level_5" \
+			"thread_level_5" ]
+    test_info_threads "info threads #11" $frame_info
+
+    # Disable restoring the current frame.
+    gdb_test_no_output "set restore-selected-frame off"
+
+    # Move all threads up a frame, no frame should change after this
+    # though.
+    gdb_test "thread apply all -- up" ".*" \
+	"all threads up, second time"
+    set frame_info [list "$hex in ${pthread_join_pattern}" \
+			"thread_level_5" \
+			"thread_level_5" \
+			"thread_level_5" ]
+    test_info_threads "info threads #12" $frame_info
+}

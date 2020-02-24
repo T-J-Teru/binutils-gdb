@@ -1,5 +1,10 @@
 2021-01-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.threads/restore-selected-frame.c: New file.
+	* gdb.threads/restore-selected-frame.exp: New file.
+
+2021-01-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.threads/restore-thread.c: New file.
 	* gdb.threads/restore-thread.exp: New file.
 

@@ -1,5 +1,12 @@
 2021-01-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.texinfo (Threads): Add anchor to 'info threads'.  Describe
+	the Frame column of 'info threads' more.  Describe which frame is
+	selected when switching threads, and document the new option for
+	restoring the previously selected frame.
+
+2021-01-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.texinfo (Inferiors Connections and Programs): Mention thread
 	tracking within the inferior command.
 	(Threads): Mention thread tracking in the general thread

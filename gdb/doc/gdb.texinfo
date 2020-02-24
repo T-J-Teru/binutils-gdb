@@ -3598,6 +3598,7 @@ Thread 1 "main" received signal SIGINT, Interrupt.
 @end smallexample
 
 @table @code
+@anchor{info threads}
 @kindex info threads
 @item info threads @r{[}@var{thread-id-list}@r{]}
 
@@ -3625,7 +3626,9 @@ the user (see @code{thread name}, below), or, in some cases, by the
 program itself.
 
 @item
-the current stack frame summary for that thread
+the current stack frame summary for that thread, this is the innermost
+frame for the thread (@pxref{set restore-selected-frame} to display the
+threads selected frame instead).
 @end enumerate
 
 @noindent
@@ -3696,6 +3699,24 @@ thread you selected, and its current stack frame summary:
 As with the @samp{[New @dots{}]} message, the form of the text after
 @samp{Switching to} depends on your system's conventions for identifying
 threads.
+
+When switching between threads, @value{GDBN} will select the innermost
+frame in the thread being switched too (@pxref{set restore-selected-frame}
+to change this behaviour).
+
+@anchor{set restore-selected-frame}
+@item set restore-selected-frame @r{[}on|off@r{]}
+@itemx show restore-selected-frame
+When @code{restore-selected-frame} is on, @value{GDBN} will restore
+the previously selected frame when switching to a different thread.
+Also the @code{info threads} command (@pxref{info threads}) will display the
+currently selected frame for each thread.
+
+If a thread has been running, then when it stops, the previously
+selected frame is discarded, and the innermost frame is again
+selected.
+
+This option is @code{off} by default.
 
 @anchor{thread apply all}
 @kindex thread apply

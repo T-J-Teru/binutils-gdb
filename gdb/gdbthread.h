@@ -370,6 +370,12 @@ public:
      bp_longjmp_call_dummy.  */
   struct frame_id initiating_frame = null_frame_id;
 
+  /* Information for the last frame successfully selected in this thread.
+     If the user configurable setting is on then GDB will try to reselect
+     this frame when switching threads.  */
+  struct frame_id selected_frame_id {};
+  int selected_frame_level = -1;
+
   /* Private data used by the target vector implementation.  */
   std::unique_ptr<private_thread_info> priv;
 
@@ -575,8 +581,11 @@ extern int thread_count (process_stratum_target *proc_target);
 /* Return true if we have any thread in any inferior.  */
 extern bool any_thread_p ();
 
-/* Switch context to thread THR.  Also sets the STOP_PC global.  */
-extern void switch_to_thread (struct thread_info *thr);
+/* Switch context to thread THR.  Also sets the STOP_PC global.  When
+   RESTORE_PREVIOUS_FRAME is true then, if this thread has a previously
+   selected frame cached, the previous frame is restored.  */
+extern void switch_to_thread (struct thread_info *thr,
+			      bool restore_previous_frame = false);
 
 /* Switch context to no thread selected.  */
 extern void switch_to_no_thread ();

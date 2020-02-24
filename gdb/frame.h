@@ -289,19 +289,29 @@ enum frame_type
   SENTINEL_FRAME
 };
 
-/* For every stopped thread, GDB tracks two frames: current and
-   selected.  Current frame is the inner most frame of the selected
-   thread.  Selected frame is the one being examined by the GDB
-   CLI (selected using `up', `down', ...).  The frames are created
-   on-demand (via get_prev_frame()) and then held in a frame cache.  */
-/* FIXME: cagney/2002-11-28: Er, there is a lie here.  If you do the
-   sequence: `thread 1; up; thread 2; thread 1' you lose thread 1's
-   selected frame.  At present GDB only tracks the selected frame of
-   the current thread.  But be warned, that might change.  */
-/* FIXME: cagney/2002-11-14: At any time, only one thread's selected
-   and current frame can be active.  Switching threads causes gdb to
-   discard all that cached frame information.  Ulgh!  Instead, current
-   and selected frame should be bound to a thread.  */
+/* When stopped GDB tracks two frames, the current frame and the selected
+   frame.  The current frame is the inner most frame of the currently
+   selected thread, and the selected frame is the one being examined by GDB
+   (selected using `up', `down', ...), again, in the currently selected
+   thread.
+
+   The frames are created on-demand (via get_prev_frame()) and then held in
+   a frame cache.
+
+   Switching threads causes GDB to discard all cached frame information.
+   Ideally the current and selected frames might be stored within the
+   thread object, this is not currently done as invalidating the frame
+   cache would require GDB to visit each thread to invalidate its cached
+   information.
+
+   Each thread does cache the frame-id of its selected frame.  When
+   switching threads GDB can (optionally, see 'set restore-selected-frame')
+   restore the previous selected frame by looking for a frame with a
+   matching frame-id.  The default behaviour is to not restore the selected
+   frame when switching threads, this means that doing 'thread 1; up;
+   thread 2; thread 1' would leave the user in thread 1, frame 0.  When
+   setting restore-selected-frame on then the same commands will leave the
+   user in thread 1, frame 1.  */
 
 /* On demand, create the inner most frame using information found in
    the inferior.  If the inner most frame can't be created, throw an
@@ -325,12 +335,10 @@ extern void reinit_frame_cache (void);
 /* Return the selected frame.  Always returns non-NULL.  If there
    isn't an inferior sufficient for creating a frame, an error is
    thrown.  When MESSAGE is non-NULL, use it for the error message,
-   otherwise use a generic error message.  */
-/* FIXME: cagney/2002-11-28: At present, when there is no selected
-   frame, this function always returns the current (inner most) frame.
-   It should instead, when a thread has previously had its frame
-   selected (but not resumed) and the frame cache invalidated, find
-   and then return that thread's previously selected frame.  */
+   otherwise use a generic error message.
+
+   If no frame has previously been selected then the inner most frame will
+   be returned.  */
 extern struct frame_info *get_selected_frame (const char *message = nullptr);
 
 /* Select a specific frame.  NULL implies re-select the inner most
