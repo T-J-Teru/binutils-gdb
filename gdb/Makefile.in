@@ -2068,7 +2068,7 @@ $(srcdir)/copying.c: @MAINTAINER_MODE_TRUE@ $(srcdir)/../COPYING3 $(srcdir)/copy
 version.c: stamp-version; @true
 # Note that the obvious names for the temp file are taken by
 # create-version.sh.
-stamp-version: Makefile version.in $(srcdir)/../bfd/version.h $(srcdir)/../gdbsupport/create-version.sh
+stamp-version: Makefile version.in $(srcdir)/../bfd/version.h $(srcdir)/../gdbsupport/create-version.sh $(srcdir)/../gdbsupport/remote-repository
 	$(ECHO_GEN) $(SHELL) $(srcdir)/../gdbsupport/create-version.sh $(srcdir) \
 	    $(host_alias) $(target_alias) version-t.t
 	@$(SHELL) $(srcdir)/../move-if-change version-t.t version.c

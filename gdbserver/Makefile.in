@@ -445,7 +445,7 @@ am--refresh:
 
 force:
 
-version-generated.cc: Makefile $(srcdir)/../gdb/version.in $(srcdir)/../bfd/version.h $(srcdir)/../gdbsupport/create-version.sh
+version-generated.cc: Makefile $(srcdir)/../gdb/version.in $(srcdir)/../bfd/version.h $(srcdir)/../gdbsupport/create-version.sh $(srcdir)/../gdbsupport/remote-repository
 	$(ECHO_GEN) $(SHELL) $(srcdir)/../gdbsupport/create-version.sh $(srcdir)/../gdb \
 		$(host_alias) $(target_alias) $@
 

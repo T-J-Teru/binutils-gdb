@@ -1,3 +1,8 @@
+2020-03-27  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* Makefile.in (stamp-version): Add remote-repository file as a
+	dependency.
+
 2020-03-25  Tom Tromey  <tom@tromey.com>
 
 	* compile/compile-object-load.c (get_out_value_type): Mention

@@ -1,5 +1,10 @@
 2020-03-27  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* create-version.sh: Add git sha information.
+	* remote-repository: New file.
+
+2020-03-27  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* create-version.sh: Resolve issues highlighted by shellcheck.
 
 2020-03-20  Simon Marchi  <simon.marchi@efficios.com>
