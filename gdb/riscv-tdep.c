@@ -3034,6 +3034,117 @@ riscv_dwarf_reg_to_regnum (struct gdbarch *gdbarch, int reg)
   return -1;
 }
 
+/* TODO: Describe.  */
+enum riscv_record_result
+{
+  RISCV_RECORD_SUCCESS,
+  RISCV_RECORD_UNSUPPORTED,
+  RISCV_RECORD_UNKNOWN
+};
+
+/* TODO: Describe.  */
+struct riscv_insn_decode_record_t
+{
+  /* The raw instruction.  We only support 2 or 4 byte instructions.  */
+  uint32_t insn;
+
+  /* TODO: Describe these.  */
+  regcache *regcache;
+  CORE_ADDR insn_addr;
+  gdbarch *gdbarch;
+};
+
+/* Decodes insns type and invokes its record handler.  */
+
+static enum riscv_record_result
+riscv_record_decode_insn_handler (riscv_insn_decode_record_t *insn)
+{
+  (void) insn;
+  return RISCV_RECORD_UNSUPPORTED;
+}
+
+/* Parse the current instruction and record the values of the registers and
+   memory that will be changed in current instruction to record_arch_list
+   return -1 if something is wrong.  */
+
+int
+riscv_process_record (struct gdbarch *gdbarch, struct regcache *regcache,
+		      CORE_ADDR insn_addr)
+{
+  uint32_t rec_no = 0;
+  uint8_t insn_size = 4;
+  uint32_t ret = 0;
+  riscv_insn_decode_record_t insn_record;
+  riscv_insn insn;
+
+  /* TODO: This call to decode here sucks!  We Maybe shouldn't need to do
+     a full decode to get the length.  Alternatively, maybe this call to
+     decode should do all of the work of understanding the instruction,
+     and then we could jump straight to the updating the stored data.  */
+  insn.decode (gdbarch, insn_addr);
+  int insn_length = insn.length ();
+
+  /* TODO: Create a buffer big enough to hold this instruction, and read the
+     instruction in.  This is not optimal as the call to DECODE above
+     already read the instruction in once, we should only read each
+     instruction once.  */
+  std::vector<gdb_byte> buf;
+  buf.reserve (insn_length);
+  target_read_memory (insn_addr, buf.data (), insn_size);
+
+  if (insn_length > 4)
+    error (_("only 2 or 4 byte instructions are supported"));
+
+  memset (&insn_record, 0, sizeof (riscv_insn_decode_record_t));
+  insn_record.insn
+    = (uint32_t) extract_unsigned_integer (buf.data,
+					   insn_size,
+					   gdbarch_byte_order (gdbarch));
+  aarch64_record.regcache = regcache;
+  aarch64_record.insn_addr = insn_addr;
+  aarch64_record.gdbarch = gdbarch;
+
+  ret = riscv_record_decode_insn_handler (&insn_record);
+  if (ret == RISCV_RECORD_UNSUPPORTED)
+    {
+      printf_unfiltered (_("Process record does not support instruction "
+			   "0x%0x at address %s.\n"),
+			 insn_record.insn,
+			 paddress (gdbarch, insn_addr));
+      ret = -1;
+    }
+
+#if 0
+  if (0 == ret)
+    {
+      /* Record registers.  */
+      record_full_arch_list_add_reg (aarch64_record.regcache,
+				     AARCH64_PC_REGNUM);
+      /* Always record register CPSR.  */
+      record_full_arch_list_add_reg (aarch64_record.regcache,
+				     AARCH64_CPSR_REGNUM);
+      if (aarch64_record.aarch64_regs)
+	for (rec_no = 0; rec_no < aarch64_record.reg_rec_count; rec_no++)
+	  if (record_full_arch_list_add_reg (aarch64_record.regcache,
+					     aarch64_record.aarch64_regs[rec_no]))
+	    ret = -1;
+
+      /* Record memories.  */
+      if (aarch64_record.aarch64_mems)
+	for (rec_no = 0; rec_no < aarch64_record.mem_rec_count; rec_no++)
+	  if (record_full_arch_list_add_mem
+	      ((CORE_ADDR)aarch64_record.aarch64_mems[rec_no].addr,
+	       aarch64_record.aarch64_mems[rec_no].len))
+	    ret = -1;
+
+      if (record_full_arch_list_add_end ())
+	ret = -1;
+    }
+#endif
+
+  return ret;
+}
+
 /* Initialize the current architecture based on INFO.  If possible,
    re-use an architecture from ARCHES, which is a list of
    architectures already created during this debugging session.
@@ -3280,6 +3391,9 @@ riscv_gdbarch_init (struct gdbarch_info info,
 
   /* Hook in OS ABI-specific overrides, if they have been registered.  */
   gdbarch_init_osabi (info, gdbarch);
+
+  /* Reversible debugging, process record.  */
+  set_gdbarch_process_record (gdbarch, riscv_process_record);
 
   return gdbarch;
 }
