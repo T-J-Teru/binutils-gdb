@@ -536,6 +536,16 @@ public:
   /* Data related to displaced stepping.  */
   displaced_step_inferior_state displaced_step_state;
 
+  /* This field is updated when GDB switches away from this inferior to
+     some other inferior, and records the current INFERIOR_PTID value
+     before switching to the new inferior.
+
+     This value is then used when switching back to this inferior to try
+     and restore the value of INFERIOR_PTID.  If the thread represented by
+     INFERIOR_PTID no longer exists when switching back to this inferior
+     then GDB will select some other thread from this inferior.  */
+  ptid_t previous_inferior_ptid;
+
   /* Per inferior data-pointers required by other GDB modules.  */
   REGISTRY_FIELDS;
 

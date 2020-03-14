@@ -1,3 +1,10 @@
+2020-03-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Inferiors Connections and Programs): Mention thread
+	tracking within the inferior command.
+	(Threads): Mention thread tracking in the general thread
+	discussion.
+
 2020-03-06  Tom de Vries  <tdevries@suse.de>
 
 	* gdb.texinfo: Fix "the the".

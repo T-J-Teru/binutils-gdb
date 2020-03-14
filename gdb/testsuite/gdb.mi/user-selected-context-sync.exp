@@ -533,6 +533,7 @@ proc match_re_or_ensure_not_output { re test } {
 proc_with_prefix test_cli_inferior { mode } {
     global gdb_main_spawn_id mi_spawn_id
 
+    reset_selection "2.1"
     reset_selection "1.1"
 
     set mi_re [make_mi_re $mode 4 2 event]

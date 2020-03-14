@@ -1,3 +1,9 @@
+2020-03-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.mi/user-selected-context-sync.exp: Update expected results.
+	* gdb.threads/restore-thread.c: New file.
+	* gdb.threads/restore-thread.exp: New file.
+
 2020-03-23  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.fortran/mixed-lang-stack.exp: Replace two hard coded address

@@ -3095,11 +3095,18 @@ For example,
 To switch focus between inferiors, use the @code{inferior} command:
 
 @table @code
+@anchor{inferior command}
 @kindex inferior @var{infno}
 @item inferior @var{infno}
 Make inferior number @var{infno} the current inferior.  The argument
 @var{infno} is the inferior number assigned by @value{GDBN}, as shown
 in the first field of the @samp{info inferiors} display.
+
+When switching between inferiors with multiple threads
+(@pxref{Threads}) @value{GDBN} will select the previously selected
+thread for that inferior.  If this is not possible, for example, if
+the thread has exited, then @value{GDBN} will select a random thread
+within the inferior.
 @end table
 
 @vindex $_inferior@r{, convenience variable}
@@ -3430,6 +3437,14 @@ Likewise when the program receives a signal:
 @smallexample
 Thread 1 "main" received signal SIGINT, Interrupt.
 @end smallexample
+
+If you're debugging multiple inferiors, @value{GDBN} keeps track of
+which thread is selected within each inferior.  When you switch
+between inferiors (@pxref{inferior command,,the @code{inferior}
+command}) @value{GDBN} will restore the inferior's previously selected
+thread where possible.  If the thread can't be selected, for example,
+if the thread has exited, then @value{GDBN} will select a random
+thread from the inferior.
 
 @table @code
 @kindex info threads

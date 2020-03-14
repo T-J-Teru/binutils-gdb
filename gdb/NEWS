@@ -42,6 +42,10 @@
 * On Windows targets, it is now possible to debug 32-bit programs with a
   64-bit GDB.
 
+* GDB now keeps track of the selected thread in each inferior, and
+  will restore the selected thread when switching inferior (if
+  possible).
+
 * New commands
 
 set exec-file-mismatch -- Set exec-file-mismatch handling (ask|warn|off).

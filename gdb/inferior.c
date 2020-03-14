@@ -636,11 +636,20 @@ inferior_command (const char *args, int from_tty)
   if (inf == NULL)
     error (_("Inferior ID %d not known."), num);
 
+  /* Preserve the current thread within this inferior so we can restore it
+     in the future when we switch back to this inferior.  */
+  current_inferior ()->previous_inferior_ptid = inferior_ptid;
+
   if (inf->pid != 0)
     {
       if (inf != current_inferior ())
 	{
-	  thread_info *tp = any_thread_of_inferior (inf);
+	  thread_info *tp = nullptr;
+
+	  if (inf->previous_inferior_ptid != null_ptid)
+	    tp = find_thread_ptid (inf, inf->previous_inferior_ptid);
+	  if (tp == nullptr)
+	    tp = any_thread_of_inferior (inf);
 	  if (tp == NULL)
 	    error (_("Inferior has no threads."));
 
