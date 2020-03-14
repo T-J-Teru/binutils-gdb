@@ -3247,11 +3247,25 @@ For example,
 To switch focus between inferiors, use the @code{inferior} command:
 
 @table @code
+@anchor{inferior command}
 @kindex inferior @var{infno}
 @item inferior @var{infno}
 Make inferior number @var{infno} the current inferior.  The argument
 @var{infno} is the inferior number assigned by @value{GDBN}, as shown
 in the first field of the @samp{info inferiors} display.
+
+When switching between inferiors with multiple threads (@pxref{Threads}),
+@value{GDBN} will select the first non-exited thread in the inferior being
+switched to, and make this the current thread.
+
+@kindex set restore-selected-thread
+@kindex show restore-selected-thread
+@item set restore-selected-thread @r{[}on|off@r{]}
+@item show restore-selected-thread
+When this option is on, @value{GDBN} will record the currently selected
+thread in each inferior.  When switching between inferiors, @value{GDBN}
+will try to restore the previously selected thread in the inferior being
+switched to.  This option is off by default.
 @end table
 
 @vindex $_inferior@r{, convenience variable}
@@ -3633,7 +3647,10 @@ For example,
 
 If you're debugging multiple inferiors, @value{GDBN} displays thread
 IDs using the qualified @var{inferior-num}.@var{thread-num} format.
-Otherwise, only @var{thread-num} is shown.
+Otherwise, only @var{thread-num} is shown.  When switching between
+inferiors, @value{GDBN} will select a suitable thread in the inferior
+being switched to, see @ref{inferior command,,the @code{inferior}
+command}, for further details on how to control this behaviour.
 
 If you specify the @samp{-gid} option, @value{GDBN} displays a column
 indicating each thread's global thread ID:

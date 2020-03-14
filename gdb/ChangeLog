@@ -1,3 +1,13 @@
+2021-01-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* inferior.c (inferior_command): Store current thread_info before
+	switching inferiors.  Reselect the previous thread_info if
+	possible after switching to the new inferior.
+	(initialize_inferiors): Register restore-selected-thread option.
+	* inferior.h (class inferior) <previous_thread_info>: New member
+	variable.
+	* NEWS: Mention new feature.
+
 2021-01-02  Simon Marchi  <simon.marchi@polymtl.ca>
 
 	* target-float.c: Fix typos.

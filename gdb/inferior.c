@@ -629,6 +629,23 @@ switch_to_inferior_no_thread (inferior *inf)
   set_current_program_space (inf->pspace);
 }
 
+/* When this is true, GDB restores the inferior's previously selected
+   thread each time the inferior is changed (where possible).  */
+
+static bool restore_selected_thread_per_inferior = false;
+
+/* Implement 'show restore-selected-thread'.  */
+
+static void
+show_restore_selected_thread_per_inferior (struct ui_file *file, int from_tty,
+					   struct cmd_list_element *c,
+					   const char *value)
+{
+  fprintf_filtered (file,
+		    _("Restoring the selected thread is currently %s.\n"),
+		    value);
+}
+
 static void
 inferior_command (const char *args, int from_tty)
 {
@@ -641,11 +658,38 @@ inferior_command (const char *args, int from_tty)
   if (inf == NULL)
     error (_("Inferior ID %d not known."), num);
 
+  /* We can only call INFERIOR_THREAD if the inferior is known to have an
+     active thread, which it wont if the inferior is currently exited.  So,
+     first check if we currently have a thread selected.  */
+  if (inferior_ptid != null_ptid)
+    {
+      /* Now take a strong reference to the current thread_info and store
+	 it within the inferior, this prevents the thread_info from being
+	 deleted until the inferior has released the reference.  */
+      thread_info *tp = inferior_thread ();
+      tp->incref ();
+      current_inferior ()->previous_thread_info.reset (tp);
+    }
+
   if (inf->pid != 0)
     {
       if (inf != current_inferior ())
 	{
-	  thread_info *tp = any_thread_of_inferior (inf);
+	  thread_info *tp = nullptr;
+
+	  if (restore_selected_thread_per_inferior
+	      && inf->previous_thread_info != nullptr)
+	    {
+	      /* Release the reference to the previous thread.  We don't
+		 switch back to this thread if it is already exited
+		 though.  */
+	      tp = inf->previous_thread_info.release ();
+	      tp->decref ();
+	      if (tp->state == THREAD_EXITED)
+		tp = nullptr;
+	    }
+	  if (tp == nullptr)
+	    tp = any_thread_of_inferior (inf);
 	  if (tp == NULL)
 	    error (_("Inferior has no threads."));
 
@@ -1021,6 +1065,18 @@ Show printing of inferior events (such as inferior start and exit)."), NULL,
 	 NULL,
 	 show_print_inferior_events,
 	 &setprintlist, &showprintlist);
+
+  add_setshow_boolean_cmd ("restore-selected-thread",
+			   no_class, &restore_selected_thread_per_inferior,
+                          _("\
+Set whether GDB restores the selected thread when switching inferiors."), _("\
+Show whether GDB restores the selected thread when switching inferiors."), _("\
+When this option is on, GDB will record the currently selected thread for\n\
+each inferior, and restore the selected thread whenever GDB switches inferiors."),
+                          nullptr,
+                          show_restore_selected_thread_per_inferior,
+                          &setlist,
+                          &showlist);
 
   create_internalvar_type_lazy ("_inferior", &inferior_funcs, NULL);
 }

@@ -1,3 +1,8 @@
+2021-01-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.threads/restore-thread.c: New file.
+	* gdb.threads/restore-thread.exp: New file.
+
 2020-12-31  Tom Tromey  <tom@tromey.com>
 
 	* gdb.rust/simple.exp: Update output for Rust 1.49.

@@ -47,6 +47,15 @@ maintenance flush register-cache
 maintenance flush dcache
   A new command to flush the dcache.
 
+set restore-selected-thread on|off
+show restore-selected-thread
+  When turned on, GDB will record the currently selected thread in
+  each inferior.  When switching between inferiors, GDB will attempt
+  to restore the previously selected thread in the inferior being
+  switched too.  If the previously selected thread is no longer
+  available, then GDB falls back to selecting the first non-exited
+  thread.
+
 * Changed commands
 
 break [PROBE_MODIFIER] [LOCATION] [thread THREADNUM]

@@ -544,6 +544,15 @@ public:
   /* Data related to displaced stepping.  */
   displaced_step_inferior_state displaced_step_state;
 
+  /* This field is updated when GDB switches away from this inferior to
+     some other inferior.  Holding a reference to the previously selected
+     thread prevents GDB from deleting the thread_info (until the inferior
+     itself is deleted).
+
+     When the user switches back to this inferior this reference is used to
+     (possibly) restore the selected thread.  */
+  thread_info_ref previous_thread_info;
+
   /* Per inferior data-pointers required by other GDB modules.  */
   REGISTRY_FIELDS;
 

@@ -1,3 +1,10 @@
+2021-01-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Inferiors Connections and Programs): Mention thread
+	tracking within the inferior command.
+	(Threads): Mention thread tracking in the general thread
+	discussion.
+
 2021-01-01  Joel Brobecker  <brobecker@adacore.com>
 
 	* gdb.texinfo, refcard.tex: Update copyright year range.
