@@ -13527,10 +13527,6 @@ dwarf2_rnglists_process (unsigned offset, struct dwarf2_cu *cu,
 	  return false;
 	}
 
-      /* Empty range entries have no effect.  */
-      if (range_beginning == range_end)
-	continue;
-
       range_beginning += *base;
       range_end += *base;
 
@@ -13638,10 +13634,6 @@ dwarf2_ranges_process (unsigned offset, struct dwarf2_cu *cu,
 	  return 0;
 	}
 
-      /* Empty range entries have no effect.  */
-      if (range_beginning == range_end)
-	continue;
-
       range_beginning += *base;
       range_end += *base;
 
@@ -13681,6 +13673,10 @@ dwarf2_ranges_read (unsigned offset, CORE_ADDR *low_return,
   retval = dwarf2_ranges_process (offset, cu,
     [&] (CORE_ADDR range_beginning, CORE_ADDR range_end)
     {
+      /* Empty range entries have no effect.  */
+      if (range_beginning == range_end)
+	return;
+
       if (ranges_pst != NULL)
 	{
 	  CORE_ADDR lowpc;
@@ -13918,6 +13914,7 @@ dwarf2_record_block_ranges (struct die_info *die, struct block *block,
   struct gdbarch *gdbarch = get_objfile_arch (objfile);
   struct attribute *attr;
   struct attribute *attr_high;
+  bool inlined_subroutine = (die->tag == DW_TAG_inlined_subroutine);
 
   attr_high = dwarf2_attr (die, DW_AT_high_pc, cu);
   if (attr_high)
@@ -13933,7 +13930,10 @@ dwarf2_record_block_ranges (struct die_info *die, struct block *block,
 
 	  low = gdbarch_adjust_dwarf2_addr (gdbarch, low + baseaddr);
 	  high = gdbarch_adjust_dwarf2_addr (gdbarch, high + baseaddr);
-	  cu->get_builder ()->record_block_range (block, low, high - 1);
+	  if (inlined_subroutine)
+	    cu->get_builder ()->record_inline_range_end (high);
+	  if (low < high)
+	    cu->get_builder ()->record_block_range (block, low, high - 1);
         }
     }
 
@@ -13958,6 +13958,10 @@ dwarf2_record_block_ranges (struct die_info *die, struct block *block,
 	  end += baseaddr;
 	  start = gdbarch_adjust_dwarf2_addr (gdbarch, start);
 	  end = gdbarch_adjust_dwarf2_addr (gdbarch, end);
+	  if (inlined_subroutine)
+	    cu->get_builder ()->record_inline_range_end (end);
+	  if (start == end)
+	    return;
 	  cu->get_builder ()->record_block_range (block, start, end - 1);
 	  blockvec.emplace_back (start, end);
 	});

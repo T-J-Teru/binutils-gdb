@@ -113,6 +113,8 @@ buildsym_compunit::~buildsym_compunit ()
       next1 = next->next;
       xfree ((void *) next);
     }
+
+  xfree (m_inline_end_vector);
 }
 
 struct macro_table *
@@ -691,35 +693,94 @@ buildsym_compunit::record_line (struct subfile *subfile, int line,
 		      * sizeof (struct linetable_entry))));
     }
 
-  /* The end of sequence marker is special.  We need to reset the
-     is_stmt flag on previous lines at the same PC, otherwise these
-     lines may cause problems since they might be at the same address
-     as the following function.  For instance suppose a function calls
-     abort there is no reason to emit a ret after that point (no joke).
-     So the label may be at the same address where the following
-     function begins.  A similar problem appears if a label is at the
-     same address where an inline function ends we cannot reliably tell
-     if this is considered part of the inline function or the calling
-     program or even the next inline function, so stack traces may
-     give surprising results.  Expect gdb.cp/step-and-next-inline.exp
-     to fail if these lines are not modified here.  */
-  if (line == 0 && subfile->line_vector->nitems > 0)
-    {
-      e = subfile->line_vector->item + subfile->line_vector->nitems;
-      do
-	{
-	  e--;
-	  if (e->pc != pc || e->line == 0)
-	    break;
-	  e->is_stmt = 0;
-	}
-      while (e > subfile->line_vector->item);
-    }
-
   e = subfile->line_vector->item + subfile->line_vector->nitems++;
   e->line = line;
   e->is_stmt = is_stmt ? 1 : 0;
   e->pc = pc;
+}
+
+
+/* Record a PC where a inlined subroutine ends.  */
+
+void
+buildsym_compunit::record_inline_range_end (CORE_ADDR end)
+{
+  /* The performance of this function is very important,
+     it shall be O(n*log(n)) therefore we do not use std::vector
+     here since some compilers, e.g. visual studio, do not
+     guarantee that for vector::push_back.  */
+  if (m_inline_end_vector == nullptr)
+    {
+      m_inline_end_vector_length = INITIAL_LINE_VECTOR_LENGTH;
+      m_inline_end_vector = (CORE_ADDR *)
+	xmalloc (sizeof (CORE_ADDR) * m_inline_end_vector_length);
+      m_inline_end_vector_nitems = 0;
+    }
+  else if (m_inline_end_vector_nitems == m_inline_end_vector_length)
+    {
+      m_inline_end_vector_length *= 2;
+      m_inline_end_vector = (CORE_ADDR *)
+	xrealloc ((char *) m_inline_end_vector,
+		  sizeof (CORE_ADDR) * m_inline_end_vector_length);
+    }
+
+  m_inline_end_vector[m_inline_end_vector_nitems++] = end;
+}
+
+
+/* Patch the is_stmt bits at the given inline end address.
+   The line table has to be already sorted.  */
+
+static void
+patch_inline_end_pos (struct linetable *table, CORE_ADDR end)
+{
+  int a = 2, b = table->nitems - 1;
+  struct linetable_entry *items = table->item;
+
+  /* We need at least two items with pc = end in the table.
+     The lowest usable items are at pos 0 and 1, the highest
+     usable items are at pos b - 2 and b - 1.  */
+  if (a > b || end < items[1].pc || end > items[b - 2].pc)
+    return;
+
+  /* Look for the first item with pc > end in the range [a,b].
+     The previous element has pc = end or there is no match.
+     We set a = 2, since we need at least two consecutive elements
+     with pc = end to do anything useful.
+     We set b = nitems - 1, since we are not interested in the last
+     element which should be an end of sequence marker with line = 0
+     and is_stmt = 1.  */
+  while (a < b)
+    {
+      int c = (a + b) / 2;
+
+      if (end < items[c].pc)
+	b = c;
+      else
+	a = c + 1;
+    }
+
+  a--;
+  if (items[a].pc != end || items[a].is_stmt)
+    return;
+
+  /* When there is a sequence of line entries at the same address
+     where an inline range ends, and the last item has is_stmt = 0,
+     we force all previous items to have is_stmt = 0 as well.
+     Setting breakpoints at those addresses is currently not
+     supported, since it is unclear if the previous addresses are
+     part of the subroutine or the calling program.  */
+  do
+    {
+      /* We stop at the first line entry with a different address,
+	 or when we see an end of sequence marker.  */
+      a--;
+      if (items[a].pc != end || items[a].line == 0)
+	break;
+
+      items[a].is_stmt = 0;
+    }
+  while (a > 0);
 }
 
 
@@ -956,6 +1017,10 @@ buildsym_compunit::end_symtab_with_blockvector (struct block *static_block,
 			      subfile->line_vector->item
 			      + subfile->line_vector->nitems,
 			      lte_is_less_than);
+
+	   for (int i = 0; i < m_inline_end_vector_nitems; i++)
+	     patch_inline_end_pos (subfile->line_vector,
+				   m_inline_end_vector[i]);
 	}
 
       /* Allocate a symbol table if necessary.  */

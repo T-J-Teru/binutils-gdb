@@ -190,6 +190,8 @@ struct buildsym_compunit
   void record_line (struct subfile *subfile, int line, CORE_ADDR pc,
 		    bool is_stmt);
 
+  void record_inline_range_end (CORE_ADDR end);
+
   struct compunit_symtab *get_compunit_symtab ()
   {
     return m_compunit_symtab;
@@ -397,6 +399,15 @@ private:
 
   /* Pending symbols that are local to the lexical context.  */
   struct pending *m_local_symbols = nullptr;
+
+  /* Pending inline end range addresses.  */
+  CORE_ADDR * m_inline_end_vector = nullptr;
+
+  /* Number of allocated inline end range addresses.  */
+  int m_inline_end_vector_length = 0;
+
+  /* Number of pending inline end range addresses.  */
+  int m_inline_end_vector_nitems = 0;
 };
 
 
