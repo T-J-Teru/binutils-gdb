@@ -11786,6 +11786,17 @@ update_global_location_list (enum ugll_insert_mode insert_mode)
 			      gdb_assert (is_hardware_watchpoint (loc2->owner));
 			      loc2->watchpoint_type = old_loc->watchpoint_type;
 			    }
+			  else if (is_breakpoint (old_loc->owner))
+			    {
+			      /* If we swap the inserted status of a
+				 hardware and software breakpoint then GDB
+				 will insert the breakpoint as one type,
+				 and later try to remove the breakpoint as
+				 the other type.  This is not good.  */
+			      gdb_assert (is_breakpoint (loc2->owner));
+			      if (old_loc->loc_type != loc2->loc_type)
+				continue;
+			    }
 
 			  /* loc2 is a duplicated location. We need to check
 			     if it should be inserted in case it will be
