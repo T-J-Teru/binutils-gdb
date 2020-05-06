@@ -1,3 +1,11 @@
+2020-08-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* eval.c (fortran_value_subarray): New function, content is taken
+	from...
+	(evaluate_subexp_standard): ...here, in two places.  Now arrays
+	and strings both call the new function.
+	(calc_f77_array_dims): Add header comment, handle strings.
+
 2020-09-14  Pedro Alves  <pedro@palves.net>
 
 	* Makefile.in (SELFTESTS_SRCS): Add
