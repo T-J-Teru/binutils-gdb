@@ -21,9 +21,13 @@
 proc gdb_py_test_silent_cmd { cmd name report_pass } {
     global gdb_prompt
 
+    set command_regex [string_to_regexp $cmd]
     gdb_test_multiple $cmd $name {
-	-re "Traceback.*$gdb_prompt $" { fail $name }
-	-re "$gdb_prompt $"            { if $report_pass { pass $name } }
+	-re "Traceback.*$gdb_prompt $" { fail "$name (Exception)" }
+	-re "SyntaxError.*$gdb_prompt $" { fail "$name (SyntaxError)" }
+	-re "^$command_regex\r\n$gdb_prompt $" {
+	    if $report_pass { pass $name }
+	}
     }
 }
 
