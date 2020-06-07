@@ -1,3 +1,8 @@
+2020-06-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.python/py-unwind.py (TestUnwinder::__call__): Add test for
+	gdb.PendingFrame.architecture method.
+
 2020-06-21  Philippe Waroquiers  <philippe.waroquiers@skynet.be>
 
 	* gdb.base/attach.exp: Test priority of 'exec-file' changed
