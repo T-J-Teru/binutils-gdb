@@ -1,5 +1,24 @@
 2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* riscv-tdep.c (struct riscv_print_default_tdesc_options): New.
+	(riscv_print_default_tdesc_len_32): New.
+	(riscv_print_default_tdesc_len_64): New.
+	(riscv_print_default_tdesc_len_enum_values_choices): New.
+	(riscv_print_default_tdesc_options_defs): New.
+	(make_riscv_maint_print_default_tdesc_options_def_group): New.
+	(riscv_maint_print_default_tdesc_xml): New.
+	(riscv_maint_print_default_tdesc_xml_completer): New.
+	(_initialize_riscv_tdep): Register new command.
+	* target-descriptions.c (fprintf_tdesc_xml_unfiltered): New
+	function, with implementation taken from...
+	(maint_print_xml_tdesc_cmd): ...here.  Use new function instead.
+	(add_maint_print_default_tdesc_cmd): New function.
+	* target-descriptions.h (add_maint_print_default_tdesc_cmd):
+	Declare.
+	(fprintf_tdesc_xml_unfiltered): Declare.
+
+2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* NEWS: Mention the new command flag.
 	* regcache-dump.c
 	(register_dump_regcache::register_dump_regcache): Add extra

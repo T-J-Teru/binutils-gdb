@@ -1,5 +1,9 @@
 2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.texinfo (Maintenance Commands): Discuss the new command.
+
+2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.texinfo (Maintenance Commands): Discuss new parameter
 	'-hide-nameless-registers'.
 

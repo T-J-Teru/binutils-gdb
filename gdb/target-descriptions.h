@@ -222,6 +222,26 @@ void set_tdesc_property (struct target_desc *,
 void tdesc_add_compatible (struct target_desc *,
 			   const struct bfd_arch_info *);
 
+/* Add a new command called NAME to the command list 'maint print
+   default-xml-tdesc '.  FUN is the command function, and DOC is the
+   documentation string as passed to ADD_CMD.
+
+   The NAME should be an architecture name and FUN should be a function
+   that takes a set of command line options, uses those options to select
+   one of the possible default target descriptions for architecture NAME
+   and then prints the description in its XML format.
+
+   The newly created command element is returned.  */
+
+extern cmd_list_element * add_maint_print_default_tdesc_cmd
+	(const char *name, cmd_const_cfunc_ftype *fun, const char *doc);
+
+/* Print an XML representation of TDESC to STREAM.  */
+
+extern void fprintf_tdesc_xml_unfiltered
+	(const struct target_desc *tdesc, struct ui_file *stream);
+
+
 #if GDB_SELF_TEST
 namespace selftests {
 

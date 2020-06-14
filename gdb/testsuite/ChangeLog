@@ -1,5 +1,9 @@
 2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.arch/riscv-default-tdesc.exp: New file.
+
+2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.base/maint.exp: Expand to cover -hide-nameless-registers.
 
 2020-06-23  Andrew Burgess  <andrew.burgess@embecosm.com>

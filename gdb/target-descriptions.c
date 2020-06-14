@@ -1757,6 +1757,18 @@ maint_print_c_tdesc_cmd (const char *args, int from_tty)
     }
 }
 
+/* Print an XML representation of TDESC to STREAM.  */
+
+void
+fprintf_tdesc_xml_unfiltered (const struct target_desc *tdesc,
+			      struct ui_file *stream)
+{
+  std::string buf;
+  print_xml_feature v (&buf);
+  tdesc->accept (v);
+  fputs_unfiltered (buf.c_str (), stream);
+}
+
 /* Implement the maintenance print xml-tdesc command.  */
 
 static void
@@ -1780,11 +1792,7 @@ maint_print_xml_tdesc_cmd (const char *args, int from_tty)
 
   if (tdesc == NULL)
     error (_("There is no target description to print."));
-
-  std::string buf;
-  print_xml_feature v (&buf);
-  tdesc->accept (v);
-  puts_unfiltered (buf.c_str ());
+  fprintf_tdesc_xml_unfiltered (tdesc, gdb_stdout);
 }
 
 namespace selftests {
@@ -1880,6 +1888,29 @@ maintenance_check_xml_descriptions (const char *dir, int from_tty)
     }
   printf_filtered (_("Tested %lu XML files, %d failed\n"),
 		   (long) selftests::xml_tdesc.size (), failed);
+}
+
+/* See target-descriptions.h.  */
+
+cmd_list_element *
+add_maint_print_default_tdesc_cmd (const char *name,
+				   cmd_const_cfunc_ftype *fun,
+				   const char *doc)
+{
+  /* If the list is not yet defined then define it.  */
+  static struct cmd_list_element *maint_print_default_tdesc_list = nullptr;
+  if (maint_print_default_tdesc_list == nullptr)
+    {
+      add_basic_prefix_cmd ("default-xml-tdesc", class_maintenance, _("\
+Maintenance command for printing GDB's default target descriptions as XML."),
+			    &maint_print_default_tdesc_list,
+			    "maintenance print default-xml_tdesc ", 0,
+			    &maintenanceprintlist);
+    }
+
+  /* Add the new command to the list.  */
+  return add_cmd (name, class_maintenance, fun, doc,
+		  &maint_print_default_tdesc_list);
 }
 
 void _initialize_target_descriptions ();

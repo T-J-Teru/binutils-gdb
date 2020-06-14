@@ -38510,6 +38510,15 @@ read in by GDB and then used to produce the description.  The
 @var{file} should be an XML document, of the form described in
 @ref{Target Description Format}.
 
+@kindex maint print default-xml-tdesc
+@item maint print default-xml-tdesc riscv -xlen @var{xlen} @r{[}-flen @var{flen}@r{]}
+This command will only be available within a @value{GDBN} compiled
+with RISC-V support.  The output of this command is an XML document of
+the form described in @ref{Target Description Format} for the default
+target description selected by @var{xlen}, the size of the x-registers
+in bits (either 32 or 64), and @var{flen} the size of the f-registers
+in bits (either 32 or 64).
+
 @kindex maint check xml-descriptions
 @item maint check xml-descriptions @var{dir}
 Check that the target descriptions dynamically created by @value{GDBN}

@@ -3480,10 +3480,116 @@ riscv_init_reggroups ()
   csr_reggroup = reggroup_new ("csr", USER_REGGROUP);
 }
 
+/* Structure to hold the values of options set by 'maint print
+   default-xml-tdesc riscv' command.  */
+
+struct riscv_print_default_tdesc_options
+{
+  const char *xlen_opt = nullptr;
+  const char *flen_opt = nullptr;
+};
+
+/* Enum values for the "maintenance print default-xml-tdesc riscv"
+   command's xlen and flen options.  */
+static const char riscv_print_default_tdesc_len_32[] = "32";
+static const char riscv_print_default_tdesc_len_64[] = "64";
+static const char *const riscv_print_default_tdesc_len_enum_values_choices[] =
+{
+  riscv_print_default_tdesc_len_32,
+  riscv_print_default_tdesc_len_64,
+  NULL
+};
+
+/* The options used by 'maint print default-xml-tdesc riscv'.  */
+
+static const gdb::option::option_def
+	riscv_print_default_tdesc_options_defs[] = {
+  /* Select the size of the x-registers.  */
+  gdb::option::enum_option_def<riscv_print_default_tdesc_options> {
+    "xlen",
+    riscv_print_default_tdesc_len_enum_values_choices,
+    [] (riscv_print_default_tdesc_options *opts) { return &opts->xlen_opt; },
+    nullptr, /* show_cmd_cb */
+    N_("XXXXX.")
+  },
+
+  /* Select the size of the f-registers.  */
+  gdb::option::enum_option_def<riscv_print_default_tdesc_options> {
+    "flen",
+    riscv_print_default_tdesc_len_enum_values_choices,
+    [] (riscv_print_default_tdesc_options *opts) { return &opts->flen_opt; },
+    nullptr, /* show_cmd_cb */
+    N_("XXXXX(f).")
+  },
+};
+
+/* Create an option_def_group for the
+   riscv_print_default_tdesc_options_defs, with OPTS as context.  */
+
+static inline gdb::option::option_def_group
+make_riscv_maint_print_default_tdesc_options_def_group
+	(riscv_print_default_tdesc_options *opts)
+{
+  return {{riscv_print_default_tdesc_options_defs}, opts};
+}
+
+/* Implement the 'maintenance print default-xml-tdesc riscv' command.  */
+
+static void
+riscv_maint_print_default_tdesc_xml (const char *args, int from_tty)
+{
+  riscv_print_default_tdesc_options opts;
+
+  auto group = make_riscv_maint_print_default_tdesc_options_def_group (&opts);
+  gdb::option::process_options
+    (&args, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_ERROR, group);
+
+  /* Build a set of features that we're going to print the default for.  */
+  struct riscv_gdbarch_features features;
+
+  /* Every target must have x-registers.  */
+  if (opts.xlen_opt == nullptr)
+    error (_("the -xlen 32|64 option must be supplied"));
+  else if (opts.xlen_opt == riscv_print_default_tdesc_len_32)
+    features.xlen = 4;
+  else if (opts.xlen_opt == riscv_print_default_tdesc_len_64)
+    features.xlen = 8;
+
+  /* The FLEN_OPT can be NULL, this indicates no f-registers are wanted.  */
+  if (opts.flen_opt == riscv_print_default_tdesc_len_32)
+    features.flen = 4;
+  else if (opts.flen_opt == riscv_print_default_tdesc_len_64)
+    features.flen = 8;
+
+  /* Find the default target description for this set of features.  */
+  const struct target_desc *tdesc
+    = riscv_lookup_target_description (features);
+
+  /* And print the default as XML.  */
+  fprintf_tdesc_xml_unfiltered (tdesc, gdb_stdout);
+}
+
+/* Completer for "maint print default-xml-tdesc riscv".  */
+
+static void
+riscv_maint_print_default_tdesc_xml_completer (cmd_list_element *ignore,
+					       completion_tracker &tracker,
+					       const char *text,
+					       const char *word)
+{
+  const auto group
+    = make_riscv_maint_print_default_tdesc_options_def_group (nullptr);
+  if (gdb::option::complete_options
+      (tracker, &text, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_ERROR, group))
+    return;
+}
+
 void _initialize_riscv_tdep ();
 void
 _initialize_riscv_tdep ()
 {
+  cmd_list_element *cmd;
+
   riscv_create_csr_aliases ();
   riscv_init_reggroups ();
 
@@ -3565,4 +3671,19 @@ this option can be used."),
 				show_use_compressed_breakpoints,
 				&setriscvcmdlist,
 				&showriscvcmdlist);
+
+  const auto default_tdesc_opts
+    = make_riscv_maint_print_default_tdesc_options_def_group (nullptr);
+  static std::string str = gdb::option::build_help (_("\
+Print a default RISC-V target description as XML.\n\
+Usage: maintenance print default-xml-tdesc riscv [OPTIONS]\n\
+\n\
+Options:\n\
+%OPTIONS%\n\
+Use the options to select which of the default RISC-V target descriptions\n\
+you wish to print."), default_tdesc_opts);
+  cmd = add_maint_print_default_tdesc_cmd
+    ("riscv", riscv_maint_print_default_tdesc_xml, str.c_str ());
+  set_cmd_completer_handle_brkchars
+    (cmd, riscv_maint_print_default_tdesc_xml_completer);
 }

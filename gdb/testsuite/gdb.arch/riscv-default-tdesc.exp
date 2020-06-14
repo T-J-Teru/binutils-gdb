@@ -1,0 +1,175 @@
+# Copyright 2020 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check that the default target description register numbering doesn't
+# change.  There could be targets in the wild that depend on this
+# numbering (they shouldn't, they should use target descriptions) so
+# we shouldn't make changes to this numbering lightly.
+#
+# While we're looking at the default target descriptions we also check
+# that the register sizes are correct.
+
+if {![istarget "riscv*-*-*"]} {
+    verbose "Skipping ${gdb_test_file_name}."
+    return
+}
+
+clean_restart
+
+# Add all x-registers into the global EXPECTED_REGS array. XLEN is the
+# size of the x-registers.
+proc add_x_regs { xlen } {
+    uplevel {
+	set expected_regs(zero) [list 0 $xlen]
+	set expected_regs(ra) [list 1 $xlen]
+	set expected_regs(sp) [list 2 $xlen]
+	set expected_regs(gp) [list 3 $xlen]
+	set expected_regs(tp) [list 4 $xlen]
+	set expected_regs(t0) [list 5 $xlen]
+	set expected_regs(t1) [list 6 $xlen]
+	set expected_regs(t2) [list 7 $xlen]
+	set expected_regs(fp) [list 8 $xlen]
+	set expected_regs(s1) [list 9 $xlen]
+	set expected_regs(a0) [list 10 $xlen]
+	set expected_regs(a1) [list 11 $xlen]
+	set expected_regs(a2) [list 12 $xlen]
+	set expected_regs(a3) [list 13 $xlen]
+	set expected_regs(a4) [list 14 $xlen]
+	set expected_regs(a5) [list 15 $xlen]
+	set expected_regs(a6) [list 16 $xlen]
+	set expected_regs(a7) [list 17 $xlen]
+	set expected_regs(s2) [list 18 $xlen]
+	set expected_regs(s3) [list 19 $xlen]
+	set expected_regs(s4) [list 20 $xlen]
+	set expected_regs(s5) [list 21 $xlen]
+	set expected_regs(s6) [list 22 $xlen]
+	set expected_regs(s7) [list 23 $xlen]
+	set expected_regs(s8) [list 24 $xlen]
+	set expected_regs(s9) [list 25 $xlen]
+	set expected_regs(s10) [list 26 $xlen]
+	set expected_regs(s11) [list 27 $xlen]
+	set expected_regs(t3) [list 28 $xlen]
+	set expected_regs(t4) [list 29 $xlen]
+	set expected_regs(t5) [list 30 $xlen]
+	set expected_regs(t6) [list 31 $xlen]
+	set expected_regs(pc) [list 32 $xlen]
+    }
+}
+
+# Add all f-registers into the global EXPECTED_REGS array.  FLEN is
+# the size of the f-registers.
+proc add_f_regs { flen } {
+    uplevel {
+	set expected_regs(ft0) [list 33 $flen]
+	set expected_regs(ft1) [list 34 $flen]
+	set expected_regs(ft2) [list 35 $flen]
+	set expected_regs(ft3) [list 36 $flen]
+	set expected_regs(ft4) [list 37 $flen]
+	set expected_regs(ft5) [list 38 $flen]
+	set expected_regs(ft6) [list 39 $flen]
+	set expected_regs(ft7) [list 40 $flen]
+	set expected_regs(fs0) [list 41 $flen]
+	set expected_regs(fs1) [list 42 $flen]
+	set expected_regs(fa0) [list 43 $flen]
+	set expected_regs(fa1) [list 44 $flen]
+	set expected_regs(fa2) [list 45 $flen]
+	set expected_regs(fa3) [list 46 $flen]
+	set expected_regs(fa4) [list 47 $flen]
+	set expected_regs(fa5) [list 48 $flen]
+	set expected_regs(fa6) [list 49 $flen]
+	set expected_regs(fa7) [list 50 $flen]
+	set expected_regs(fs2) [list 51 $flen]
+	set expected_regs(fs3) [list 52 $flen]
+	set expected_regs(fs4) [list 53 $flen]
+	set expected_regs(fs5) [list 54 $flen]
+	set expected_regs(fs6) [list 55 $flen]
+	set expected_regs(fs7) [list 56 $flen]
+	set expected_regs(fs8) [list 57 $flen]
+	set expected_regs(fs9) [list 58 $flen]
+	set expected_regs(fs10) [list 59 $flen]
+	set expected_regs(fs11) [list 60 $flen]
+	set expected_regs(ft8) [list 61 $flen]
+	set expected_regs(ft9) [list 62 $flen]
+	set expected_regs(ft10) [list 63 $flen]
+	set expected_regs(ft11) [list 64 $flen]
+	# The status registers are always 32-bits.
+	set expected_regs(fflags) [list 66 32]
+	set expected_regs(frm) [list 67 32]
+	set expected_regs(fcsr) [list 68 32]
+    }
+}
+
+# Now check all the different combinations of x-reg and f-reg.  I'm
+# not sure all of these actually make sense (32-bit x-reg with 64-bit
+# f-reg maybe?) but there's no reason why GDB can't generate a
+# sensible default target configuration, so just check everything.
+foreach xlen { 32 64 } {
+    foreach flen { 0 32 64 } {
+
+	array set expected_regs {}
+	add_x_regs $xlen
+	set args "-xlen $xlen"
+
+	if {$flen != 0} {
+	    add_f_regs $flen
+	    set args "$args -flen $flen"
+	}
+
+	set found_bad_reg_num false
+	set found_bad_reg_size false
+	set test "maint print default-xml-tdesc riscv $args"
+	gdb_test_multiple $test $test {
+	    -re "\r\n<target>\r\n" {
+		exp_continue
+	    }
+	    -re "^    <reg name=\"(\[^\"\]+)\" bitsize=\"(\[^\"\]+)\"\[^\r\n\]+regnum=\"(\[^\"\]+)\"/>\r\n" {
+		set reg $expect_out(1,string)
+		set size $expect_out(2,string)
+		set num $expect_out(3,string)
+		if {[info exists expected_regs($reg)]} {
+		    set exp_num [lindex $expected_regs($reg) 0]
+		    set exp_size [lindex $expected_regs($reg) 1]
+		    if { $exp_num != $num } {
+			verbose -log "Register $reg is number $num, but was expected to be $exp_num"
+			set found_bad_reg_num true
+		    }
+		    if { $exp_size != $size } {
+			verbose -log "Register $reg is size $size, but was expected to be $exp_size"
+			set found_bad_reg_size true
+		    }
+		    unset expected_regs($reg)
+		}
+		exp_continue
+	    }
+	    -re "^  ((<architecture|</?feature)\[^\r\n\]+)\r\n" {
+		exp_continue
+	    }
+	    -re "^    <union.*</union>\r\n" {
+		exp_continue
+	    }
+	    -re "^</target>\r\n" {
+		exp_continue
+	    }
+	    -re "^$gdb_prompt $" {
+		gdb_assert { !$found_bad_reg_num } \
+		    "$gdb_test_name, all register numbers matched"
+		gdb_assert { !$found_bad_reg_size } \
+		    "$gdb_test_name, all register sizes matched"
+		gdb_assert { [llength [array names expected_regs]] == 0} \
+		    "$gdb_test_name, all expected registers found"
+	    }
+	}
+    }
+}
