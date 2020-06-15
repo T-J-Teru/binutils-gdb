@@ -216,6 +216,28 @@ enum regcache_dump_what
   regcache_dump_remote
 };
 
+/* Called after GDB fails to open a file in REGCACHE_PRINT, calls
+   PERROR_WITH_NAME passing in an appropriate name based on WHAT_TO_DUMP.  */
+static void
+regcache_print_open_perror (enum regcache_dump_what what_to_dump)
+{
+  /* Don't internationalise the name strings passed in here as these are
+     the names of commands, which are not themselves internationalised.  */
+  switch (what_to_dump)
+    {
+    case regcache_dump_none:
+      perror_with_name ("maintenance print registers");
+    case regcache_dump_raw:
+      perror_with_name ("maintenance print raw-registers");
+    case regcache_dump_cooked:
+      perror_with_name ("maintenance print cooked-registers");
+    case regcache_dump_groups:
+      perror_with_name ("maintenance print register-groups");
+    case regcache_dump_remote:
+      perror_with_name ("maintenance print remote-registers");
+    };
+}
+
 static void
 regcache_print (const char *args, enum regcache_dump_what what_to_dump)
 {
@@ -228,7 +250,7 @@ regcache_print (const char *args, enum regcache_dump_what what_to_dump)
   else
     {
       if (!file.open (args, "w"))
-	perror_with_name (_("maintenance print architecture"));
+	regcache_print_open_perror (what_to_dump);
       out = &file;
     }
 
