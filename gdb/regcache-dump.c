@@ -31,8 +31,10 @@
 class register_dump_regcache : public register_dump
 {
 public:
-  register_dump_regcache (regcache *regcache, bool dump_pseudo)
-    : register_dump (regcache->arch ()), m_regcache (regcache),
+  register_dump_regcache (regcache *regcache, bool dump_pseudo,
+			  bool hide_nameless)
+    : register_dump (regcache->arch (), hide_nameless),
+      m_regcache (regcache),
       m_dump_pseudo (dump_pseudo)
   {
   }
@@ -91,8 +93,10 @@ private:
 class register_dump_reg_buffer : public register_dump, reg_buffer
 {
 public:
-  register_dump_reg_buffer (gdbarch *gdbarch, bool dump_pseudo)
-    : register_dump (gdbarch), reg_buffer (gdbarch, dump_pseudo)
+  register_dump_reg_buffer (gdbarch *gdbarch, bool dump_pseudo,
+			    bool hide_nameless)
+    : register_dump (gdbarch, hide_nameless),
+      reg_buffer (gdbarch, dump_pseudo)
   {
   }
 
@@ -139,8 +143,8 @@ protected:
 class register_dump_none : public register_dump
 {
 public:
-  register_dump_none (gdbarch *arch)
-    : register_dump (arch)
+  register_dump_none (gdbarch *arch, bool hide_nameless)
+    : register_dump (arch, hide_nameless)
   {}
 
 protected:
@@ -153,8 +157,8 @@ protected:
 class register_dump_remote : public register_dump
 {
 public:
-  register_dump_remote (gdbarch *arch)
-    : register_dump (arch)
+  register_dump_remote (gdbarch *arch, bool hide_nameless)
+    : register_dump (arch, hide_nameless)
   {}
 
 protected:
@@ -180,8 +184,8 @@ protected:
 class register_dump_groups : public register_dump
 {
 public:
-  register_dump_groups (gdbarch *arch)
-    : register_dump (arch)
+  register_dump_groups (gdbarch *arch, bool hide_nameless)
+    : register_dump (arch, hide_nameless)
   {}
 
 protected:
@@ -208,6 +212,56 @@ protected:
       }
   }
 };
+
+/* Structure to hold the options use by maintenance register printing
+   commands.  */
+
+struct maint_print_regs_options
+{
+  bool hide_nameless_registers = false;
+};
+
+/* The options used by maintenance register printing commands.  */
+
+static const gdb::option::option_def maint_print_regs_options_defs[] = {
+  /* Select the size of the x-registers.  */
+  gdb::option::boolean_option_def<maint_print_regs_options> {
+    "hide-nameless-registers",
+    [] (maint_print_regs_options *opts) {
+      return &opts->hide_nameless_registers;
+    },
+    nullptr, /* show_cmd_cb */
+    N_("Hide registers with no name.")
+  },
+};
+
+/* Create an option_def_group for the maint_print_regs_options_defs, with
+   OPTS as context.  */
+
+static inline gdb::option::option_def_group
+make_maint_print_regs_options_def_group
+	(maint_print_regs_options *opts)
+{
+  return {{maint_print_regs_options_defs}, opts};
+}
+
+/* Completer for "maint print *" register based commands.  */
+
+static void
+maint_print_regs_completer (cmd_list_element *ignore,
+			    completion_tracker &tracker,
+			    const char *text,
+			    const char * /* word */)
+{
+  const auto group
+    = make_maint_print_regs_options_def_group (nullptr);
+  if (gdb::option::complete_options
+      (tracker, &text, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_OPERAND, group))
+    return;
+
+  const char *word = advance_to_expression_complete_word_point (tracker, text);
+  filename_completer (ignore, tracker, text, word);
+}
 
 enum regcache_dump_what
 {
@@ -241,11 +295,18 @@ regcache_print_open_perror (enum regcache_dump_what what_to_dump)
 static void
 regcache_print (const char *args, enum regcache_dump_what what_to_dump)
 {
+  /* Process command arguments.  */
+  maint_print_regs_options opts;
+  auto group = make_maint_print_regs_options_def_group (&opts);
+  gdb::option::process_options
+    (&args, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_OPERAND, group);
+  bool hide_nameless = opts.hide_nameless_registers;
+
   /* Where to send output.  */
   stdio_file file;
   ui_file *out;
 
-  if (args == NULL)
+  if (args == NULL || *args == '\0')
     out = gdb_stdout;
   else
     {
@@ -266,13 +327,13 @@ regcache_print (const char *args, enum regcache_dump_what what_to_dump)
   switch (what_to_dump)
     {
     case regcache_dump_none:
-      dump.reset (new register_dump_none (gdbarch));
+      dump.reset (new register_dump_none (gdbarch, hide_nameless));
       break;
     case regcache_dump_remote:
-      dump.reset (new register_dump_remote (gdbarch));
+      dump.reset (new register_dump_remote (gdbarch, hide_nameless));
       break;
     case regcache_dump_groups:
-      dump.reset (new register_dump_groups (gdbarch));
+      dump.reset (new register_dump_groups (gdbarch, hide_nameless));
       break;
     case regcache_dump_raw:
     case regcache_dump_cooked:
@@ -281,14 +342,16 @@ regcache_print (const char *args, enum regcache_dump_what what_to_dump)
 
 	if (target_has_registers)
 	  dump.reset (new register_dump_regcache (get_current_regcache (),
-						  dump_pseudo));
+						  dump_pseudo,
+						  hide_nameless));
 	else
 	  {
 	    /* For the benefit of "maint print registers" & co when
 	       debugging an executable, allow dumping a regcache even when
 	       there is no thread selected / no registers.  */
 	    dump.reset (new register_dump_reg_buffer (target_gdbarch (),
-						      dump_pseudo));
+						      dump_pseudo,
+						      hide_nameless));
 	  }
       }
       break;
@@ -331,29 +394,77 @@ void _initialize_regcache_dump ();
 void
 _initialize_regcache_dump ()
 {
-  add_cmd ("registers", class_maintenance, maintenance_print_registers,
-	   _("Print the internal register configuration.\n"
-	     "Takes an optional file parameter."), &maintenanceprintlist);
-  add_cmd ("raw-registers", class_maintenance,
-	   maintenance_print_raw_registers,
-	   _("Print the internal register configuration "
-	     "including raw values.\n"
-	     "Takes an optional file parameter."), &maintenanceprintlist);
-  add_cmd ("cooked-registers", class_maintenance,
-	   maintenance_print_cooked_registers,
-	   _("Print the internal register configuration "
-	     "including cooked values.\n"
-	     "Takes an optional file parameter."), &maintenanceprintlist);
-  add_cmd ("register-groups", class_maintenance,
-	   maintenance_print_register_groups,
-	   _("Print the internal register configuration "
-	     "including each register's group.\n"
-	     "Takes an optional file parameter."),
-	   &maintenanceprintlist);
-  add_cmd ("remote-registers", class_maintenance,
-	   maintenance_print_remote_registers, _("\
-Print the internal register configuration including remote register number "
-"and g/G packets offset.\n\
-Takes an optional file parameter."),
-	   &maintenanceprintlist);
+  cmd_list_element *cmd;
+  const auto maint_reg_print_opts
+    = make_maint_print_regs_options_def_group (nullptr);
+
+  static std::string registers_help
+    = gdb::option::build_help (_("\
+Print the internal register configuration.\n\
+Usage: maintenance print registers [OPTIONS] [FILENAME]\n\
+\n\
+Options:\n\
+%OPTIONS%\n\
+When optional FILENAME is provided output is written to the specified\n\
+file."), maint_reg_print_opts);
+  cmd = add_cmd ("registers", class_maintenance, maintenance_print_registers,
+		 registers_help.c_str (), &maintenanceprintlist);
+  set_cmd_completer_handle_brkchars (cmd, maint_print_regs_completer);
+
+  static std::string raw_registers_help
+    = gdb::option::build_help (_("\
+Print the internal register configuration including raw values.\n\
+Usage: maintenance print raw-registers [OPTIONS] [FILENAME]\n\
+\n\
+Options:\n\
+%OPTIONS%\n\
+When optional FILENAME is provided output is written to the specified\n\
+file."), maint_reg_print_opts);
+  cmd = add_cmd ("raw-registers", class_maintenance,
+		 maintenance_print_raw_registers,
+		 raw_registers_help.c_str (), &maintenanceprintlist);
+  set_cmd_completer_handle_brkchars (cmd, maint_print_regs_completer);
+
+  static std::string cooked_registers_help
+    = gdb::option::build_help (_("\
+Print the internal register configuration including cooked values.\n\
+Usage: maintenance print cooked-registers [OPTIONS] [FILENAME]\n\
+\n\
+Options:\n\
+%OPTIONS%\n\
+When optional FILENAME is provided output is written to the specified\n\
+file."), maint_reg_print_opts);
+  cmd = add_cmd ("cooked-registers", class_maintenance,
+		 maintenance_print_cooked_registers,
+		 cooked_registers_help.c_str (), &maintenanceprintlist);
+  set_cmd_completer_handle_brkchars (cmd, maint_print_regs_completer);
+
+  static std::string register_groups_help
+    = gdb::option::build_help (_("\
+Print the internal register configuration each registers groups.\n\
+Usage: maintenance print register-groups [OPTIONS] [FILENAME]\n\
+\n\
+Options:\n\
+%OPTIONS%\n\
+When optional FILENAME is provided output is written to the specified\n\
+file."), maint_reg_print_opts);
+  cmd = add_cmd ("register-groups", class_maintenance,
+		 maintenance_print_register_groups,
+		 register_groups_help.c_str (), &maintenanceprintlist);
+  set_cmd_completer_handle_brkchars (cmd, maint_print_regs_completer);
+
+  static std::string remote_registers_help
+    = gdb::option::build_help (_("\
+Print the internal register configuration including remote register\n\
+number and g/G packets offset.\n\
+Usage: maintenance print remote-registers [OPTIONS] [FILENAME]\n\
+\n\
+Options:\n\
+%OPTIONS%\n\
+When optional FILENAME is provided output is written to the specified\n\
+file."), maint_reg_print_opts);
+  cmd = add_cmd ("remote-registers", class_maintenance,
+		 maintenance_print_remote_registers,
+		 remote_registers_help.c_str (), &maintenanceprintlist);
+  set_cmd_completer_handle_brkchars (cmd, maint_print_regs_completer);
 }

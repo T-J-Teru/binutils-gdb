@@ -38549,11 +38549,11 @@ Takes an optional file parameter.
 @kindex maint print cooked-registers
 @kindex maint print register-groups
 @kindex maint print remote-registers
-@item maint print registers @r{[}@var{file}@r{]}
-@itemx maint print raw-registers @r{[}@var{file}@r{]}
-@itemx maint print cooked-registers @r{[}@var{file}@r{]}
-@itemx maint print register-groups @r{[}@var{file}@r{]}
-@itemx maint print remote-registers @r{[}@var{file}@r{]}
+@item maint print registers @r{[}-hide-nameless-registers@r{]} @r{[}@var{file}@r{]}
+@itemx maint print raw-registers @r{[}-hide-nameless-registers@r{]} @r{[}@var{file}@r{]}
+@itemx maint print cooked-registers @r{[}-hide-nameless-registers@r{]} @r{[}@var{file}@r{]}
+@itemx maint print register-groups @r{[}-hide-nameless-registers@r{]} @r{[}@var{file}@r{]}
+@itemx maint print remote-registers @r{[}-hide-nameless-registers@r{]} @r{[}@var{file}@r{]}
 Print @value{GDBN}'s internal register data structures.
 
 The command @code{maint print raw-registers} includes the contents of
@@ -38567,6 +38567,16 @@ and offsets in the `G' packets.
 
 These commands take an optional parameter, a file name to which to
 write the information.
+
+On many targets the register number space is only sparsely populated
+with usable registers, this can be to accomodate handling different
+target configurations using the same GDB code, or in some cases to
+line up GDB's internal register numbering with some target specific
+numbering.
+
+When a register isn't in use it will be reported with no name in the
+register lists outputed by these commands.  If you wish to hide these
+nameless registers then pass the @code{-hide-nameless-registers} flag.
 
 @kindex maint print reggroups
 @item maint print reggroups @r{[}@var{file}@r{]}

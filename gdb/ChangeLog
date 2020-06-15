@@ -1,5 +1,28 @@
 2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* NEWS: Mention the new command flag.
+	* regcache-dump.c
+	(register_dump_regcache::register_dump_regcache): Add extra
+	parameter, and pass through to parent class.
+	(register_dump_reg_buffer::register_dump_reg_buffer): Likewise.
+	(register_dump_none::register_dump_none): Likewise.
+	(register_dump_remote::register_dump_remote): Likewise.
+	(register_dump_groups::register_dump_groups): Likewise.
+	(struct maint_print_regs_options): New structure.
+	(maint_print_regs_options_defs): New static global.
+	(make_maint_print_regs_options_def_group): New function.
+	(maint_print_regs_completer): New function.
+	(regcache_print): Parse command flags pass option through when
+	needed.  Handle empty as well as NULL argument string.
+	(_initialize_regcache_dump): Add command completion for all
+	commands, and update help text to include options.
+	* regcache.c (register_dump::dump): Skip nameless registers if
+	requested.
+	* regcache.h (register_dump::register_dump): Take extra parameter.
+	(register_dump::m_hide_nameless): New member variable.
+
+2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* regcache-dump.c (regcache_print_open_perror): New function.
 	(regcache_print): Use new function.
 

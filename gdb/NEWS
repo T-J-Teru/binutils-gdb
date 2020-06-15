@@ -63,6 +63,12 @@
 * On Windows targets, it is now possible to debug 32-bit programs with a
   64-bit GDB.
 
+* The "maintenance print registers", "maintenance print
+  raw-registers", "maintenance print cooked-registers", and
+  "maintenance print remote-registers" commands now all have a command
+  line option '-hide-nameless-registers' which hides nameless
+  registers in the output.
+
 * New commands
 
 set exec-file-mismatch -- Set exec-file-mismatch handling (ask|warn|off).

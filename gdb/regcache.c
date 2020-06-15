@@ -1330,6 +1330,15 @@ register_dump::dump (ui_file *file)
 	{
 	  const char *p = gdbarch_register_name (m_gdbarch, regnum);
 
+	  if (m_hide_nameless && (p == NULL || p[0] == '\0'))
+	    {
+	      /* Skip this nameless register, but update the offset in case
+		 a nameless register is given a non-zero sized type.  */
+	      register_offset = (descr->register_offset[regnum]
+				 + descr->sizeof_register[regnum]);
+	      continue;
+	    }
+
 	  if (p == NULL)
 	    p = "";
 	  else if (p[0] == '\0')

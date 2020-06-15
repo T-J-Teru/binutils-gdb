@@ -478,8 +478,9 @@ public:
   virtual ~register_dump () = default;
 
 protected:
-  register_dump (gdbarch *arch)
-    : m_gdbarch (arch)
+  register_dump (gdbarch *arch, bool hide_nameless)
+    : m_gdbarch (arch),
+      m_hide_nameless (hide_nameless)
   {}
 
   /* Dump the register REGNUM contents.  If REGNUM is -1, print the
@@ -487,6 +488,10 @@ protected:
   virtual void dump_reg (ui_file *file, int regnum) = 0;
 
   gdbarch *m_gdbarch;
+
+  /* When this is true registers with no name should be hidden from the
+     output.  */
+  bool m_hide_nameless;
 };
 
 #endif /* REGCACHE_H */
