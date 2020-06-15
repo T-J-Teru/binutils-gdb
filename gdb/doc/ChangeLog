@@ -1,3 +1,8 @@
+2020-06-15  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (Maintenance Commands): Move the parameter of 'maint
+	print c-tdesc' from the @kindex to the @item.
+
 2020-06-23  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.texinfo (Maintenance Commands): Document new 'maint print
