@@ -1,5 +1,42 @@
 2020-08-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* Makefile.in (HFILES_NO_SRCDIR): Add f-array-walker.h.
+	* NEWS: Mention new options.
+	* expprint.c (dump_subexp_body_standard): Print RANGE_HAS_STRIDE.
+	* expression.h (enum range_type): Add RANGE_HAS_STRIDE.
+	* f-array-walker.h: New file.
+	* f-exp.y (arglist): Allow for a series of subranges.
+	(subrange): Add cases for subranges with strides.
+	* f-lang.c: Include 'gdbcmd.h' and 'f-array-walker.h'.
+	(repack_array_slices): New static global.
+	(show_repack_array_slices): New function.
+	(fortran_array_slicing_debug): New static global.
+	(show_fortran_array_slicing_debug): New function.
+	(value_f90_subarray): Delete.
+	(skip_undetermined_arglist): Delete.
+	(class fortran_array_repacker_base_impl): New class.
+	(class fortran_lazy_array_repacker_impl): New class.
+	(class fortran_array_repacker_impl): New class.
+	(fortran_value_subarray): Complete rewrite.
+	(set_fortran_list): New static global.
+	(show_fortran_list): Likewise.
+	(_initialize_f_language): Register new commands.
+	(fortran_adjust_dynamic_array_base_address_hack): New function.
+	* f-lang.h (fortran_adjust_dynamic_array_base_address_hack):
+	Declare.
+	* f-valprint.c: Include 'f-array-walker.h'.
+	(class fortran_array_printer_impl): New class.
+	(f77_print_array_1): Delete.
+	(f77_print_array): Delete.
+	(fortran_print_array): New.
+	(f_value_print_inner): Update to call fortran_print_array.
+	* gdbtypes.c: Include 'f-lang.h'.
+	(resolve_dynamic_type_internal): Call
+	fortran_adjust_dynamic_array_base_address_hack.
+	* parse.c (operator_length_standard): Handle RANGE_HAS_STRIDE.
+
+2020-08-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* expprint.c (print_subexp_standard): Update to reflect changes to
 	enum range_type.
 	(dump_subexp_body_standard): Likewise.

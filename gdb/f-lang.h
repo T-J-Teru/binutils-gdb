@@ -64,7 +64,6 @@ extern void f77_get_dynamic_array_length (struct type *);
 
 extern int calc_f77_array_dims (struct type *);
 
-
 /* Fortran (F77) types */
 
 struct builtin_f_type
@@ -121,5 +120,23 @@ extern struct value *fortran_argument_convert (struct value *value,
 
 extern struct type *fortran_preserve_arg_pointer (struct value *arg,
 						  struct type *type);
+
+/* Fortran arrays can have a negative stride.  When this happens it is
+   often the case that the base address for an object is not the lowest
+   address occupied by that object.  For example, an array slice (10:1:-1)
+   will be encoded with lower bound 1, upper bound 10, a stride of
+   -ELEMENT_SIZE, and have a base address pointer that points at the
+   element with the highest address in memory.
+
+   This really doesn't play well with our current model of value contents,
+   but could easily require a significant update in order to be supported
+   "correctly".
+
+   For now, we manually force the base address to be the lowest addressed
+   element here.  Yes, this will break some things, but it fixes other
+   things.  The hope is that it fixes more than it breaks.  */
+
+extern CORE_ADDR fortran_adjust_dynamic_array_base_address_hack
+	(struct type *type, CORE_ADDR address);
 
 #endif /* F_LANG_H */

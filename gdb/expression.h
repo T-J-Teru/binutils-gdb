@@ -199,6 +199,9 @@ enum range_type
 
   /* The high bound of this range is exclusive.  */
   RANGE_HIGH_BOUND_EXCLUSIVE = 1 << 2,
+
+  /* The range has a stride.  */
+  RANGE_HAS_STRIDE = 1 << 3,
 };
 
 DEF_ENUM_FLAGS_TYPE (enum range_type, range_types);
