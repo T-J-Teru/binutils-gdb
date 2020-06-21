@@ -2967,13 +2967,6 @@
 	* amd64-linux-nat.c (amd64_linux_nat_target::fetch_registers,
 	amd64_linux_nat_target::store_registers, ps_get_thread_area, ): Adjust.
 
-2020-04-27  Luis Machado  <luis.machado@linaro.org>
-
-	* dwarf2/frame-tailcall.c (dwarf2_tailcall_sniffer_first): Handle
-	problematic inline frame unwinding situation.
-	* frame.c (frame_id_computed_p): New function.
-	* frame.h (frame_id_computed_p): New prototype.
-
 2020-04-26  Tom Tromey  <tom@tromey.com>
 
 	* command.h (enum command_class) <class_pseudo>: Remove.
