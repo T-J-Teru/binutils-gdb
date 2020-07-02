@@ -1,5 +1,9 @@
 2020-08-13  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.fortran/array-slices.exp: Add missing message data.
+
+2020-08-13  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.fortran/array-slices.exp: Update expected results.
 	* gdb.fortran/class-allocatable-array.exp: Likewise.
 	* gdb.fortran/multi-dim.exp: Likewise.
