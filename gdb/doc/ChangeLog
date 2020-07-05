@@ -1,3 +1,7 @@
+2020-07-05  Tom Tromey  <tom@tromey.com>
+
+	* gdb.texinfo (Help): Mention help news.
+
 2020-08-25  Shahab Vahedi  <shahab@synopsys.com>
 
 	* gdb.texinfo (Synopsys ARC): Document LP_START, LP_END and BTA.
