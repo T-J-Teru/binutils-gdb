@@ -1,3 +1,8 @@
+2020-07-05  Tom Tromey  <tom@tromey.com>
+
+	* filestuff.h (read_entire_file): Declare.
+	* filestuff.cc (read_entire_file): New function.
+
 2020-08-13  Simon Marchi  <simon.marchi@polymtl.ca>
 
 	* selftest.h (run_tests): Change parameter to array_view.
