@@ -1,3 +1,8 @@
+2020-10-05  Tom Tromey  <tom@tromey.com>
+
+	* gdb.texinfo (Output Styling): Document "set style startup"
+	commands.
+
 2020-10-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.texinfo (Commands): Add link to new section.

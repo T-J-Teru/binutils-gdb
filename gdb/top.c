@@ -1399,11 +1399,7 @@ print_gdb_version (struct ui_file *stream, bool interactive)
 
   ui_file_style style;
   if (interactive)
-    {
-      ui_file_style nstyle = { ui_file_style::MAGENTA, ui_file_style::NONE,
-			       ui_file_style::BOLD };
-      style = nstyle;
-    }
+    style = startup_style.style ();
   fprintf_styled (stream, style, "GNU gdb %s%s\n", PKGVERSION, version);
 
   /* Second line is a copyright notice.  */
