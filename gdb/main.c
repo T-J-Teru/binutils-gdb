@@ -1081,6 +1081,11 @@ captured_main_1 (struct captured_main_args *context)
 		   CMDARG_STARTUP_COMMAND, &ret);
   startup_file_read = true;
 
+  /* Recheck if we're starting up quietly after processing the startup
+     scripts and commands.  */
+  if (!quiet)
+    quiet = check_quiet_mode ();
+
   /* Now that gdb_init has created the initial inferior, we're in
      position to set args for that inferior.  */
   if (set_args)

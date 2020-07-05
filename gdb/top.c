@@ -2153,6 +2153,34 @@ set_history_filename (const char *args,
     }
 }
 
+/* Whether we're in quiet startup mode.  */
+
+static bool startup_quiet;
+
+/* See top.h.  */
+
+bool
+check_quiet_mode ()
+{
+  return startup_quiet;
+}
+
+/* Set the startup-quiet flag.  */
+
+static void
+set_startup_quiet (const char *args, int from_tty, struct cmd_list_element *c)
+{
+  write_startup_file ();
+}
+
+static void
+show_startup_quiet (struct ui_file *file, int from_tty,
+	      struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Whether to start up quietly is %s.\n"),
+		    value);
+}
+
 static void
 init_gdb_version_vars (void)
 {
@@ -2306,6 +2334,17 @@ input settings."),
 			NULL,
 			show_interactive_mode,
 			&setlist, &showlist);
+
+  c = add_setshow_boolean_cmd ("startup-quietly", class_support,
+			       &startup_quiet, _("\
+Set whether GDB should start up quietly."), _("		\
+Show whether GDB should start up quietly."), NULL,
+			       set_startup_quiet,
+			       show_startup_quiet,
+			       &setlist, &showlist);
+  /* Arrange to write "set startup-quietly" to the early startup
+     file.  */
+  add_default_startup_writer (c);
 
   c = add_cmd ("new-ui", class_support, new_ui_command, _("\
 Create a new UI.\n\
