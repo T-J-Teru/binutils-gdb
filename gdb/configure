@@ -901,6 +901,7 @@ with_libmpfr_prefix
 with_libmpfr_type
 with_python
 with_python_libdir
+with_pythonhome_variable
 with_guile
 enable_source_highlight
 with_intel_pt
@@ -1647,6 +1648,8 @@ Optional Packages:
                           (auto/yes/no/<python-program>)
   --with-python-libdir[=DIR]
                           search for python's libraries in DIR
+  --with-pythonhome-variable[=STRING]
+                          use STRING instead of PYTHONHOME
   --with-guile[=GUILE]    include guile support
                           (auto/yes/no/<guile-version>/<pkg-config-program>)
   --with-intel-pt         include Intel Processor Trace support (auto/yes/no)
@@ -11101,6 +11104,30 @@ else
   CONFIG_OBS="$CONFIG_OBS python/python.o"
   CONFIG_SRCS="$CONFIG_SRCS python/python.c"
 fi
+
+# Handle --with-pythonhome-variable=VAR.  Provides an alternative to
+# the PYTHONHOME environment variable specifically for GDB.  If this
+# configure switch is not provided then the default is to use
+# PYTHONHOME.
+
+# Check whether --with-pythonhome-variable was given.
+if test "${with_pythonhome_variable+set}" = set; then :
+  withval=$with_pythonhome_variable;
+   if test "x${with_pythonhome_variable}" = "x"; then
+     as_fn_error $? "missing value for --with-pythonhome-variable" "$LINENO" 5
+   fi
+
+else
+
+    with_pythonhome_variable="PYTHONHOME"
+
+fi
+
+
+cat >>confdefs.h <<_ACEOF
+#define WITH_PYTHONHOME_VARIABLE "${with_pythonhome_variable}"
+_ACEOF
+
 
 # Work around Python http://bugs.python.org/issue10112.  See also
 # http://bugs.python.org/issue11410, otherwise -Wl,--dynamic-list has

@@ -1636,54 +1636,96 @@ init__gdb_module (void)
 }
 #endif
 
+/* The Python c-aoi changed between v2 and v3.  In the earlier api the
+   functions took 'char *' arguments, while in the later api the functions
+   all take 'wchar_t *' arguments.
+
+   GDB has 'char *' strings, and so needs to convert the string when using
+   the v3 c-api to Python.
+
+   This class encapsulates both the differing types and the optional
+   conversion.  Create an instance of this class passing in the original
+   'char *' value, then call the 'str ()' member function to access the
+   argument value as either 'char *' or 'wchar_t *' (depending on the
+   version of Python GDB is linked against).  */
+
+class gdbpy_config_string
+{
+public:
+
+  /* The type that Python expects.  */
+#ifdef IS_PY3K
+  typedef wchar_t type;
+#else
+  typedef char type;
+#endif
+
+  /* Constructor.  Might convert STRING to a wchar_t.  If the string can't
+     be converted then the value of this argument will be set to NULL.  */
+  gdbpy_config_string (const char *string)
+  {
+#ifdef IS_PY3K
+    std::string oldloc = setlocale (LC_ALL, NULL);
+    setlocale (LC_ALL, "");
+    size_t string_len = strlen (string) + 1;
+    wchar_t *copy = XNEWVEC (wchar_t, string_len);
+    size_t count = mbstowcs (copy, string, string_len);
+    if (count == (size_t) -1)
+      m_string.reset (nullptr);
+    else
+      m_string.reset (copy);
+    setlocale (LC_ALL, oldloc.c_str ());
+#else
+    m_string.reset (xstrdup (string));
+#endif
+  }
+
+  /* Get the value of this argument ready to pass to Python.  */
+  type *
+  str () const
+  {
+    return m_string.get ();
+  }
+
+private:
+  /* The value for this argument.  Either Python requires that this value
+     exist for the entire run of the program (but doesn't itself free the
+     argument), or Python immediately copies the argument.  */
+  gdb::unique_xmalloc_ptr<type> m_string;
+};
+
 static bool
 do_start_initialization ()
 {
-#ifdef IS_PY3K
-  size_t progsize, count;
-  /* Python documentation indicates that the memory given
-     to Py_SetProgramName cannot be freed.  However, it seems that
-     at least Python 3.7.4 Py_SetProgramName takes a copy of the
-     given program_name.  Making progname_copy static and not release
-     the memory avoids a leak report for Python versions that duplicate
-     program_name, and respect the requirement of Py_SetProgramName
-     for Python versions that do not duplicate program_name.  */
-  static wchar_t *progname_copy;
+  gdb::unique_xmalloc_ptr<char> default_value;
+  const char *varvalue;
+
+#ifdef WITH_PYTHONHOME_VARIABLE
+  const char *varname = WITH_PYTHONHOME_VARIABLE;
+
+  if (getenv (varname) != NULL)
+    varvalue = getenv (varname);
+  else
 #endif
-
-#ifdef WITH_PYTHON_PATH
-  /* Work around problem where python gets confused about where it is,
-     and then can't find its libraries, etc.
-     NOTE: Python assumes the following layout:
-     /foo/bin/python
-     /foo/lib/pythonX.Y/...
-     This must be done before calling Py_Initialize.  */
-  gdb::unique_xmalloc_ptr<char> progname
-    (concat (ldirname (python_libdir.c_str ()).c_str (), SLASH_STRING, "bin",
-	      SLASH_STRING, "python", (char *) NULL));
-#ifdef IS_PY3K
-  std::string oldloc = setlocale (LC_ALL, NULL);
-  setlocale (LC_ALL, "");
-  progsize = strlen (progname.get ());
-  progname_copy = XNEWVEC (wchar_t, progsize + 1);
-  count = mbstowcs (progname_copy, progname.get (), progsize + 1);
-  if (count == (size_t) -1)
     {
-      fprintf (stderr, "Could not convert python path to string\n");
-      return false;
+#ifdef WITH_PYTHON_LIBDIR
+      default_value.reset
+	(xstrdup (ldirname (python_libdir.c_str ()).c_str ()));
+      varvalue = default_value.get ();
+#else
+      varvalue = WITH_PYTHON_PATH;
+#endif
     }
-  setlocale (LC_ALL, oldloc.c_str ());
 
-  /* Note that Py_SetProgramName expects the string it is passed to
-     remain alive for the duration of the program's execution, so
-     it is not freed after this call.  */
-  Py_SetProgramName (progname_copy);
+  /* In the v2 c-api Python relies on the value of this argument continuing
+     to exist until Py_Finalize has been called.  Place the argument in
+     static storage so it will not be freed until GDB is exiting.  */
+  static gdbpy_config_string pythonhome_var (varvalue);
+  Py_SetPythonHome (pythonhome_var.str ());
 
+#ifdef IS_PY3K
   /* Define _gdb as a built-in module.  */
   PyImport_AppendInittab ("_gdb", init__gdb_module);
-#else
-  Py_SetProgramName (progname.release ());
-#endif
 #endif
 
   Py_Initialize ();

@@ -755,6 +755,9 @@
 /* Define if the PPC simulator is being linked in. */
 #undef WITH_PPC_SIM
 
+/* Environment variable to use instead of PYTHONHOME */
+#undef WITH_PYTHONHOME_VARIABLE
+
 /* Directory containing Python's standard libraries from --with-python-libdir.
    */
 #undef WITH_PYTHON_LIBDIR

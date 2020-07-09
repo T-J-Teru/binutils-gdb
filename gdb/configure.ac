@@ -970,6 +970,22 @@ else
   CONFIG_SRCS="$CONFIG_SRCS python/python.c"
 fi
 
+# Handle --with-pythonhome-variable=VAR.  Provides an alternative to
+# the PYTHONHOME environment variable specifically for GDB.  If this
+# configure switch is not provided then the default is to use
+# PYTHONHOME.
+AC_ARG_WITH(pythonhome-variable,
+  AS_HELP_STRING([--with-pythonhome-variable@<:@=STRING@:>@], [use STRING instead of PYTHONHOME]),
+  [
+   if test "x${with_pythonhome_variable}" = "x"; then
+     AC_MSG_ERROR([missing value for --with-pythonhome-variable])
+   fi
+  ],[
+    with_pythonhome_variable="PYTHONHOME"
+  ])
+AC_DEFINE_UNQUOTED(WITH_PYTHONHOME_VARIABLE, "${with_pythonhome_variable}",
+		   [Environment variable to use instead of PYTHONHOME])
+
 # Work around Python http://bugs.python.org/issue10112.  See also
 # http://bugs.python.org/issue11410, otherwise -Wl,--dynamic-list has
 # no effect.  Note that the only test after this that uses Python is
