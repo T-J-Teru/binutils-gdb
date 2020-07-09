@@ -82,10 +82,12 @@ static unsigned int tcp_retry_limit = 15;
 
 #define POLL_INTERVAL 5
 
-/* Helper function to wait a while.  If SOCK is not -1, wait on its
-   file descriptor.  Otherwise just wait on a timeout, updating
-   *POLLS.  Returns -1 on timeout or interrupt, otherwise the value of
-   select.  */
+/* Helper function to wait a while.  If SOCK is not -1, wait on its file
+   descriptor.  Otherwise just wait on a timeout, updating *POLLS.
+
+   Returns -1 on timeout, otherwise the value of select.  Interrupts
+   (EINTR) are swallowed within this function, however, this function will
+   throw an error if the user interrupts the wait.  */
 
 static int
 wait_for_connect (int sock, unsigned int *polls)
@@ -122,29 +124,34 @@ wait_for_connect (int sock, unsigned int *polls)
       t.tv_usec = 0;
     }
 
-  if (sock >= 0)
+  do
     {
-      fd_set rset, wset, eset;
+      QUIT;
+      if (sock >= 0)
+	{
+	  fd_set rset, wset, eset;
 
-      FD_ZERO (&rset);
-      FD_SET (sock, &rset);
-      wset = rset;
-      eset = rset;
+	  FD_ZERO (&rset);
+	  FD_SET (sock, &rset);
+	  wset = rset;
+	  eset = rset;
 
-      /* POSIX systems return connection success or failure by signalling
-	 wset.  Windows systems return success in wset and failure in
-	 eset.
+	  /* POSIX systems return connection success or failure by signalling
+	     wset.  Windows systems return success in wset and failure in
+	     eset.
 
-	 We must call select here, rather than gdb_select, because
-	 the serial structure has not yet been initialized - the
-	 MinGW select wrapper will not know that this FD refers
-	 to a socket.  */
-      n = select (sock + 1, &rset, &wset, &eset, &t);
+	     We must call select here, rather than gdb_select, because
+	     the serial structure has not yet been initialized - the
+	     MinGW select wrapper will not know that this FD refers
+	     to a socket.  */
+	  n = select (sock + 1, &rset, &wset, &eset, &t);
+	}
+      else
+	/* Use gdb_select here, since we have no file descriptors, and on
+	   Windows, plain select doesn't work in that case.  */
+	n = gdb_select (0, NULL, NULL, NULL, &t);
     }
-  else
-    /* Use gdb_select here, since we have no file descriptors, and on
-       Windows, plain select doesn't work in that case.  */
-    n = gdb_select (0, NULL, NULL, NULL, &t);
+  while (n == -1 && errno == EINTR);
 
   /* If we didn't time out, only count it as one poll.  */
   if (n > 0 || *polls < POLL_INTERVAL)

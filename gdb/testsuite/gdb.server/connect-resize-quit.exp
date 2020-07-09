@@ -1,0 +1,88 @@
+# Copyright 2020 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+# Check that a terminal resize while waiting to connect to a target
+# doesn't cause the wait to be abandoned.  Then check that the wait
+# can be interrupted with SIGINT.
+
+proc test_signal { sig } {
+    global gdb_prompt
+
+    with_test_prefix "SIG${sig}" {
+
+	set testname "waiting on target remote"
+
+	gdb_start
+
+	# Open a connection to a remote target, but use a port number that is
+	# unlikely to actually be in use.  We want this connection to block
+	# waiting for a remote so we can test GDB's behaviour in this blocked
+	# state.
+	gdb_test_no_output "set tcp connect-timeout 2"
+
+	set timeout_count 0
+	while { $timeout_count < 5} {
+	    # Try connecting.  This should block waiting for a remote to appear.
+	    send_gdb "target remote :0\n"
+
+	    # Now send a signal to GDB and follow up by sending some other command.
+	    set gdb_pid [exp_pid -i [board_info host fileid]]
+	    remote_exec host "kill -${sig} $gdb_pid"
+	    send_gdb "echo xxyyzz\\n\n"
+
+	    # Now try to figure out what GDB did.
+	    set got_timeout false
+	    gdb_test_multiple "" "$testname" {
+		-re "^target remote :0\r\n:0: Connection timed out\\..*$gdb_prompt $" {
+		    # It's possible that we didn't send the signal quickly enough.
+		    # Maybe the testing machine is heavily loaded?
+		    set got_timeout true
+		}
+		-re "^target remote :0\r\n:0: Interrupted system call\\.\r\n$gdb_prompt.*xxyyzz.*$gdb_prompt $" {
+		    fail "$gdb_test_name (interrupted by $sig)"
+		    return
+		}
+		-re "^target remote :0\r\necho xxyyzz\\\\n\r.:0: Connection timed out.\r\n$gdb_prompt.*xxyyzz.*$gdb_prompt $" {
+		    if { $sig == "WINCH" } {
+			pass $gdb_test_name
+		    } else {
+			fail "$gdb_test_name (unexpected timeout)"
+		    }
+		    return
+		}
+		-re "^target remote :0\r\nQuit\r\n$gdb_prompt.*xxyyzz.*$gdb_prompt $" {
+		    if { $sig == "INT" } {
+			pass $gdb_test_name
+		    } else {
+			fail "$gdb_test_name (unexpected QUIT)"
+		    }
+		    return
+		}
+	    }
+
+	    if { ! $got_timeout } {
+		# Some other unknown error.
+		return
+	    }
+
+	    incr timeout_count
+	}
+
+	unresolved "$testname (too many timeouts)"
+    }
+}
+
+test_signal WINCH
+test_signal INT
