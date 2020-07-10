@@ -1,5 +1,10 @@
 2020-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* eval.c (evaluate_subexp_standard): Call evaluate_subexp with
+	EVAL_NORMAL if we are accessing an element with a dynamic type.
+
+2020-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	PR fortran/23051
 	PR fortran/26139
 	* valops.c (value_ind): Pass address to

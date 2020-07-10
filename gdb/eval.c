@@ -2031,12 +2031,30 @@ evaluate_subexp_standard (struct type *expect_type,
     case STRUCTOP_STRUCT:
       tem = longest_to_int (exp->elts[pc + 1].longconst);
       (*pos) += 3 + BYTES_TO_EXP_ELEM (tem + 1);
+      oldpos = *pos;
       arg1 = evaluate_subexp (NULL_TYPE, exp, pos, noside);
       if (noside == EVAL_SKIP)
 	return eval_skip_value (exp);
+      if (noside == EVAL_AVOID_SIDE_EFFECTS)
+	{
+	  /* If the element of the structure has a dynamic type then we
+	     need to get the real value representing the containing
+	     structure so that we can correctly evaluate the type of the
+	     element.  If we're not already avoiding side effects then we
+	     already have the real value of the containing structure, so
+	     this is not needed.  */
+	  type = lookup_struct_elt_type (value_type (arg1),
+					 &exp->elts[pc + 2].string, 1);
+	  if (type != nullptr && is_dynamic_type (type))
+	    {
+	      *pos = oldpos;
+	      arg1 = evaluate_subexp (NULL_TYPE, exp, pos, EVAL_NORMAL);
+	    }
+	}
       arg3 = value_struct_elt (&arg1, NULL, &exp->elts[pc + 2].string,
 			       NULL, "structure");
-      if (noside == EVAL_AVOID_SIDE_EFFECTS)
+      if (noside == EVAL_AVOID_SIDE_EFFECTS
+	  && !is_dynamic_type (check_typedef (value_type (arg3))))
 	arg3 = value_zero (value_type (arg3), VALUE_LVAL (arg3));
       return arg3;
 

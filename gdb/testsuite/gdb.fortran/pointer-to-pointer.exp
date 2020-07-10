@@ -44,3 +44,4 @@ set l_buffer_type [multi_line \
 gdb_test "ptype buffer" "type = PTR TO -> \\( ${l_buffer_type} \\)"
 gdb_test "ptype *buffer" "type = ${l_buffer_type}"
 gdb_test "ptype buffer%alpha" "type = real\\(kind=4\\) \\(5\\)"
+gdb_test "ptype (*buffer)%alpha" "type = real\\(kind=4\\) \\(5\\)"

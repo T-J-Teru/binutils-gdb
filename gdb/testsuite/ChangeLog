@@ -1,5 +1,10 @@
 2020-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.fortran/class-allocatable-array.exp: Add more tests.
+	* gdb.fortran/pointer-to-pointer.exp: Add more tests.
+
+2020-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	PR fortran/23051
 	PR fortran/26139
 	* gdb.fortran/class-allocatable-array.exp: New file.

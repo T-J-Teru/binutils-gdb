@@ -41,3 +41,19 @@ gdb_continue_to_breakpoint "Break Here"
 gdb_test "print this" " = \\( _data = \[^\r\n\]+, _vptr = \[^\r\n\]+\\)"
 gdb_test "print this%_data" " = \\(PTR TO -> \\( Type test_type \\)\\) \[^\r\n\]+"
 gdb_test "print this%_data%b" " = \\(\\( 1, 2, 3\\) \\( 4, 5, 6\\) \\)"
+
+set integer4 [fortran_int4]
+set real4 [fortran_real4]
+
+# Check we can correctly access the types of these same objects.
+gdb_test "ptype this" [multi_line \
+			   "type = Type \[^\r\n\]+" \
+			   "    PTR TO -> \\( Type test_type :: _data \\)" \
+			   "    PTR TO -> \\( Type \[^\r\n\]+ :: _vptr \\)" \
+			   "End Type \[^\r\n\]+" ]
+gdb_test "ptype this%_data" [multi_line \
+				 "type = PTR TO -> \\( Type test_type" \
+				 "    ${integer4} :: a" \
+				 "    ${real4}, allocatable :: b\\(:,:\\)" \
+				 "End Type test_type \\)" ]
+gdb_test "ptype this%_data%b" "type = ${real4}, allocatable \\(3,2\\)"
