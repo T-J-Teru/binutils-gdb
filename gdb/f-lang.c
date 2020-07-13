@@ -36,10 +36,16 @@
 #include "c-lang.h"
 #include "target-float.h"
 #include "gdbarch.h"
+#include "gdbcmd.h"
 
 #include <math.h>
 
 /* Local functions */
+
+static value *fortran_prepare_argument (struct expression *exp, int *pos,
+					int arg_num, bool is_internal_call_p,
+					struct type *func_type,
+					enum noside noside);
 
 /* Return the encoding that should be used for the character type
    TYPE.  */
@@ -467,22 +473,11 @@ evaluate_subexp_f (struct type *expect_type, struct expression *exp,
 	    int tem = 1;
 	    for (; tem <= nargs; tem++)
 	      {
-		argvec[tem] = evaluate_subexp_with_coercion (exp, pos, noside);
-		/* Arguments in Fortran are passed by address.  Coerce the
-		   arguments here rather than in value_arg_coerce as
-		   otherwise the call to malloc to place the non-lvalue
-		   parameters in target memory is hit by this Fortran
-		   specific logic.  This results in malloc being called
-		   with a pointer to an integer followed by an attempt to
-		   malloc the arguments to malloc in target memory.
-		   Infinite recursion ensues.  */
-		if (code == TYPE_CODE_PTR || code == TYPE_CODE_FUNC)
-		  {
-		    bool is_artificial
-		      = TYPE_FIELD_ARTIFICIAL (value_type (arg1), tem - 1);
-		    argvec[tem] = fortran_argument_convert (argvec[tem],
-							    is_artificial);
-		  }
+		bool is_internal_func = (code == TYPE_CODE_INTERNAL_FUNCTION);
+		argvec[tem]
+		  = fortran_prepare_argument (exp, pos, (tem - 1),
+					      is_internal_func,
+					      value_type (arg1), noside);
 	      }
 	    argvec[tem] = 0;	/* signal end of arglist */
 	    if (noside == EVAL_SKIP)
@@ -1050,16 +1045,78 @@ builtin_f_type (struct gdbarch *gdbarch)
   return (const struct builtin_f_type *) gdbarch_data (gdbarch, f_type_data);
 }
 
+/* Whether GDB should assume arguments to functions without debug are
+   artificial or not.  */
+
+static bool fortran_arguments_are_artificial = false;
+
+/* Implement 'show fortran arguments-are-artificial'.  */
+
+static void
+show_fortran_arguments_are_artificial (struct ui_file *file, int from_tty,
+				       struct cmd_list_element *c,
+				       const char *value)
+{
+  fprintf_filtered (file, _("Assuming arguments to Fortran functions "
+			    "without debug are artificial is %s.\n"),
+		    value);
+}
+
+/* Command-list for the "set/show fortran" prefix command.  */
+
+static struct cmd_list_element *set_fortran_list;
+static struct cmd_list_element *show_fortran_list;
+
 void _initialize_f_language ();
 void
 _initialize_f_language ()
 {
   f_type_data = gdbarch_data_register_post_init (build_fortran_types);
+
+  add_basic_prefix_cmd ("fortran", no_class,
+                        _("Prefix command for changing Fortran-specific settings."),
+                        &set_fortran_list, "set fortran ", 0, &setlist);
+
+  add_show_prefix_cmd ("fortran", no_class,
+                       _("Generic command for showing Fortran-specific settings."),
+                       &show_fortran_list, "show fortran ", 0, &showlist);
+
+  add_setshow_boolean_cmd ("arguments-are-artificial", class_vars,
+                           &fortran_arguments_are_artificial, _("\
+Sets whether arguments to functions without debug information are artificial."), _("\
+Show whether arguments to functions without debug information are artificial."), _("\
+When calling a function in the inferior that does not have debug\n\
+information GDB needs to decide if the arguments are artificial or not.\n\
+\n\
+Artificial arguments are passed by value while non-artificial arguments\n\
+are passed by reference.\n\
+When this setting is on GDB will assume all arguments are artificial and\n\
+pass them by value.  If you need to pass a non-artificial argument then\n\
+pass the address of the argument.\n\
+\n\
+This setting only effects calling functions without debug information.  For\n\
+functions with debug information GDB knows which arguments are artificial,\n\
+and which are not."),
+                           NULL,
+                           show_fortran_arguments_are_artificial,
+                           &set_fortran_list, &show_fortran_list);
 }
 
-/* See f-lang.h.  */
+/* Ensures that function argument VALUE is in the appropriate form to
+   pass to a Fortran function.  Returns a possibly new value that should
+   be used instead of VALUE.
 
-struct value *
+   When IS_ARTIFICIAL is true this indicates an artificial argument,
+   e.g. hidden string lengths which the GNU Fortran argument passing
+   convention specifies as being passed by value.
+
+   When IS_ARTIFICIAL is false, the argument is passed by pointer.  If the
+   value is already in target memory then return a value that is a pointer
+   to VALUE.  If VALUE is not in memory (e.g. an integer literal), allocate
+   space in the target, copy VALUE in, and return a pointer to the in
+   memory copy.  */
+
+static struct value *
 fortran_argument_convert (struct value *value, bool is_artificial)
 {
   if (!is_artificial)
@@ -1092,4 +1149,59 @@ fortran_preserve_arg_pointer (struct value *arg, struct type *type)
   if (value_type (arg)->code () == TYPE_CODE_PTR)
     return value_type (arg);
   return type;
+}
+
+/* Prepare (and return) an argument value ready for an inferior function
+   call to a Fortran function.  EXP and POS are the expressions describing
+   the argument to prepare.  ARG_NUM is the argument number being
+   prepared, with 0 being the first argument and so on.  FUNC_TYPE is the
+   type of the function being called.
+
+   IS_INTERNAL_CALL_P is true if this is a call to a function of type
+   TYPE_CODE_INTERNAL_FUNCTION, otherwise this parameter is false.
+
+   NOSIDE has its usual meaning for expression parsing (see eval.c).
+
+   Arguments in Fortran are normally passed by address, we coerce the
+   arguments here rather than in value_arg_coerce as otherwise the call to
+   malloc (to place the non-lvalue parameters in target memory) is hit by
+   this Fortran specific logic.  This results in malloc being called with a
+   pointer to an integer followed by an attempt to malloc the arguments to
+   malloc in target memory.  Infinite recursion ensues.  */
+
+static value *
+fortran_prepare_argument (struct expression *exp, int *pos,
+			  int arg_num, bool is_internal_call_p,
+			  struct type *func_type, enum noside noside)
+{
+  if (is_internal_call_p)
+    return evaluate_subexp_with_coercion (exp, pos, noside);
+
+  bool is_artificial;
+  if (arg_num >= func_type->num_fields ())
+    {
+      /* We are unable to know if this argument is artificial or not.  The
+	 behaviour now depends on 'set fortran arguments-are-artificial'.  */
+      if (fortran_arguments_are_artificial)
+	{
+	  /* If the expression the user is trying to pass here starts by
+	     taking the address of a value then they are trying to pass a
+	     non-artificial argument, strip away the address-of operator,
+	     and allow FORTRAN_ARGUMENT_CONVERT to fix things up.  */
+	  if (exp->elts[*pos].opcode == UNOP_ADDR)
+	    {
+	      ++(*pos);
+	      is_artificial = false;
+	    }
+	  else
+	    is_artificial = true;
+	}
+      else
+	is_artificial = false;
+    }
+  else
+    is_artificial = TYPE_FIELD_ARTIFICIAL (func_type, arg_num);
+
+  struct value *arg_val = evaluate_subexp_with_coercion (exp, pos, noside);
+  return fortran_argument_convert (arg_val, is_artificial);
 }

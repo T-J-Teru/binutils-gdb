@@ -117,6 +117,16 @@ show exec-file-mismatch -- Show exec-file-mismatch handling (ask|warn|off).
   executable file; if 'warn', just display a warning; if 'off', don't
   attempt to detect a mismatch.
 
+set fortran arguments-are-artificial on|off
+show fortran arguments-are-artificial
+  When calling Fortran functions without debug information GDB needs
+  to know if arguments should be treated as artificial or not.  By
+  default this setting is off, and all arguments are treated as
+  non-artificial, and passed by reference.
+  When this setting is on, arguments are treated as artificial and
+  passed by value, to pass a non-artificial argument take its address
+  with '&' and pass that instead.
+
 tui new-layout NAME WINDOW WEIGHT [WINDOW WEIGHT]...
   Define a new TUI layout, specifying its name and the windows that
   will be displayed.

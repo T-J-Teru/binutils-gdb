@@ -16852,6 +16852,7 @@ vector data types.
 currently supports only the features of Fortran 77 language.
 
 @cindex trailing underscore, in Fortran symbols
+@anchor{fortran_trailing_underscores}
 Some Fortran compilers (@sc{gnu} Fortran 77 and Fortran 95 compilers
 among them) append an underscore to the names of variables and
 functions.  When you debug programs compiled by those compilers, you
@@ -16919,6 +16920,59 @@ This command prints the values contained in the Fortran @code{COMMON}
 block whose name is @var{common-name}.  With no argument, the names of
 all @code{COMMON} blocks visible at the current program location are
 printed.
+
+@cindex artificial arguments, Fortran
+@kindex set fortran arguments-are-artificial
+@kindex show fortran arguments-are-artificial
+@item set fortran arguments-are-artificial @r{[}on|off@r{]}
+@item show fortran arguments-are-artificial
+Fortran subroutines and functions have the concept of artificial
+arguments.  For example when passing an assumed-shape array the array
+argument is pass-by-reference and identifies the contents of the
+array, while a second artificial parameter is pass-by-value and
+identifies the length of the array.
+
+When calling Fortran program functions (@pxref{Calling,,Calling
+Program Functions}) that don't have debug information @value{GDBN} has
+no way to know which parameters are artificial and should be
+pass-by-value, and which are non-artificial, and should be
+pass-by-reference.
+
+When this setting is @samp{off}, which is the default, and you call a
+program function that does not have debug information, @value{GDBN}
+will assume all arguments are not artificial.  Every argument will be
+passed by reference.  This means that if the argument is not already
+in the programs memory @value{GDBN} will allocate space, copy the
+argument into the programs memory, and then pass a pointer to the
+argument to the program function.
+
+When this setting is @samp{on}, and you call a program function that
+does not have debug information, @value{GDBN} will assume all arguments
+are artificial and pass them by value.  If you need to pass a mix of
+non-artificial and artificial arguments, then pass the address of the
+argument using the @code{&} operator.  The following Fortran function
+takes an integer and string argument.  The string, being
+assumed-shape, will require a third artifical argument containing the
+strings length:
+
+@smallexample
+integer function a_func (num, str)
+  integer :: num
+  character(len=*) :: str
+  ! ....
+end function a_func
+@end smallexample
+
+If the above function was compiled without debug information, then to
+call it within @value{GDBN}, you might do this:
+
+@smallexample
+(@value{GDBN}) set fortran arguments-are-artificial on
+(@value{GDBN}) print (integer) a_func_ (&99, &'abc', 3)
+@end smallexample
+
+For an explanation of why @code{a_func_} was used see the description
+of @ref{fortran_trailing_underscores,,trailing underscores}.
 @end table
 
 @node Pascal

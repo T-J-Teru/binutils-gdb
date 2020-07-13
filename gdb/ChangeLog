@@ -1,3 +1,18 @@
+2020-10-18  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR fortran/26155
+	* NEWS: Mention new setting.
+	* f-lang.c: Add 'gdbcmnd.h' include.
+	(evaluate_subexp_f): Call fortran_prepare_argument.
+	(fortran_arguments_are_artificial): New static global.
+	(show_fortran_arguments_are_artificial): New function.
+	(set_fortran_list): New static global.
+	(show_fortran_list): New static global.
+	(_initialize_f_language): Register new commands.
+	(fortran_argument_convert): Update comment, make static.
+	(fortran_prepare_argument): New function.
+	* f-lang.h (fortran_argument_convert): Delete declaration.
+
 2020-10-17  Tom Tromey  <tom@tromey.com>
 
 	* xcoffread.c (xcoff_end_psymtab): Use partial_symtab::empty.
