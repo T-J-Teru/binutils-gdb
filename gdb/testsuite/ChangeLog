@@ -1,3 +1,8 @@
+2020-07-20  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.cp/disasm-func-name.cc: New file.
+	* gdb.cp/disasm-func-name.exp: New file.
+
 2020-07-20  Tom de Vries  <tdevries@suse.de>
 
 	* gdb.base/valgrind-infcall-2.exp: Handle printf unknown return type.
