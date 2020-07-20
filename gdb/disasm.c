@@ -383,8 +383,12 @@ do_mixed_source_and_assembly_deprecated
       if (le[i].is_stmt == 0)
 	continue;
 
-      /* Skip any end-of-function markers.  */
-      if (le[i].line == linetable_entry::end_marker)
+      /* Skip any end-of-function markers or entries for line number 0.  An
+	 entry for line number 0 means there's no source associated with
+	 this address, so when building a source-centric view (with source
+	 lines in order) it doesn't make much sense to include these
+	 entries.  */
+      if (le[i].line == linetable_entry::end_marker || le[i].line == 0)
 	continue;
 
       mle[newlines].line = le[i].line;
@@ -678,7 +682,7 @@ do_mixed_source_and_assembly (struct gdbarch *gdbarch,
 		}
 	    }
 	  tuple_emitter.emplace (uiout, "src_and_asm_line");
-	  if (sal.symtab != NULL)
+	  if (sal.symtab != NULL && sal.line > 0)
 	    print_source_lines (sal.symtab, sal.line, sal.line + 1, psl_flags);
 	  else
 	    uiout->text (_("--- no source info for this pc ---\n"));
