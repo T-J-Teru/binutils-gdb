@@ -238,10 +238,11 @@ ltpy_get_all_source_lines (PyObject *self, PyObject *args)
     {
       item = &(SYMTAB_LINETABLE (symtab)->item[index]);
 
-      /* 0 is used to signify end of line table information.  Do not
-	 include in the source set. */
-      if (item->line > 0)
+      /* The special value linetable_entry::end_marker is used to signify
+	 end of line table information.  Do not include in the source set.  */
+      if (item->line != linetable_entry::end_marker)
 	{
+	  gdb_assert (item->line >= 0);
 	  gdbpy_ref<> line = gdb_py_object_from_longest (item->line);
 
 	  if (line == NULL)
@@ -407,9 +408,9 @@ ltpy_iternext (PyObject *self)
 
   item = &(SYMTAB_LINETABLE (symtab)->item[iter_obj->current_index]);
 
-  /* Skip over internal entries such as 0.  0 signifies the end of
-     line table data and is not useful to the API user.  */
-  while (item->line < 1)
+  /* Skip over internal entries such as the end of sequence marker,
+     linetable_entry::end_marker as this is not useful to the API user.  */
+  while (item->line == linetable_entry::end_marker)
     {
       iter_obj->current_index++;
 

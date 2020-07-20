@@ -1,3 +1,31 @@
+2020-07-20  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/26243
+	* buildsym.c (buildsym_compunit::record_line): Add an assert for
+	the incoming line number.  Update comments to not mention 0
+	specifically.  Update to check for linetable_entry::end_marker
+	rather than 0.
+	(buildsym_compunit::end_symtab_with_blockvector): Check for
+	linetable_entry::end_marker, not 0.
+	* disasm.c (line_is_less_than): Likewise.
+	(do_mixed_source_and_assembly_deprecated): Likewise.
+	(do_mixed_source_and_assembly): Likewise.
+	* dwarf2/read.c (dwarf_finish_line): Pass
+	linetable_entry::end_marker not 0.
+	* mdebugread.c (add_line): Set is_stmt field.
+	* python/py-linetable.c (ltpy_get_all_source_lines): Check for
+	linetable_entry::end_marker not 0, update comments.
+	(ltpy_iternext): Likewise.
+	* record-btrace.c (btrace_find_line_range): Likewise.
+	* symmisc.c (maintenance_print_one_line_table): Likewise.
+	* symtab.c (find_pc_sect_line): Likewise.
+	(find_line_symtab): Likewise.
+	(skip_prologue_using_sal): Likewise.
+	* symtab.h (linetable_entry::end_marker): New const static member
+	variable.  Add a static assert for this field.
+	* xcoffread.c (arrange_linetable): Check for
+	linetable_entry::end_marker not 0.
+
 2020-07-18  Tom Tromey  <tom@tromey.com>
 
 	* linux-nat.c (linux_multi_process): Remove.

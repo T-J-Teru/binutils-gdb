@@ -171,7 +171,8 @@ line_is_less_than (const deprecated_dis_line_entry &mle1,
 
   /* End of sequence markers have a line number of 0 but don't want to
      be sorted to the head of the list, instead sort by PC.  */
-  if (mle1.line == 0 || mle2.line == 0)
+  if (mle1.line == linetable_entry::end_marker
+      || mle2.line == linetable_entry::end_marker)
     {
       if (mle1.start_pc != mle2.start_pc)
 	val = mle1.start_pc < mle2.start_pc;
@@ -346,7 +347,7 @@ do_mixed_source_and_assembly_deprecated
   struct symtab_and_line sal;
   int i;
   int out_of_order = 0;
-  int next_line = 0;
+  int next_line = linetable_entry::end_marker;
   int num_displayed = 0;
   print_source_lines_flags psl_flags = 0;
 
@@ -383,7 +384,7 @@ do_mixed_source_and_assembly_deprecated
 	continue;
 
       /* Skip any end-of-function markers.  */
-      if (le[i].line == 0)
+      if (le[i].line == linetable_entry::end_marker)
 	continue;
 
       mle[newlines].line = le[i].line;
@@ -425,7 +426,7 @@ do_mixed_source_and_assembly_deprecated
       /* Print out everything from next_line to the current line.  */
       if (mle[i].line >= next_line)
 	{
-	  if (next_line != 0)
+	  if (next_line != linetable_entry::end_marker)
 	    {
 	      /* Just one line to print.  */
 	      if (next_line == mle[i].line)
@@ -571,7 +572,7 @@ do_mixed_source_and_assembly (struct gdbarch *gdbarch,
   gdb::optional<ui_out_emit_list> list_emitter;
 
   last_symtab = NULL;
-  last_line = 0;
+  last_line = linetable_entry::end_marker;
   pc = low;
 
   while (pc < high)
@@ -591,7 +592,7 @@ do_mixed_source_and_assembly (struct gdbarch *gdbarch,
 
 	  /* If this is the first line of output, check for any preceding
 	     lines.  */
-	  if (last_line == 0
+	  if (last_line == linetable_entry::end_marker
 	      && first_le != NULL
 	      && first_le->line < sal.line)
 	    {
@@ -604,7 +605,8 @@ do_mixed_source_and_assembly (struct gdbarch *gdbarch,
 	  /* Same source file as last time.  */
 	  if (sal.symtab != NULL)
 	    {
-	      if (sal.line > last_line + 1 && last_line != 0)
+	      if (last_line != linetable_entry::end_marker
+		  && sal.line > last_line + 1)
 		{
 		  int l;
 

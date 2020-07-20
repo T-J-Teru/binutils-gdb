@@ -1036,7 +1036,7 @@ maintenance_print_one_line_table (struct symtab *symtab, void *data)
 	  item = &linetable->item [i];
 	  ui_out_emit_tuple tuple_emitter (uiout, nullptr);
 	  uiout->field_signed ("index", i);
-	  if (item->line > 0)
+	  if (item->line != linetable_entry::end_marker)
 	    uiout->field_signed ("line", item->line);
 	  else
 	    uiout->field_string ("line", _("END"));

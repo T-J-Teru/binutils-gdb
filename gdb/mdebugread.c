@@ -4516,6 +4516,7 @@ add_line (struct linetable *lt, int lineno, CORE_ADDR adr, int last)
     return lineno;
 
   lt->item[lt->nitems].line = lineno;
+  lt->item[lt->nitems].is_stmt = 1;
   lt->item[lt->nitems++].pc = adr << 2;
   return lineno;
 }

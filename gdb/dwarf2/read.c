@@ -20390,7 +20390,8 @@ dwarf_finish_line (struct gdbarch *gdbarch, struct subfile *subfile,
 			  paddress (gdbarch, address));
     }
 
-  dwarf_record_line_1 (gdbarch, subfile, 0, address, true, cu);
+  dwarf_record_line_1 (gdbarch, subfile, linetable_entry::end_marker,
+		       address, true, cu);
 }
 
 void

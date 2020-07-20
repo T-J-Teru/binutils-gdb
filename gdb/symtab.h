@@ -1306,6 +1306,37 @@ struct rust_vtable_symbol : public symbol
 
 struct linetable_entry
 {
+  /* Special value placed into the LINE field to indicate an end of
+     sequence in the line table.  The current value of zero was selected a
+     long time ago in GDB, and turns out to be special, care must be taken
+     when changing this.
+
+     The problem is that a line number of 0 in DWARF means that an address
+     has no source code associated with it.  What this means for GDB is
+     that any incoming DWARF that makes use of line number 0 will have
+     clashed with our end of line marker.
+
+     You might think we could just change this constant to something else
+     then, like -1.  Though that sounds like a good idea, and indeed is
+     the eventual goal, we can't just rush in and make this change.  The
+     reason is that in most cases end of sequence markers are something
+     that GDB ignores, for example, there's no source code associated with
+     an end of sequence marker.  It turns out that this behaviour is just
+     close enough to how line number 0 should be handled that in most
+     cases the behaviour of GDB is acceptable when using 0 as the end of
+     sequence marker.
+
+     However, if we change this marker value to -1 then suddenly 0 stops
+     being special.  Any DWARF that makes use of line number 0 is suddenly
+     going to end up causing GDB to start using 0 as though it was an
+     actual line number, for example GDB will start trying to access line
+     0 from source files.
+
+     The upshot of all this is that when END_MARKER was introduced, its
+     value has been left as zero for now.  */
+
+  static const int end_marker = 0;
+
   /* The line number for this entry.  */
   int line;
 
@@ -1315,6 +1346,14 @@ struct linetable_entry
   /* The address for this entry.  */
   CORE_ADDR pc;
 };
+
+/* Normally line numbers in a program are positive integers greater than
+   zero.  The line number 0 is reserved in DWARF to indicate instructions
+   that don't have associated source code.  Currently we rely on the end
+   marker conflicting with line number 0, but hopefully this will change
+   in the future, at which point this assert should be updated.  */
+
+gdb_static_assert (linetable_entry::end_marker == 0);
 
 /* The order of entries in the linetable is significant.  They should
    be sorted by increasing values of the pc field.  If there is more than

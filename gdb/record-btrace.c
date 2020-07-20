@@ -732,7 +732,8 @@ btrace_find_line_range (CORE_ADDR pc)
 	 possibly adding more line numbers to the range.  At the time this
 	 change was made I was unsure how to test this so chose to go with
 	 maintaining the existing experience.  */
-      if ((lines[i].pc == pc) && (lines[i].line != 0)
+      if ((lines[i].pc == pc)
+	  && (lines[i].line != linetable_entry::end_marker)
 	  && (lines[i].is_stmt == 1))
 	range = btrace_line_range_add (range, lines[i].line);
     }

@@ -3248,7 +3248,8 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
          save prev if it represents the end of a function (i.e. line number
          0) instead of a real line.  */
 
-      if (prev && prev->line && (!best || prev->pc > best->pc))
+      if (prev && prev->line != linetable_entry::end_marker
+	  && (!best || prev->pc > best->pc))
 	{
 	  best = prev;
 	  best_symtab = iter_s;
@@ -3264,7 +3265,8 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
 	    {
 	      struct linetable_entry *tmp = best;
 	      while (tmp > first && (tmp - 1)->pc == tmp->pc
-		     && (tmp - 1)->line != 0 && !tmp->is_stmt)
+		     && (tmp - 1)->line != linetable_entry::end_marker
+		     && !tmp->is_stmt)
 		--tmp;
 	      if (tmp->is_stmt)
 		best = tmp;
@@ -3291,7 +3293,7 @@ find_pc_sect_line (CORE_ADDR pc, struct obj_section *section, int notcurrent)
 	 don't make some up.  */
       val.pc = pc;
     }
-  else if (best->line == 0)
+  else if (best->line == linetable_entry::end_marker)
     {
       /* If our best fit is in a range of PC's for which no line
 	 number info is available (line number is zero) then we didn't
@@ -3378,14 +3380,14 @@ find_line_symtab (struct symtab *sym_tab, int line,
          the GLOBAL_BLOCK of a symtab has a begin and end address).  */
 
       /* BEST is the smallest linenumber > LINE so far seen,
-         or 0 if none has been seen so far.
+         or the end marker if none has been seen so far.
          BEST_INDEX and BEST_LINETABLE identify the item for it.  */
       int best;
 
       if (best_index >= 0)
 	best = best_linetable->item[best_index].line;
       else
-	best = 0;
+	best = linetable_entry::end_marker;
 
       for (objfile *objfile : current_program_space->objfiles ())
 	{
@@ -3419,7 +3421,8 @@ find_line_symtab (struct symtab *sym_tab, int line,
 			  best_symtab = s;
 			  goto done;
 			}
-		      if (best == 0 || l->item[ind].line < best)
+		      if (best == linetable_entry::end_marker
+			  || l->item[ind].line < best)
 			{
 			  best = l->item[ind].line;
 			  best_index = ind;
@@ -3718,7 +3721,8 @@ skip_prologue_using_lineinfo (CORE_ADDR func_addr, struct symtab *symtab)
       /* Don't use line numbers of zero, they mark special entries in
 	 the table.  See the commentary on symtab.h before the
 	 definition of struct linetable.  */
-      if (item->line > 0 && func_start <= item->pc && item->pc < func_end)
+      if (item->line != linetable_entry::end_marker
+	  && func_start <= item->pc && item->pc < func_end)
 	return item->pc;
     }
 
@@ -3946,11 +3950,11 @@ skip_prologue_using_sal (struct gdbarch *gdbarch, CORE_ADDR func_addr)
 	  /* Skip any earlier lines, and any end-of-sequence marker
 	     from a previous function.  */
 	  while (linetable->item[idx].pc != prologue_sal.pc
-		 || linetable->item[idx].line == 0)
+		 || linetable->item[idx].line == linetable_entry::end_marker)
 	    idx++;
 
 	  if (idx+1 < linetable->nitems
-	      && linetable->item[idx+1].line != 0
+	      && linetable->item[idx+1].line != linetable_entry::end_marker
 	      && linetable->item[idx+1].pc == start_pc)
 	    return start_pc;
 	}

@@ -435,7 +435,7 @@ arrange_linetable (struct linetable *oldLineTb)
       if (oldLineTb->item[ii].is_stmt == 0)
 	continue;
 
-      if (oldLineTb->item[ii].line == 0)
+      if (oldLineTb->item[ii].line == linetable_entry::end_marker)
 	{			/* Function entry found.  */
 	  if (function_count >= fentry_size)
 	    {			/* Make sure you have room.  */
@@ -477,9 +477,11 @@ arrange_linetable (struct linetable *oldLineTb)
      a function begin.  */
 
   newline = 0;
-  if (oldLineTb->item[0].line != 0)
+  if (oldLineTb->item[0].line != linetable_entry::end_marker)
     for (newline = 0;
-    newline < oldLineTb->nitems && oldLineTb->item[newline].line; ++newline)
+	 newline < oldLineTb->nitems
+	   && oldLineTb->item[newline].line != linetable_entry::end_marker;
+	 ++newline)
       newLineTb->item[newline] = oldLineTb->item[newline];
 
   /* Now copy function lines one by one.  */
@@ -498,7 +500,8 @@ arrange_linetable (struct linetable *oldLineTb)
 	}
 
       for (jj = fentry[ii].line + 1;
-	   jj < oldLineTb->nitems && oldLineTb->item[jj].line != 0;
+	   jj < oldLineTb->nitems
+	     && oldLineTb->item[jj].line != linetable_entry::end_marker;
 	   ++jj, ++newline)
 	newLineTb->item[newline] = oldLineTb->item[jj];
     }

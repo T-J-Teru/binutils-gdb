@@ -671,6 +671,10 @@ buildsym_compunit::record_line (struct subfile *subfile, int line,
 {
   struct linetable_entry *e;
 
+  /* Is this an asset?  Or is this processing user input and so should we
+     be handling, or throwing an error for invalid data?  */
+  gdb_assert (line == linetable_entry::end_marker || line >= 0);
+
   /* Make sure line vector exists and is big enough.  */
   if (!subfile->line_vector)
     {
@@ -692,20 +696,19 @@ buildsym_compunit::record_line (struct subfile *subfile, int line,
 		      * sizeof (struct linetable_entry))));
     }
 
-  /* Normally, we treat lines as unsorted.  But the end of sequence
-     marker is special.  We sort line markers at the same PC by line
-     number, so end of sequence markers (which have line == 0) appear
-     first.  This is right if the marker ends the previous function,
-     and there is no padding before the next function.  But it is
-     wrong if the previous line was empty and we are now marking a
-     switch to a different subfile.  We must leave the end of sequence
-     marker at the end of this group of lines, not sort the empty line
-     to after the marker.  The easiest way to accomplish this is to
-     delete any empty lines from our table, if they are followed by
-     end of sequence markers.  All we lose is the ability to set
-     breakpoints at some lines which contain no instructions
-     anyway.  */
-  if (line == 0)
+  /* Normally, we treat lines as unsorted.  But the end of sequence marker
+     is special.  We sort line markers at the same PC by line number, so
+     end of sequence markers (which have line ==
+     linetable_entry::end_marker) appear first.  This is right if the
+     marker ends the previous function, and there is no padding before the
+     next function.  But it is wrong if the previous line was empty and we
+     are now marking a switch to a different subfile.  We must leave the
+     end of sequence marker at the end of this group of lines, not sort the
+     empty line to after the marker.  The easiest way to accomplish this is
+     to delete any empty lines from our table, if they are followed by end
+     of sequence markers.  All we lose is the ability to set breakpoints at
+     some lines which contain no instructions anyway.  */
+  if (line == linetable_entry::end_marker)
     {
       while (subfile->line_vector->nitems > 0)
 	{
@@ -944,8 +947,9 @@ buildsym_compunit::end_symtab_with_blockvector (struct block *static_block,
 		  const linetable_entry &ln2) -> bool
 	      {
 		if (ln1.pc == ln2.pc
-		    && ((ln1.line == 0) != (ln2.line == 0)))
-		  return ln1.line == 0;
+		    && ((ln1.line == linetable_entry::end_marker)
+			!= (ln2.line == linetable_entry::end_marker)))
+		  return ln1.line == linetable_entry::end_marker;
 
 		return (ln1.pc < ln2.pc);
 	      };
