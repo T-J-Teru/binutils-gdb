@@ -1541,7 +1541,7 @@ disassemble_command (const char *arg, int from_tty)
       if (!find_pc_partial_function_sym (pc, &symbol, &low, &high, &block))
 	error (_("No function contains specified address."));
 
-      if (asm_demangle)
+      if (asm_demangle_p ())
 	name = symbol->print_name ();
       else
 	name = symbol->linkage_name ();

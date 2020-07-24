@@ -25,6 +25,16 @@
 
   You can get the latest version from https://sourceware.org/elfutils.
 
+* 'set print asm-demangle' is now an auto boolean, meaning it can be
+  set to on, off, or auto.  It's default is now auto, which means it
+  defers to the value of 'set print demangle'.  For the last 6 years
+  GDB has contained a bug that, for some languages, caused 'set print
+  asm-demangle' to not function correctly, and effectively always be
+  on.  This bug in GDB has now been fixed, but this means that for the
+  effected languages GDB's behaviour has now changed.  In order to
+  avoid confusing users, by changing the default for this flag we
+  maintain the behaviour GDB has had for the last 6 years.
+
 * New features in the GDB remote stub, GDBserver
 
   ** GDBserver is now supported on RISC-V GNU/Linux.

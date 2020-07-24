@@ -521,7 +521,9 @@ gdb_test_no_output "set print address" "set print address"
 #test set print array
 gdb_test_no_output "set print array" "set print array"
 #test set print asm-demangle
-gdb_test_no_output "set print asm-demangle" "set print asm-demangle"
+gdb_test "set print asm-demangle" \
+    "\"on\", \"off\" or \"auto\" expected\\." \
+    "set print asm-demangle"
 #test set print demangle
 gdb_test_no_output "set print demangle" "set print demangle"
 #test set print elements
@@ -663,7 +665,7 @@ gdb_test "show print address" "Printing of addresses is on."
 #test show print array
 gdb_test "show print array" "Pretty formatting of arrays is on."
 #test show print asm-demangle
-gdb_test "show print asm-demangle" "Demangling of C\[+\]+/ObjC names in disassembly listings is on."
+gdb_test "show print asm-demangle" "Demangling of C\[+\]+/ObjC names in disassembly listings is \"auto\" \\(currently \"on\"\\)\\."
 #test show print demangle
 gdb_test "show print demangle" "Demangling of encoded C\[+\]+/ObjC names when displaying symbols is on."
 #test show print elements

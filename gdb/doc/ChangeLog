@@ -1,3 +1,9 @@
+2020-07-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/26270
+	* gdb.texinfo (Print Settings): Note change in default for
+	asm-demangle.  Rewrite the @item line for this option.
+
 2020-07-22  Kevin Buettner  <kevinb@redhat.com>
 
 	* gdb.texinfo (Maintenance Commands): Add documentation for

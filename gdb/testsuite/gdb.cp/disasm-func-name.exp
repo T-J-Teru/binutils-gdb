@@ -41,10 +41,20 @@ proc check_disassembly_header { request expected } {
 	"Dump of assembler code for function ${expected}:\r\n.*"
 }
 
-gdb_test_no_output "set print asm-demangle on"
+with_test_prefix "asm-demangle=on" {
+    check_disassembly_header "main" "main\\(\\)"
+    check_disassembly_header "process" "process\\(A\\*, int\\)"
+    check_disassembly_header "A::A" "A::A\\(int\\)"
+    check_disassembly_header "A::get_i" "A::get_i\\(\\) const"
+    check_disassembly_header "A::set_i" "A::set_i\\(int\\)"
+}
 
-check_disassembly_header "main" "main\\(\\)"
-check_disassembly_header "process" "process\\(A\\*, int\\)"
-check_disassembly_header "A::A" "A::A\\(int\\)"
-check_disassembly_header "A::get_i" "A::get_i\\(\\) const"
-check_disassembly_header "A::set_i" "A::set_i\\(int\\)"
+gdb_test_no_output "set print asm-demangle off"
+
+with_test_prefix "asm-demangle=off" {
+    check_disassembly_header "main" "main\\(\\)"
+    check_disassembly_header "process" "\[^()\]+"
+    check_disassembly_header "A::A" "\[^()\]+"
+    check_disassembly_header "A::get_i" "\[^()\]+"
+    check_disassembly_header "A::set_i" "\[^()\]+"
+}

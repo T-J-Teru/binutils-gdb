@@ -1,3 +1,11 @@
+2020-07-06  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/26270
+	* gdb.ada/win_fu_syms.exp: Update expected output.
+	* gdb.base/default.exp: Update expected output.
+	* gdb.cp/disasm-func-name.exp: Update for change in asm-demangle,
+	add new tests.
+
 2020-07-23  Pedro Alves  <pedro@palves.net>
 
 	* gdb.server/server-kill.exp (prepare): New, factored out from the

@@ -1,3 +1,19 @@
+2020-07-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/26270
+	* NEWS: Mention change in default for asm-demangle.
+	* cli/cli-cmds.c (disassemble_command): Switch to use
+	asm_demangle_p.
+	* gdb-demangle.c (asm_demangle): Change type to auto bool, default
+	is auto.
+	(show_asm_demangle): Update to deal with new asm_demangle type.
+	(asm_demangle_p): New function.
+	(_initialize_gdb_demangle): Register 'set print asm-demangle' as
+	an auto-boolean.
+	* gdb-demangle.h (asm_demangle): Delete declaration.
+	(asm_demangle_p): Declare.
+	* printcmd.c (build_address_symbolic): Call asm
+
 2020-07-23  Pedro Alves  <pedro@palves.net>
 
 	* frame-unwind.c (frame_unwind_try_unwinder): On exception, don't

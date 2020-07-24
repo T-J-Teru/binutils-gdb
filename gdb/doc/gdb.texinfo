@@ -11556,11 +11556,16 @@ linkage.  The default is on.
 @item show print demangle
 Show whether C@t{++} names are printed in mangled or demangled form.
 
-@item set print asm-demangle
-@itemx set print asm-demangle on
-Print C@t{++} names in their source form rather than their mangled form, even
-in assembler code printouts such as instruction disassemblies.
-The default is off.
+@item set print asm-demangle [auto|on|off]
+Print C@t{++} names in their source form rather than their mangled
+form, even in assembler code printouts such as instruction
+disassemblies.  This flag interacts differently to @code{set print
+demangle} in different parts of @value{GDBN}, in some places this flag
+is independent to @code{set print demangle}, and in other places this
+flag will override the setting in @code{set print demangle}.
+
+The default is auto, which means this flag defers to @code{set print
+demangle}.
 
 @item show print asm-demangle
 Show whether C@t{++} names in assembly listings are printed in mangled

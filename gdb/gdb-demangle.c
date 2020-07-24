@@ -44,6 +44,7 @@
 #endif
 
 /* See documentation in gdb-demangle.h.  */
+
 bool demangle = true;
 
 static void
@@ -57,16 +58,35 @@ show_demangle (struct ui_file *file, int from_tty,
 }
 
 /* See documentation in gdb-demangle.h.  */
-bool asm_demangle = false;
 
+static enum auto_boolean asm_demangle = AUTO_BOOLEAN_AUTO;
 static void
 show_asm_demangle (struct ui_file *file, int from_tty,
 		   struct cmd_list_element *c, const char *value)
 {
-  fprintf_filtered (file,
-		    _("Demangling of C++/ObjC names in "
-		      "disassembly listings is %s.\n"),
-		    value);
+  if (asm_demangle == AUTO_BOOLEAN_AUTO)
+    fprintf_filtered (file,
+		      _("Demangling of C++/ObjC names in disassembly "
+			"listings is \"%s\" (currently \"%s\").\n"),
+		      value, (demangle ? "on" : "off"));
+  else if (asm_demangle == AUTO_BOOLEAN_TRUE && !demangle)
+    fprintf_filtered (file,
+		      _("Demangling of C++/ObjC names in disassembly "
+			"listings is \"%s\", but is overridden by "
+			"'set print demangle' which is \"off\".\n"),
+		      value);
+  else
+    fprintf_filtered (file,
+		      _("Demangling of C++/ObjC names in disassembly "
+			"listings is \"%s\"."), value);
+}
+
+/* See gdb-demangle.h.  */
+
+bool
+asm_demangle_p ()
+{
+  return demangle && (asm_demangle != AUTO_BOOLEAN_FALSE);
 }
 
 /* String name for the current demangling style.  Set by the
@@ -244,7 +264,7 @@ Show demangling of encoded C++/ObjC names when displaying symbols."), NULL,
 			   show_demangle,
 			   &setprintlist, &showprintlist);
 
-  add_setshow_boolean_cmd ("asm-demangle", class_support, &asm_demangle, _("\
+  add_setshow_auto_boolean_cmd ("asm-demangle", class_support, &asm_demangle, _("\
 Set demangling of C++/ObjC names in disassembly listings."), _("\
 Show demangling of C++/ObjC names in disassembly listings."), NULL,
 			   NULL,

@@ -23,10 +23,13 @@
    C++/ObjC form rather than raw.  */
 extern bool demangle;
 
-/* True means that encoded C++/ObjC names should be printed out in their
-   C++/ObjC form even in assembler language displays.  If this is set, but
-   DEMANGLE is false, names are printed raw, i.e. DEMANGLE controls.  */
-extern bool asm_demangle;
+/* Return true if symbols in assembler listing should be demangled.  The
+   return value depends on the value of both 'set print asm-demangle' and
+   'set print demangle'.  If 'set print demangle' is off then this will
+   always return true.  If 'set print asm-demangle' is set to auto then
+   this will mirror the value in 'set print demangle'.  */
+
+extern bool asm_demangle_p ();
 
 /* Check if a character is one of the commonly used C++ marker characters.  */
 extern bool is_cplus_marker (int);

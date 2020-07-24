@@ -623,7 +623,7 @@ build_address_symbolic (struct gdbarch *gdbarch,
       addr = gdbarch_addr_bits_remove (gdbarch, addr);
 
       name_location = BLOCK_ENTRY_PC (SYMBOL_BLOCK_VALUE (symbol));
-      if (do_demangle || asm_demangle)
+      if (do_demangle || asm_demangle_p ())
 	name_temp = symbol->print_name ();
       else
 	name_temp = symbol->linkage_name ();
@@ -666,7 +666,7 @@ build_address_symbolic (struct gdbarch *gdbarch,
 
 	  symbol = 0;
 	  name_location = BMSYMBOL_VALUE_ADDRESS (msymbol);
-	  if (do_demangle || asm_demangle)
+	  if (do_demangle || asm_demangle_p ())
 	    name_temp = msymbol.minsym->print_name ();
 	  else
 	    name_temp = msymbol.minsym->linkage_name ();
@@ -715,7 +715,7 @@ print_address (struct gdbarch *gdbarch,
 	       CORE_ADDR addr, struct ui_file *stream)
 {
   fputs_styled (paddress (gdbarch, addr), address_style.style (), stream);
-  print_address_symbolic (gdbarch, addr, stream, asm_demangle, " ");
+  print_address_symbolic (gdbarch, addr, stream, asm_demangle_p (), " ");
 }
 
 /* Return a prefix for instruction address:
