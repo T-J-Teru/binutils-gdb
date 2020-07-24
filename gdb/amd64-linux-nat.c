@@ -392,7 +392,7 @@ amd64_linux_new_thread (ptid_t ptid)
    a request for a thread's local storage address.  */
 
 ps_err_e
-ps_get_thread_area (const struct ps_prochandle *ph,
+ps_get_thread_area (struct ps_prochandle *ph,
                     lwpid_t lwpid, int idx, void **base)
 {
   if (gdbarch_ptr_bit (target_gdbarch) == 32)
@@ -680,13 +680,13 @@ siginfo_from_compat_siginfo (siginfo_t *to, compat_siginfo_t *from)
    INF.  */
 
 static int
-amd64_linux_siginfo_fixup (struct siginfo *native, gdb_byte *inf, int direction)
+amd64_linux_siginfo_fixup (siginfo_t *native, gdb_byte *inf, int direction)
 {
   /* Is the inferior 32-bit?  If so, then do fixup the siginfo
      object.  */
   if (gdbarch_addr_bit (get_frame_arch (get_current_frame ())) == 32)
     {
-      gdb_assert (sizeof (struct siginfo) == sizeof (compat_siginfo_t));
+      gdb_assert (sizeof (siginfo_t) == sizeof (compat_siginfo_t));
 
       if (direction == 0)
 	compat_siginfo_from_siginfo ((struct compat_siginfo *) inf, native);
