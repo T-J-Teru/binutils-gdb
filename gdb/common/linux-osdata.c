@@ -588,7 +588,7 @@ linux_xfer_osdata_threads (gdb_byte *readbuf,
 	  while ((dp = readdir (dirp)) != NULL)
 	    {
 	      struct stat statbuf;
-	      char procentry[sizeof ("/proc/4294967295")];
+	      char procentry[300];
 
 	      if (!isdigit (dp->d_name[0])
 		  || NAMELEN (dp) > sizeof ("4294967295") - 1)
@@ -702,7 +702,7 @@ linux_xfer_osdata_fds (gdb_byte *readbuf,
 	  while ((dp = readdir (dirp)) != NULL)
 	    {
 	      struct stat statbuf;
-	      char procentry[sizeof ("/proc/4294967295")];
+	      char procentry[300];
 
 	      if (!isdigit (dp->d_name[0])
 		  || NAMELEN (dp) > sizeof ("4294967295") - 1)
