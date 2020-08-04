@@ -1,5 +1,10 @@
 2020-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* lib/check-test-names.exp (do_reset_vars): Use 'array unset' to
+	unset the array variable.
+
+2020-07-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	PR fortran/23051
 	PR fortran/26139
 	* gdb.fortran/class-allocatable-array.exp: New file.
