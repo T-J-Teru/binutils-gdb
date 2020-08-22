@@ -644,7 +644,18 @@ ui_out::vmessage (const ui_file_style &in_style, const char *format,
 	  }
 	  break;
 	case wide_string_arg:
-	  gdb_assert_not_reached (_("wide_string_arg not supported in vmessage"));
+	  {
+	    /* TODO: The format_pieces list converts the '%ls' format used
+	       for the wchar_t to '%s'.  When we're printing target strings
+	       there's some conversion magic that happens, which I guess
+	       requires the '%s', but that leaves us stuck here.
+
+	       For now, just force '%ls', but it would be nice to
+	       understand the logic of what's going on here.  */
+	    const wchar_t *str = va_arg (args, const wchar_t *);
+	    gdb_assert (piece.n_int_args == 0);
+	    call_do_message (style, "%ls", str);
+	  }
 	  break;
 	case wide_char_arg:
 	  gdb_assert_not_reached (_("wide_char_arg not supported in vmessage"));

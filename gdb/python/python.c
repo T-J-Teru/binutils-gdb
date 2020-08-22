@@ -1802,6 +1802,55 @@ do_start_initialization ()
 
 #endif /* HAVE_PYTHON */
 
+/* Implement the "maintenance info python" command.  */
+
+static void
+maintenance_info_python (const char *arg, int from_tty)
+{
+#ifdef HAVE_PYTHON
+
+  auto yes_no_str = [] (int val) -> const char *
+  {
+    return (val != 0) ? "yes" : "no";
+  };
+
+  printf_filtered (_("Python Information:\n"));
+  printf_filtered (_("version: %s\n"), Py_GetVersion ());
+#ifdef IS_PY3K
+  printf_filtered (_("program name: %ls\n"), Py_GetProgramName ());
+  printf_filtered (_("full program name: %ls\n"), Py_GetProgramFullPath ());
+  printf_filtered (_("home: %ls\n"), Py_GetPythonHome ());
+  printf_filtered (_("path: %ls\n"), Py_GetPath ());
+#else
+  printf_filtered (_("program name: %s\n"), Py_GetProgramName ());
+  printf_filtered (_("full program name: %s\n"), Py_GetProgramFullPath ());
+  printf_filtered (_("home: %s\n"), Py_GetPythonHome ());
+  printf_filtered (_("path: %s\n"), Py_GetPath ());
+#endif
+  printf_filtered (_("libdir: %s\n"), python_libdir.c_str ());
+  printf_filtered (_("ignore environment: %s\n"),
+		   yes_no_str (Py_IgnoreEnvironmentFlag));
+  printf_filtered (_("debug: %s\n"), yes_no_str (Py_DebugFlag));
+  printf_filtered (_("verbose: %s\n"), yes_no_str (Py_VerboseFlag));
+
+#ifdef WITH_PYTHONHOME_VARIABLE
+  const char *varvalue;
+  if (getenv (WITH_PYTHONHOME_VARIABLE) != NULL)
+    varvalue = getenv (WITH_PYTHONHOME_VARIABLE);
+  else
+    varvalue = "*unset*";
+  printf_filtered (_("Python home variable: %s\t(%s)\n"),
+		   WITH_PYTHONHOME_VARIABLE, varvalue);
+#endif
+
+#else /* HAVE_PYTHON */
+
+  printf_filtered (_("Python support not included.\n"));
+
+#endif /* ! HAVE_PYTHON */
+}
+
+
 /* See python.h.  */
 cmd_list_element *python_cmd_element = nullptr;
 
@@ -1877,6 +1926,11 @@ message == an error message without a stack will be printed."),
 			NULL, NULL,
 			&user_set_python_list,
 			&user_show_python_list);
+
+
+  add_cmd ("python", class_maintenance, maintenance_info_python, _("\
+Print information about the Python configuration."),
+	   &maintenanceinfolist);
 
 #ifdef HAVE_PYTHON
   if (!do_start_initialization () && PyErr_Occurred ())
