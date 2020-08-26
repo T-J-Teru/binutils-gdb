@@ -854,8 +854,8 @@ extern void set_gdbarch_address_class_type_flags (struct gdbarch *gdbarch, gdbar
 
 extern int gdbarch_address_class_type_flags_to_name_p (struct gdbarch *gdbarch);
 
-typedef const char * (gdbarch_address_class_type_flags_to_name_ftype) (struct gdbarch *gdbarch, int type_flags);
-extern const char * gdbarch_address_class_type_flags_to_name (struct gdbarch *gdbarch, int type_flags);
+typedef const char * (gdbarch_address_class_type_flags_to_name_ftype) (struct gdbarch *gdbarch, type_instance_flags type_flags);
+extern const char * gdbarch_address_class_type_flags_to_name (struct gdbarch *gdbarch, type_instance_flags type_flags);
 extern void set_gdbarch_address_class_type_flags_to_name (struct gdbarch *gdbarch, gdbarch_address_class_type_flags_to_name_ftype *address_class_type_flags_to_name);
 
 /* Execute vendor-specific DWARF Call Frame Instruction.  OP is the instruction.

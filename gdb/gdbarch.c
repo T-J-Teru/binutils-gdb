@@ -3526,7 +3526,7 @@ gdbarch_address_class_type_flags_to_name_p (struct gdbarch *gdbarch)
 }
 
 const char *
-gdbarch_address_class_type_flags_to_name (struct gdbarch *gdbarch, int type_flags)
+gdbarch_address_class_type_flags_to_name (struct gdbarch *gdbarch, type_instance_flags type_flags)
 {
   gdb_assert (gdbarch != NULL);
   gdb_assert (gdbarch->address_class_type_flags_to_name != NULL);

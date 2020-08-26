@@ -1,3 +1,22 @@
+2020-08-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* avr-tdep.c (avr_address_class_type_flags): Update return type.
+	(avr_address_class_type_flags_to_name): Update argument types.
+	(avr_address_class_name_to_type_flags): Update return type and
+	argument types.
+	* ft32-tdep.c (ft32_address_class_type_flags): Update return type.
+	(ft32_address_class_type_flags_to_name): Update argument types.
+	(ft32_address_class_name_to_type_flags): Update return type and
+	argument types.
+	* gdbarch.c: Regenerate.
+	* gdbarch.h: Regenerate.
+	* gdbarch.sh (address_class_type_flags_to_name): Update argument
+	types.
+	* s390-tdep.c (s390_address_class_type_flags): Update return type.
+	(s390_address_class_type_flags_to_name): Update argument types.
+	(s390_address_class_name_to_type_flags): Update return type and
+	argument types.
+
 2020-08-25  Shahab Vahedi  <shahab@synopsys.com>
 
 	* MAINTAINERS: Add ARC target and maintainer.

@@ -341,7 +341,7 @@ ft32_pointer_to_address (struct gdbarch *gdbarch,
    This method maps DW_AT_address_class attributes to a
    type_instance_flag_value.  */
 
-static int
+static type_instance_flags
 ft32_address_class_type_flags (int byte_size, int dwarf2_addr_class)
 {
   /* The value 1 of the DW_AT_address_class attribute corresponds to the
@@ -357,7 +357,8 @@ ft32_address_class_type_flags (int byte_size, int dwarf2_addr_class)
    Convert a type_instance_flag_value to an address space qualifier.  */
 
 static const char*
-ft32_address_class_type_flags_to_name (struct gdbarch *gdbarch, int type_flags)
+ft32_address_class_type_flags_to_name (struct gdbarch *gdbarch,
+				       type_instance_flags type_flags)
 {
   if (type_flags & TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1)
     return "flash";
@@ -369,18 +370,18 @@ ft32_address_class_type_flags_to_name (struct gdbarch *gdbarch, int type_flags)
 
    Convert an address space qualifier to a type_instance_flag_value.  */
 
-static int
+static bool
 ft32_address_class_name_to_type_flags (struct gdbarch *gdbarch,
 				       const char* name,
-				       int *type_flags_ptr)
+				       type_instance_flags *type_flags_ptr)
 {
   if (strcmp (name, "flash") == 0)
     {
       *type_flags_ptr = TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1;
-      return 1;
+      return true;
     }
   else
-    return 0;
+    return false;
 }
 
 /* Given a return value in `regbuf' with a type `valtype',
