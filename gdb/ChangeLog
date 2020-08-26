@@ -1,5 +1,16 @@
 2020-08-26  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* d-lang.c (build_d_types): Use SET_TYPE_INSTANCE_FLAGS.
+	* ft32-tdep.c (ft32_gdbarch_init): Likewise.
+	* gdbtypes.c (gdbtypes_post_init): Likewise.
+	* gdbtypes.h (struct type) <get_instance_flags>: New member
+	function.
+	<set_instance_flags>: Likewise.
+	(TYPE_INSTANCE_FLAGS): Update.
+	(SET_TYPE_INSTANCE_FLAGS): Update.
+
+2020-08-26  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* avr-tdep.c (avr_address_class_type_flags): Update return type.
 	(avr_address_class_type_flags_to_name): Update argument types.
 	(avr_address_class_name_to_type_flags): Update return type and

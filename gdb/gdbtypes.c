@@ -5823,10 +5823,12 @@ gdbtypes_post_init (struct gdbarch *gdbarch)
     = arch_integer_type (gdbarch, 128, 0, "int128_t");
   builtin_type->builtin_uint128
     = arch_integer_type (gdbarch, 128, 1, "uint128_t");
-  TYPE_INSTANCE_FLAGS (builtin_type->builtin_int8) |=
-    TYPE_INSTANCE_FLAG_NOTTEXT;
-  TYPE_INSTANCE_FLAGS (builtin_type->builtin_uint8) |=
-    TYPE_INSTANCE_FLAG_NOTTEXT;
+  SET_TYPE_INSTANCE_FLAGS (builtin_type->builtin_int8,
+			   (TYPE_INSTANCE_FLAGS (builtin_type->builtin_int8)
+			    | TYPE_INSTANCE_FLAG_NOTTEXT));
+  SET_TYPE_INSTANCE_FLAGS (builtin_type->builtin_uint8,
+			   (TYPE_INSTANCE_FLAGS (builtin_type->builtin_uint8)
+			    | TYPE_INSTANCE_FLAG_NOTTEXT));
 
   /* Wide character types.  */
   builtin_type->builtin_char16

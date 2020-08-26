@@ -577,7 +577,9 @@ ft32_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   func_void_type = make_function_type (void_type, NULL);
   tdep->pc_type = arch_pointer_type (gdbarch, 4 * TARGET_CHAR_BIT, NULL,
 				     func_void_type);
-  TYPE_INSTANCE_FLAGS (tdep->pc_type) |= TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1;
+  SET_TYPE_INSTANCE_FLAGS (tdep->pc_type,
+			   (TYPE_INSTANCE_FLAGS (tdep->pc_type)
+			    | TYPE_INSTANCE_FLAG_ADDRESS_CLASS_1));
 
   set_gdbarch_num_regs (gdbarch, FT32_NUM_REGS);
   set_gdbarch_sp_regnum (gdbarch, FT32_SP_REGNUM);
