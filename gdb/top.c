@@ -2217,15 +2217,6 @@ check_quiet_mode ()
   return startup_quiet;
 }
 
-/* Write "set startup-quietly" to the file.  */
-
-static void
-write_startup_quietly (ui_file *outfile)
-{
-  fprintf_unfiltered (outfile, "set startup-quietly %s\n",
-		      startup_quiet ? "on" : "off");
-}
-
 /* Set the startup-quiet flag.  */
 
 static void
@@ -2396,16 +2387,16 @@ input settings."),
                         show_interactive_mode,
                         &setlist, &showlist);
 
-  add_setshow_boolean_cmd ("startup-quietly", class_support,
-			   &startup_quiet, _("\
+  c = add_setshow_boolean_cmd ("startup-quietly", class_support,
+			       &startup_quiet, _("\
 Set whether GDB should start up quietly."), _("\
 Show whether GDB should start up quietly."), NULL,
-			   set_startup_quiet,
-			   show_startup_quiet,
-			   &setlist, &showlist);
+			       set_startup_quiet,
+			       show_startup_quiet,
+			       &setlist, &showlist);
   /* Arrange to write "set startup-quietly" to the early startup
      file.  */
-  add_startup_writer (write_startup_quietly);
+  add_default_startup_writer (c);
 
   c = add_cmd ("new-ui", class_support, new_ui_command, _("\
 Create a new UI.\n\

@@ -407,7 +407,7 @@ Configure colors used in some startup text."),
 				      &style_set_list, &style_show_list,
 				      false);
   /* Ensure that the startup style is written to the startup file.  */
-  add_startup_writer ([] (ui_file *outfile)
+  add_startup_writer ([] (ui_file *outfile, const cmd_list_element *cmd)
     {
       startup_style.write (outfile);
     });

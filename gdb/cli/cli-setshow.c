@@ -36,7 +36,8 @@
 #define STARTUP_FILE "startup-commands"
 
 /* Callbacks that will be called to write out startup settings.  */
-static std::vector<write_startup_setting_ftype *> write_startup_functions;
+static std::vector<std::pair<write_startup_setting_ftype *,
+			     const cmd_list_element *>> write_startup_functions;
 
 /* True after gdb has read the startup file.  */
 static bool startup_file_read;
@@ -71,16 +72,45 @@ write_startup_file ()
 # This file is written by gdb whenever the relevant settings are changed.\n\
 # Any edits you make here may be overwritten by gdb.\n");
 
-  for (auto &callback : write_startup_functions)
-    callback (&outfile);
+  for (auto &callback_and_cmd : write_startup_functions)
+    callback_and_cmd.first (&outfile, callback_and_cmd.second);
+}
+
+/* A default callback that can be used to write the value of CMD into the
+   startup configuration file.  All the required information is extracted
+   from CMD and the result written to OUTFILE.  */
+
+static void
+default_startup_writer_callback (ui_file *outfile,
+				 const cmd_list_element *cmd)
+{
+  std::string str = "set ";
+  if (cmd->prefixname != nullptr)
+    str += cmd->prefixname;
+  gdb_assert (cmd->name != nullptr);
+  str += cmd->name;
+  str += " ";
+  str += get_setshow_command_value_string (cmd);
+  str += "\n";
+  fputs_unfiltered (str.c_str (), outfile);
 }
 
 /* See cli-setshow.h.  */
 
 void
-add_startup_writer (write_startup_setting_ftype *callback)
+add_startup_writer (write_startup_setting_ftype *callback,
+		    const cmd_list_element *cmd)
 {
-  write_startup_functions.push_back (callback);
+  write_startup_functions.emplace_back (callback, cmd);
+}
+
+/* See cli-setshow.h.  */
+
+void
+add_default_startup_writer (const cmd_list_element *cmd)
+{
+  gdb_assert (cmd != nullptr);
+  add_startup_writer (default_startup_writer_callback, cmd);
 }
 
 /* See cli-setshow.h.  */

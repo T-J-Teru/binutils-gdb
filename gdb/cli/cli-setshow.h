@@ -71,12 +71,19 @@ extern void write_startup_file ();
    startup file.  */
 
 class ui_file;
-typedef void write_startup_setting_ftype (ui_file *);
+typedef void write_startup_setting_ftype (ui_file *, const cmd_list_element *);
 
 /* Add a callback function that will be called when writing the
    startup sequence.  */
 
-extern void add_startup_writer (write_startup_setting_ftype *callback);
+extern void add_startup_writer (write_startup_setting_ftype *callback,
+				const cmd_list_element *cmd = nullptr);
+
+/* Add the default callback function that will be called when writing the
+   startup sequence.  The default callback builds a string to set the
+   option from CMD.  */
+
+extern void add_default_startup_writer (const cmd_list_element *cmd);
 
 /* Read the startup file.  This should only be called by the gdb
    startup sequence.  */

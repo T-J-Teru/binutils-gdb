@@ -1,3 +1,17 @@
+2020-07-28  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* cli/cli-setshow.c (write_startup_functions): Change type.
+	(write_startup_file): Update walk of write_startup_functions.
+	(default_startup_writer_callback): New function.
+	(add_default_startup_writer): New function.
+	* cli/cli-setshow.h (write_startup_setting_ftype): Update typedef.
+	(add_startup_writer): Add new parameter with default value.
+	(add_default_startup_writer): Declare new function.
+	* cli/cli-style.c (_initialize_cli_style): Update function
+	signature for lambda function.
+	* top.c (write_startup_quietly): Delete.
+	(init_main): Use add_default_startup_writer.
+
 2020-07-05  Tom Tromey  <tom@tromey.com>
 
 	* tips: Add a tip.
