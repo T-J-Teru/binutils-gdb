@@ -1,3 +1,11 @@
+2020-10-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.texinfo (File Options): Mention new command line options.
+	(Startup): Discuss when startup files are processed.
+	(Initialization Files): Add description of startup files.
+	(Auto-loading): Mention startup files.
+	(gdb man): Likewise.
+
 2020-11-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.texinfo (Mode Options): Descriptions of initialization files

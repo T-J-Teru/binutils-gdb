@@ -1,3 +1,21 @@
+2020-10-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* NEWS: Mention new startup files and command line options.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: Define GDBSTARTUP.
+	* main.c (relocate_gdbinit_path_maybe_in_datadir): Rename to...
+	(relocate_file_path_maybe_in_datadir): ...this.
+	(class gdb_initfile_finder): New class.
+	(get_init_files): New uses gdb_initfile_finder.
+	(get_startup_files): New function.
+	(enum cmdarg_kind): Add CMDARG_STARTUP_FILE and
+	CMDARG_STARTUP_COMMAND.
+	(captured_main_1): Add support for new command line flags, and for
+	processing startup files.
+	(print_gdb_help): Include startup files in the output, print 'None
+	found' when there are no startup files, or no init files.
+
 2020-11-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* main.c (execute_cmdargs): New function.

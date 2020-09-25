@@ -46,6 +46,9 @@
 /* The .gdbinit filename. */
 #undef GDBINIT
 
+/* The .gdbstartup filename. */
+#undef GDBSTARTUP
+
 /* look for global separate data files in this path [DATADIR/gdb] */
 #undef GDB_DATADIR
 

@@ -1040,6 +1040,22 @@ Execute a single @value{GDBN} command before loading the inferior (but
 after loading gdbinit files).
 @xref{Startup}.
 
+@item -startup-command @var{file}
+@itemx -sx @var{file}
+@cindex @code{--startup-command}
+@cindex @code{-sx}
+Execute commands from file @var{file} as early as possible during the
+initialization process, before any output is produced.
+@xref{Startup}.
+
+@item -startup-eval-command @var{command}
+@itemx -sex @var{command}
+@cindex @code{--startup-eval-command}
+@cindex @code{-sex}
+Execute a single @value{GDBN} command as early as possible during the
+initialization process, before any output is produced.
+@xref{Startup}.
+
 @item -directory @var{directory}
 @itemx -d @var{directory}
 @cindex @code{--directory}
@@ -1291,6 +1307,22 @@ important when reporting @value{GDBN} bugs (@pxref{GDB Bugs}).
 Here's the description of what @value{GDBN} does during session startup:
 
 @enumerate
+
+@item
+Performs minimal setup required to initialise basic internal state.
+
+@item
+@cindex startup file
+Reads startup options from the startup file (if any) in your home
+directory, followed by any startup options contained in a startup file
+(if any) in the local directory as long as @samp{set auto-load
+local-gdbinit} is set to @samp{on} (@pxref{Init File in the Current
+Directory}), @pxref{Local directory startup file}.
+
+@item
+Any startup command line options (@samp{startup-command} and
+@samp{startup-eval-command}) are processed.
+
 @item
 Sets up the command interpreter as specified by the command line
 (@pxref{Mode Options, interpreter}).
@@ -1367,13 +1399,63 @@ To display the list of initialization files loaded by @value{GDBN} at
 startup, in the order they will be loaded, you can use @kbd{gdb
 --help}.
 
+The files processed are split into two categories @dfn{startup files}
+and @dfn{initialization files}.  The startup files are loaded as
+early as possible during @value{GDBN}'s startup and allow a limited
+set of settings to be configured that can affect how the rest of
+@value{GDBN} starts up.  The more general initialization files are
+processed later after @value{GDBN} has finished its own internal
+startup process, any commands can be used in these files.
+
 As the system wide and home directory initialization files are
 processed before most command line options, changes to settings
 (e.g. @samp{set complaints}) can affect subsequent processing of
 command line options and operands.
 
 The following sections describe where @value{GDBN} looks for the
-initialization and the order that the files are searched for.
+startup and initialization files, and the order that the files are
+searched for.
+
+@subsubsection Home directory startup files
+
+@value{GDBN} initially looks for startup files in the users home
+directory@footnote{On DOS/Windows systems, the home directory is the
+one pointed to by the @code{HOME} environment variable.}.  There are a
+number of locations that @value{GDBN} will search in the home
+directory, these locations are searched in order and @value{GDBN} will
+load the first file that it finds, and subsequent locations will not
+be checked.
+
+On non-Apple hosts the locations searched are:
+@table @file
+@item $XDG_CONFIG_HOME/gdb/gdbstartup
+@item $HOME/.config/gdb/gdbstartup
+@item $HOME/.gdbstartup
+@end table
+
+While on Apple hosts the locations searched are:
+@table @file
+@item $HOME/Library/Preferences/gdb/gdbstartup
+@item $HOME/.gdbstartup
+@end table
+
+It is possible to prevent the home directory startup file from
+being loaded using the @samp{-nx} or @samp{-nh} command line options,
+@pxref{Mode Options,,Choosing Modes}.
+
+@anchor{Local directory startup file}
+@subsubsection Local directory startup file
+
+@value{GDBN} will check the current directory for a file called
+@file{./.gdbstartup}.  It is loaded after the home directory startup
+file.
+
+If the file in the current directory was already loaded as the home
+directory startup file then it will not be loaded a second time.
+
+It is possible to prevent the local directory startup file from being
+loaded using the @samp{-nx} command line option, @pxref{Mode
+Options,,Choosing Modes}.
 
 @anchor{System Wide Init Files}
 @subsubsection System wide initialization files
@@ -26045,9 +26127,10 @@ There are various kinds of files @value{GDBN} can automatically load.
 In addition to these files, @value{GDBN} supports auto-loading code written
 in various extension languages.  @xref{Auto-loading extensions}.
 
-Note that loading of these associated files (including the local @file{.gdbinit}
-file) requires accordingly configured @code{auto-load safe-path}
-(@pxref{Auto-loading safe path}).
+Note that loading of these associated files (including the local
+@file{.gdbinit} and @file{.gdbstartup} files) requires accordingly
+configured @code{auto-load safe-path} (@pxref{Auto-loading safe
+path}).
 
 For these reasons, @value{GDBN} includes commands and options to let you
 control when to auto-load files and which files should be auto-loaded.
@@ -26170,8 +26253,9 @@ By default, @value{GDBN} reads and executes the canned sequences of commands
 from init file (if any) in the current working directory,
 see @ref{Init File in the Current Directory during Startup}.
 
-Note that loading of this local @file{.gdbinit} file also requires accordingly
-configured @code{auto-load safe-path} (@pxref{Auto-loading safe path}).
+Note that loading of this local @file{.gdbinit} (and likewise of
+@file{.gdbstartup}) file also requires accordingly configured
+@code{auto-load safe-path} (@pxref{Auto-loading safe path}).
 
 @table @code
 @anchor{set auto-load local-gdbinit}
@@ -46522,12 +46606,14 @@ Execute given @value{GDBN} @var{command}.
 Add @var{directory} to the path to search for source files.
 
 @item -nh
-Do not execute commands from @file{~/.config/gdb/gdbinit} or
-@file{~/.gdbinit}.
+Do not execute commands from @file{~/.config/gdb/gdbinit},
+@file{~/.gdbinit}, @file{~/.config/gdb/gdbstartup}, or
+@file{~/.gdbstartup}
 
 @item -nx
 @itemx -n
-Do not execute commands from any @file{.gdbinit} initialization files.
+Do not execute commands from any @file{.gdbinit} or @file{.gdbstartup}
+initialization files.
 
 @item -quiet
 @itemx -q

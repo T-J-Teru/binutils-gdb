@@ -21,6 +21,17 @@
   $HOME/.gdbinit.  On Apple hosts the search order is instead:
   $HOME/Library/Preferences/gdb/gdbinit, $HOME/.gdbinit.
 
+* GDB will now load and process commands from
+  ~/.config/gdb/gdbstartup, ~/.gdbstartup, or a local file
+  ./.gdbstartup if these files are present.  These files are processed
+  earlier than any of the previous initialization files and can effect
+  parts of GDB's startup that previously had already been completed
+  before the initialization files were read.
+
+* GDB now has two new options "--startup-command" and
+  "--startup-eval-command" with corresponding short options "-sx" and
+  "-sex" that allow startup options to be passed on the command line.
+
 * New commands
 
 set debug event-loop
