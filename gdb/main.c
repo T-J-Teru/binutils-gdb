@@ -95,6 +95,17 @@ int batch_silent = 0;
 int return_child_result = 0;
 int return_child_result_value = -1;
 
+/* True after gdb has read the startup files, and processed any startup
+   command line options.  */
+static bool startup_file_read = false;
+
+/* See main.h.  */
+
+bool
+gdb_startup_file_read_p ()
+{
+  return startup_file_read;
+}
 
 /* GDB as it has been invoked from the command line (i.e. argv[0]).  */
 static char *gdb_program_name;
@@ -1068,6 +1079,7 @@ captured_main_1 (struct captured_main_args *context)
     }
   execute_cmdargs (&cmdarg_vec, CMDARG_STARTUP_FILE,
 		   CMDARG_STARTUP_COMMAND, &ret);
+  startup_file_read = true;
 
   /* Now that gdb_init has created the initial inferior, we're in
      position to set args for that inferior.  */

@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include "arch-utils.h"
 #include "observable.h"
+#include "main.h"
 
 #include "ui-out.h"
 
@@ -28,6 +29,110 @@
 #include "cli/cli-cmds.h"
 #include "cli/cli-setshow.h"
 #include "cli/cli-utils.h"
+#include "cli/cli-style.h"
+
+/* Filename where startup options are written to when modified.  If this
+   is NULL or the empty string then startup options are not automatically
+   saved when set.  */
+
+static char *startup_save_filename;
+
+/* Implement 'show startup-save-filename'.  */
+
+static void
+show_startup_save_filename (struct ui_file *file, int from_tty,
+                            struct cmd_list_element *c, const char *value)
+{
+  if (startup_save_filename == NULL
+      || *startup_save_filename == '\0')
+    fprintf_filtered (file,
+                      _("Startup options will not be written to and file.\n"));
+  else
+    fprintf_filtered (file, _("Startup options will be written to \"%ps\".\n"),
+                      styled_string (file_name_style.style (), value));
+}
+
+/* Callbacks that will be called to write out startup settings.  */
+
+static std::vector<std::pair<write_startup_setting_ftype *,
+                             const cmd_list_element *>> write_startup_functions;
+
+/* See cli-setshow.h.  */
+
+void
+write_startup_file ()
+{
+  if (!gdb_startup_file_read_p ())
+    return;
+
+  /* Saving of these options is disabled.  */
+  if (startup_save_filename == NULL
+      || *startup_save_filename == '\0')
+    {
+      static bool warned = false;
+      if (!warned)
+        {
+          warning (_("auto-save of startup options is disabled.  Use `set "
+                     "startup-save-filename FILENAME` to save startup "
+                     "options."));
+          warned = true;
+        }
+      return;
+    }
+
+  stdio_file outfile;
+
+  if (!outfile.open (startup_save_filename, FOPEN_WT))
+    perror_with_name (startup_save_filename);
+
+  fprintf_unfiltered (&outfile, "\
+# This file is written by gdb whenever the relevant settings are changed.\n\
+# Any edits you make here will be overwritten by gdb.\n");
+
+  for (auto &callback_and_cmd : write_startup_functions)
+    callback_and_cmd.first (&outfile, callback_and_cmd.second);
+}
+
+/* A default callback that can be used to write the value of CMD into the
+   startup configuration file.  All the required information is extracted
+   from CMD and the result written to OUTFILE.  */
+
+static void
+default_startup_writer_callback (ui_file *outfile,
+                                 const cmd_list_element *cmd)
+{
+  std::string str;
+  std::function<void(const cmd_list_element *)> build_cmd;
+  build_cmd = [&] (const cmd_list_element *c) -> void
+    {
+      if (c->prefix != nullptr)
+        build_cmd (c->prefix);
+      (str += c->name) += " ";
+    };
+
+  build_cmd (cmd);
+  str += get_setshow_command_value_string (cmd);
+  str += "\n";
+  fputs_unfiltered (str.c_str (), outfile);
+}
+
+/* See cli-setshow.h.  */
+
+void
+add_startup_writer (write_startup_setting_ftype *callback,
+                    const cmd_list_element *cmd)
+{
+  write_startup_functions.emplace_back (callback, cmd);
+}
+
+/* See cli-setshow.h.  */
+
+void
+add_default_startup_writer (const cmd_list_element *cmd)
+{
+  gdb_assert (cmd != nullptr);
+  add_startup_writer (default_startup_writer_callback, cmd);
+}
 
 /* Return true if the change of command parameter should be notified.  */
 
@@ -774,4 +879,19 @@ cmd_show_list (struct cmd_list_element *list, int from_tty)
     }
 }
 
-
+extern void _initialize_cli_setshow ();
+void
+_initialize_cli_setshow ()
+{
+  add_setshow_filename_cmd ("startup-save-filename", class_support,
+                            &startup_save_filename, _("\
+Set the filename to which startup options should be written."), _("\
+Show the filename to which startup options are written."), _("\
+Some options only effect the startup of GDB.  When these options are\n\
+modified GDB can arrange to write the values of all of these options\n\
+to a file which can then be sourced during startup to reapply these\n\
+options."),
+                            NULL,
+                            show_startup_save_filename,
+                            &setlist, &showlist);
+}

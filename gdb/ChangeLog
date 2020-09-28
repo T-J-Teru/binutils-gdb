@@ -1,5 +1,25 @@
 2020-10-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* cli/cli-setshow.c: Add 'main.h' and 'cli/cli-style.h' include.
+	(startup_save_filename): New static global.
+	(show_startup_save_filename): New function.
+	(write_startup_functions): New static global.
+	(write_startup_file): New function.
+	(default_startup_writer_callback): New function.
+	(add_startup_writer): New function.
+	(add_default_startup_writer): New function.
+	(_initialize_cli_setshow): New function.
+	* cli/cli-setshow.h (write_startup_file): Declare.
+	(write_startup_setting_ftype): New typedef.
+	(add_startup_writer): Declare.
+	(add_default_startup_writer): Declare.
+	* main.c (startup_file_read): New static global.
+	(gdb_startup_file_read_p): New function.
+	(captured_main_1): Set startup_file_read.
+	* main.h (gdb_startup_file_read_p): Declare.
+
+2020-10-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* NEWS: Mention new startup files and command line options.
 	* config.in: Regenerate.
 	* configure: Regenerate.

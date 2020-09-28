@@ -1717,6 +1717,7 @@ show you the alternatives available, if there is more than one possibility).
 * Completion::                  Command completion
 * Command Options::             Command options
 * Command aliases default args::        Automatically prepend default arguments to user-defined aliases
+* Automatically saving startup settings::      Automatically saving startup settings
 * Help::                        How to ask @value{GDBN} for help
 @end menu
 
@@ -2219,6 +2220,34 @@ using the temporary values of the settings and the arguments explicitly given
 by the user.
 For more information about the @code{with} command usage,
 see @ref{Command Settings}.
+
+@node Automatically saving startup settings
+@section Automatically saving startup settings
+@table @code
+@kindex show startup-save-filename
+@kindex set startup-save-filename filename
+@cindex @value{GDBN} startup settings
+@item show startup-save-filename
+@itemx set startup-save-filename @var{filename}
+Some settings only effect the early startup behaviour of @value{GDBN}.
+In order to make use of these settings they will need to be added to a
+startup file, for example @file{~/.config/gdb/gdbstartup}
+(@pxref{Startup}).
+
+When @samp{startup-save-filename} is set to a valid path @value{GDBN}
+will automatically save all startup settings to this file whenever they
+are modified in a @value{GDBN} session.  The save file can then be
+loaded using @samp{source} (@pxref{Command Files}).
+
+For example, these commands could be placed into
+@file{~/.config/gdb/gdbstartup} in order to have GDB automatically
+save and restore startup settings:
+
+@smallexample
+set startup-save-filename ~/.config/gdb/autosave
+source ~/.config/gdb/autosave
+@end smallexample
+@end table
 
 @node Help
 @section Getting Help

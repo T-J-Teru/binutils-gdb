@@ -1,5 +1,10 @@
 2020-10-05  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.texinfo (Commands): Add link to new section.
+	(Automatically saving startup options): New section.
+
+2020-10-05  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.texinfo (File Options): Mention new command line options.
 	(Startup): Discuss when startup files are processed.
 	(Initialization Files): Add description of startup files.

@@ -52,4 +52,9 @@ extern const char *get_gdb_program_name (void);
 
 extern void set_gdb_data_directory (const char *new_data_dir);
 
+/* Return true once GDB has finished reading in the startup files, and
+   finished processing any startup command line options.  */
+
+extern bool gdb_startup_file_read_p ();
+
 #endif
