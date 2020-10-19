@@ -1,3 +1,8 @@
+2020-11-19  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* valprint.c (print_char_chars): Delete definition.
+	* valprint.h (print_char_chars): Delete declaration.
+
 2020-11-19  Simon Marchi  <simon.marchi@polymtl.ca>
 
 	* f-lang.c (fortran_value_subarray): Use plongest/pulongest.
