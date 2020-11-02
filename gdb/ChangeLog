@@ -1,3 +1,14 @@
+2020-11-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* target-descriptions.c (target_find_description): Add an assert,
+	and remove a different assert.
+	(target_clear_description): Remove check of target_desc_fetched.
+	(tdesc_use_registers): Add an assert.
+	(maint_print_tdesc_lookup_tdesc): New function.
+	(maint_print_c_tdesc_cmd): Update to use
+	maint_print_tdesc_lookup_tdesc.
+	(maint_print_xml_tdesc_cmd): Likewise.
+
 2020-11-12  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* features/Makefile (XMLTOC): Add rx.xml.

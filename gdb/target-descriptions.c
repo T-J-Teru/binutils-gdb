@@ -535,12 +535,31 @@ target_find_description (void)
      during its to_open or to_create_inferior, if it needs extra
      information about the target to initialize.  */
   if (target_desc_fetched)
-    return;
+    {
+      /* We have previously tried fetching a description from the remote
+	 target.  If we actually got a description from the remote target
+	 then we should be using that description now.  This is true even
+	 if the description came from a user supplied file.  */
+      if (current_target_desc != nullptr)
+	gdb_assert (gdbarch_target_desc (target_gdbarch ()) ==
+		    current_target_desc);
+      return;
+    }
 
-  /* The current architecture should not have any target description
-     specified.  It should have been cleared, e.g. when we
-     disconnected from the previous target.  */
-  gdb_assert (gdbarch_target_desc (target_gdbarch ()) == NULL);
+  /* Once upon a time, at this point we used to assert that the current
+     gdbarch no longer had a target description associated with it.
+     However, this is no longer true.  Some targets make use of a default
+     target description that is looked up (or created) in the
+     architecture's *_gdbarch_init method.
+
+     Further some of these targets now store a reference to this default
+     target description in the gdbarch data structure (which allows users
+     to visualise the default if needed).
+
+     What this means is that for some architectures the gdbarch will never
+     have a nullptr for its associated target description, even if the
+     target has never tried to fetch a target description from the
+     target.  */
 
   /* First try to fetch an XML description from the user-specified
      file.  */
@@ -588,19 +607,27 @@ target_find_description (void)
 }
 
 /* Discard any description fetched from the current target, and switch
-   the current architecture to one with no target description.  */
+   the current architecture to one with either no target description, or
+   with the a default description supplied by the *_gdbarch_init function
+   for that architecture.  */
 
 void
 target_clear_description (void)
 {
   struct gdbarch_info info;
 
-  if (!target_desc_fetched)
-    return;
+  /* Once upon a time we used to only carry out the actions below if the
+     had previously fetched a target description from the target.  This was
+     based on an assumption that a gdbarch could only have a target
+     description if it was fetched from the target.
+
+     This is no longer true.  Some targets select a default target
+     description in their *_gdbarch_init method and attach this to the
+     gdbarch.  For these architectures a gdbarch will always have a target
+     description, even when none is fetched from the target.  */
 
   target_desc_fetched = 0;
   current_target_desc = NULL;
-
   gdbarch_info_init (&info);
   if (!gdbarch_update_p (info))
     internal_error (__FILE__, __LINE__,
@@ -1110,6 +1137,17 @@ tdesc_use_registers (struct gdbarch *gdbarch,
      registers, so the caller should know that registers are
      included.  */
   gdb_assert (tdesc_has_registers (target_desc));
+
+  /* The target description on GDBARCH should match the target description
+     we're being asked to use now.  However, for some targets GDBARCH might
+     not have a target description registered.  This is acceptable, and
+     indicates that the target description we're being asked to use now was
+     a default selected in the architectures *_gdbarch_init method.
+
+     The important thing here is that GDBARCH should not have a different
+     target description registered.  */
+  gdb_assert (gdbarch_target_desc (gdbarch) == target_desc
+	      || gdbarch_target_desc (gdbarch) == nullptr);
 
   data = (struct tdesc_arch_data *) gdbarch_data (gdbarch, tdesc_data);
   data->arch_regs = std::move (early_data->arch_regs);
@@ -1757,40 +1795,85 @@ make_maint_print_c_tdesc_options_def_group (maint_print_c_tdesc_options *opts)
   return {{maint_print_c_tdesc_opt_defs}, opts};
 }
 
-/* Implement 'maintenance print c-tdesc' command.  */
+/* Helper for maint_print_c_tdesc_cmd and maint_print_xml_tdesc_cmd.  If
+   ARGS is nullptr then the current target description, either from the
+   current inferior, or the current architecture (in that order) is placed
+   into *TDESC, and *FILENAME is set to a string that describes where the
+   description came from.
+
+   IF ARGS is not nullptr then it is assumed to be a filename, *FILENAME is
+   updated to point at ARGS, and *TDESC points at a target description read
+   from the file ARGS.
+
+   Errors encountered while reading the target description will be
+   thrown.
+
+   If no target description is found then an error is thrown.
+
+   After calling this function neither *TDESC not *FILENAME will be
+   nullptr.
+
+   None of the strings that *FILENAME might end up pointing at need to be
+   freed after calling this function.  */
+
+static void
+maint_print_tdesc_lookup_tdesc (const char *args,
+				const struct target_desc **tdesc,
+				const char **filename)
+{
+  *tdesc = nullptr;
+  *filename = nullptr;
+
+  if (args == nullptr)
+    {
+      /* Check the global target-supplied description before the current
+	 architecture's.  This lets a GDB for one architecture generate
+	 another architecture's description, even though the gdbarch
+	 initialization code will reject the new description.  */
+      if (current_target_desc != nullptr)
+	{
+	  *tdesc = current_target_desc;
+	  if (target_description_filename == nullptr)
+	    *filename = "fetched from target";
+	  else
+	    *filename = target_description_filename;
+	}
+      /* If there's no target description cached on the current inferior,
+	 but there is a target description for the current gdbarch, then
+	 this description must be a default from within the architectures
+	 *_gdbarch_init method.  */
+      else if (gdbarch_target_desc (target_gdbarch ()) != nullptr)
+	{
+	  *tdesc = gdbarch_target_desc (target_gdbarch ());
+	  *filename = "default within GDB";
+	}
+    }
+  else
+    {
+      /* Use the target description from the XML file.  */
+      *filename = args;
+      *tdesc = file_read_description_xml (args);
+    }
+
+  if (*tdesc == nullptr)
+    error (_("There is no target description to print."));
+  gdb_assert (*filename != nullptr);
+}
+
+/* Implement 'maint print c-tdesc' command.  */
 
 static void
 maint_print_c_tdesc_cmd (const char *args, int from_tty)
 {
-  const struct target_desc *tdesc;
-  const char *filename;
+  const struct target_desc *tdesc = nullptr;
+  const char *filename = nullptr;
 
   maint_print_c_tdesc_options opts;
   auto grp = make_maint_print_c_tdesc_options_def_group (&opts);
   gdb::option::process_options
     (&args, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_ERROR, grp);
 
-  if (args == NULL)
-    {
-      /* Use the global target-supplied description, not the current
-	 architecture's.  This lets a GDB for one architecture generate C
-	 for another architecture's description, even though the gdbarch
-	 initialization code will reject the new description.  */
-      tdesc = current_target_desc;
-      filename = target_description_filename;
-    }
-  else
-    {
-      /* Use the target description from the XML file.  */
-      filename = args;
-      tdesc = file_read_description_xml (filename);
-    }
-
-  if (tdesc == NULL)
-    error (_("There is no target description to print."));
-
-  if (filename == NULL)
-    filename = "fetched from target";
+  maint_print_tdesc_lookup_tdesc (args, &tdesc, &filename);
 
   std::string filename_after_features (filename);
   auto loc = filename_after_features.rfind ("/features/");
@@ -1840,24 +1923,10 @@ maint_print_c_tdesc_cmd_completer (struct cmd_list_element *ignore,
 static void
 maint_print_xml_tdesc_cmd (const char *args, int from_tty)
 {
-  const struct target_desc *tdesc;
+  const struct target_desc *tdesc = nullptr;
+  const char *filename = nullptr;
 
-  if (args == NULL)
-    {
-      /* Use the global target-supplied description, not the current
-	 architecture's.  This lets a GDB for one architecture generate XML
-	 for another architecture's description, even though the gdbarch
-	 initialization code will reject the new description.  */
-      tdesc = current_target_desc;
-    }
-  else
-    {
-      /* Use the target description from the XML file.  */
-      tdesc = file_read_description_xml (args);
-    }
-
-  if (tdesc == NULL)
-    error (_("There is no target description to print."));
+  maint_print_tdesc_lookup_tdesc (args, &tdesc, &filename);
 
   std::string buf;
   print_xml_feature v (&buf);
