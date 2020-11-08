@@ -6226,6 +6226,12 @@ remote_target::remote_resume_with_vcont (ptid_t ptid, int step,
   char *p;
   char *endp;
 
+  /* Track which thread was resumed.  */
+  if (ptid == minus_one_ptid)
+    set_continue_thread (any_thread_ptid);
+  else
+    set_continue_thread (ptid);
+
   /* No reverse execution actions defined for vCont.  */
   if (::execution_direction == EXEC_REVERSE)
     return 0;
@@ -7692,6 +7698,16 @@ remote_target::process_stop_reply (struct stop_reply *stop_reply,
       bool is_stop_for_all_threads
 	= (status->kind == TARGET_WAITKIND_EXITED
 	   || status->kind == TARGET_WAITKIND_SIGNALLED);
+
+      /* If we only resumed a single thread, then that thread must (surely)
+	 be the thread we report the stop against.  */
+      if (stop_reply->rs->continue_thread != minus_one_ptid)
+	{
+	  if (is_stop_for_all_threads)
+	    ptid = ptid_t (stop_reply->rs->continue_thread.pid ());
+	  else
+	    ptid = stop_reply->rs->continue_thread;
+	}
 
       for (thread_info *thr : all_non_exited_threads (this))
 	{
