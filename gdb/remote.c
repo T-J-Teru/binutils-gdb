@@ -747,6 +747,9 @@ public: /* Remote specific methods.  */
   ptid_t process_stop_reply (struct stop_reply *stop_reply,
 			     target_waitstatus *status);
 
+  ptid_t select_thread_for_ambiguous_stop_reply
+    (const struct target_waitstatus *status);
+
   void remote_notice_new_inferior (ptid_t currthread, int executing);
 
   void process_initial_stop_replies (int from_tty);
@@ -7671,6 +7674,182 @@ remote_notif_get_pending_events (remote_target *remote, notif_client *nc)
   remote->remote_notif_get_pending_events (nc);
 }
 
+/* Called from process_stop_reply when the stop packet we are responding
+   too didn't include a process-id or thread-id.  STATUS is the stop event
+   we are responding too.
+
+   It is the task of this function to select a suitable thread (or process)
+   and return its ptid, this is the thread (or process) we will assume the
+   stop event came from.
+
+   In some cases there isn't really any choice about which thread (or
+   process) is selected, a basic remote with a single process containing a
+   single thread might choose not to send any process-id or thread-id in
+   its stop packets, this function will select and return the one and only
+   thread.
+
+   However, if a target supports multiple threads (or processes) and still
+   doesn't include a thread-id (or process-id) in its stop packet then
+   first, this is a badly behaving target, and second, we're going to have
+   to select a thread (or process) at random and use that.  This function
+   will print a warning to the user if it detects that there is the
+   possibility that GDB is guessing which thread (or process) to
+   report.  */
+
+ptid_t
+remote_target::select_thread_for_ambiguous_stop_reply
+	(const struct target_waitstatus *status)
+{
+  /* Some stop events apply to all threads in an inferior, while others
+     only apply to a single thread.  */
+  bool is_stop_for_all_threads
+    = (status->kind == TARGET_WAITKIND_EXITED
+       || status->kind == TARGET_WAITKIND_SIGNALLED);
+
+  struct remote_state *rs = get_remote_state ();
+
+  /* Track the possible threads in this structure.  */
+  struct thread_choices
+  {
+    /* Constructor.  */
+    thread_choices (struct remote_state *rs, bool is_stop_for_all_threads)
+      : m_rs (rs),
+	m_is_stop_for_all_threads (is_stop_for_all_threads)
+    { /* Nothing.  */ }
+
+    /* Disable/delete these.  */
+    thread_choices () = delete;
+    DISABLE_COPY_AND_ASSIGN (thread_choices);
+
+    /* Consider thread THR setting the internal thread tracking variables
+       as appropriate.  */
+    void consider_thread (thread_info *thr)
+    {
+      /* Record the first non-exited thread as a fall-back response.  This
+	 is only every used during the initial connection to the target.  */
+      if (m_non_exited_thread == nullptr)
+	m_non_exited_thread = thr;
+      else if (!m_is_stop_for_all_threads
+	       || m_non_exited_thread->ptid.pid () != thr->ptid.pid ())
+	m_non_exited_thread_multiple = true;
+
+      /* If this is an executing thread then it might be a more appropriate
+	 match than just picking the first non-exited thread.  */
+      if (thr->executing)
+	{
+	  if (m_executing_thread == nullptr)
+	    m_executing_thread = thr;
+	  else if (!m_is_stop_for_all_threads
+		   || m_executing_thread->ptid.pid () != thr->ptid.pid ())
+	    m_executing_thread_multiple = true;
+	}
+    }
+
+    /* Return a pointer to the best possible thread.  */
+    thread_info *best_thread () const
+    { return best_thread_inner ().first; }
+
+    /* Return true if there were multiple possible thread/processes and we
+       had to just pick one.  We only worry about seeing multiple
+       candidates in the category from which the BEST_THREAD was selected.  */
+    bool multiple_possible_threads_p () const
+    { return best_thread_inner ().second; }
+
+  private:
+
+    /* Return a pair.  The first item is the best thread that was found,
+       the second is a bool which is true if there were multiple suitable
+       threads seen.  If multiple suitable threads were seen then the best
+       thread that was returned was actually just the first, best, thread.
+       If the bool is false then only one suitable thread was seen.  The
+       best thread will never be nullptr.  */
+    std::pair<thread_info *,bool> best_thread_inner () const
+    {
+      /* The best thread is the first non-exited thread that was marked as
+	 executing.  */
+      std::pair <thread_info *, bool> result (m_executing_thread,
+					      m_executing_thread_multiple);
+
+      /* If there was no thread marked as executing then select a
+	 non-exited thread.  This should only happen during the initial
+	 connection to the target when all threads are marked
+	 non-executing but we still see the very first stop packet.  */
+      if (result.first == nullptr)
+	result = {m_non_exited_thread, m_non_exited_thread_multiple};
+
+      return result;
+    }
+
+    /* The remote state we are examining threads for.  */
+    struct remote_state *m_rs = nullptr;
+
+    /* Is this stop event one for all threads in a process (e.g.  process
+       exited), or an event for a single thread (e.g. thread stopped).  */
+    bool m_is_stop_for_all_threads;
+
+    /* The first thread whose executing flag is true.  */
+    thread_info *m_executing_thread = nullptr;
+
+    /* Set to true if we see multiple possible threads that could be
+       stored into M_EXECUTING_THREAD.  The variable M_EXECUTING_THREAD is
+       set to the first suitable thread seen, then on the second suitable
+       thread this flag is set to true.  */
+    unsigned int m_executing_thread_multiple = false;
+
+    /* The first non-exited thread.  */
+    thread_info *m_non_exited_thread = nullptr;
+
+    /* Set to true if we see multiple possible threads that could be
+       stored into M_NON_EXITED_THREAD.  The variable M_NON_EXITED_THREAD
+       is set to the first suitable thread seen, then on the second suitable
+       thread this flag is set to true.  */
+    unsigned int m_non_exited_thread_multiple = false;
+  } choices (rs, is_stop_for_all_threads);
+
+  /* Consider all non-exited threads to see which is the best match.  */
+  for (thread_info *thr : all_non_exited_threads (this))
+    choices.consider_thread (thr);
+
+  /* Select the best possible thread.  */
+  thread_info *thr = choices.best_thread ();
+  gdb_assert (thr != nullptr);
+
+  /* Warn if the remote target is sending ambiguous stop replies.  */
+  if (choices.multiple_possible_threads_p ())
+    {
+      static bool warned = false;
+
+      if (!warned)
+	{
+	  /* If you are seeing this warning then the remote target has
+	     stopped without specifying a thread-id, but the target
+	     does have multiple threads (or inferiors), and so GDB is
+	     having to guess which thread stopped.
+
+	     Examples of what might cause this are the target sending
+	     and 'S' stop packet, or a 'T' stop packet and not
+	     including a thread-id.
+
+	     Additionally, the target might send a 'W' or 'X packet
+	     without including a process-id, when the target has
+	     multiple running inferiors.  */
+	  if (is_stop_for_all_threads)
+	    warning (_("multi-inferior target stopped without "
+		       "sending a process-id, using first "
+		       "non-exited inferior"));
+	  else
+	    warning (_("multi-threaded target stopped without "
+		       "sending a thread-id, using first "
+		       "non-exited thread"));
+	  warned = true;
+	}
+    }
+
+  /* If this is a stop for all threads then don't use a particular threads
+     ptid, instead create a new ptid where only the pid field is set.  */
+  return ((is_stop_for_all_threads) ? ptid_t (thr->ptid.pid ()) : thr->ptid);
+}
+
 /* Called when it is decided that STOP_REPLY holds the info of the
    event that is to be returned to the core.  This function always
    destroys STOP_REPLY.  */
@@ -7684,61 +7863,11 @@ remote_target::process_stop_reply (struct stop_reply *stop_reply,
   *status = stop_reply->ws;
   ptid = stop_reply->ptid;
 
-  /* If no thread/process was reported by the stub then use the first
-     non-exited thread in the current target.  */
+  /* If no thread/process was reported by the stub then select a suitable
+     thread/process.  */
   if (ptid == null_ptid)
-    {
-      /* Some stop events apply to all threads in an inferior, while others
-	 only apply to a single thread.  */
-      bool is_stop_for_all_threads
-	= (status->kind == TARGET_WAITKIND_EXITED
-	   || status->kind == TARGET_WAITKIND_SIGNALLED);
-
-      for (thread_info *thr : all_non_exited_threads (this))
-	{
-	  if (ptid != null_ptid
-	      && (!is_stop_for_all_threads
-		  || ptid.pid () != thr->ptid.pid ()))
-	    {
-	      static bool warned = false;
-
-	      if (!warned)
-		{
-		  /* If you are seeing this warning then the remote target
-		     has stopped without specifying a thread-id, but the
-		     target does have multiple threads (or inferiors), and
-		     so GDB is having to guess which thread stopped.
-
-		     Examples of what might cause this are the target
-		     sending and 'S' stop packet, or a 'T' stop packet and
-		     not including a thread-id.
-
-		     Additionally, the target might send a 'W' or 'X
-		     packet without including a process-id, when the target
-		     has multiple running inferiors.  */
-		  if (is_stop_for_all_threads)
-		    warning (_("multi-inferior target stopped without "
-			       "sending a process-id, using first "
-			       "non-exited inferior"));
-		  else
-		    warning (_("multi-threaded target stopped without "
-			       "sending a thread-id, using first "
-			       "non-exited thread"));
-		  warned = true;
-		}
-	      break;
-	    }
-
-	  /* If this is a stop for all threads then don't use a particular
-	     threads ptid, instead create a new ptid where only the pid
-	     field is set.  */
-	  if (is_stop_for_all_threads)
-	    ptid = ptid_t (thr->ptid.pid ());
-	  else
-	    ptid = thr->ptid;
-	}
-      gdb_assert (ptid != null_ptid);
-    }
+    ptid = select_thread_for_ambiguous_stop_reply (status);
+  gdb_assert (ptid != null_ptid);
 
   if (status->kind != TARGET_WAITKIND_EXITED
       && status->kind != TARGET_WAITKIND_SIGNALLED

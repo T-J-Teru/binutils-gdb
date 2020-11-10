@@ -1,3 +1,9 @@
+2020-12-23  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/26819
+	* gdb.server/stop-reply-no-thread-multi.c: New file.
+	* gdb.server/stop-reply-no-thread-multi.exp: New file.
+
 2020-12-21  Peter Waller  <p@pwaller.net>
 
 	* gdb.base/style-interp-exec-mi.exp: New.
