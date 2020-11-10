@@ -1,5 +1,15 @@
 2020-11-11  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	PR gdb/26819
+	* remote.c (remote_target::guess_thread_for_ambiguous_stop_reply):
+	New member function.
+	(record_continue_thread): New function.
+	(remote_target::remote_resume_with_vcont): Call record_continue_thread.
+	(remote_target::process_stop_reply): Call
+	guess_thread_for_ambiguous_stop_reply.
+
+2020-11-11  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* riscv-tdep.c (riscv_dwarf_reg_to_regnum): Decode DWARF CSR
 	numbers.
 	* riscv-tdep.h (RISCV_DWARF_FIRST_CSR, RISCV_DWARF_LAST_CSR): New
