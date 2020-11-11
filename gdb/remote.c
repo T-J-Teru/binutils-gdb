@@ -9653,7 +9653,12 @@ remote_target::getpkt_or_notif_sane_1 (gdb::char_vector *buf,
      previously cached response.  */
   rs->cached_wait_status = 0;
 
-  strcpy (buf->data (), "timeout");
+  /* Set the first character to NULL.  If we get a timeout then when the
+     packet finds its way to packet_ok the packet will be classified as
+     PACKET_UNKNOWN.  Once upon a time we wrote the string "timeout" into
+     the buffer here, this will be classified as PACKET_OK, which means GDB
+     will interpret a timeout while fetching a packet as success.  */
+  *(buf->data ()) ='\0';
 
   if (forever)
     timeout = watchdog > 0 ? watchdog : -1;
