@@ -88,6 +88,9 @@ proc test {} {
 		-re "debugger service failed.*$gdb_prompt $" {
 		    fail $test
 		}
+		-re "Attaching to process $decimal failed.*$gdb_prompt $" {
+		    fail $test
+		}
 		-re "$gdb_prompt $" {
 		    if {$eperm} {
 			xfail "$test (EPERM)"
