@@ -1,5 +1,10 @@
 2020-11-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* riscv-tdep.c (riscv_gdbarch_init): Ensure the default target
+	description is placed into the gdbarch structure.
+
+2020-11-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* target-descriptions.c (target_find_description): Add an assert,
 	and remove a different assert.
 	(target_clear_description): Remove check of target_desc_fetched.

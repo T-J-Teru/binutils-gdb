@@ -3302,7 +3302,7 @@ riscv_gdbarch_init (struct gdbarch_info info,
 
   /* Ensure we always have a target description.  */
   if (!tdesc_has_registers (tdesc))
-    tdesc = riscv_find_default_target_description (info);
+    info.target_desc = tdesc = riscv_find_default_target_description (info);
   gdb_assert (tdesc);
 
   if (riscv_debug_gdbarch)
