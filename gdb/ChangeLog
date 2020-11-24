@@ -1,5 +1,11 @@
 2020-11-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* riscv-tdep.c (riscv_is_unknown_csr): New function.
+	(riscv_register_reggroup_p): Update group handling for unknown
+	CSRs.
+
+2020-11-25  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* arch/riscv.c: Include 'rv32e-xregs.c'.
 	(riscv_create_target_description): Update to handle rv32e.
 	* arch/riscv.h (struct riscv_gdbarch_features) <embedded>: New
