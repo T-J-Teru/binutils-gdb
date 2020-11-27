@@ -1,3 +1,12 @@
+2020-11-30  Craig Blackmore  <craig.blackmore@embecosm.com>
+	    Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* corelow.c: Add 'xml-tdesc.h' include.
+	(core_target::read_description): Load the target description from
+	the core file when possible.
+	* gcore.c: Add 'gdbsupport/tdesc.h' include.
+	(write_gcore_file_1): Write out the target description.
+
 2018-12-01  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* remote-sim.c (gdbsim_xfer_features): New function.

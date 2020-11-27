@@ -38,6 +38,7 @@
 #include "gdbsupport/gdb_unlinker.h"
 #include "gdbsupport/byte-vector.h"
 #include "gdbsupport/scope-exit.h"
+#include "gdbsupport/tdesc.h"
 
 /* The largest amount of memory to read from the target at once.  We
    must throttle it to limit the amount of memory used by GDB during
@@ -82,6 +83,25 @@ write_gcore_file_1 (bfd *obfd)
   else
     note_data = gdbarch_make_corefile_notes (target_gdbarch (), obfd,
 					     &note_size);
+
+  /* Append the target description to the core file.  */
+  const struct target_desc *tdesc = gdbarch_target_desc (target_gdbarch ());
+  const char *tdesc_xml = tdesc_get_features_xml (tdesc);
+  if (tdesc_xml != nullptr && *tdesc_xml != '\0')
+    {
+      /* Skip the leading '@'.  */
+      if (*tdesc_xml == '@')
+	++tdesc_xml;
+
+      /* Include the null terminator in the length.  */
+      size_t tdesc_len = strlen (tdesc_xml) + 1;
+
+      /* Now add the target description into the core file.  */
+      note_data.reset (elfcore_write_register_note (obfd,
+						    note_data.release (),
+						    &note_size, ".gdb-tdesc",
+						    tdesc_xml, tdesc_len));
+    }
 
   if (note_data == NULL || note_size == 0)
     error (_("Target does not support core file generation."));
