@@ -1,6 +1,15 @@
 2020-11-30  Craig Blackmore  <craig.blackmore@embecosm.com>
 	    Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* elf-bfd.h (elfcore_write_riscv_csr): Declare.
+	* elf.c (elfcore_grok_riscv_csr): New function.
+	(elfcore_grok_note): Handle NT_RISCV_CSR.
+	(elfcore_write_riscv_csr): New function.
+	(elfcore_write_register_note): Handle '.reg-riscv-csr'.
+
+2020-11-30  Craig Blackmore  <craig.blackmore@embecosm.com>
+	    Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* elfnn-riscv.c (riscv_write_core_note): New function.
 	(elf_backend_write_core_note): Define.
 

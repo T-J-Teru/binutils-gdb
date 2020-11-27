@@ -9892,6 +9892,12 @@ elfcore_grok_arc_v2 (bfd *abfd, Elf_Internal_Note *note)
 }
 
 static bfd_boolean
+elfcore_grok_riscv_csr (bfd *abfd, Elf_Internal_Note *note)
+{
+  return elfcore_make_note_pseudosection (abfd, ".reg-riscv-csr", note);
+}
+
+static bfd_boolean
 elfcore_grok_gdb_tdesc (bfd *abfd, Elf_Internal_Note *note)
 {
   return elfcore_make_note_pseudosection (abfd, ".gdb-tdesc", note);
@@ -10556,6 +10562,9 @@ elfcore_grok_note (bfd *abfd, Elf_Internal_Note *note)
 
     case NT_GDB_TDESC:
       return elfcore_grok_gdb_tdesc (abfd, note);
+
+    case NT_RISCV_CSR:
+      return elfcore_grok_riscv_csr (abfd, note);
 
     case NT_PRPSINFO:
     case NT_PSINFO:
@@ -11939,11 +11948,23 @@ elfcore_write_arc_v2 (bfd *abfd,
 }
 
 char *
+elfcore_write_riscv_csr (bfd *abfd,
+                         char *buf,
+                         int *bufsiz,
+                         const void *csrs,
+                         int size)
+{
+  const char *note_name = "CORE";
+  return elfcore_write_note (abfd, buf, bufsiz,
+			     note_name, NT_RISCV_CSR, csrs, size);
+}
+
+char *
 elfcore_write_gdb_tdesc (bfd *abfd,
-			 char *buf,
-			 int *bufsiz,
-			 const void *tdesc,
-			 int size)
+                     char *buf,
+                     int *bufsiz,
+                     const void *tdesc,
+                     int size)
 {
   const char *note_name = "CORE";
   return elfcore_write_note (abfd, buf, bufsiz,
@@ -12036,6 +12057,8 @@ elfcore_write_register_note (bfd *abfd,
     return elfcore_write_arc_v2 (abfd, buf, bufsiz, data, size);
   if (strcmp (section, ".gdb-tdesc") == 0)
     return elfcore_write_gdb_tdesc (abfd, buf, bufsiz, data, size);
+  if (strcmp (section, ".reg-riscv-csr") == 0)
+    return elfcore_write_riscv_csr (abfd, buf, bufsiz, data, size);
   return NULL;
 }
 
