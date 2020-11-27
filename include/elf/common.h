@@ -665,6 +665,8 @@
 #define NT_SIGINFO	0x53494749	/* Fields of siginfo_t.  */
 #define NT_FILE		0x46494c45	/* Description of mapped files.  */
 
+#define NT_GDB_TDESC	0x54444553	/* Contains copy of GDB's target description XML.  */
+
 /* Note segments for core files on dir-style procfs systems.  */
 
 #define NT_PSTATUS	10		/* Has a struct pstatus */

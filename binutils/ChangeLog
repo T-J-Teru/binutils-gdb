@@ -1,3 +1,8 @@
+2020-11-30  Craig Blackmore  <craig.blackmore@embecosm.com>
+	    Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* readelf.c (get_note_type): Handle NT_GDB_TDESC.
+
 2020-10-22  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* testsuite/binutils-all/objcopy.exp (objcopy_test): Report

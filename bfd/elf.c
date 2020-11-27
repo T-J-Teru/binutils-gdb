@@ -9891,6 +9891,12 @@ elfcore_grok_arc_v2 (bfd *abfd, Elf_Internal_Note *note)
   return elfcore_make_note_pseudosection (abfd, ".reg-arc-v2", note);
 }
 
+static bfd_boolean
+elfcore_grok_gdb_tdesc (bfd *abfd, Elf_Internal_Note *note)
+{
+  return elfcore_make_note_pseudosection (abfd, ".gdb-tdesc", note);
+}
+
 #if defined (HAVE_PRPSINFO_T)
 typedef prpsinfo_t   elfcore_psinfo_t;
 #if defined (HAVE_PRPSINFO32_T)		/* Sparc64 cross Sparc32 */
@@ -10547,6 +10553,9 @@ elfcore_grok_note (bfd *abfd, Elf_Internal_Note *note)
 	return elfcore_grok_aarch_pauth (abfd, note);
       else
 	return TRUE;
+
+    case NT_GDB_TDESC:
+      return elfcore_grok_gdb_tdesc (abfd, note);
 
     case NT_PRPSINFO:
     case NT_PSINFO:
@@ -11930,6 +11939,18 @@ elfcore_write_arc_v2 (bfd *abfd,
 }
 
 char *
+elfcore_write_gdb_tdesc (bfd *abfd,
+			 char *buf,
+			 int *bufsiz,
+			 const void *tdesc,
+			 int size)
+{
+  const char *note_name = "CORE";
+  return elfcore_write_note (abfd, buf, bufsiz,
+                             note_name, NT_GDB_TDESC, tdesc, size);
+}
+
+char *
 elfcore_write_register_note (bfd *abfd,
 			     char *buf,
 			     int *bufsiz,
@@ -12013,6 +12034,8 @@ elfcore_write_register_note (bfd *abfd,
     return elfcore_write_aarch_pauth (abfd, buf, bufsiz, data, size);
   if (strcmp (section, ".reg-arc-v2") == 0)
     return elfcore_write_arc_v2 (abfd, buf, bufsiz, data, size);
+  if (strcmp (section, ".gdb-tdesc") == 0)
+    return elfcore_write_gdb_tdesc (abfd, buf, bufsiz, data, size);
   return NULL;
 }
 
