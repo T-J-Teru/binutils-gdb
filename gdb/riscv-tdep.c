@@ -74,6 +74,12 @@ static inline bool is_ ## INSN_NAME ## _insn (long insn) \
 #include "opcode/riscv-opc.h"
 #undef DECLARE_INSN
 
+/* The names of the RISC-V target description features.  */
+const char *riscv_feature_name_csr = "org.gnu.gdb.riscv.csr";
+static const char *riscv_feature_name_cpu = "org.gnu.gdb.riscv.cpu";
+static const char *riscv_feature_name_fpu = "org.gnu.gdb.riscv.fpu";
+static const char *riscv_feature_name_virtual = "org.gnu.gdb.riscv.virtual";
+
 /* Cached information about a frame.  */
 
 struct riscv_unwind_cache
@@ -252,7 +258,7 @@ riscv_register_feature::register_info::check
 
 static const struct riscv_register_feature riscv_xreg_feature =
 {
- "org.gnu.gdb.riscv.cpu", true,
+ riscv_feature_name_cpu, true,
  {
    { RISCV_ZERO_REGNUM + 0, { "zero", "x0" }, RISCV_REG_REQUIRED },
    { RISCV_ZERO_REGNUM + 1, { "ra", "x1" }, RISCV_REG_REQUIRED },
@@ -294,7 +300,7 @@ static const struct riscv_register_feature riscv_xreg_feature =
 
 static const struct riscv_register_feature riscv_freg_feature =
 {
- "org.gnu.gdb.riscv.fpu", true,
+  riscv_feature_name_fpu, true,
  {
    { RISCV_FIRST_FP_REGNUM + 0, { "ft0", "f0" }, RISCV_REG_REQUIRED },
    { RISCV_FIRST_FP_REGNUM + 1, { "ft1", "f1" }, RISCV_REG_REQUIRED },
@@ -344,7 +350,7 @@ static const struct riscv_register_feature riscv_freg_feature =
 
 static const struct riscv_register_feature riscv_virtual_feature =
 {
- "org.gnu.gdb.riscv.virtual", false,
+   riscv_feature_name_virtual, false,
  {
    { RISCV_PRIV_REGNUM, { "priv" }, RISCV_REG_OPTIONAL }
  }
@@ -356,7 +362,7 @@ static const struct riscv_register_feature riscv_virtual_feature =
 
 static struct riscv_register_feature riscv_csr_feature =
 {
- "org.gnu.gdb.riscv.csr", false,
+  riscv_feature_name_csr, false,
  {
 #define DECLARE_CSR(NAME,VALUE,CLASS,DEFINE_VER,ABORT_VER) \
   { RISCV_ ## VALUE ## _REGNUM, { # NAME }, RISCV_REG_OPTIONAL },

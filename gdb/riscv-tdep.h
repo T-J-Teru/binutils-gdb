@@ -130,4 +130,7 @@ extern int riscv_abi_flen (struct gdbarch *gdbarch);
 extern std::vector<CORE_ADDR> riscv_software_single_step
   (struct regcache *regcache);
 
+/* The names of the RISC-V target description features.  */
+extern const char *riscv_feature_name_csr;
+
 #endif /* RISCV_TDEP_H */
