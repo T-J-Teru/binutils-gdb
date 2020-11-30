@@ -1,6 +1,14 @@
 2020-11-30  Craig Blackmore  <craig.blackmore@embecosm.com>
 	    Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* Makefile.in (ALL_TARGET_OBS): Add riscv-none-tdep.o.
+	(ALLDEPFILES): Add riscv-none-tdep.c.
+	* configure.tgt (riscv*-*-*): Include riscv-none-tdep.c.
+	* riscv-none-tdep.c: New file.
+
+2020-11-30  Craig Blackmore  <craig.blackmore@embecosm.com>
+	    Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* corelow.c: Add 'xml-tdesc.h' include.
 	(core_target::read_description): Load the target description from
 	the core file when possible.
