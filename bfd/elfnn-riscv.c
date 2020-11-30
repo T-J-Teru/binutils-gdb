@@ -4866,6 +4866,77 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 # define PRPSINFO_OFFSET_PR_PSARGS	56
 #endif
 
+/* Write PRSTATUS note into core file.  This will be called before the
+   generic code in elf.c.  By checking the compiler defines we only perform
+   any action here if the generic code would otherwise not be able to help
+   us.  The intention is that bare metal core dumps (where the prstatus32_t
+   might not be available) will use this code, while non bare metal tools
+   will use the generic elf code.  */
+
+static char *
+riscv_write_core_note (bfd *abfd ATTRIBUTE_UNUSED,
+                       char *buf ATTRIBUTE_UNUSED,
+                       int *bufsiz ATTRIBUTE_UNUSED,
+                       int note_type ATTRIBUTE_UNUSED, ...)
+{
+  switch (note_type)
+    {
+    default:
+      return NULL;
+
+#if !defined (HAVE_PRPSINFO_T)
+    case NT_PRPSINFO:
+      {
+	char data[PRPSINFO_SIZE] ATTRIBUTE_NONSTRING;
+	va_list ap;
+
+	va_start (ap, note_type);
+	memset (data, 0, sizeof (data));
+	strncpy (data + PRPSINFO_OFFSET_PR_FNAME, va_arg (ap, const char *), 16);
+#if GCC_VERSION == 8000 || GCC_VERSION == 8001
+	DIAGNOSTIC_PUSH;
+	/* GCC 8.0 and 8.1 warn about 80 equals destination size with
+	   -Wstringop-truncation:
+	   https://gcc.gnu.org/bugzilla/show_bug.cgi?id=85643
+	 */
+	DIAGNOSTIC_IGNORE_STRINGOP_TRUNCATION;
+#endif
+	strncpy (data + PRPSINFO_OFFSET_PR_PSARGS, va_arg (ap, const char *), 80);
+#if GCC_VERSION == 8000 || GCC_VERSION == 8001
+	DIAGNOSTIC_POP;
+#endif
+	va_end (ap);
+	return elfcore_write_note (abfd, buf, bufsiz,
+				   "CORE", note_type, data, sizeof (data));
+      }
+#endif /* !HAVE_PRPSINFO_T */
+
+#if !defined (HAVE_PRSTATUS_T)
+    case NT_PRSTATUS:
+      {
+        char data[PRSTATUS_SIZE];
+        va_list ap;
+        long pid;
+        int cursig;
+        const void *greg;
+
+        va_start (ap, note_type);
+        memset (data, 0, sizeof(data));
+        pid = va_arg (ap, long);
+        bfd_put_32 (abfd, pid, data + PRSTATUS_OFFSET_PR_PID);
+        cursig = va_arg (ap, int);
+        bfd_put_16 (abfd, cursig, data + PRSTATUS_OFFSET_PR_CURSIG);
+        greg = va_arg (ap, const void *);
+        memcpy (data + PRSTATUS_OFFSET_PR_REG, greg,
+                PRSTATUS_SIZE - PRSTATUS_OFFSET_PR_REG - ARCH_SIZE / 8);
+        va_end (ap);
+        return elfcore_write_note (abfd, buf, bufsiz,
+                                   "CORE", note_type, data, sizeof (data));
+      }
+#endif /* !HAVE_PRSTATUS_T */
+    }
+}
+
 /* Support for core dump NOTE sections.  */
 
 static bfd_boolean
@@ -4976,6 +5047,8 @@ riscv_elf_obj_attrs_arg_type (int tag)
 #define elf_backend_grok_prstatus	     riscv_elf_grok_prstatus
 #define elf_backend_grok_psinfo		     riscv_elf_grok_psinfo
 #define elf_backend_object_p		     riscv_elf_object_p
+#undef  elf_backend_write_core_note
+#define elf_backend_write_core_note          riscv_write_core_note
 #define elf_info_to_howto_rel		     NULL
 #define elf_info_to_howto		     riscv_info_to_howto_rela
 #define bfd_elfNN_bfd_relax_section	     _bfd_riscv_relax_section
