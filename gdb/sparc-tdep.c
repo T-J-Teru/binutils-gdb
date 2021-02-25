@@ -1946,38 +1946,20 @@ sparc_supply_rwindow (struct regcache *regcache, CORE_ADDR sp, int regnum)
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   int offset = 0;
   gdb_byte buf[8];
-  int i;
+  int reg_size;
 
   if (sp & 1)
     {
       /* Registers are 64-bit.  */
+      reg_size = 8;
       sp += BIAS;
-
-      for (i = SPARC_L0_REGNUM; i <= SPARC_I7_REGNUM; i++)
-	{
-	  if (regnum == i || regnum == -1)
-	    {
-	      target_read_memory (sp + ((i - SPARC_L0_REGNUM) * 8), buf, 8);
-
-	      /* Handle StackGhost.  */
-	      if (i == SPARC_I7_REGNUM)
-		{
-		  ULONGEST wcookie = sparc_fetch_wcookie (gdbarch);
-		  ULONGEST i7;
-
-		  i7 = extract_unsigned_integer (buf + offset, 8, byte_order);
-		  store_unsigned_integer (buf + offset, 8, byte_order,
-					  i7 ^ wcookie);
-		}
-
-	      regcache->raw_supply (i, buf);
-	    }
-	}
     }
   else
     {
-      /* Registers are 32-bit.  Toss any sign-extension of the stack
-	 pointer.  */
+      /* Registers are 32-bit.  */
+      reg_size = 4;
+
+      /* Toss any sign-extension of the stack pointer.  */
       sp &= 0xffffffffUL;
 
       /* Clear out the top half of the temporary buffer, and put the
@@ -1987,27 +1969,38 @@ sparc_supply_rwindow (struct regcache *regcache, CORE_ADDR sp, int regnum)
 	  memset (buf, 0, 4);
 	  offset = 4;
 	}
+    }
 
-      for (i = SPARC_L0_REGNUM; i <= SPARC_I7_REGNUM; i++)
+  for (int i = SPARC_L0_REGNUM; i <= SPARC_I7_REGNUM; i++)
+    {
+      if (regnum == i || regnum == -1)
 	{
-	  if (regnum == i || regnum == -1)
+	  if (target_read_memory (sp + ((i - SPARC_L0_REGNUM) * reg_size),
+				  buf + offset, reg_size) == -1)
 	    {
-	      target_read_memory (sp + ((i - SPARC_L0_REGNUM) * 4),
-				  buf + offset, 4);
-
-	      /* Handle StackGhost.  */
-	      if (i == SPARC_I7_REGNUM)
-		{
-		  ULONGEST wcookie = sparc_fetch_wcookie (gdbarch);
-		  ULONGEST i7;
-
-		  i7 = extract_unsigned_integer (buf + offset, 4, byte_order);
-		  store_unsigned_integer (buf + offset, 4, byte_order,
-					  i7 ^ wcookie);
-		}
-
-	      regcache->raw_supply (i, buf);
+	      warning (_("failed to read %d bytes of target memory at %s for register %s"),
+		       reg_size,
+		       core_addr_to_string (sp + ((i - SPARC_L0_REGNUM)
+						  * reg_size)),
+		       gdbarch_register_name (gdbarch, i));
+	      /* Mark the register as unavailable.  */
+	      regcache->raw_supply (i, nullptr);
+	      continue;
 	    }
+
+	  /* Handle StackGhost.  */
+	  if (i == SPARC_I7_REGNUM)
+	    {
+	      ULONGEST wcookie = sparc_fetch_wcookie (gdbarch);
+	      ULONGEST i7;
+
+	      i7 = extract_unsigned_integer (buf + offset, reg_size,
+					     byte_order);
+	      store_unsigned_integer (buf + offset, reg_size, byte_order,
+				      i7 ^ wcookie);
+	    }
+
+	  regcache->raw_supply (i, buf);
 	}
     }
 }
@@ -2020,63 +2013,51 @@ sparc_collect_rwindow (const struct regcache *regcache,
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   int offset = 0;
   gdb_byte buf[8];
-  int i;
+  int reg_size;
 
   if (sp & 1)
     {
       /* Registers are 64-bit.  */
+      reg_size = 8;
       sp += BIAS;
-
-      for (i = SPARC_L0_REGNUM; i <= SPARC_I7_REGNUM; i++)
-	{
-	  if (regnum == -1 || regnum == SPARC_SP_REGNUM || regnum == i)
-	    {
-	      regcache->raw_collect (i, buf);
-
-	      /* Handle StackGhost.  */
-	      if (i == SPARC_I7_REGNUM)
-		{
-		  ULONGEST wcookie = sparc_fetch_wcookie (gdbarch);
-		  ULONGEST i7;
-
-		  i7 = extract_unsigned_integer (buf + offset, 8, byte_order);
-		  store_unsigned_integer (buf, 8, byte_order, i7 ^ wcookie);
-		}
-
-	      target_write_memory (sp + ((i - SPARC_L0_REGNUM) * 8), buf, 8);
-	    }
-	}
     }
   else
     {
-      /* Registers are 32-bit.  Toss any sign-extension of the stack
-	 pointer.  */
+      /* Registers are 32-bit.  */
+      reg_size = 4;
+
+      /* Toss any sign-extension of the stack pointer.  */
       sp &= 0xffffffffUL;
 
       /* Only use the bottom half if we're in 64-bit mode.  */
       if (gdbarch_ptr_bit (regcache->arch ()) == 64)
 	offset = 4;
+    }
 
-      for (i = SPARC_L0_REGNUM; i <= SPARC_I7_REGNUM; i++)
+  for (int i = SPARC_L0_REGNUM; i <= SPARC_I7_REGNUM; i++)
+    {
+      if (regnum == -1 || regnum == SPARC_SP_REGNUM || regnum == i)
 	{
-	  if (regnum == -1 || regnum == SPARC_SP_REGNUM || regnum == i)
+	  regcache->raw_collect (i, buf);
+
+	  /* Handle StackGhost.  */
+	  if (i == SPARC_I7_REGNUM)
 	    {
-	      regcache->raw_collect (i, buf);
+	      ULONGEST wcookie = sparc_fetch_wcookie (gdbarch);
+	      ULONGEST i7;
 
-	      /* Handle StackGhost.  */
-	      if (i == SPARC_I7_REGNUM)
-		{
-		  ULONGEST wcookie = sparc_fetch_wcookie (gdbarch);
-		  ULONGEST i7;
-
-		  i7 = extract_unsigned_integer (buf + offset, 4, byte_order);
-		  store_unsigned_integer (buf + offset, 4, byte_order,
-					  i7 ^ wcookie);
-		}
-
-	      target_write_memory (sp + ((i - SPARC_L0_REGNUM) * 4),
-				   buf + offset, 4);
+	      i7 = extract_unsigned_integer (buf + offset, reg_size,
+					     byte_order);
+	      store_unsigned_integer (buf + offset, reg_size, byte_order, i7 ^ wcookie);
 	    }
+
+	  if (target_write_memory (sp + ((i - SPARC_L0_REGNUM) * reg_size),
+				   buf + offset, reg_size) == -1)
+	    error (_("failed to write %d bytes of target memory at %s for register %s"),
+		   reg_size,
+		   core_addr_to_string (sp + ((i - SPARC_L0_REGNUM)
+					      * reg_size)),
+		   gdbarch_register_name (gdbarch, i));
 	}
     }
 }
