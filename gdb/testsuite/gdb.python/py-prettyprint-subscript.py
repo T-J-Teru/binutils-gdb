@@ -65,6 +65,16 @@ class pp_generic_map:
     def display_hint (self):
         return 'map'
 
+class pp_string_type:
+    def __init__ (self, val):
+        self.val = val
+
+    def to_string (self):
+        return self.val['m_s'].string ()
+
+    def display_hint (self):
+        return 'string'
+
 class pretty_printer_finder:
     def __init__ (self):
         self.dict = {}
@@ -80,6 +90,9 @@ class pretty_printer_finder:
             = lambda v : pp_generic_array ('float', v)
         self.dict[re.compile ('^generic_map<int, int>$')] \
             = lambda v : pp_generic_map ('int', 'int', v)
+        self.dict[re.compile ('^generic_map<string_type, int>$')] \
+            = lambda v : pp_generic_map ('string_type', 'int', v)
+        self.dict[re.compile ('^string_type$')] = pp_string_type
 
     def lookup (self, value):
         type = value.type
@@ -125,6 +138,7 @@ class generic_array_subscript (gdb.xmethod.XMethod):
             if idx < 0 or idx >= obj['m_nitems']:
                 raise gdb.GdbError ("array index %d out of bounds" % idx)
             ptr = obj['m_items'] + idx
+            # This output is checked for by the test.
             print ("xmethod found it")
             return ptr.dereference ()
 
@@ -180,6 +194,7 @@ class generic_map_subscript (gdb.xmethod.XMethod):
             while pointer != end:
                 child = pointer.dereference ()
                 if (child['key'] == idx):
+                    # This output is checked for by the test.
                     print ("xmethod found it")
                     return child['value']
                 pointer += 1
@@ -217,6 +232,43 @@ class generic_map_matcher (gdb.xmethod.XMethodMatcher):
                     workers.append (worker)
         return workers
 
+class string_type_xmethod (gdb.xmethod.XMethod):
+
+    class worker (gdb.xmethod.XMethodWorker):
+        def get_arg_types (self):
+            return [gdb.lookup_type ('char').pointer ()]
+
+        def get_result_type(self, obj):
+            return gdb.lookup_type('bool')
+
+        def __call__(self, obj, other):
+            return gdb.Value (obj['m_s'].string () == other.string ())
+
+    def get_worker (self, method_name):
+        # Method name is always 'operator=='.
+        return self.worker ()
+
+    def __init__ (self):
+        gdb.xmethod.XMethod.__init__ (self, "string_type::operator==")
+
+class string_type_matcher (gdb.xmethod.XMethodMatcher):
+    def __init__ (self):
+        gdb.xmethod.XMethodMatcher.__init__ (self, 'string_type_matcher')
+        self.methods = [string_type_xmethod ()]
+
+    def match (self, class_type, method_name):
+        workers = []
+        for method in self.methods:
+            if (method.enabled and class_type.tag == "string_type"
+                and method_name == "operator=="):
+                worker = method.get_worker (method_name)
+                if worker:
+                    workers.append (worker)
+        return workers
+
 def register_xmethods ():
     gdb.xmethod.register_xmethod_matcher (None, generic_array_matcher ())
     gdb.xmethod.register_xmethod_matcher (None, generic_map_matcher ())
+
+# Always register the string_type xmethod support.
+gdb.xmethod.register_xmethod_matcher (None, string_type_matcher ())

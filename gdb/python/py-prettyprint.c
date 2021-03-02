@@ -26,6 +26,7 @@
 #include "python.h"
 #include "python-internal.h"
 #include "cli/cli-style.h"
+#include "expop.h"
 
 /* Return type of print_string_repr.  */
 
@@ -817,7 +818,15 @@ gdbpy_val_pretty_printer_find_child (const extension_language_defn *extlang,
 		 pull from the iterator.  Check to see if this is the name
 		 we're looking for.  */
 	      struct value *tmp = convert_value_from_python (py_v);
-	      prev_matched_as_name = value_equal (idx, tmp);
+	      struct expression exp (language, gdbarch);
+
+	      /* Call through eval_op_equal here so that we get the chance
+		 to use the compiled in operators, or any xmethods that are
+		 available.  This call will fall back to value_equal if
+		 there's no special handling available.  */
+	      struct value *res = eval_op_equal (nullptr, &exp, EVAL_NORMAL,
+						 BINOP_EQUAL, tmp, idx);
+	      prev_matched_as_name = (bool) value_as_long (res);
 	    }
 	  else if (prev_matched_as_name)
 	    {

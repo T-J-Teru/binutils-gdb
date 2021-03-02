@@ -155,6 +155,18 @@ proc run_tests {lang use_subscript_operators use_xmethods} {
     gdb_test "p obj_int_int\[2\]" ${err_msg}
     set err_msg [build_map_key_error 10 $use_xmethods]
     gdb_test "p obj_int_int\[10\]" ${err_msg}
+
+    # The following tests are only available for C++.
+    if { $lang == "c++" } {
+	gdb_test "p obj_str_int" \
+	    " = string_type -> int map \"string to int map\" with 3 elements = \\{\\\[\"abc\"\\\] = 1, \\\[\"def\"\\\] = 2, \\\[\"ghi\"\\\] = 3\\}"
+	gdb_test "p obj_str_int\[arg1\]" " = 1"
+	gdb_test "p obj_str_int\[arg2\]" " = 2"
+	gdb_test "p obj_str_int\[arg3\]" " = 3"
+	gdb_test "p obj_str_int\[\"abc\"\]" " = 1"
+	gdb_test "p obj_str_int\[\"def\"\]" " = 2"
+	gdb_test "p obj_str_int\[\"ghi\"\]" " = 3"
+    }
 }
 
 # Each test-spec is {

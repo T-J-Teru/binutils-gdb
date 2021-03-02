@@ -1,5 +1,11 @@
 2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* python/py-prettyprint.c: Add 'expop.h' include.
+	(gdbpy_val_pretty_printer_find_child): Call eval_op_equal instead
+	of value_equal.
+
+2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* NEWS: Mention use of pretty-printer for [] indexing.
 	* eval.c (evaluate_subexp_standard): Use pretty printers to find
 	children for BINOP_SUBSCRIPT.

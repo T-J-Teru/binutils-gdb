@@ -1,5 +1,21 @@
 2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.python/py-prettyprint-subscript.cc (class string_type): New
+	class.
+	(dump_bool): New global.
+	(obj_str_int): New global.
+	(main): Fill new global.
+	* gdb.python/py-prettyprint-subscript.exp (run_tests): Add new
+	tests.
+	* gdb.python/py-prettyprint-subscript.py (class pp_string_type):
+	New class.
+	(class pretty_printer_finder): Add lookup for string to int type.
+	(generic_array_subscript::worker::__call__): Add comment.
+	(generic_map_subscript::worker::__call__): Add comment.
+	(class string_type_xmethod): New class.
+
+2021-04-22  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.python/py-prettyprint-subscript.c: New file.
 	* gdb.python/py-prettyprint-subscript.cc: New file.
 	* gdb.python/py-prettyprint-subscript.exp: New file.

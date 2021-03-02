@@ -19,6 +19,52 @@
 #include <cstdlib>
 #include <stdexcept>
 
+/* A very minimal string like class.  This is used instead of std::string
+   so that we can provide known pretty-printers and xmethods for this
+   class.  */
+
+class string_type
+{
+public:
+  string_type ()
+  {
+    m_s = strdup ("");
+  }
+
+  string_type (const char *s)
+  {
+    m_s = strdup (s);
+  }
+
+  string_type (const string_type &other)
+  {
+    m_s = strdup (other.m_s);
+  }
+
+  string_type &
+  operator= (const string_type &other)
+  {
+    free (m_s);
+    m_s = strdup (other.m_s);
+    return *this;
+  }
+
+  bool
+  operator== (const string_type &other)
+  {
+    return strcmp (m_s, other.m_s) == 0;
+  }
+
+  bool
+  operator== (const char *other)
+  {
+    return other != nullptr && strcmp (m_s, other) == 0;
+  }
+
+private:
+  char *m_s = nullptr;
+};
+
 template<typename TYPE>
 class generic_array
 {
@@ -99,6 +145,7 @@ private:
 
 volatile int dump_int;
 volatile float dump_float;
+volatile bool dump_bool;
 
 int
 main ()
@@ -106,6 +153,7 @@ main ()
   generic_array<int> obj_int ("first int array");
   generic_array<float> obj_float ("first float array");
   generic_map<int,int> obj_int_int ("int to int map");
+  generic_map<string_type,int> obj_str_int ("string to int map");
 
   obj_int.push_back (3);
   obj_int.push_back (6);
@@ -121,6 +169,14 @@ main ()
   obj_int_int.insert (5, 21);
   obj_int_int.insert (8, 16);
   obj_int_int.insert (9, 42);
+
+  string_type arg1 = "abc";
+  string_type arg2 = "def";
+  string_type arg3 = "ghi";
+
+  obj_str_int.insert ("abc", 1);
+  obj_str_int.insert ("def", 2);
+  obj_str_int.insert ("ghi", 3);
 
 #ifdef DEFINE_SUBSCRIPT_OPERATOR
   dump_int = obj_int[0];
