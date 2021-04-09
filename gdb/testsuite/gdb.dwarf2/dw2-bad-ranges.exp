@@ -1,0 +1,184 @@
+# Copyright 2021 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib dwarf.exp
+
+# Test that GDB can handle the case where invalid DWARF information
+# results in the main function appearing to be outside of any
+# particular symtab.
+#
+# This situation arrises when the .debug_ranges information for a
+# compilation unit claims an address range but the .debug_line
+# information does not.
+
+# This test can only be run on targets which support DWARF-2 and use gas.
+if {![dwarf2_support]} {
+    verbose "Skipping $gdb_test_file_name."
+    return 0
+}
+
+# The .c files use __attribute__.
+if [get_compiler_info] {
+    return -1
+}
+if !$gcc_compiled {
+    verbose "Skipping $gdb_test_file_name."
+    return 0
+}
+
+standard_testfile dw2-ranges-overlap.c -dw.S
+
+set asm_file [standard_output_file $srcfile2]
+Dwarf::assemble $asm_file {
+    global srcdir subdir srcfile
+    declare_labels ranges_label_1 ranges_label_2
+    declare_labels stmt_label_1 stmt_label_2
+
+    # Provide start, len, and end variables for each function.
+    get_func_info main
+    get_func_info bar
+    get_func_info foo
+
+    # A compilation unit for functions BAR and FOO.
+    cu {} {
+	compile_unit {
+	    {language @DW_LANG_C}
+	    {name $srcfile}
+	    {stmt_list ${stmt_label_1} DW_FORM_sec_offset}
+	    {ranges ${ranges_label_1} DW_FORM_sec_offset}
+	} {
+	    declare_labels int_label
+            int_label: DW_TAG_base_type {
+                {DW_AT_byte_size 4 DW_FORM_sdata}
+                {DW_AT_encoding  @DW_ATE_signed}
+                {DW_AT_name      int}
+            }
+
+	    subprogram {
+		{external 1 flag}
+		{MACRO_AT_func {foo}}
+		{type :$int_label}
+		{DW_AT_decl_file 1 data1}
+		{DW_AT_decl_line 25 data1}
+	    }
+
+	    subprogram {
+		{external 1 flag}
+		{MACRO_AT_func {bar}}
+		{type :$int_label}
+		{DW_AT_decl_file 1 data1}
+		{DW_AT_decl_line 18 data1}
+	    }
+	}
+    }
+
+    # A compilation unit for function MAIN.
+    cu {} {
+	compile_unit {
+	    {language @DW_LANG_C}
+	    {name $srcfile}
+	    {stmt_list ${stmt_label_2} DW_FORM_sec_offset}
+	    {ranges ${ranges_label_2} DW_FORM_sec_offset}
+	} {
+	    declare_labels int_label
+            int_label: DW_TAG_base_type {
+                {DW_AT_byte_size 4 DW_FORM_sdata}
+                {DW_AT_encoding  @DW_ATE_signed}
+                {DW_AT_name      int}
+            }
+
+	    subprogram {
+		{MACRO_AT_func {main}}
+		{external 1 flag}
+		{type :$int_label}
+		{DW_AT_decl_file 1 data1}
+		{DW_AT_decl_line 32 data1}
+	    }
+	}
+    }
+
+    # Line table information covering functions BAR and FOO.
+    lines {version 2} stmt_label_1 {
+	include_dir "${srcdir}/${subdir}"
+	file_name "$srcfile" 1
+
+	program {
+	    {DW_LNE_set_address $bar_start}
+	    {DW_LNS_advance_line 19}
+	    {DW_LNS_copy}
+	    {DW_LNS_advance_pc $bar_len}
+	    {DW_LNS_advance_line 1}
+	    {DW_LNS_copy}
+	    {DW_LNE_end_sequence}
+
+	    {DW_LNE_set_address $foo_start}
+	    {DW_LNS_advance_line 6}
+	    {DW_LNS_copy}
+	    {DW_LNS_advance_pc $foo_len}
+	    {DW_LNS_advance_line 1}
+	    {DW_LNS_copy}
+	    {DW_LNE_end_sequence}
+	}
+    }
+
+    # Line table information covering functin MAIN.
+    lines {version 2} stmt_label_2 {
+	include_dir "${srcdir}/${subdir}"
+	file_name "$srcfile" 1
+
+	program {
+	    {DW_LNE_set_address $main_start}
+	    {DW_LNS_advance_line 33}
+	    {DW_LNS_copy}
+	    {DW_LNS_advance_pc $main_len}
+	    {DW_LNS_advance_line 1}
+	    {DW_LNS_copy}
+	    {DW_LNE_end_sequence}
+	}
+    }
+
+    # Range information.  Each compilation unit references a different
+    # sequence.
+    ranges {is_64 [is_64_target]} {
+	# This the the range information that should cover just BAR
+	# and FOO.  However, this informaiton is deliberately wrong
+	# and instead covers BAR, FOO, and MAIN.
+	ranges_label_1: sequence {
+	    base $bar_start
+	    range 0 $bar_len
+	    base $foo_start
+	    range 0 $foo_len
+	    base $main_start
+	    range 0 $main_len
+	}
+	# This is the information that correctly covers just MAIN.
+	ranges_label_2: sequence {
+	    base $main_start
+	    range 0 $main_len
+	}
+    }
+}
+
+if { [prepare_for_testing "failed to prepare" ${testfile} \
+	  [list $srcfile $asm_file] {nodebug}] } {
+    return -1
+}
+
+if ![runto_main] {
+    return -1
+}
+
+gdb_test "list"
+gdb_test "p 1 + 1" " = 2"
