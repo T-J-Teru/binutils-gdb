@@ -4223,7 +4223,7 @@ struct output_source_filename_data
 
 
   /* Cache of what we've seen so far.  */
-  filename_seen_cache *filename_cache;
+  filename_seen_cache<> *filename_cache;
 
   /* Flag of whether we're printing the first one.  */
   int first;
@@ -4364,7 +4364,7 @@ info_sources_command (const char *args, int from_tty)
       error (_("No symbol table is loaded.  Use the \"file\" command."));
     }
 
-  filename_seen_cache filenames_seen;
+  filename_seen_cache<> filenames_seen;
 
   auto group = make_info_sources_options_def_group (&data.partial_match);
 
@@ -5956,7 +5956,7 @@ not_interesting_fname (const char *fname)
    map_partial_symbol_filenames.  */
 struct add_partial_filename_data
 {
-  filename_seen_cache *filename_cache;
+  filename_seen_cache<> *filename_cache;
   const char *text;
   const char *word;
   int text_len;
@@ -6006,7 +6006,7 @@ make_source_files_completion_list (const char *text, const char *word)
   if (!have_full_symbols () && !have_partial_symbols ())
     return list;
 
-  filename_seen_cache filenames_seen;
+  filename_seen_cache<> filenames_seen;
 
   for (objfile *objfile : current_program_space->objfiles ())
     {

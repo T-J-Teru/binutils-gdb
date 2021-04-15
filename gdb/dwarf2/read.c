@@ -5002,14 +5002,17 @@ dwarf2_base_index_functions::map_symbol_filenames
 	  for (int j = 0; j < file_data->num_file_names; ++j)
 	    {
 	      const char *filename = file_data->file_names[j];
-	      per_objfile->per_bfd->filenames_cache->seen (filename);
+	      per_objfile->per_bfd->filenames_cache->seen (filename, per_cu);
 	    }
 	}
     }
 
-  per_objfile->per_bfd->filenames_cache->traverse ([&] (const char *filename)
+  per_objfile->per_bfd->filenames_cache->traverse ([&] (const char *filename, const dwarf2_per_cu_data *per_cu)
     {
       gdb::unique_xmalloc_ptr<char> this_real_name;
+
+      if (per_objfile->symtab_set_p (per_cu))
+	return;
 
       if (need_fullname)
 	this_real_name = gdb_realpath (filename);

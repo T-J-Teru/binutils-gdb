@@ -1,5 +1,29 @@
 2021-04-07  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* Makefile.in (COMMON_SFILES): Remove reference to
+	filename-seen-cache.c.
+	* dwarf2/read.c
+	(dwarf2_base_index_functions::map_symbol_filenames): Store per_cu
+	in the filenames_cache alongside each filename.  When traversing
+	the cache use the per_cu to determine if the full symtab has
+	already been loaded.
+	* dwarf2/read.h (struct dwarf2_per_bfd): Change type of
+	filenames_cache member variable.
+	* filename-seen-cache.c: Delete file.
+	* filename-seen-cache.h: Complete rewrite of file, maintains the
+	same API to filename_seen_cache, but the implementation is
+	entirely new.
+	* symtab.c (struct output_source_filename_data): Change type of
+	filename_cache member variable.
+	(info_sources_command): Change type of filenames_seen local
+	variable.
+	(struct add_partial_filename_data): Change type of filename_cache
+	member variable.
+	(make_source_files_completion_list): Change type of filenames_seen
+	local variable.
+
+2021-04-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* symtab.c (struct output_source_filename_data): Rename
 	filename_seen_cache field to filename_cache.
 	(output_source_filename_data::output): Update for change in member
