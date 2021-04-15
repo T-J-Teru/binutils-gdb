@@ -1,3 +1,16 @@
+2021-04-07  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* symtab.c (struct output_source_filename_data): Rename
+	filename_seen_cache field to filename_cache.
+	(output_source_filename_data::output): Update for change in member
+	variable name.
+	(info_sources_command): Likewise.
+	(struct add_partial_filename_data): Rename filename_seen_cache
+	field to filename_cache.
+	(add_partial_filename_data::operator()): Update for change in
+	member variable name.
+	(make_source_files_completion_list): Likewise.
+
 2021-04-14  Tankut Baris Aktemur  <tankut.baris.aktemur@intel.com>
 
 	* dwarf2/read.c (inherit_abstract_dies): Keep a reference to the

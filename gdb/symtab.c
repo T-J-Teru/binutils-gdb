@@ -4223,7 +4223,7 @@ struct output_source_filename_data
 
 
   /* Cache of what we've seen so far.  */
-  struct filename_seen_cache *filename_seen_cache;
+  filename_seen_cache *filename_cache;
 
   /* Flag of whether we're printing the first one.  */
   int first;
@@ -4253,7 +4253,7 @@ output_source_filename_data::output (const char *name)
      symtabs; it doesn't hurt to check.  */
 
   /* Was NAME already seen?  */
-  if (filename_seen_cache->seen (name))
+  if (filename_cache->seen (name))
     {
       /* Yes; don't print it again.  */
       return;
@@ -4374,7 +4374,7 @@ info_sources_command (const char *args, int from_tty)
   if (args != NULL && *args != '\000')
     data.regexp = args;
 
-  data.filename_seen_cache = &filenames_seen;
+  data.filename_cache = &filenames_seen;
   data.first = 1;
 
   if (data.partial_match.dirname && data.partial_match.basename)
@@ -5956,7 +5956,7 @@ not_interesting_fname (const char *fname)
    map_partial_symbol_filenames.  */
 struct add_partial_filename_data
 {
-  struct filename_seen_cache *filename_seen_cache;
+  filename_seen_cache *filename_cache;
   const char *text;
   const char *word;
   int text_len;
@@ -5973,7 +5973,7 @@ add_partial_filename_data::operator() (const char *filename,
 {
   if (not_interesting_fname (filename))
     return;
-  if (!filename_seen_cache->seen (filename)
+  if (!filename_cache->seen (filename)
       && filename_ncmp (filename, text, text_len) == 0)
     {
       /* This file matches for a completion; add it to the
@@ -5985,7 +5985,7 @@ add_partial_filename_data::operator() (const char *filename,
       const char *base_name = lbasename (filename);
 
       if (base_name != filename
-	  && !filename_seen_cache->seen (base_name)
+	  && !filename_cache->seen (base_name)
 	  && filename_ncmp (base_name, text, text_len) == 0)
 	add_filename_to_list (base_name, text, word, list);
     }
@@ -6039,7 +6039,7 @@ make_source_files_completion_list (const char *text, const char *word)
 	}
     }
 
-  datum.filename_seen_cache = &filenames_seen;
+  datum.filename_cache = &filenames_seen;
   datum.text = text;
   datum.word = word;
   datum.text_len = text_len;
