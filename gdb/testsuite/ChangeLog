@@ -1,3 +1,7 @@
+2021-05-10  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.guile/scm-breakpoint.exp (test_watchpoints): Add new tests.
+
 2021-05-07  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.guile/guile.exp: Add an extra test.
