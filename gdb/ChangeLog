@@ -1,5 +1,13 @@
 2021-05-14  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* remote.c (struct remote_inferior): Add
+	pending_vcont_resume_thread_count field.
+	(remote_target::commit_resumed): Add use of
+	pending_vcont_resume_thread_count field, only send wildcard action
+	if there are threads the wildcard will cover.
+
+2021-05-14  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* remote.c (check_pending_events_prevent_wildcard_vcont): Change
 	argument type, update and re-wrap, header comment.
 	(remote_target::commit_resumed): Convert any_process_wildcard and

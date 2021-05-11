@@ -6485,6 +6485,11 @@ struct remote_inferior : public private_inferior
 {
   /* Whether we can send a wildcard vCont for this process.  */
   bool may_wildcard_vcont = true;
+
+  /* The number of threads in this inferior that have a pending vCont
+     resume.  Used when building vCont packets, and it only valid during
+     remote_target::commit_resumed.  */
+  int pending_vcont_resume_thread_count = 0;
 };
 
 /* Get the remote private inferior data associated to INF.  */
@@ -6698,6 +6703,7 @@ remote_target::commit_resumed ()
       remote_inferior *priv = get_remote_inferior (inf);
 
       priv->may_wildcard_vcont = true;
+      priv->pending_vcont_resume_thread_count = 0;
     }
 
   /* Check for any pending events (not reported or processed yet) and
@@ -6723,7 +6729,10 @@ remote_target::commit_resumed ()
 	}
 
       if (priv->get_resume_state () == resume_state::RESUMED_PENDING_VCONT)
-	any_pending_vcont_resume = true;
+	{
+	  get_remote_inferior (tp->inf)->pending_vcont_resume_thread_count++;
+	  any_pending_vcont_resume = true;
+	}
 
       /* If a thread is the parent of an unfollowed fork, then we
 	 can't do a global wildcard, as that would resume the fork
@@ -6771,7 +6780,10 @@ remote_target::commit_resumed ()
          it will be included in a wildcard resume instead.  */
       if (info.step || info.sig != GDB_SIGNAL_0
 	  || !get_remote_inferior (tp->inf)->may_wildcard_vcont)
-	vcont_builder.push_action (tp->ptid, info.step, info.sig);
+	{
+	  vcont_builder.push_action (tp->ptid, info.step, info.sig);
+	  get_remote_inferior (tp->inf)->pending_vcont_resume_thread_count--;
+	}
 
       remote_thr->set_resumed ();
     }
@@ -6783,7 +6795,8 @@ remote_target::commit_resumed ()
 
   for (inferior *inf : all_non_exited_inferiors (this))
     {
-      if (get_remote_inferior (inf)->may_wildcard_vcont)
+      if (get_remote_inferior (inf)->may_wildcard_vcont
+	  && get_remote_inferior (inf)->pending_vcont_resume_thread_count > 0)
 	{
 	  any_process_wildcard = true;
 	  break;
@@ -6804,7 +6817,9 @@ remote_target::commit_resumed ()
 	{
 	  for (inferior *inf : all_non_exited_inferiors (this))
 	    {
-	      if (get_remote_inferior (inf)->may_wildcard_vcont)
+	      if (get_remote_inferior (inf)->may_wildcard_vcont
+		  && (get_remote_inferior (inf)
+		      ->pending_vcont_resume_thread_count > 0))
 		{
 		  vcont_builder.push_action (ptid_t (inf->pid),
 					     false, GDB_SIGNAL_0);
