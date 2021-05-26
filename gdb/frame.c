@@ -2080,7 +2080,50 @@ get_prev_frame_if_no_cycle (struct frame_info *this_frame)
 	  /* Unlink.  */
 	  prev_frame->next = NULL;
 	  this_frame->prev = NULL;
-	  prev_frame = NULL;
+
+	  /* Consider the call stack A->B, where A is a normal frame and B
+	     is an inline frame.  When computing the frame-id for B we need
+	     to compute the frame-id for A.
+
+	     If the frame-id for A is a duplicate then it must be the case
+	     that B will also be a duplicate.
+
+	     If we spot A as being a duplicate here and so return NULL then
+	     B will fail to obtain a valid frame-id for A, and thus B will
+	     be unable to return a valid frame-id (in fact an assertion
+	     will trigger).
+
+	     What this means is that, if we are being asked to get the
+	     previous frame for an inline frame and we want to reject the
+	     new (previous) frame then we should really return the frame so
+	     that the inline frame can still compute its frame-id.  This is
+	     safe as we can be confident that the inline frame-id will also
+	     be a duplicate, and so the inline frame (and therefore all
+	     frames previous to it) will then be rejected.  */
+	  if (this_frame->unwind->type != INLINE_FRAME
+	      || this_frame->this_id.p != frame_id_status::COMPUTING)
+	    prev_frame = NULL;
+	}
+      else
+	{
+	  /* This assertion ties into the special handling of inline frames
+	     above.
+
+	     We know that to compute the frame-id of an inline frame we
+	     must first compute the frame-id of the inline frame's previous
+	     frame.
+
+	     If the previous frame is rejected as a duplicate then it
+	     should be the case that the inline frame is also rejected as a
+	     duplicate, and we should not reach this assertion.
+
+	     However, if we do reach this assertion then the inline frame
+	     has not been rejected, thus, it should be the case that the
+	     frame previous to the inline frame has also not be rejected,
+	     this is reflected by the requirement that the inline frame's
+	     previous pointer not be nullptr at this point.  */
+	  gdb_assert (this_frame->unwind->type != INLINE_FRAME
+		      || this_frame->prev != nullptr);
 	}
     }
   catch (const gdb_exception &ex)
