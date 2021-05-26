@@ -1,5 +1,12 @@
 2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* python/py-frame.c (frapy_level): New function.
+	(frame_object_methods): Register 'level' method.
+	* python/py-unwind.c (pending_framepy_level): New function.
+	(pending_frame_object_methods): Register 'level' method.
+
+2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* python/py-inferior.c (infpy_get_connection_num): Call new
 	function gdb_py_object_from_int.
 	* python/py-utils.c (gdb_py_object_from_int): New function.
