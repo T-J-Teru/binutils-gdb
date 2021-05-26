@@ -1,5 +1,11 @@
 2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.base/inline-frame-bad-unwind.c: New file.
+	* gdb.base/inline-frame-bad-unwind.exp: New file.
+	* gdb.base/inline-frame-bad-unwind.py: New file.
+
+2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.python/py-frame.exp: Add Frame.level tests.
 	* gdb.python/py-pending-frame-level.c: New file.
 	* gdb.python/py-pending-frame-level.exp: New file.
