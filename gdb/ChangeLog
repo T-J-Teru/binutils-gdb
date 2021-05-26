@@ -1,3 +1,8 @@
+2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* python/py-unwind.c (unwind_infopy_add_saved_register): Handle
+	saving user registers.
+
 2021-05-27  Simon Marchi  <simon.marchi@polymtl.ca>
 
 	* Fix tab after space indentation issues throughout.
