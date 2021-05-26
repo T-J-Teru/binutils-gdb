@@ -1,5 +1,12 @@
 2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* python/py-inferior.c (infpy_get_connection_num): Call new
+	function gdb_py_object_from_int.
+	* python/py-utils.c (gdb_py_object_from_int): New function.
+	* python/python-internal.h (gdb_py_object_from_int): Declare.
+
+2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* python/py-unwind.c (unwind_infopy_add_saved_register): Handle
 	saving user registers.
 

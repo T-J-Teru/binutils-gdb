@@ -335,6 +335,18 @@ gdb_py_object_from_ulongest (ULONGEST l)
 #endif
 }
 
+/* Convert an int I to the appropriate Python object.  */
+
+gdbpy_ref<>
+gdb_py_object_from_int (int i)
+{
+#ifdef IS_PY3K
+  return gdbpy_ref<> (PyLong_FromLong (i));
+#else
+  return gdbpy_ref<> (PyInt_FromLong (l));
+#endif
+}
+
 /* Like PyInt_AsLong, but returns 0 on failure, 1 on success, and puts
    the value into an out parameter.  */
 

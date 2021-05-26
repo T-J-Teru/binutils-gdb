@@ -747,6 +747,8 @@ int get_addr_from_python (PyObject *obj, CORE_ADDR *addr)
 
 gdbpy_ref<> gdb_py_object_from_longest (LONGEST l);
 gdbpy_ref<> gdb_py_object_from_ulongest (ULONGEST l);
+gdbpy_ref<> gdb_py_object_from_int (int i);
+
 int gdb_py_int_as_long (PyObject *, long *);
 
 PyObject *gdb_py_generic_dict (PyObject *self, void *closure);
