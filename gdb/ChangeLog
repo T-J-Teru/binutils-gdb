@@ -1,5 +1,14 @@
 2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* frame.c (get_prev_frame_id_by_id): Delete.
+	* frame.h (get_prev_frame_id_by_id): Delete declaration.
+	* valops.c (value_assign): Use VALUE_NEXT_FRAME_ID and
+	get_prev_frame_always, not VALUE_FRAME_ID.
+	* value.c (value_fetch_lazy_register): Likewise.
+	* value.h (VALUE_FRAME_ID): Delete.
+
+2021-05-29  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* frame.c (get_prev_frame_if_no_cycle): Always return prev_frame
 	when computing the frame_id for an INLINE_FRAME.  Add an extra
 	assertion.

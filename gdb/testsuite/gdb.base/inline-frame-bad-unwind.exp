@@ -120,3 +120,20 @@ gdb_test_sequence "bt"  "Backtrace when the unwind is broken at frame 1" {
     "\\r\\n#1 \[^\r\n\]* bar \\(\\) at "
     "\\r\\nBacktrace stopped: previous frame identical to this frame \\(corrupt stack\\?\\)"
 }
+
+# Flush the register cache (which also flushes the frame cache) so we
+# get a full backtrace again, then switch on frame debugging and try
+# to back trace.  At one point this triggered an assertion.
+gdb_test "maint flush register-cache" \
+    "Register cache flushed\\." ""
+gdb_test_no_output "set debug frame 1"
+gdb_test_multiple "bt" "backtrace with debugging on" {
+    -re "^$gdb_prompt $" {
+	pass $gdb_test_name
+    }
+    -re "\[^\r\n\]+\r\n" {
+	exp_continue
+    }
+}
+gdb_test "p 1 + 2 + 3" " = 6" \
+    "ensure GDB is still alive"
