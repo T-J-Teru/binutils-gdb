@@ -230,7 +230,10 @@ def _on_stop(event):
         # This can only really happen via a "repl" evaluation of
         # something like "attach".  In this case just emit a generic
         # stop.
-        obj["reason"] = "stopped"
+        if _expected_pause:
+            obj["reason"] = "pause"
+        else:
+            obj["reason"] = "stopped"
     elif (
         _expected_pause
         and event.details["reason"] == "signal-received"
