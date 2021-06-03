@@ -26,7 +26,10 @@ if {[prepare_for_testing "failed to prepare" $testfile $srcfile debug]} {
     return -1
 }
 
-if ![runto_main] {
+# So we can safely detach after "run".
+gdb_test_no_output "tty /dev/tty"
+
+if {![runto_main]} {
     return -1
 }
 
