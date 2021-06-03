@@ -60,6 +60,14 @@ prefork_hook (const char *args)
 
 /* See nat/fork-inferior.h.  */
 
+bool
+child_has_managed_tty_hook ()
+{
+  return false;
+}
+
+/* See nat/fork-inferior.h.  */
+
 void
 postfork_hook (pid_t pid)
 {
