@@ -8057,6 +8057,27 @@ remote_target::process_stop_reply (struct stop_reply *stop_reply,
 
       remote_notice_new_inferior (ptid, false);
       remote_thread_info *remote_thr = get_remote_thread_info (this, ptid);
+
+      /* Check that the thread that is reported stopped is one that was
+	 previously running.  This catches the case where a badly behaving
+	 target reports a stop for a thread that GDB thinks should already
+	 be stopped.
+
+	 In many cases, reporting a stop for a thread that GDB thinks is
+	 already stopped, turns out to be harmless, however, there are
+	 cases, (e.g. when single stepping), where reporting a stop against
+	 an unexpected thread will trigger assertion failures from within
+	 infrun.
+
+	 The one exception to this logic is when we stop after an exec
+	 call.  The exec will replace the main thread of the inferior, even
+	 if the exec is performed in some other thread.  Thus, GDB might
+	 step thread 2, but the exec-stop is reported in thread 1.  */
+      if (remote_thr->get_resume_state () != resume_state::RESUMED
+	  && status->kind != TARGET_WAITKIND_EXECD)
+	error (_("stop received from remote for thread that should "
+		 "not be executing"));
+
       remote_thr->core = stop_reply->core;
       remote_thr->stop_reason = stop_reply->stop_reason;
       remote_thr->watch_data_address = stop_reply->watch_data_address;

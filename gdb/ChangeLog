@@ -1,5 +1,11 @@
 2021-06-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	PR gdb/26819
+	* remote.c (remote_target::process_stop_reply): Catch the case
+	where a stop reply arrives for a thread that was not resumed.
+
+2021-06-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* remote.c (remote_state) <attaching>: New member variable.
 	(remote_target::remote_add_thread): Check the attaching flag too.
 	(extended_remote_target::attach): Set remote_state::attaching true
