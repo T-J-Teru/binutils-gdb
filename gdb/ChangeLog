@@ -1,5 +1,12 @@
 2021-06-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* remote.c (remote_state) <attaching>: New member variable.
+	(remote_target::remote_add_thread): Check the attaching flag too.
+	(extended_remote_target::attach): Set remote_state::attaching true
+	for the scope of this function, and use remote_add_thread.
+
+2021-06-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* remote.c (remote_target::start_remote): Use scoped_restore to
 	manage remote_state::starting_up flag.
 

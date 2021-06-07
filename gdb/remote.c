@@ -252,6 +252,9 @@ public: /* data */
      about the remote side's threads, relocating symbols, etc.).  */
   bool starting_up = false;
 
+  /* True if we are going through the ::attach code.  */
+  bool attaching = false;
+
   /* If we negotiated packet size explicitly (and thus can bypass
      heuristics for the largest packet size that will not overflow
      a buffer in the stub), this will be set to that packet size.
@@ -2536,7 +2539,7 @@ remote_target::remote_add_thread (ptid_t ptid, bool running, bool executing)
      consider that a single-threaded target, mentioning a new thread
      might be confusing to the user.  Be silent then, preserving the
      age old behavior.  */
-  if (rs->starting_up)
+  if (rs->starting_up || rs->attaching)
     thread = add_thread_silent (this, ptid);
   else
     thread = add_thread (this, ptid);
@@ -5977,6 +5980,12 @@ extended_remote_target::attach (const char *args, int from_tty)
   int pid;
   char *wait_status = NULL;
 
+  /* Let ::remote-add_thread know we are going through the initial attach
+     process, and so should not announce the first thread to the user.  */
+  gdb_assert (!rs->attaching);
+  scoped_restore attaching_restore
+    = make_scoped_restore (&rs->attaching, true);
+
   pid = parse_pid_to_attach (args);
 
   /* Remote PID can be freely equal to getpid, do not check it here the same
@@ -6045,14 +6054,11 @@ extended_remote_target::attach (const char *args, int from_tty)
 	 ptid.  */
       ptid_t curr_ptid = remote_current_thread (ptid_t (pid));
 
-      /* Add the main thread to the thread list.  */
-      thread_info *thr = add_thread_silent (this, curr_ptid);
+      /* Add the main thread to the thread list, this thread is initially
+	 assumed to be executing/running.  */
+      thread_info *thr = remote_add_thread (curr_ptid, true, true);
 
       switch_to_thread (thr);
-
-      /* Don't consider the thread stopped until we've processed the
-	 saved stop reply.  */
-      set_executing (this, thr->ptid, true);
     }
 
   /* Next, if the target can specify a description, read it.  We do
