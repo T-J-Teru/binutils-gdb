@@ -4667,7 +4667,9 @@ remote_target::start_remote (int from_tty, int extended_p)
      Ctrl-C before we're connected and synced up can't interrupt the
      target.  Instead, it offers to drop the (potentially wedged)
      connection.  */
-  rs->starting_up = true;
+  gdb_assert (!rs->starting_up);
+  scoped_restore starting_up_restore
+    = make_scoped_restore (&rs->starting_up, true);
 
   QUIT;
 
@@ -4808,7 +4810,6 @@ remote_target::start_remote (int from_tty, int extended_p)
 
 	  /* We're connected, but not running.  Drop out before we
 	     call start_remote.  */
-	  rs->starting_up = false;
 	  return;
 	}
       else
@@ -4923,7 +4924,6 @@ remote_target::start_remote (int from_tty, int extended_p)
 
 	  /* We're connected, but not running.  Drop out before we
 	     call start_remote.  */
-	  rs->starting_up = false;
 	  return;
 	}
 
@@ -4967,7 +4967,12 @@ remote_target::start_remote (int from_tty, int extended_p)
   /* The thread and inferior lists are now synchronized with the
      target, our symbols have been relocated, and we're merged the
      target's tracepoints with ours.  We're done with basic start
-     up.  */
+     up.
+
+     We manually set the starting_up flag here despite having
+     STARTING_UP_RESTORE which will do this for us at the end of our
+     scope, now we are fully connected we want things like Ctrl-C handling
+     to behave as normal during the following code.  */
   rs->starting_up = false;
 
   /* Maybe breakpoints are global and need to be inserted now.  */
