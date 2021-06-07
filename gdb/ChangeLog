@@ -1,5 +1,10 @@
 2021-06-04  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* remote.c (remote_target::start_remote): Set 'starting_up' using
+	boolean values instead of integers.
+
+2021-06-04  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* remote.c (remote_target)
 	<select_thread_for_ambiguous_stop_reply>: Add additional debug
 	output.
