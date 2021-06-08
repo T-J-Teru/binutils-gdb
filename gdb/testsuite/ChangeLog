@@ -1,3 +1,19 @@
+2021-06-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/19675
+	* gdb.base/step-over-clone.c (global_lock): New global variable.
+	(global_thread_count): Likewise.
+	(clone_fn): Decrement global_thread_count under a lock.
+	(main): Prevent thread reentering main, setup global_thread_count,
+	and wait for all threads to start before calling marker.
+	* gdb.base/step-over-syscall.exp (check_pc_after_cross_syscall):
+	Take additional parameter, figure out the current thread, and
+	check GDB is stopped in the correct thread.
+	(step_over_syscall): Link against pthreads library for clone
+	syscall test.  Remove general call to kfail, pass extra variable
+	to check_pc_after_cross_syscall, call setup_kfail when
+	appropriate.
+
 2021-06-25  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	* gdb.base/info_sources_2-header.h: New file.
