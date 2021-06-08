@@ -1,5 +1,11 @@
 2021-06-30  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	PR gdb/27830
+	* gdb.threads/stepi-over-clone.c: New file.
+	* gdb.threads/stepi-over-clone.exp: New file.
+
+2021-06-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	PR gdb/19675
 	* gdb.base/step-over-clone.c (global_lock): New global variable.
 	(global_thread_count): Likewise.

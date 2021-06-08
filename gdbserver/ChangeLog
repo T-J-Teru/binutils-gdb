@@ -1,3 +1,10 @@
+2021-06-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/27830
+	* linux-low.cc
+	(linux_process_target::thread_still_has_status_pending): Add
+	support for filtering out unwanted thread created events.
+
 2021-06-19  Mike Frysinger  <vapier@gentoo.org>
 
 	* acinclude.m4: Delete most m4_include's of ../config files.
