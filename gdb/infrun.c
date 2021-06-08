@@ -1748,6 +1748,10 @@ displaced_step_finish (thread_info *event_thread, enum gdb_signal signal)
   if (!displaced->in_progress ())
     return DISPLACED_STEP_FINISH_STATUS_OK;
 
+  /* We no longer need to be notified about the creation of any new
+     threads.  */
+  target_thread_events (false);
+
   gdb_assert (event_thread->inf->displaced_step_state.in_progress_count > 0);
   event_thread->inf->displaced_step_state.in_progress_count--;
 
@@ -2146,6 +2150,18 @@ do_target_resume (ptid_t resume_ptid, bool step, enum gdb_signal sig)
     target_pass_signals ({});
   else
     target_pass_signals (signal_pass);
+
+  /* If we are performing a step-over (in-place) then we will only be
+     setting a single thread running.  We don't want any new thread
+     (spawned by the step) to start running, so request that the target
+     stop the thread.
+
+     Alternatively, if we are doing a displaced step then we will need to
+     fix the $pc address in any newly created threads, so again, in that
+     case, request that the target stop any new threads.  */
+  if (step_over_info_valid_p ()
+      || displaced_step_in_progress (tp->inf))
+    target_thread_events (true);
 
   target_resume (resume_ptid, step, sig);
 
@@ -5814,6 +5830,10 @@ finish_step_over (struct execution_control_state *ecs)
 	 then only the thread that was stepped should be reporting
 	 back an event.  */
       gdb_assert (ecs->event_thread->control.trap_expected);
+
+      /* We no longer need to be notified about any new threads that are
+	 created.  */
+      target_thread_events (false);
 
       clear_step_over_info ();
     }

@@ -1646,13 +1646,14 @@ linux_process_target::thread_still_has_status_pending (thread_info *thread)
   if (!lp->status_pending_p)
     return 0;
 
+  int discard = 0;
+
   if (thread->last_resume_kind != resume_stop
       && (lp->stop_reason == TARGET_STOPPED_BY_SW_BREAKPOINT
 	  || lp->stop_reason == TARGET_STOPPED_BY_HW_BREAKPOINT))
     {
       struct thread_info *saved_thread;
       CORE_ADDR pc;
-      int discard = 0;
 
       gdb_assert (lp->last_status != 0);
 
@@ -1689,14 +1690,26 @@ linux_process_target::thread_still_has_status_pending (thread_info *thread)
 #endif
 
       current_thread = saved_thread;
-
-      if (discard)
+    }
+  else if (lp->waitstatus.kind == TARGET_WAITKIND_THREAD_CREATED)
+    {
+      /* If this thread stopped due to a thread created event, but GDB has
+	 since told us it no longer cares about these events, then just
+	 ignore this event.  */
+      client_state &cs = get_client_state ();
+      if (!cs.report_thread_events)
 	{
-	  if (debug_threads)
-	    debug_printf ("discarding pending breakpoint status\n");
-	  lp->status_pending_p = 0;
-	  return 0;
+	  lp->waitstatus.kind = TARGET_WAITKIND_IGNORE;
+	  discard = 1;
 	}
+    }
+
+  if (discard)
+    {
+      if (debug_threads)
+	debug_printf ("discarding pending thread event\n");
+      lp->status_pending_p = 0;
+      return 0;
     }
 
   return 1;
