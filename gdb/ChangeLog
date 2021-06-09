@@ -1,6 +1,12 @@
 2021-06-30  Andrew Burgess  <andrew.burgess@embecosm.com>
 
 	PR gdb/27830
+	* infrun.c (restart_threads): Threads that are already executing
+	in the target are already resumed.
+
+2021-06-30  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	PR gdb/27830
 	* infrun.c (displaced_step_finish): Disable thread events.
 	(do_target_resume): Enable thread events when stepping.
 	(finish_step_over): Disable thread events.
