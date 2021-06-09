@@ -5751,6 +5751,17 @@ restart_threads (struct thread_info *event_thread)
 	  continue;
 	}
 
+      /* If the target already thinks the thread is executing, but it is
+	 not marked resumed, then this is a new thread that infrun has not
+	 seen before.  It can just be marked as resumed.  */
+      if (tp->executing)
+	{
+	  infrun_debug_printf ("restart threads: [%s] already executing",
+			      target_pid_to_str (tp->ptid).c_str ());
+	  tp->set_resumed (true);
+	  continue;
+	}
+
       if (thread_is_in_step_over_chain (tp))
 	{
 	  infrun_debug_printf ("restart threads: [%s] needs step-over",
