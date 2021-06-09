@@ -76,10 +76,12 @@ gdb_test_multiple "disassemble" "" {
     }
 }
 
-# The test proc.  NON_STOP and DISPLACED are either 'on' or 'off', and are
-# used to configure how GDB starts up.  THIRD_THREAD is either True or False,
-# and is used to configure the inferior.
-proc test {non_stop displaced third_thread} {
+# The test proc.  NON_STOP and DISPLACED are either 'on' or 'off', and
+# are used to configure how GDB starts up.  THIRD_THREAD is either
+# True or False, and is used to adjust how the test inferior runs.
+# DISABLE_QTHREADEVENTS is either True or False and is used to disable
+# use of the QThreadEvents packet within GDB.
+proc test {non_stop displaced third_thread disable_QThreadEvents } {
     global binfile srcfile
     global syscall_addrs
     global GDBFLAGS
@@ -93,6 +95,10 @@ proc test {non_stop displaced third_thread} {
 		append GDBFLAGS " -ex \"set non-stop $non_stop\""
 		append GDBFLAGS " -ex \"set displaced $displaced\""
 		clean_restart $binfile
+	    }
+
+	    if { $disable_QThreadEvents } {
+		gdb_test_no_output "set remote thread-events-packet off"
 	    }
 
 	    runto_main
@@ -322,7 +328,16 @@ foreach_with_prefix third_thread { False True } {
 		continue
 	    }
 	    # Pass False as the last argument to leave QThreadEvents enabled.
-	    test ${non-stop} ${displaced} ${third_thread}
+	    test ${non-stop} ${displaced} ${third_thread} False
 	}
     }
+}
+
+if {[target_info exists gdb_protocol]
+    && ([target_info gdb_protocol] == "remote"
+	|| [target_info gdb_protocol] == "extended-remote")} {
+    # For remote targets, run this test again, non-stop mode on, displaced
+    # stepping off, no creation of a third thread, but do disable the
+    # QThreadEvents packet.
+    test "on" "off" False True
 }
