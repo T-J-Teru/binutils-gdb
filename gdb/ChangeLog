@@ -1,3 +1,12 @@
+2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* event-top.c (handle_sigfpe): Delete.
+	(async_float_handler): Delete.
+	(sigfpe_token): Delete.
+	(handle_fatal_signal): New function.
+	(async_init_signals): Update header comment and remove use of
+	handle_sigfpe and sigfpe_token.
+
 2021-07-01  Pedro Alves  <pedro@palves.net>
 
 	PR mi/15729
