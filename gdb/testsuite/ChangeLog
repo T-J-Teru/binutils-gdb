@@ -1,3 +1,8 @@
+2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
+	* gdb.base/bt-on-fatal-signal.c: New file.
+	* gdb.base/bt-on-fatal-signal.exp: New file.
+
 2021-07-01  Pedro Alves  <pedro@palves.net>
 
 	PR mi/15729

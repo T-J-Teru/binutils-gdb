@@ -39693,6 +39693,18 @@ These are representative commands for each @var{kind} of setting type
 @value{GDBN} supports.  They are used by the testsuite for exercising
 the settings infrastructure.
 
+@kindex maint set backtrace-on-fatal-signal
+@kindex maint show backtrace-on-fatal-signal
+@item maint set backtrace-on-fatal-signal [on|off]
+@itemx maint show backtrace-on-fatal-signal
+When this setting is @code{on}, if @value{GDBN} itself terminates with
+a fatal signal (e.g.@: SIGSEGV), then a limited backtrace will be
+printed to stderr.  This backtrace can be used to help diagnose
+crashes within @value{GDBN} in situations where a user is unable to
+share a corefile with the @value{GDBN} developers.
+
+This setting is @code{off} by default.
+
 @kindex maint with
 @item maint with @var{setting} [@var{value}] [-- @var{command}]
 Like the @code{with} command, but works with @code{maintenance set}

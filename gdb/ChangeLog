@@ -1,5 +1,24 @@
 2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* NEWS: Mention new commands.
+	* config.in: Regenerate.
+	* configure: Regenerate.
+	* configure.ac: Add header check for execinfo.h.  Add a check for
+	the backtrace and backtrace_symbols_fd functions.
+	* event-top.c: Add execinfo.h include.
+	(bt_on_fatal_signal): New static global.
+	(show_bt_on_fatal_signal): New function.
+	(set_bt_on_fatal_signal): New function.
+	(unblock_signal): New function.
+	(handle_fatal_signal): New function.
+	(handle_sigsegv): Call handle_fatal_signal instead of abort.
+	(async_sigtstp_handler): Make use of unblock_signal.
+	(_initialize_event_top): Register new maintenance command.
+	* ui-file.h (ui_file) <fd>: New virtual member function.
+	(stdio_file) <fd>: New member function.
+
+2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* event-top.c (async_init_signals): Rewrite the header comment.
 
 2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>

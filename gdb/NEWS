@@ -170,6 +170,12 @@ show python dont-write-bytecode
   When set to 'auto' (the default) Python will check the
   PYTHONDONTWRITEBYTECODE environment variable.
 
+maint set backtrace-on-fatal-signal on|off
+maint show backtrace-on-fatal-signal
+  This setting is 'off' by default.  When 'on' GDB will print a
+  limited backtrace to stderr in the situation where GDB terminates
+  with a fatal signal.
+
 * Changed commands
 
 break [PROBE_MODIFIER] [LOCATION] [thread THREADNUM]
