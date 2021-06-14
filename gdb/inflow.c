@@ -978,7 +978,14 @@ inflow_inferior_exit (struct inferior *inf)
 		  /* Flush any pending output and close the pty.  */
 		  delete_file_handler (run_terminal->pty_fd);
 		  child_terminal_flush_stdout (run_terminal);
-		  close (run_terminal->pty_fd);
+
+		  /* Explicitly send a SIGHUP instead of just closing
+		     the terminal and letting the kernel send it,
+		     because we want the session leader to have a
+		     chance to put itself in the foreground, so that
+		     its children, if any (e.g., we're detaching),
+		     don't get a SIGHUP too.  */
+		  kill (run_terminal->session_leader, SIGHUP);
 
 		  /* Since we closed the controlling terminal, the
 		     session leader should exit now, killed by SIGHUP.
@@ -998,13 +1005,16 @@ inflow_inferior_exit (struct inferior *inf)
 			     inf->num, (int) run_terminal->session_leader,
 			     errno, safe_strerror (errno));
 		  else if (res != run_terminal->session_leader
-			   || !WIFSIGNALED (status)
-			   || WTERMSIG (status) != SIGHUP)
+			   || !WIFEXITED (status)
+			   || WEXITSTATUS (status) != 0)
 		    warning (_("unexpected waitstatus "
 			       "reaping session leader for inf %d (sid=%d): "
 			       "res=%d, status=0x%x"),
 			     inf->num, (int) run_terminal->session_leader,
 			     res, status);
+
+		  /* We can now close the terminal.  */
+		  close (run_terminal->pty_fd);
 		}
 #endif /* GDB_MANAGED_TERMINALS */
 	      delete run_terminal;

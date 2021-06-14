@@ -85,6 +85,33 @@ private:
   std::string m_storage;
 };
 
+#if GDB_MANAGED_TERMINALS
+
+/* SIGHUP handler for the session leader processes.  GDB sends this
+   explicitly, though it'll also be called if GDB crashes and the
+   terminal is abruptly closed.  */
+
+static void
+session_leader_hup (int sig)
+{
+  scoped_ignore_sigttou ignore_sigttou;
+
+  /* We put the inferior (a child of the session leader) in the
+     foreground, so by default, on detach, if we did nothing else, the
+     inferior would get a SIGHUP when the terminal is closed by GDB.
+     That SIGHUP would likely kill the inferior.  To avoid it, we put
+     the session leader in the foreground before the terminal is
+     closed.  Only processes in the foreground process group get the
+     automatic SIGHUP, so the detached process doesn't get it.  */
+  int res = tcsetpgrp (0, getpid ());
+  if (res == -1)
+    trace_start_error (_("tcsetpgrp failed in session leader\n"));
+
+  _exit (0);
+}
+
+#endif
+
 /* Create argument vector for straight call to execvp.  Breaks up
    ALLARGS into an argument vector suitable for passing to execvp and
    stores it in M_ARGV.  E.g., on "run a b c d" this routine would get
@@ -430,8 +457,8 @@ fork_inferior (const char *exec_file_arg, const std::string &allargs,
 	      /* This is the parent / session leader process.  It just
 		 stays around until GDB closes the terminal.  */
 
-	      /* We want to exit when GDB closes our terminal.  */
-	      signal (SIGHUP, SIG_DFL);
+	      /* Gracefully handle SIGHUP.  */
+	      signal (SIGHUP, session_leader_hup);
 
 	      managed_tty_debug_printf
 		(_("session-leader (sid=%d): waiting for child pid=%d exit\n"),
