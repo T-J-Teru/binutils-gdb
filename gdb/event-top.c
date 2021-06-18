@@ -1016,7 +1016,10 @@ static struct serial_event *quit_serial_event;
    For SIGTRAP we just ensure its disposition is set to SIG_DFL.
 
    For SIGSEGV the handle_sig* function does all the work for handling this
-   signal.  */
+   signal.
+
+   For SIGFPE, SIGBUS, and SIGABRT, these signals will all cause GDB to
+   terminate immediately.  */
 void
 async_init_signals (void)
 {
@@ -1064,6 +1067,18 @@ async_init_signals (void)
 #ifdef SIGTSTP
   sigtstp_token =
     create_async_signal_handler (async_sigtstp_handler, NULL, "sigtstp");
+#endif
+
+#ifdef SIGFPE
+  signal (SIGFPE, handle_fatal_signal);
+#endif
+
+#ifdef SIGBUS
+  signal (SIGBUS, handle_fatal_signal);
+#endif
+
+#ifdef SIGABRT
+  signal (SIGABRT, handle_fatal_signal);
 #endif
 
   install_handle_sigsegv ();

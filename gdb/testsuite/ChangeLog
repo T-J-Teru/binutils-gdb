@@ -1,5 +1,9 @@
 2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* gdb.base/bt-on-fatal-signal.exp: Add additional tests.
+
+2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* gdb.base/bt-on-fatal-signal.c: New file.
 	* gdb.base/bt-on-fatal-signal.exp: New file.
 

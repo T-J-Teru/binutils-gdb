@@ -1,5 +1,10 @@
 2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* event-top.c (async_init_signals): Handle SIGFPE, SIGBUS, and
+	SIGABRT.  Update header comment.
+
+2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* NEWS: Mention new commands.
 	* config.in: Regenerate.
 	* configure: Regenerate.
