@@ -1,5 +1,9 @@
 2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
 
+	* event-top.c (async_init_signals): Rewrite the header comment.
+
+2021-07-02  Andrew Burgess  <andrew.burgess@embecosm.com>
+
 	* event-top.c (async_init_signals): For each signal, call signal
 	only after calling create_async_signal_handler.
 

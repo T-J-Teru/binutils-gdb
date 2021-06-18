@@ -899,18 +899,21 @@ handle_sigsegv (int sig)
    handler.  */
 static struct serial_event *quit_serial_event;
 
-/* Initialization of signal handlers and tokens.  There is a function
-   handle_sig* for each of the signals GDB cares about.  Specifically:
-   SIGINT, SIGQUIT, SIGTSTP, SIGHUP, SIGWINCH.  These
-   functions are the actual signal handlers associated to the signals
-   via calls to signal().  The only job for these functions is to
-   enqueue the appropriate event/procedure with the event loop.  Such
-   procedures are the old signal handlers.  The event loop will take
-   care of invoking the queued procedures to perform the usual tasks
-   associated with the reception of the signal.  */
-/* NOTE: 1999-04-30 This is the asynchronous version of init_signals.
-   init_signals will become obsolete as we move to have to event loop
-   as the default for gdb.  */
+/* Initialization of signal handlers and tokens.  There are a number of
+   different strategies for handling different signals here.
+
+   For SIGINT, SIGTERM, SIGQUIT, SIGHUP, SIGTSTP, there is a function
+   handle_sig* for each of these signals.  These functions are the actual
+   signal handlers associated to the signals via calls to signal().  The
+   only job for these functions is to enqueue the appropriate
+   event/procedure with the event loop.  The event loop will take care of
+   invoking the queued procedures to perform the usual tasks associated
+   with the reception of the signal.
+
+   For SIGTRAP we just ensure its disposition is set to SIG_DFL.
+
+   For SIGSEGV the handle_sig* function does all the work for handling this
+   signal.  */
 void
 async_init_signals (void)
 {
