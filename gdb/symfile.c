@@ -268,6 +268,7 @@ build_section_addr_info_from_objfile (const struct objfile *objfile)
     {
       int sectindex = sap[i].sectindex;
 
+      gdb_assert (sectindex < objfile->section_offsets.size ());
       sap[i].addr += objfile->section_offsets[sectindex];
     }
   return sap;
@@ -421,6 +422,7 @@ relative_addr_info_to_section_offsets (section_offsets &section_offsets,
       /* Record all sections in offsets.  */
       /* The section_offsets in the objfile are here filled in using
 	 the BFD index.  */
+      gdb_assert (osp->sectindex < section_offsets.size ());
       section_offsets[osp->sectindex] = osp->addr;
     }
 }

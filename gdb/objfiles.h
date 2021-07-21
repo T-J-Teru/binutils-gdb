@@ -598,6 +598,7 @@ public:
     gdb_assert (section->owner == nullptr || section->owner == this->obfd);
 
     int idx = gdb_bfd_section_index (this->obfd, section);
+    gdb_assert (idx < this->section_offsets.size ());
     return this->section_offsets[idx];
   }
 
@@ -609,6 +610,7 @@ public:
     gdb_assert (section->owner == nullptr || section->owner == this->obfd);
 
     int idx = gdb_bfd_section_index (this->obfd, section);
+    gdb_assert (idx < this->section_offsets.size ());
     this->section_offsets[idx] = offset;
   }
 
