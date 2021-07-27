@@ -58,4 +58,26 @@
   internal_error (__FILE__, __LINE__, _(message))
 #endif
 
+/* If a pointer argument to a function is marked as nonnull (using the
+   nonnull attribute) then GCC will warn about any attempts to compare the
+   pointer to nullptr.  Even if you can silence the warning GCC will
+   likely optimize out the check (and any associated code block)
+   completely.
+
+   Normally this would be what you want, but, marking an argument nonnull
+   doesn't guarantee that nullptr can't be passed.  So it's not
+   unreasonable that we might want to add an assert that the argument is
+   not nullptr.
+
+   This function should be used for this purpose, like:
+
+   gdb_assert (nonnull_arg_is_not_nullptr (arg_name));  */
+
+template<typename T>
+bool _GL_ATTRIBUTE_NOINLINE
+nonnull_arg_is_not_nullptr (const T *ptr)
+{
+  return ptr != nullptr;
+}
+
 #endif /* COMMON_GDB_ASSERT_H */

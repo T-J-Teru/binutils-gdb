@@ -35,7 +35,7 @@ class unlinker
   unlinker (const char *filename) ATTRIBUTE_NONNULL (2)
     : m_filename (filename)
   {
-    gdb_assert (filename != NULL);
+    gdb_assert (nonnull_arg_is_not_nullptr (filename));
   }
 
   ~unlinker ()
