@@ -287,7 +287,7 @@ ravenscar_thread_target::add_active_thread ()
   thread_info *active_thr = find_thread_ptid (proc_target, active_ptid);
   if (active_thr == nullptr)
     {
-      active_thr = ::add_thread (proc_target, active_ptid);
+      active_thr = ::add_thread (proc_target, active_ptid, true);
       m_cpu_map[active_ptid.tid ()] = base_cpu;
     }
   return active_thr;
@@ -424,7 +424,7 @@ ravenscar_thread_target::add_thread (struct ada_task_info *task)
 {
   if (find_thread_ptid (current_inferior (), task->ptid) == NULL)
     {
-      ::add_thread (current_inferior ()->process_target (), task->ptid);
+      ::add_thread (current_inferior ()->process_target (), task->ptid, true);
       m_cpu_map[task->ptid.tid ()] = task->base_cpu;
     }
 }

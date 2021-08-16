@@ -557,7 +557,7 @@ tfile_target_open (const char *arg, int from_tty)
 
   inferior_appeared (current_inferior (), TFILE_PID);
 
-  thread_info *thr = add_thread_silent (&tfile_ops, ptid_t (TFILE_PID));
+  thread_info *thr = add_thread_silent (&tfile_ops, ptid_t (TFILE_PID), false);
   switch_to_thread (thr);
 
   if (ts->traceframe_count <= 0)

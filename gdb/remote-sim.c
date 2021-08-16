@@ -661,7 +661,7 @@ gdbsim_target::create_inferior (const char *exec_file,
 
   inferior_appeared (current_inferior (),
 		     sim_data->remote_sim_ptid.pid ());
-  thread_info *thr = add_thread_silent (this, sim_data->remote_sim_ptid);
+  thread_info *thr = add_thread_silent (this, sim_data->remote_sim_ptid, true);
   switch_to_thread (thr);
 
   insert_breakpoints ();	/* Needed to get correct instruction

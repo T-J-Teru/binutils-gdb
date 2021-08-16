@@ -384,9 +384,9 @@ windows_add_thread (ptid_t ptid, HANDLE h, void *tlb, bool main_thread_p)
      the main thread silently (in reality, this thread is really
      more of a process to the user than a thread).  */
   if (main_thread_p)
-    add_thread_silent (&the_windows_nat_target, ptid);
+    add_thread_silent (&the_windows_nat_target, ptid, true);
   else
-    add_thread (&the_windows_nat_target, ptid);
+    add_thread (&the_windows_nat_target, ptid, true);
 
   /* It's simplest to always set this and update the debug
      registers.  */
@@ -1907,6 +1907,14 @@ windows_nat_target::attach (const char *args, int from_tty)
 #endif
 
   do_initial_windows_stuff (pid, 1);
+
+  /* After attaching all threads are stopped.  It would be better if the
+     threads were added in the non-resumed state, but this is not currently
+     the case (the reason for this is just lack of understanding of how
+     threads are managed on Windows).  So we fix up the state here.  */
+  for (thread_info *thr : current_inferior ()->non_exited_threads ())
+    thr->set_resumed (false);
+
   target_terminal::ours ();
 }
 

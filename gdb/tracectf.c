@@ -1169,7 +1169,8 @@ ctf_target_open (const char *dirname, int from_tty)
 
   inferior_appeared (current_inferior (), CTF_PID);
 
-  thread_info *thr = add_thread_silent (&ctf_ops, ptid_t (CTF_PID));
+  /* Pass false to indicate the thread starts in a non-resumed state.  */
+  thread_info *thr = add_thread_silent (&ctf_ops, ptid_t (CTF_PID), false);
   switch_to_thread (thr);
 
   merge_uploaded_trace_state_variables (&uploaded_tsvs);

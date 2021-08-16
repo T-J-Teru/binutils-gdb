@@ -62,7 +62,7 @@ obsd_nat_target::update_thread_list ()
 	  if (inferior_ptid.lwp () == 0)
 	    thread_change_ptid (this, inferior_ptid, ptid);
 	  else
-	    add_thread (this, ptid);
+	    add_thread (this, ptid, true);
 	}
 
       if (ptrace (PT_GET_THREAD_NEXT, pid, (caddr_t)&pts, sizeof pts) == -1)
@@ -133,7 +133,7 @@ obsd_nat_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 	  if (in_thread_list (this, ptid_t (pid)))
 	    thread_change_ptid (this, ptid_t (pid), wptid);
 	  else
-	    add_thread (this, wptid);
+	    add_thread (this, wptid, true);
 	}
     }
   return wptid;

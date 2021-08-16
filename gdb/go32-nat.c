@@ -755,7 +755,7 @@ go32_nat_target::create_inferior (const char *exec_file,
   if (!inf->target_is_pushed (this))
     inf->push_target (this);
 
-  thread_info *thr = add_thread_silent (ptid_t (SOME_PID));
+  thread_info *thr = add_thread_silent (ptid_t (SOME_PID), true);
   switch_to_thread (thr);
 
   clear_proceed_status (0);

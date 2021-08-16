@@ -908,7 +908,7 @@ fbsd_add_threads (fbsd_nat_target *target, pid_t pid)
 	    continue;
 #endif
 	  fbsd_lwp_debug_printf ("adding thread for LWP %u", lwps[i]);
-	  add_thread (target, ptid);
+	  add_thread (target, ptid, true);
 	}
     }
 }
@@ -1331,7 +1331,7 @@ fbsd_nat_target::wait_1 (ptid_t ptid, struct target_waitstatus *ourstatus,
 		{
 		  fbsd_lwp_debug_printf ("adding thread for LWP %u",
 					 pl.pl_lwpid);
-		  add_thread (this, wptid);
+		  add_thread (this, wptid, true);
 		}
 	      ourstatus->set_spurious ();
 	      return wptid;
