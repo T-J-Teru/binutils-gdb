@@ -125,7 +125,7 @@ nbsd_add_threads (nbsd_nat_target *target, pid_t pid)
 	    if (inferior_ptid.lwp () == 0)
 	      thread_change_ptid (target, inferior_ptid, ptid);
 	    else
-	      add_thread (target, ptid);
+	      add_thread (target, ptid, true);
 	  }
       };
 
@@ -652,7 +652,7 @@ nbsd_nat_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 	  ourstatus->set_spurious ();
       else
 	{
-	  add_thread (this, wptid);
+	  add_thread (this, wptid, true);
 	  ourstatus->set_thread_created ();
 	}
       return wptid;

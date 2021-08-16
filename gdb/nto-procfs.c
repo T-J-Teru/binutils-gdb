@@ -411,7 +411,7 @@ nto_procfs_target::update_thread_list ()
       ptid = ptid_t (pid, 0, tid);
       new_thread = find_thread_ptid (this, ptid);
       if (!new_thread)
-	new_thread = add_thread (ptid);
+	new_thread = add_thread (ptid, true);
       update_thread_private_data (new_thread, tid, status.state, 0);
       status.tid++;
     }

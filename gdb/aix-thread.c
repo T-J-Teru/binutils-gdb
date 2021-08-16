@@ -809,7 +809,7 @@ sync_threadlists (void)
 	    = current_inferior ()->process_target ();
 	  thread = add_thread_with_info (proc_target,
 					 ptid_t (infpid, 0, pbuf[pi].pthid),
-					 priv);
+					 priv, true);
 
 	  pi++;
 	}
@@ -843,7 +843,7 @@ sync_threadlists (void)
 	    {
 	      process_stratum_target *proc_target
 		= current_inferior ()->process_target ();
-	      thread = add_thread (proc_target, pptid);
+	      thread = add_thread (proc_target, pptid, true);
 
 	      aix_thread_info *priv = new aix_thread_info;
 	      thread->priv.reset (priv);

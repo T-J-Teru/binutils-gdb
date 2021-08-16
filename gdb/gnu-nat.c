@@ -1085,9 +1085,9 @@ gnu_nat_target::inf_validate_procs (struct inf *inf)
 	      thread_change_ptid (this, inferior_ptid, ptid);
 	    else if (inf->pending_execs != 0)
 	      /* This is a shell thread.  */
-	      add_thread_silent (this, ptid);
+	      add_thread_silent (this, ptid, true);
 	    else
-	      add_thread (this, ptid);
+	      add_thread (this, ptid, true);
 	  }
       }
 
@@ -2117,7 +2117,7 @@ gnu_nat_target::create_inferior (const char *exec_file,
   /* We have something that executes now.  We'll be running through
      the shell at this point (if startup-with-shell is true), but the
      pid shouldn't change.  */
-  thread_info *thr = add_thread_silent (this, ptid_t (pid));
+  thread_info *thr = add_thread_silent (this, ptid_t (pid), true);
   switch_to_thread (thr);
 
   /* Attach to the now stopped child, which is actually a shell...  */

@@ -380,9 +380,9 @@ windows_add_thread (ptid_t ptid, HANDLE h, void *tlb, bool main_thread_p)
      the main thread silently (in reality, this thread is really
      more of a process to the user than a thread).  */
   if (main_thread_p)
-    add_thread_silent (&the_windows_nat_target, ptid);
+    add_thread_silent (&the_windows_nat_target, ptid, true);
   else
-    add_thread (&the_windows_nat_target, ptid);
+    add_thread (&the_windows_nat_target, ptid, true);
 
   /* It's simplest to always set this and update the debug
      registers.  */

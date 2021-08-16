@@ -238,28 +238,39 @@ post_create_inferior (int from_tty)
   /* Be sure we own the terminal in case write operations are performed.  */ 
   target_terminal::ours_for_output ();
 
+  /* The inferior should not be resumed at this point.  */
+  for (thread_info *thread : current_inferior ()->threads ())
+    gdb_assert (!thread->resumed ());
+
   /* If the target hasn't taken care of this already, do it now.
      Targets which need to access registers during to_open,
      to_create_inferior, or to_attach should do it earlier; but many
      don't need to.  */
   target_find_description ();
 
-  /* Now that we know the register layout, retrieve current PC.  But
-     if the PC is unavailable (e.g., we're opening a core file with
-     missing registers info), ignore it.  */
-  thread_info *thr = inferior_thread ();
+  /* Now that we know the register layout, update the stop_pc if it is not
+     already set.  If GDB attached to a running process then the stop_pc
+     will have been set while processing the stop events triggered during
+     the attach.  If this is a core file, or we're just starting a new
+     process, then the stop_pc will not currently be set.
 
-  thr->clear_stop_pc ();
-  try
-    {
-      regcache *rc = get_thread_regcache (thr);
-      thr->set_stop_pc (regcache_read_pc (rc));
-    }
-  catch (const gdb_exception_error &ex)
-    {
-      if (ex.error != NOT_AVAILABLE_ERROR)
-	throw;
-    }
+     But, if the PC is unavailable (e.g., we're opening a core file with
+     missing registers info), ignore it.  Obviously, if we're trying to
+     debug a running process and we can't read the PC then this is bad and
+     shouldn't be ignored, but we'll soon hit errors trying to read the PC
+     elsewhere in GDB, so ignoring this here is fine.  */
+  thread_info *thr = inferior_thread ();
+  if (!thr->stop_pc_p ())
+    try
+      {
+	regcache *rc = get_thread_regcache (thr);
+	thr->set_stop_pc (regcache_read_pc (rc));
+      }
+    catch (const gdb_exception_error &ex)
+      {
+	if (ex.error != NOT_AVAILABLE_ERROR)
+	  throw;
+      }
 
   if (current_program_space->exec_bfd ())
     {
@@ -452,6 +463,17 @@ run_command_1 (const char *args, int from_tty, enum run_how run_how)
   /* to_create_inferior should push the target, so after this point we
      shouldn't refer to run_target again.  */
   run_target = NULL;
+
+  /* Threads are created as resumed, but not executing.  We now want to
+     mark the thread as non-resumed.  The thread will be moved back into
+     the resumed state later when we call proceed, however, if that fails
+     then we want to ensure the thread is left in a non-resumed state.  */
+  for (thread_info *thread : current_inferior ()->threads ())
+    {
+      gdb_assert (thread->resumed ());
+      gdb_assert (!thread->executing ());
+      thread->set_resumed (false);
+    }
 
   /* We're starting off a new process.  When we get out of here, in
      non-stop mode, finish the state of all threads of that process,
@@ -2589,9 +2611,20 @@ attach_command (const char *args, int from_tty)
 	/* The user requested an `attach&'; stop just one thread.  */
 	target_stop (inferior_ptid);
       else
-	/* The user requested an `attach', so stop all threads of this
-	   inferior.  */
-	target_stop (ptid_t (inferior_ptid.pid ()));
+	{
+	  /* The user requested an `attach', so stop all threads of this
+	     inferior.  */
+	  target_stop (ptid_t (inferior_ptid.pid ()));
+
+	  for (thread_info *thread : inferior->non_exited_threads ())
+	    {
+	      gdb_assert (thread->executing ());
+	      gdb_assert (thread->resumed ());
+
+	      thread->set_executing (false);
+	      thread->set_resumed (false);
+	    }
+	}
     }
 
   /* Check for exec file mismatch, and let the user solve it.  */
