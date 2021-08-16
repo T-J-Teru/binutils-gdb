@@ -422,7 +422,7 @@ bsd_uthread_target::wait (ptid_t ptid, struct target_waitstatus *status,
   /* Don't let the core see a ptid without a corresponding thread.  */
   thread_info *thread = find_thread_ptid (beneath, ptid);
   if (thread == NULL || thread->state == THREAD_EXITED)
-    add_thread (beneath, ptid);
+    add_thread (beneath, ptid, true);
 
   return ptid;
 }
@@ -480,7 +480,7 @@ bsd_uthread_target::update_thread_list ()
 	  if (inferior_ptid.tid () == 0)
 	    thread_change_ptid (proc_target, inferior_ptid, ptid);
 	  else
-	    add_thread (proc_target, ptid);
+	    add_thread (proc_target, ptid, true);
 	}
 
       addr = bsd_uthread_read_memory_address (addr + offset);

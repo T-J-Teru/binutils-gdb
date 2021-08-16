@@ -97,7 +97,7 @@ inf_ptrace_target::create_inferior (const char *exec_file,
   /* We have something that executes now.  We'll be running through
      the shell at this point (if startup-with-shell is true), but the
      pid shouldn't change.  */
-  thread_info *thr = add_thread_silent (this, ptid);
+  thread_info *thr = add_thread_silent (this, ptid, true);
   switch_to_thread (thr);
 
   unpusher.release ();
@@ -167,7 +167,7 @@ inf_ptrace_target::attach (const char *args, int from_tty)
 
   /* Always add a main thread.  If some target extends the ptrace
      target, it should decorate the ptid later with more info.  */
-  thread_info *thr = add_thread_silent (this, ptid_t (pid));
+  thread_info *thr = add_thread_silent (this, ptid_t (pid), true);
   switch_to_thread (thr);
 
   /* Don't consider the thread stopped until we've processed its

@@ -260,15 +260,15 @@ new_thread (struct inferior *inf, ptid_t ptid)
 }
 
 struct thread_info *
-add_thread_silent (process_stratum_target *targ, ptid_t ptid)
+add_thread_silent (process_stratum_target *targ, ptid_t ptid, bool resumed_p)
 {
   gdb_assert (targ != nullptr);
 
   inferior *inf = find_inferior_ptid (targ, ptid);
 
-  threads_debug_printf ("add thread to inferior %d, ptid %s, target %s",
-			inf->num, ptid.to_string ().c_str (),
-			targ->shortname ());
+  threads_debug_printf
+    ("add thread to inferior %d, ptid %s, target %s, resumed_p = %d",
+     inf->num, ptid.to_string ().c_str (), targ->shortname (), resumed_p);
 
   /* We may have an old thread with the same id in the thread list.
      If we do, it must be dead, otherwise we wouldn't be adding a new
@@ -279,6 +279,14 @@ add_thread_silent (process_stratum_target *targ, ptid_t ptid)
     delete_thread (tp);
 
   tp = new_thread (inf, ptid);
+
+  /* Upon creation, all threads are non-executing, and non-resumed.  Before
+     notifying observers of the new thread, we set the resumed flag to the
+     desired value.  */
+  gdb_assert (!tp->executing ());
+  tp->set_resumed (resumed_p);
+
+  /* Announce the new thread to all observers.  */
   gdb::observers::new_thread.notify (tp);
 
   return tp;
@@ -286,9 +294,9 @@ add_thread_silent (process_stratum_target *targ, ptid_t ptid)
 
 struct thread_info *
 add_thread_with_info (process_stratum_target *targ, ptid_t ptid,
-		      private_thread_info *priv)
+		      private_thread_info *priv, bool resumed_p)
 {
-  thread_info *result = add_thread_silent (targ, ptid);
+  thread_info *result = add_thread_silent (targ, ptid, resumed_p);
 
   result->priv.reset (priv);
 
@@ -300,9 +308,9 @@ add_thread_with_info (process_stratum_target *targ, ptid_t ptid,
 }
 
 struct thread_info *
-add_thread (process_stratum_target *targ, ptid_t ptid)
+add_thread (process_stratum_target *targ, ptid_t ptid, bool resumed_p)
 {
-  return add_thread_with_info (targ, ptid, NULL);
+  return add_thread_with_info (targ, ptid, NULL, resumed_p);
 }
 
 private_thread_info::~private_thread_info () = default;
@@ -341,9 +349,18 @@ thread_info::deletable () const
 void
 thread_info::set_executing (bool executing)
 {
-  m_executing = executing;
+  if (executing == m_executing)
+    return;
+
+  gdb_assert (m_resumed);
+
   if (executing)
     this->clear_stop_pc ();
+
+  threads_debug_printf ("ptid = %s, executing = %d",
+			this->ptid.to_string ().c_str (),
+			executing);
+  m_executing = executing;
 }
 
 /* See gdbthread.h.  */
@@ -354,6 +371,8 @@ thread_info::set_resumed (bool resumed)
   if (resumed == m_resumed)
     return;
 
+  gdb_assert (!m_executing);
+
   process_stratum_target *proc_target = this->inf->process_target ();
 
   /* If we transition from resumed to not resumed, we might need to remove
@@ -361,6 +380,9 @@ thread_info::set_resumed (bool resumed)
   if (!resumed)
     proc_target->maybe_remove_resumed_with_pending_wait_status (this);
 
+  threads_debug_printf ("ptid = %s, resumed = %d",
+			this->ptid.to_string ().c_str (),
+			resumed);
   m_resumed = resumed;
 
   /* If we transition from not resumed to resumed, we might need to add

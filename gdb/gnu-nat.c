@@ -1085,9 +1085,9 @@ gnu_nat_target::inf_validate_procs (struct inf *inf)
 	      thread_change_ptid (this, inferior_ptid, ptid);
 	    else if (inf->pending_execs != 0)
 	      /* This is a shell thread.  */
-	      add_thread_silent (this, ptid);
+	      add_thread_silent (this, ptid, true);
 	    else
-	      add_thread (this, ptid);
+	      add_thread (this, ptid, true);
 	  }
       }
 
@@ -2120,7 +2120,7 @@ gnu_nat_target::create_inferior (const char *exec_file,
   /* We have something that executes now.  We'll be running through
      the shell at this point (if startup-with-shell is true), but the
      pid shouldn't change.  */
-  thread_info *thr = add_thread_silent (this, ptid_t (pid));
+  thread_info *thr = add_thread_silent (this, ptid_t (pid), true);
   switch_to_thread (thr);
 
   /* Attach to the now stopped child, which is actually a shell...  */
@@ -2186,6 +2186,13 @@ gnu_nat_target::attach (const char *args, int from_tty)
   inferior->attach_flag = 1;
 
   inf_update_procs (inf);
+
+  /* After attaching all threads are stopped.  It would be better if the
+     threads were added in the non-resumed state, but this is not currently
+     the case (the reason for this is just lack of understanding of how
+     threads are managed on HURD).  So we fix up the state here.  */
+  for (thread_info *thr : current_inferior ()->non_exited_threads ())
+    thr->set_resumed (false);
 
   thread_info *thr
     = find_thread_ptid (this, ptid_t (pid, inf_pick_first_thread ()));

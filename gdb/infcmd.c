@@ -238,28 +238,62 @@ post_create_inferior (int from_tty)
   /* Be sure we own the terminal in case write operations are performed.  */ 
   target_terminal::ours_for_output ();
 
+  if (debug_infrun)
+    {
+      infrun_debug_printf ("threads in the newly created inferior:");
+      for (thread_info *thread : current_inferior ()->non_exited_threads ())
+	infrun_debug_printf ("  thread %s, executing = %d, resumed = %d, "
+			     "state = %s",
+			     thread->ptid.to_string ().c_str (),
+			     thread->executing (),
+			     thread->resumed (),
+			     thread_state_string (thread->state));
+    }
+
+  /* When attaching to a multi-threaded process the "first" thread will be
+     stopped as part of the attach.  We then call stop_all_threads, which
+     will request that all threads stop.  When the first stop is processed
+     we will end up in here.
+
+     So, we expect that the "first" thread of the inferior should be
+     stopped, as well as one other random thread.  All of the other threads
+     should still be considered resumed, but will have a stop event
+     incoming.
+
+     As a consequence, we only make an assertion here about the currently
+     selected thread of the inferior.  Of the remaining threads, we only
+     expect one to be stopped, but we don't assert that.  */
+  gdb_assert (!inferior_thread ()->resumed ());
+
   /* If the target hasn't taken care of this already, do it now.
      Targets which need to access registers during to_open,
      to_create_inferior, or to_attach should do it earlier; but many
      don't need to.  */
   target_find_description ();
 
-  /* Now that we know the register layout, retrieve current PC.  But
-     if the PC is unavailable (e.g., we're opening a core file with
-     missing registers info), ignore it.  */
-  thread_info *thr = inferior_thread ();
+  /* Now that we know the register layout, update the stop_pc if it is not
+     already set.  If GDB attached to a running process then the stop_pc
+     will have been set while processing the stop events triggered during
+     the attach.  If this is a core file, or we're just starting a new
+     process, then the stop_pc will not currently be set.
 
-  thr->clear_stop_pc ();
-  try
-    {
-      regcache *rc = get_thread_regcache (thr);
-      thr->set_stop_pc (regcache_read_pc (rc));
-    }
-  catch (const gdb_exception_error &ex)
-    {
-      if (ex.error != NOT_AVAILABLE_ERROR)
-	throw;
-    }
+     But, if the PC is unavailable (e.g., we're opening a core file with
+     missing registers info), ignore it.  Obviously, if we're trying to
+     debug a running process and we can't read the PC then this is bad and
+     shouldn't be ignored, but we'll soon hit errors trying to read the PC
+     elsewhere in GDB, so ignoring this here is fine.  */
+  thread_info *thr = inferior_thread ();
+  if (!thr->stop_pc_p ())
+    try
+      {
+	regcache *rc = get_thread_regcache (thr);
+	thr->set_stop_pc (regcache_read_pc (rc));
+      }
+    catch (const gdb_exception_error &ex)
+      {
+	if (ex.error != NOT_AVAILABLE_ERROR)
+	  throw;
+      }
 
   if (current_program_space->exec_bfd ())
     {
@@ -453,6 +487,31 @@ run_command_1 (const char *args, int from_tty, enum run_how run_how)
   /* to_create_inferior should push the target, so after this point we
      shouldn't refer to run_target again.  */
   run_target = NULL;
+
+  if (debug_infrun)
+    {
+      infrun_debug_printf ("immediately after create_process:");
+      for (thread_info *thread : current_inferior ()->non_exited_threads ())
+	infrun_debug_printf ("  thread %s, executing = %d, resumed = %d, "
+			     "state = %s",
+			     thread->ptid.to_string ().c_str (),
+			     thread->executing (),
+			     thread->resumed (),
+			     thread_state_string (thread->state));
+    }
+
+  /* All threads in the new inferior should be resumed, but not executing.
+     We now mark the thread(s) as non-resumed.
+
+     The thread will be marked resumed again later when we call proceed,
+     however, if that fails then we want to ensure the thread is left in a
+     non-resumed state.  */
+  for (thread_info *thread : current_inferior ()->threads ())
+    {
+      gdb_assert (thread->resumed ());
+      gdb_assert (!thread->executing ());
+      thread->set_resumed (false);
+    }
 
   /* We're starting off a new process.  When we get out of here, in
      non-stop mode, finish the state of all threads of that process,
@@ -2589,6 +2648,11 @@ attach_command (const char *args, int from_tty)
      shouldn't refer to attach_target again.  */
   attach_target = NULL;
 
+  /* After an attach the state of all threads will vary depending upon the
+     type of target that's in use.  For some targets, after an attach, all
+     the threads are resumed and executing (e.g. GNU/Linux).  For other
+     targets, all the threads will be stopped, so non-executing, and
+     non-resumed (e.g. Windows).  */
   if (debug_infrun)
     {
       infrun_debug_printf ("immediately after attach:");

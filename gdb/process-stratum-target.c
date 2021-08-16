@@ -100,7 +100,7 @@ process_stratum_target::follow_exec (inferior *follow_inf, ptid_t ptid,
 	 may decide to unpush itself from the original inferior's target stack
 	 after that, at its discretion.  */
       follow_inf->push_target (orig_inf->process_target ());
-      thread_info *t = add_thread (follow_inf->process_target (), ptid);
+      thread_info *t = add_thread (follow_inf->process_target (), ptid, false);
 
       /* Leave the new inferior / thread as the current inferior / thread.  */
       switch_to_thread (t);
@@ -118,7 +118,7 @@ process_stratum_target::follow_fork (inferior *child_inf, ptid_t child_ptid,
   if (child_inf != nullptr)
     {
       child_inf->push_target (this);
-      add_thread_silent (this, child_ptid);
+      add_thread_silent (this, child_ptid, false);
     }
 }
 
