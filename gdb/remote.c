@@ -751,7 +751,8 @@ public: /* Remote specific methods.  */
   int remote_resume_with_vcont (ptid_t ptid, int step,
 				gdb_signal siggnal);
 
-  thread_info *add_current_inferior_and_thread (const char *wait_status);
+  thread_info *add_current_inferior_and_thread (const char *wait_status,
+						bool resumed_p);
 
   ptid_t wait_ns (ptid_t ptid, struct target_waitstatus *status,
 		  target_wait_flags options);
@@ -2546,8 +2547,9 @@ remote_target::remote_add_thread (ptid_t ptid, bool running, bool executing)
      when we process a matching stop reply.  */
   get_remote_thread_info (thread)->set_resumed ();
 
-  set_executing (this, ptid, executing);
   set_running (this, ptid, running);
+  set_resumed (this, ptid, running);
+  set_executing (this, ptid, executing);
 
   return thread;
 }
@@ -4440,7 +4442,8 @@ remote_target::get_current_thread (const char *wait_status)
    The function returns pointer to the main thread of the inferior. */
 
 thread_info *
-remote_target::add_current_inferior_and_thread (const char *wait_status)
+remote_target::add_current_inferior_and_thread (const char *wait_status,
+						bool resumed_p)
 {
   struct remote_state *rs = get_remote_state ();
   bool fake_pid_p = false;
@@ -4471,7 +4474,7 @@ remote_target::add_current_inferior_and_thread (const char *wait_status)
   /* Add the main thread and switch to it.  Don't try reading
      registers yet, since we haven't fetched the target description
      yet.  */
-  thread_info *tp = add_thread_silent (this, curr_ptid);
+  thread_info *tp = add_thread_silent (this, curr_ptid, resumed_p);
   switch_to_thread_no_regs (tp);
 
   return tp;
@@ -4586,6 +4589,7 @@ remote_target::process_initial_stop_replies (int from_tty)
 	evthread->set_pending_waitstatus (ws);
 
       set_executing (this, event_ptid, false);
+      set_resumed (this, event_ptid, false);
       set_running (this, event_ptid, false);
       get_remote_thread_info (evthread)->set_not_resumed ();
     }
@@ -4841,7 +4845,8 @@ remote_target::start_remote (int from_tty, int extended_p)
 	  /* Target has no concept of threads at all.  GDB treats
 	     non-threaded target as single-threaded; add a main
 	     thread.  */
-	  thread_info *tp = add_current_inferior_and_thread (wait_status);
+	  thread_info *tp
+	    = add_current_inferior_and_thread (wait_status, true);
 	  get_remote_thread_info (tp)->set_resumed ();
 	}
       else
@@ -10488,7 +10493,7 @@ Remote replied unexpectedly while setting startup-with-shell: %s"),
 
   /* vRun's success return is a stop reply.  */
   stop_reply = run_worked ? rs->buf.data () : NULL;
-  add_current_inferior_and_thread (stop_reply);
+  add_current_inferior_and_thread (stop_reply, false);
 
   /* Get updated offsets, if the stub uses qOffsets.  */
   get_offsets ();

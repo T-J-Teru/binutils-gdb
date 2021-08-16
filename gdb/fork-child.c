@@ -126,10 +126,24 @@ gdb_startup_inferior (pid_t pid, int num_traps)
   inferior *inf = current_inferior ();
   process_stratum_target *proc_target = inf->process_target ();
 
+  for (thread_info *thread : inf->threads ())
+    {
+      /* Ideally, all targets would created their initial threads in the
+	 non-resumed state, and only when we get here would we mark the
+	 threads as resumed.  However, this is not currently the case, some
+	 targets create their initial threads in the resumed state (for no
+	 particular reason other than historical), and so we can't assert
+	 anything about the state of the inferior threads at this point.
+
+	 What we'd like to say is:  gdb_assert (!thread->resumed ());   */
+      thread->set_resumed (true);
+    }
+
   ptid_t ptid = startup_inferior (proc_target, pid, num_traps, NULL, NULL);
 
   /* Mark all threads non-executing.  */
   set_executing (proc_target, ptid, false);
+  set_resumed (proc_target, ptid, false);
 
   return ptid;
 }

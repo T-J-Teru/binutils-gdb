@@ -345,6 +345,8 @@ public:
 
   void set_stop_pc (CORE_ADDR stop_pc)
   {
+    gdb_assert (!m_resumed);
+    gdb_assert (!m_executing);
     m_suspend.stop_pc = stop_pc;
   }
 
@@ -352,6 +354,8 @@ public:
 
   void clear_stop_pc ()
   {
+    gdb_assert (m_resumed);
+    gdb_assert (!m_executing);
     m_suspend.stop_pc.reset ();
   }
 
@@ -547,22 +551,25 @@ using inferior_ref
 /* Create an empty thread list, or empty the existing one.  */
 extern void init_thread_list (void);
 
-/* Add a thread to the thread list, print a message
-   that a new thread is found, and return the pointer to
-   the new thread.  Caller my use this pointer to 
-   initialize the private thread data.  */
+/* Add a thread to the thread list, print a message that a new thread is
+   found, and return the pointer to the new thread.  Caller my use this
+   pointer to initialize the private thread data.  When RESUMED_P is true
+   the thread is created in a resumed state, otherwise, the thread is
+   created in a non-resumed state.  */
 extern struct thread_info *add_thread (process_stratum_target *targ,
-				       ptid_t ptid);
+				       ptid_t ptid, bool resumed_p = true);
 
 /* Same as add_thread, but does not print a message about new
    thread.  */
 extern struct thread_info *add_thread_silent (process_stratum_target *targ,
-					      ptid_t ptid);
+					      ptid_t ptid,
+					      bool resumed_p = true);
 
 /* Same as add_thread, and sets the private info.  */
 extern struct thread_info *add_thread_with_info (process_stratum_target *targ,
 						 ptid_t ptid,
-						 private_thread_info *);
+						 private_thread_info *,
+						 bool resumed_p = true);
 
 /* Delete thread THREAD and notify of thread exit.  If the thread is
    currently not deletable, don't actually delete it but still tag it

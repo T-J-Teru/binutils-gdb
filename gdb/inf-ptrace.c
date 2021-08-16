@@ -94,7 +94,7 @@ inf_ptrace_target::create_inferior (const char *exec_file,
   /* We have something that executes now.  We'll be running through
      the shell at this point (if startup-with-shell is true), but the
      pid shouldn't change.  */
-  thread_info *thr = add_thread_silent (this, ptid);
+  thread_info *thr = add_thread_silent (this, ptid, false);
   switch_to_thread (thr);
 
   unpusher.release ();

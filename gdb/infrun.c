@@ -580,7 +580,13 @@ holding the child stopped.  Try \"set detach-on-fork\" or \
   /* If there is a child inferior, target_follow_fork must have created a thread
      for it.  */
   if (child_inf != nullptr)
-    gdb_assert (!child_inf->thread_list.empty ());
+    {
+      gdb_assert (!child_inf->thread_list.empty ());
+
+      /* Any added thread should have been marked non-resumed already.  */
+      for (thread_info *thread : child_inf->threads ())
+	gdb_assert (!thread->resumed ());
+    }
 
   /* Detach the parent if needed.  */
   if (follow_child)
@@ -1091,6 +1097,7 @@ follow_exec (ptid_t ptid, const char *exec_file_target)
      breakpoint or similar, it's gone now.  We cannot truly
      step-to-next statement through an exec().  */
   thread_info *th = inferior_thread ();
+  gdb_assert (!th->resumed ());
   th->control.step_resume_breakpoint = NULL;
   th->control.exception_resume_breakpoint = NULL;
   th->control.single_step_breakpoints = NULL;
@@ -1171,6 +1178,11 @@ follow_exec (ptid_t ptid, const char *exec_file_target)
 
   gdb_assert (current_inferior () == inf);
   gdb_assert (current_program_space == inf->pspace);
+
+  /* The inferior (and so thread) might have changed depending on which
+     path we took through the above code.  However, the currently selected
+     thread should not be in a resumed state.  */
+  gdb_assert (!inferior_thread ()->resumed ());
 
   /* Attempt to open the exec file.  SYMFILE_DEFER_BP_RESET is used
      because the proper displacement for a PIE (Position Independent
@@ -2100,6 +2112,52 @@ internal_resume_ptid (int user_step)
     return user_visible_resume_ptid (user_step);
 }
 
+/* Before calling into target code to set inferior threads executing we
+   must mark all threads as resumed.  If an exception is thrown while
+   trying to set the threads executing then we should mark the threads as
+   non-resumed.
+
+   Create an instance of this struct before */
+struct scoped_mark_thread_resumed
+{
+  /* Constructor.  All threads matching PTID will be marked as resumed.  */
+  scoped_mark_thread_resumed (process_stratum_target *targ, ptid_t ptid)
+    : m_target (targ), m_ptid (ptid)
+  {
+    gdb_assert (m_target != nullptr);
+    set_resumed (m_target, m_ptid, true);
+  }
+
+  /* Destructor.  If M_TARGET is not nullptr then mark all threads matching
+     M_PTID as no longer being resumed.  The expectation is that on the
+     exception path this will be called with M_TARGET still set to a valid
+     target.  If however, the threads were successfully set executing then
+     this->commit() will have been called, and M_TARGET will now be
+     nullptr.  */
+  ~scoped_mark_thread_resumed ()
+  {
+    if (m_target != nullptr)
+      set_resumed (m_target, m_ptid, false);
+  }
+
+  /* Called once all of the threads have successfully be set executing (by
+     calling into the target code).  Clears M_TARGET as an indication that,
+     when this object is destructed, we should leave all matching threads
+     as being marked resumed.  */
+  void commit ()
+  {
+    m_target = nullptr;
+  }
+
+private:
+
+  /* The target used for marking threads as resumed or non-resumed.  */
+  process_stratum_target *m_target;
+
+  /* The thread (or threads) to mark as resumed.  */
+  ptid_t m_ptid;
+};
+
 /* Wrapper for target_resume, that handles infrun-specific
    bookkeeping.  */
 
@@ -2107,6 +2165,11 @@ static void
 do_target_resume (ptid_t resume_ptid, bool step, enum gdb_signal sig)
 {
   struct thread_info *tp = inferior_thread ();
+
+  /* Create a scoped_mark_thread_resumed to mark all threads matching
+     RESUME_PTID as resumed.  */
+  process_stratum_target *curr_target = current_inferior ()->process_target ();
+  scoped_mark_thread_resumed scoped_resume (curr_target, resume_ptid);
 
   gdb_assert (!tp->stop_requested);
 
@@ -2146,6 +2209,9 @@ do_target_resume (ptid_t resume_ptid, bool step, enum gdb_signal sig)
 
   if (target_can_async_p ())
     target_async (1);
+
+  /* Call commit so SCOPED_RESUME leaves threads marked as resumed.  */
+  scoped_resume.commit ();
 }
 
 /* Resume the inferior.  SIG is the signal to give the inferior
@@ -2305,7 +2371,6 @@ resume_1 (enum gdb_signal sig)
 
 	      resume_ptid = internal_resume_ptid (user_step);
 	      do_target_resume (resume_ptid, false, GDB_SIGNAL_0);
-	      tp->set_resumed (true);
 	      return;
 	    }
 	}
@@ -2514,7 +2579,6 @@ resume_1 (enum gdb_signal sig)
     }
 
   do_target_resume (resume_ptid, step, sig);
-  tp->set_resumed (true);
 }
 
 /* Resume the inferior.  SIG is the signal to give the inferior
@@ -5616,6 +5680,10 @@ handle_inferior_event (struct execution_control_state *ecs)
 	 execd thread for that case (this is a nop otherwise).  */
       ecs->event_thread = inferior_thread ();
 
+      /* If we did switch threads above, then the new thread should still
+	 be in the non-resumed state.  */
+      gdb_assert (!ecs->event_thread->resumed ());
+
       ecs->event_thread->set_stop_pc
 	(regcache_read_pc (get_thread_regcache (ecs->event_thread)));
 
@@ -5865,12 +5933,6 @@ finish_step_over (struct execution_control_state *ecs)
 
 	  /* Record the event thread's event for later.  */
 	  save_waitstatus (tp, &ecs->ws);
-	  /* This was cleared early, by handle_inferior_event.  Set it
-	     so this pending event is considered by
-	     do_target_wait.  */
-	  tp->set_resumed (true);
-
-	  gdb_assert (!tp->executing ());
 
 	  regcache = get_thread_regcache (tp);
 	  tp->set_stop_pc (regcache_read_pc (regcache));
@@ -5880,6 +5942,10 @@ finish_step_over (struct execution_control_state *ecs)
 			       paddress (target_gdbarch (), tp->stop_pc ()),
 			       target_pid_to_str (tp->ptid).c_str (),
 			       currently_stepping (tp));
+
+	  /* This was cleared early, by handle_inferior_event.  Set it so
+	     this pending event is considered by do_target_wait.  */
+	  tp->set_resumed (true);
 
 	  /* This in-line step-over finished; clear this so we won't
 	     start a new one.  This is what handle_signal_stop would
@@ -7530,7 +7596,6 @@ keep_going_stepped_thread (struct thread_info *tp)
 				     get_frame_address_space (frame),
 				     tp->stop_pc ());
 
-      tp->set_resumed (true);
       resume_ptid = internal_resume_ptid (tp->control.stepping_command);
       do_target_resume (resume_ptid, false, GDB_SIGNAL_0);
     }
