@@ -1863,7 +1863,7 @@ do_attach (ptid_t ptid)
 
   /* Add it to gdb's thread list.  */
   ptid = ptid_t (pi->pid, lwpid, 0);
-  thread_info *thr = add_thread (&the_procfs_target, ptid);
+  thread_info *thr = add_thread (&the_procfs_target, ptid, true);
   switch_to_thread (thr);
 }
 
@@ -2221,7 +2221,7 @@ wait_again:
 		    temp_ptid = ptid_t (pi->pid, temp_tid, 0);
 		    /* If not in GDB's thread list, add it.  */
 		    if (!in_thread_list (this, temp_ptid))
-		      add_thread (this, temp_ptid);
+		      add_thread (this, temp_ptid, true);
 
 		    target_continue_no_signal (ptid);
 		    goto wait_again;
@@ -2280,7 +2280,7 @@ wait_again:
 		    /* If not in GDB's thread list, add it.  */
 		    temp_ptid = ptid_t (pi->pid, temp_tid, 0);
 		    if (!in_thread_list (this, temp_ptid))
-		      add_thread (this, temp_ptid);
+		      add_thread (this, temp_ptid, true);
 
 		    status->set_stopped (GDB_SIGNAL_0);
 		    return retval;
@@ -2311,7 +2311,7 @@ wait_again:
 		  /* We have a new thread.  We need to add it both to
 		     GDB's list and to our own.  If we don't create a
 		     procinfo, resume may be unhappy later.  */
-		  add_thread (this, retval);
+		  add_thread (this, retval, true);
 		  if (find_procinfo (retval.pid (),
 				     retval.lwp ()) == NULL)
 		    create_procinfo (retval.pid (),
@@ -2847,7 +2847,7 @@ procfs_target::create_inferior (const char *exec_file,
   /* We have something that executes now.  We'll be running through
      the shell at this point (if startup-with-shell is true), but the
      pid shouldn't change.  */
-  thread_info *thr = add_thread_silent (this, ptid_t (pid));
+  thread_info *thr = add_thread_silent (this, ptid_t (pid), true);
   switch_to_thread (thr);
 
   procfs_init_inferior (pid);
@@ -2862,7 +2862,7 @@ procfs_notice_thread (procinfo *pi, procinfo *thread, void *ptr)
 
   thread_info *thr = find_thread_ptid (&the_procfs_target, gdb_threadid);
   if (thr == NULL || thr->state == THREAD_EXITED)
-    add_thread (&the_procfs_target, gdb_threadid);
+    add_thread (&the_procfs_target, gdb_threadid, true);
 
   return 0;
 }

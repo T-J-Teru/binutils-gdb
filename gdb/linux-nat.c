@@ -1141,7 +1141,7 @@ attach_proc_task_lwp_callback (ptid_t ptid)
 	  /* Also add the LWP to gdb's thread list, in case a
 	     matching libthread_db is not found (or the process uses
 	     raw clone).  */
-	  add_thread (linux_target, lp->ptid);
+	  add_thread (linux_target, lp->ptid, true);
 	  set_running (linux_target, lp->ptid, true);
 	  set_executing (linux_target, lp->ptid, true);
 	}
@@ -2030,7 +2030,7 @@ linux_handle_extended_wait (struct lwp_info *lp, int status)
 	      /* The process is not using thread_db.  Add the LWP to
 		 GDB's list.  */
 	      target_post_attach (new_lp->ptid.lwp ());
-	      add_thread (linux_target, new_lp->ptid);
+	      add_thread (linux_target, new_lp->ptid, true);
 	    }
 
 	  /* Even if we're stopping the thread for some reason
@@ -2912,7 +2912,7 @@ linux_nat_filter_event (int lwpid, int status)
       lp = add_lwp (ptid_t (lwpid, lwpid));
       lp->stopped = 1;
       lp->resumed = 1;
-      add_thread (linux_target, lp->ptid);
+      add_thread (linux_target, lp->ptid, true);
     }
 
   if (WIFSTOPPED (status) && !lp)

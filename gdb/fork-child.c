@@ -126,6 +126,9 @@ gdb_startup_inferior (pid_t pid, int num_traps)
   inferior *inf = current_inferior ();
   process_stratum_target *proc_target = inf->process_target ();
 
+  for (thread_info *thread : inf->threads ())
+    gdb_assert (thread->resumed ());
+
   ptid_t ptid = startup_inferior (proc_target, pid, num_traps, NULL, NULL);
 
   /* Mark all threads non-executing.  */

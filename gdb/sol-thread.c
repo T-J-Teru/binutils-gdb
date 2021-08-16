@@ -456,7 +456,7 @@ sol_thread_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 	    {
 	      process_stratum_target *proc_target
 		= current_inferior ()->process_target ();
-	      add_thread (proc_target, rtnval);
+	      add_thread (proc_target, rtnval, true);
 	    }
 	}
     }
@@ -1008,7 +1008,7 @@ sol_update_thread_list_callback (const td_thrhandle_t *th, void *ignored)
     {
       process_stratum_target *proc_target
 	= current_inferior ()->process_target ();
-      add_thread (proc_target, ptid);
+      add_thread (proc_target, ptid, true);
     }
 
   return 0;

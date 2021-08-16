@@ -347,7 +347,8 @@ add_to_thread_list (asection *asect, asection *reg_sect)
 
   ptid_t ptid (pid, lwpid);
 
-  thread_info *thr = add_thread (inf->process_target (), ptid);
+  /* Pass false to indicate the thread should be added non-resumed.  */
+  thread_info *thr = add_thread (inf->process_target (), ptid, false);
 
 /* Warning, Will Robinson, looking at BFD private data! */
 
@@ -505,7 +506,7 @@ core_target_open (const char *arg, int from_tty)
       if (thread == NULL)
 	{
 	  inferior_appeared (current_inferior (), CORELOW_PID);
-	  thread = add_thread_silent (target, ptid_t (CORELOW_PID));
+	  thread = add_thread_silent (target, ptid_t (CORELOW_PID), false);
 	}
 
       switch_to_thread (thread);
@@ -513,6 +514,10 @@ core_target_open (const char *arg, int from_tty)
 
   if (current_program_space->exec_bfd () == nullptr)
     locate_exec_from_corefile_build_id (core_bfd, from_tty);
+
+  /* Threads in a core file are not started resumed.  */
+  for (thread_info *thread : current_inferior ()->threads ())
+    gdb_assert (!thread->resumed ());
 
   post_create_inferior (from_tty);
 
