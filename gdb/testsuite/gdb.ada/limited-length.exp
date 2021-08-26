@@ -1,0 +1,51 @@
+# Copyright 2021 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib "ada.exp"
+
+if { [skip_ada_tests] } { return -1 }
+
+standard_ada_testfile foo
+
+if {[gdb_compile_ada "${srcfile}" "${binfile}" executable [list debug ]] != "" } {
+  return -1
+}
+
+clean_restart ${testfile}
+
+set bp_location [gdb_get_line_number "STOP" ${testdir}/foo.adb]
+if ![runto "foo.adb:$bp_location" ] then {
+  perror "Couldn't run ${testfile}"
+  return
+}
+
+gdb_test "print Large_Array" \
+    "\\(\\(\\(1, 2, 3, 4\\), \\(5, 6, 7, 8\\), \\(9, 10, 11, 12\\), .* \\(53, 54, 55, 56\\), \\(57, 58, 59, 60\\), \\(61, 62, 63, 64\\)\\)\\)"
+
+set elem_size [get_valueof "/d" "(Large_Array(1,1,1)'Size + 7) / 8" "*unknown"]
+set max_value_size [expr $elem_size * 32]
+gdb_test_no_output "set max-value-size $max_value_size"
+
+gdb_test "print Large_Array" \
+    "value of type .* requires $decimal bytes, which is more than max-value-size" \
+    "print Large_Array with reduced max-value-size"
+
+gdb_test "print -elements 2 -- Large_Array" \
+    "\\(\\(\\(1, 2\\.\\.\\.\\), \\(5, 6\\.\\.\\.\\)\\.\\.\\.\\), \\(\\(17, 18\\.\\.\\.\\), \\(21, 22\\.\\.\\.\\)\\.\\.\\.\\)\\.\\.\\.\\)"
+
+gdb_test_no_output "set print elements 2"
+gdb_test "print Large_Array" \
+    "\\(\\(\\(1, 2\\.\\.\\.\\), \\(5, 6\\.\\.\\.\\)\\.\\.\\.\\), \\(\\(17, 18\\.\\.\\.\\), \\(21, 22\\.\\.\\.\\)\\.\\.\\.\\)\\.\\.\\.\\)" \
+    "print Large_Array with 'set print elements 2' in effect"

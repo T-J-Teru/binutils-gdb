@@ -1247,6 +1247,11 @@ print_command_parse_format (const char **expp, const char *cmdname,
 void
 print_value (value *val, const value_print_options &opts)
 {
+  /* This setting allows large arrays to be printed by limiting the number
+     of elements that are loaded into GDB's memory; we only need to load as
+     many array elements as we plan to print.  */
+  scoped_array_length_limiting limit_large_arrays (opts.print_max);
+
   int histindex = record_latest_value (val);
 
   annotate_value_history_begin (histindex, value_type (val));

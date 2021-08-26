@@ -1,0 +1,72 @@
+# Copyright 2021 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test GDB's limited array printing.
+
+standard_testfile
+
+if { [prepare_for_testing "failed to prepare" $testfile $srcfile] } {
+    return -1
+}
+
+if ![runto_main] then {
+    perror "couldn't run to breakpoint"
+    continue
+}
+
+with_test_prefix "with standard max-value size" {
+    gdb_test "print large_1d_array" \
+	" = \\{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, .*\\}"
+    gdb_test "print large_2d_array" \
+	" = \\{\\{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, \\{10, 11, 12, .*\\}\\}"
+}
+
+# Set the max-value-size so we can only print 51 elements.
+set int_size [get_valueof "/d" "sizeof(int)" "*unknown*"]
+gdb_test_no_output "set max-value-size [expr $int_size * 51]"
+
+with_test_prefix "with reduced max-value size" {
+    gdb_test "print large_1d_array" \
+	"\r\nvalue requires $decimal bytes, which is more than max-value-size"
+    gdb_test "print large_2d_array" \
+	"\r\nvalue requires $decimal bytes, which is more than max-value-size"
+}
+
+gdb_test_no_output "set print elements 3"
+
+with_test_prefix "with reduced print elements" {
+    # TODO: I find it weid that the syntax here is '0, 1, 2...' rather
+    # than '0, 1, 2, ...' which I think better represents that
+    # separate elements have been removed.
+    gdb_test "print large_1d_array" \
+	" = \\{0, 1, 2\\.\\.\\.\\}"
+
+    # TODO: Should we print something better than '<unavailable>'
+    # here?  This would require that values understand more about why
+    # they are not available.
+    gdb_test "print \$" " = <unavailable>" \
+	"print large_1d_array from history"
+
+    # TODO: I find this syntax really weird.  I guess I see that C/C++
+    # don't have true multi-dimensional arrays, but printing the first
+    # few elements from each sub-array was really not what I was
+    # expecting.
+    gdb_test "print large_2d_array" \
+	" = \\{\\{0, 1, 2\\.\\.\\.\\}, \\{10, 11, 12\\.\\.\\.\\}, \\{20, 21, 22\\.\\.\\.\\}\\.\\.\\.\\}"
+
+    # TODO: See previous '<unavailable>' test above.
+    gdb_test "print \$" " = <unavailable>" \
+	"print large_2d_array from history"
+}
