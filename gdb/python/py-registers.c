@@ -196,6 +196,8 @@ gdbpy_register_descriptor_to_string (PyObject *self)
   int regnum = reg->regnum;
 
   const char *name = gdbarch_register_name (gdbarch, regnum);
+  if (name == nullptr)
+    name = "*unknown*";
   return PyString_FromString (name);
 }
 
@@ -364,7 +366,11 @@ register_descriptor_iter_find (PyObject *self, PyObject *args, PyObject *kw)
       int regnum = user_reg_map_name_to_regnum (gdbarch, register_name,
 						strlen (register_name));
       if (regnum >= 0)
-	return gdbpy_get_register_descriptor (gdbarch, regnum).release ();
+	{
+	  const char *name = gdbarch_register_name (gdbarch, regnum);
+	  if (name != nullptr && *name != '\0')
+	    return gdbpy_get_register_descriptor (gdbarch, regnum).release ();
+	}
     }
 
   Py_RETURN_NONE;
