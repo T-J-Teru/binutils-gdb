@@ -135,11 +135,27 @@ then
 	    CFLAGS="$CFLAGS -Werror $wtest"
 	    saved_CXXFLAGS="$CXXFLAGS"
 	    CXXFLAGS="$CXXFLAGS -Werror $wtest"
+            # In the following tests we use AC_LINK_IFELSE rather than
+            # AC_COMPILE_IFELSE, this works around this issue when
+            # using ccache: https://github.com/ccache/ccache/issues/738.
+            #
+            # Basically, ccache will reorder -Werror with respect to
+            # other command line options, placing -Werror after other
+            # options.  If the problem with the command line option is
+            # that it is not supported in the current language
+            # (e.g. -Wmissing-prototypes for g++), then this means
+            # that you'll get a warning and not an error about the
+            # option.
+            #
+            # However, if we perform a full link then ccache will not
+            # kick in (ccache only activates when compiling to object
+            # format), and so the options are not reordered, and we'll
+            # get an error for any unsupported options.
 	    if test "x$w" = "x-Wunused-variable"; then
 	      # Check for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=38958,
 	      # fixed in GCC 4.9.  This test is derived from the gdb
 	      # source code that triggered this bug in GCC.
-	      AC_COMPILE_IFELSE(
+	      AC_LINK_IFELSE(
 		[AC_LANG_PROGRAM(
 		   [struct scoped_restore_base {};
 		    struct scoped_restore_tmpl : public scoped_restore_base {
@@ -151,7 +167,7 @@ then
 		[]
 	      )
 	    else
-	      AC_COMPILE_IFELSE(
+	      AC_LINK_IFELSE(
 		[AC_LANG_PROGRAM([], [])],
 		[WARN_CFLAGS="${WARN_CFLAGS} $w"],
 		[]
