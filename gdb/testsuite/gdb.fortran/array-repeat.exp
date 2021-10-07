@@ -1,0 +1,66 @@
+# Copyright 2021 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/> .
+
+# Test the detection and printing of repeated elements in Fortran
+# arrays.
+
+if {[skip_fortran_tests]} { return -1 }
+
+standard_testfile ".f90"
+load_lib fortran.exp
+
+if {[prepare_for_testing ${testfile}.exp ${testfile} ${srcfile} \
+	 {debug f90}]} {
+    return -1
+}
+
+if {![fortran_runto_main]} {
+    perror "Could not run to main."
+    continue
+}
+
+gdb_breakpoint [gdb_get_line_number "Break Here"]
+gdb_continue_to_breakpoint "Break Here"
+
+# Build up the expected output for each array.
+set a1p "(1, 1, 1, 1, 1)"
+set a2p "(2, 2, 2, 2, 2)"
+set a2p "(${a2p} ${a2p} ${a2p} ${a2p} ${a2p})"
+set a3p "(3, 3, 3, 3, 3)"
+set a3p "(${a3p} ${a3p} ${a3p} ${a3p} ${a3p})"
+set a3p "(${a3p} ${a3p} ${a3p} ${a3p} ${a3p})"
+
+# Convert the output into a regexp.
+set a1p [string_to_regexp $a1p]
+set a2p [string_to_regexp $a2p]
+set a3p [string_to_regexp $a3p]
+
+with_test_prefix "repeats=default" {
+    # Check the arrays print as expected.
+    gdb_test "print array_1d" "${a1p}"
+    gdb_test "print array_2d" "${a2p}"
+    gdb_test "print array_3d" "${a3p}"
+}
+
+with_test_prefix "repeats=4" {
+    # Now set the repeat limit.
+    gdb_test_no_output "set print repeats 4"
+
+    gdb_test "print array_1d" "\\(1, <repeats 5 times>\\)"
+    gdb_test "print array_2d" \
+	"\\(\\(2, <repeats 5 times>\\) <repeats 5 times>\\)"
+    gdb_test "print array_3d" \
+	"\\(\\(\\(3, <repeats 5 times>\\) <repeats 5 times>\\) <repeats 5 times>\\)"
+}
