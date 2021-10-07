@@ -9298,14 +9298,18 @@ The command @samp{forward-search @var{regexp}} checks each line,
 starting with the one following the last line listed, for a match for
 @var{regexp}.  It lists the line that is found.  You can use the
 synonym @samp{search @var{regexp}} or abbreviate the command name as
-@code{fo}.
+@code{fo}.  If a match is found then the convenience variable
+@samp{$_} is update to the matching line number.  If no match is found
+then @samp{$_} is left unchanged.
 
 @kindex reverse-search
 @item reverse-search @var{regexp}
 The command @samp{reverse-search @var{regexp}} checks each line, starting
 with the one before the last line listed and going backward, for a match
 for @var{regexp}.  It lists the line that is found.  You can abbreviate
-this command as @code{rev}.
+this command as @code{rev}.  If a match is found then the convenience
+variable @samp{$_} is update to the matching line number.  If no match
+is found then @samp{$_} is left unchanged.
 @end table
 
 @node Source Path
