@@ -29,30 +29,45 @@ if {[build_executable $testfile.exp $testfile $srcfile] == -1} {
     return -1
 }
 
+set startup_with_shell_modes { "on" }
+if {!([target_info gdb_protocol] == "remote"
+      || [target_info gdb_protocol] == "extended-remote")} {
+    lappend startup_with_shell_modes "off"
+} else {
+    # Some of these tests will not work when using the remote protocol
+    # due to bug PR gdb/28392.
+    unsupported "gdbserver 'startup-with-shell off' broken PR gdb/28392"
+}
+
 # NAME is the name to use for the tests and ARGLIST is the list of
 # arguments that are passed to GDB when it is started.
 
 proc args_test { name arglist } {
-    save_vars { ::GDBFLAGS } {
-	set ::GDBFLAGS "$::GDBFLAGS --args $::binfile $arglist"
+    foreach_with_prefix startup_with_shell $::startup_with_shell_modes {
+	save_vars { ::GDBFLAGS } {
+	    set ::GDBFLAGS "$::GDBFLAGS --args $::binfile $arglist"
 
-	clean_restart $::binfile
+	    clean_restart $::binfile
 
-	runto_main
-	gdb_breakpoint [gdb_get_line_number "set breakpoint here"]
-	gdb_continue_to_breakpoint "breakpoint for $name"
+	    gdb_test_no_output "set startup-with-shell ${startup_with_shell}" \
+		"set startup-with-shell for $name"
 
-	set expected_len [expr 1 + [llength $arglist]]
-	gdb_test "print argc" "\\\$$::decimal = $expected_len" "argc for $name"
+	    runto_main
+	    gdb_breakpoint [gdb_get_line_number "set breakpoint here"]
+	    gdb_continue_to_breakpoint "breakpoint for $name"
 
-	set i 1
-	foreach arg $arglist {
-	    if { $arg eq "\n" } {
-		set arg {\\n}
+	    set expected_len [expr 1 + [llength $arglist]]
+	    gdb_test "print argc" "\\\$$::decimal = $expected_len" "argc for $name"
+
+	    set i 1
+	    foreach arg $arglist {
+		if { $arg eq "\n" } {
+		    set arg {\\n}
+		}
+		gdb_test "print argv\[$i\]" "\\\$$::decimal = $::hex \"$arg\"" \
+		    "argv\[$i\] for $name"
+		set i [expr $i + 1]
 	    }
-	    gdb_test "print argv\[$i\]" "\\\$$::decimal = $::hex \"$arg\"" \
-		"argv\[$i\] for $name"
-	    set i [expr $i + 1]
 	}
     }
 }

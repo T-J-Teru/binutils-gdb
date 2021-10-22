@@ -25,7 +25,7 @@ if {[build_executable "failed to prepare" $testfile $srcfile \
     return
 }
 
-proc do_test { method } {
+proc do_test { method startup_with_shell } {
     global binfile hex
 
     # The second arg is an empty string on purpose.  The last argument
@@ -34,6 +34,8 @@ proc do_test { method } {
     set inferior_args { "first arg" "" "third-arg" "'" "\"" " " "" }
 
     clean_restart $binfile
+
+    gdb_test_no_output "set startup-with-shell $startup_with_shell"
 
     if { $method == "start" } {
 	# The start command does not make sense for a stub.
@@ -122,6 +124,19 @@ proc do_test { method } {
     gdb_test "print argv\[7\]" " = $hex \"\""
 }
 
+set startup_with_shell_modes { "on" }
+if {!([target_info gdb_protocol] == "remote"
+       || [target_info gdb_protocol] == "extended-remote")} {
+    lappend startup_with_shell_modes "off"
+} else {
+    # Due to PR gdb/28392 gdbserver doesn't currently support having
+    # startup-with-shell off, and then attempting to pass arguments
+    # containing whitespace.
+    unsupported "bug gdb/28392: gdbserver doesn't support this"
+}
+
 foreach_with_prefix method { "start" "starti" "run" "set args" } {
-    do_test $method
+    foreach_with_prefix startup_with_shell $startup_with_shell_modes {
+	do_test $method $startup_with_shell
+    }
 }
