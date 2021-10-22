@@ -153,15 +153,81 @@ public:
 
   /* Called to process an element of ELT_TYPE at offset ELT_OFF from the
      start of the parent object.  */
-  void process_element (struct type *elt_type, LONGEST elt_off, bool last_p)
+  LONGEST process_element (struct type *elt_type, LONGEST elt_off, bool last_p, LONGEST curr_idx, LONGEST last_idx, LONGEST stride)
   {
+    LONGEST reps = 1;
+
+    if (m_options->repeat_count_threshold < UINT_MAX)
+      {
+	LONGEST rep1 = curr_idx + 1;
+
+	while (rep1 < last_idx
+	       && value_contents_eq (m_val, elt_off,
+				     m_val, elt_off + (stride * reps),
+				     TYPE_LENGTH (elt_type)))
+	  {
+	    /* This is how many repeats we have completed.  */
+	    ++rep1;
+	    ++reps;
+	  }
+      }
+
     /* Extract the element value from the parent value.  */
     struct value *e_val
       = value_from_component (m_val, elt_type, elt_off);
     common_val_print (e_val, m_stream, m_recurse, m_options, current_language);
     if (!last_p)
       fputs_filtered (", ", m_stream);
-    ++m_elts;
+
+    if (reps > m_options->repeat_count_threshold)
+      {
+	// todo: annotations!
+	// annotate_elt_rep (reps);
+	fprintf_filtered (m_stream, "%p[<repeats %s times>%p]",
+			  metadata_style.style ().ptr (), plongest (reps),
+			  nullptr);
+      }
+    else
+      reps = 1;
+
+    //fprintf (stderr, "<m_elts = %s, reps = %s>",
+    //     plongest (m_elts), plongest (reps));
+
+    m_elts += reps;
+    return reps;
+  }
+
+  LONGEST blah_blah (struct type *elt_type, LONGEST elt_off, LONGEST stride, LONGEST curr_idx, LONGEST last_idx)
+  {
+    LONGEST reps = 1;
+
+    if (m_options->repeat_count_threshold < UINT_MAX)
+      {
+	LONGEST rep1 = curr_idx + 1;
+
+	while (rep1 < last_idx
+	       && value_contents_eq (m_val, elt_off,
+				     m_val, elt_off + (stride * reps),
+				     TYPE_LENGTH (elt_type)))
+	  {
+	    /* This is how many repeats we have completed.  */
+	    ++rep1;
+	    ++reps;
+	  }
+      }
+
+    if (reps > m_options->repeat_count_threshold)
+      {
+	// todo: annotations!
+	// annotate_elt_rep (reps);
+	fprintf_filtered (m_stream, "%p[<repeats %s times>%p]",
+			  metadata_style.style ().ptr (), plongest (reps),
+			  nullptr);
+      }
+    else
+      reps = 1;
+
+    return reps;
   }
 
 private:

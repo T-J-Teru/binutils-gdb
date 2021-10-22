@@ -330,9 +330,10 @@ public:
   /* Create a lazy value in target memory representing a single element,
      then load the element into GDB's memory and copy the contents into the
      destination value.  */
-  void process_element (struct type *elt_type, LONGEST elt_off, bool last_p)
+  LONGEST process_element (struct type *elt_type, LONGEST elt_off, bool last_p, LONGEST curr_idx, LONGEST last_idx, LONGEST stride)
   {
     copy_element_to_dest (value_at_lazy (elt_type, m_addr + elt_off));
+    return 1;
   }
 
 private:
@@ -368,11 +369,12 @@ public:
   /* Extract an element of ELT_TYPE at offset (M_BASE_OFFSET + ELT_OFF)
      from the content buffer of M_VAL then copy this extracted value into
      the repacked destination value.  */
-  void process_element (struct type *elt_type, LONGEST elt_off, bool last_p)
+  LONGEST process_element (struct type *elt_type, LONGEST elt_off, bool last_p, LONGEST curr_idx, LONGEST last_idx, LONGEST stride)
   {
     struct value *elt
       = value_from_component (m_val, elt_type, (elt_off + m_base_offset));
     copy_element_to_dest (elt);
+    return 1;
   }
 
 private:

@@ -82,6 +82,11 @@ public:
     return offset;
   }
 
+  LONGEST stride () const
+  {
+    return m_stride;
+  }
+
 private:
 
   /* The stride for the type we are working with.  */
@@ -150,8 +155,12 @@ struct fortran_array_walker_base_impl
          process_element (TYPE, OFFSET, true);
        finish_dimension (true, true);
      finish_dimension (false, true);  */
-  void process_element (struct type *elt_type, LONGEST elt_off, bool last_p)
-  { /* Nothing.  */ }
+  LONGEST process_element (struct type *elt_type, LONGEST elt_off, bool last_p, LONGEST curr_idx, LONGEST last_idx, LONGEST stride)
+  { return 1; }
+
+
+  LONGEST blah_blah (struct type *elt_type, LONGEST elt_off, LONGEST stride, LONGEST curr_idx, LONGEST last_idx)
+  { return 1; }
 };
 
 /* A class to wrap up the process of iterating over a multi-dimensional
@@ -178,7 +187,7 @@ public:
       m_address (address),
       m_impl (type, address, args...)
   {
-    m_ndimensions =  calc_f77_array_dims (m_type);
+    m_ndimensions = calc_f77_array_dims (m_type);
   }
 
   /* Walk the array.  */
@@ -209,19 +218,22 @@ private:
 
     if (nss != m_ndimensions)
       {
+	struct type *subarray_type = TYPE_TARGET_TYPE (check_typedef (type));
+
 	/* For dimensions other than the inner most, walk each element and
 	   recurse while peeling off one more dimension of the array.  */
 	for (LONGEST i = lowerbound;
 	     m_impl.continue_walking (i < upperbound + 1);
-	     i++)
+	     )
 	  {
 	    /* Use the index and the stride to work out a new offset.  */
 	    LONGEST new_offset = offset + calc.index_offset (i);
+	    LONGEST stride = calc.stride ();
 
 	    /* Now print the lower dimension.  */
-	    struct type *subarray_type
-	      = TYPE_TARGET_TYPE (check_typedef (type));
 	    walk_1 (nss + 1, subarray_type, new_offset, (i == upperbound));
+
+	    i += m_impl.blah_blah (subarray_type, new_offset, stride, i, (upperbound + 1));
 	  }
       }
     else
@@ -230,7 +242,7 @@ private:
 	   within this dimension.  */
 	for (LONGEST i = lowerbound;
 	     m_impl.continue_walking (i < upperbound + 1);
-	     i++)
+	     )
 	  {
 	    LONGEST elt_off = offset + calc.index_offset (i);
 
@@ -241,7 +253,9 @@ private:
 		elt_type = resolve_dynamic_type (elt_type, {}, e_address);
 	      }
 
-	    m_impl.process_element (elt_type, elt_off, (i == upperbound));
+	    LONGEST stride = calc.stride ();
+
+	    i += m_impl.process_element (elt_type, elt_off, (i == upperbound), i, (upperbound + 1), stride);
 	  }
       }
 
