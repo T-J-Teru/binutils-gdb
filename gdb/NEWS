@@ -51,6 +51,14 @@
 
 * The Ada 'Object_Size attribute is now supported.
 
+* GDB now accepts --no-escape-args as an alternative to --args on the
+  command line.  GDB will not escape special shell characters within
+  arguments after --no-escape-args.
+
+* gdbserver now accepts --no-escape-args as a command line flag.  When
+  this flag is used gdbserver will not escape special shell characters
+  within the inferior arguments.
+
 * Python API
 
   ** Added gdb.record.clear.  Clears the trace data of the current recording.
