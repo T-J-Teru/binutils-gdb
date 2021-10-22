@@ -9,6 +9,14 @@
 * GDB index now contains information about the main function.  This speeds up
   startup when it is being used for some large binaries.
 
+* GDB now accepts --no-escape-args as an alternative to --args on the
+  command line.  GDB will not escape special shell characters within
+  arguments after --no-escape-args.
+
+* gdbserver now accepts --no-escape-args as a command line flag.  When
+  this flag is used gdbserver will not escape special shell characters
+  within the inferior arguments.
+
 * Changed commands
 
 disassemble
