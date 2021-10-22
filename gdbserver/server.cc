@@ -3873,10 +3873,20 @@ gdbserver_usage (FILE *stream)
 	   "  --startup-with-shell\n"
 	   "                        Start PROG using a shell.  I.e., execs a shell that\n"
 	   "                        then execs PROG.  (default)\n"
+	   "                        To make use of globbing and variable subsitution for\n"
+	   "                        arguments passed directly on gdbserver invocation,\n"
+	   "                        see the --no-escape-args command line option in\n"
+	   "                        addition\n"
 	   "  --no-startup-with-shell\n"
 	   "                        Exec PROG directly instead of using a shell.\n"
-	   "                        Disables argument globbing and variable substitution\n"
-	   "                        on UNIX-like systems.\n"
+	   "  --no-escape-args\n"
+	   "                        If PROG is started using a shell (see the\n"
+	   "                        --[no-]startup-with-shell option),\n"
+	   "                        ARGS passed directly on gdbserver invocation are\n"
+	   "                        escaped, so no globbing or variable substitution\n"
+	   "                        happens for those. This option disables escaping, so\n"
+	   "                        globbing and variable substituation in the shell\n"
+	   "                        are done for ARGS on UNIX-like systems.\n"
 	   "\n"
 	   "Debug options:\n"
 	   "\n"
@@ -4110,6 +4120,7 @@ captured_main (int argc, char *argv[])
   volatile int attach = 0;
   int was_running;
   bool selftest = false;
+  bool escape_args = true;
 #if GDB_SELF_TEST
   std::vector<const char *> selftest_filters;
 
@@ -4270,6 +4281,8 @@ captured_main (int argc, char *argv[])
 	startup_with_shell = true;
       else if (strcmp (*next_arg, "--no-startup-with-shell") == 0)
 	startup_with_shell = false;
+      else if (strcmp (*next_arg, "--no-escape-args") == 0)
+	escape_args = false;
       else if (strcmp (*next_arg, "--once") == 0)
 	run_once = true;
       else if (strcmp (*next_arg, "--selftest") == 0)
@@ -4379,8 +4392,10 @@ captured_main (int argc, char *argv[])
       std::vector<char *> temp_arg_vector;
       for (i = 1; i < n; i++)
 	temp_arg_vector.push_back (next_arg[i]);
+      escape_args_func escape_func = (escape_args ? escape_shell_characters
+				      : escape_quotes_and_white_space);
       program_args = construct_inferior_arguments (temp_arg_vector,
-						   escape_shell_characters);
+						   escape_func);
 
       /* Wait till we are at first instruction in program.  */
       target_create_inferior (program_path.get (), program_args);
