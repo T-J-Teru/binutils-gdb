@@ -1147,7 +1147,19 @@ gdbpy_colorize (const std::string &filename, const std::string &contents)
       gdbpy_print_stack ();
       return {};
     }
-  gdbpy_ref<> contents_arg (PyString_FromString (contents.c_str ()));
+
+  /* The pygments library, which is what we currently use for applying
+     styling, is happy to take input as a bytes object, and to figure out
+     the encoding for itself.  This removes the need for us to figure out
+     (guess?) at how the content is encoded, which is probably a good
+     thing.
+
+     It might be tempting to use the host_charset here, but that is likely
+     not correct; the host_charset represents the charset of the output
+     display, which is not related in any way to the encoding of the
+     source file.  */
+  gdbpy_ref<> contents_arg (PyBytes_FromStringAndSize (contents.c_str (),
+						       contents.size ()));
   if (contents_arg == nullptr)
     {
       gdbpy_print_stack ();
@@ -1178,8 +1190,29 @@ gdbpy_colorize (const std::string &filename, const std::string &contents)
 						   nullptr));
   if (host_str == nullptr)
     {
-      gdbpy_print_stack ();
-      return {};
+      /* The attempt to convert the unicode string to a bytes object using
+	 the host_charset failed.  If it failed with a unicode encoding
+	 error then maybe the host_charset isn't the correct choice, we
+	 might be able to do better.  We see this situation arise if the
+	 source file contains non utf-8 characters, and we are writing to a
+	 non utf-8 output stream, e.g. a dumb ascii terminal, as we
+	 encounter during DejaGNU testing.  */
+      if (PyErr_ExceptionMatches (PyExc_UnicodeEncodeError))
+	{
+	  /* Lets try do convert the unicode to bytes using the 'latin_1'
+	     encoding scheme, this seems more likely to succeed, though it's
+	     possible that some of the output might not render correctly
+	     depending on the precise encoding of the input.  */
+	  PyErr_Clear ();
+	  host_str = gdbpy_ref<> (PyUnicode_AsEncodedString (unic.get (),
+							     "latin_1",
+							     nullptr));
+	}
+      if (host_str == nullptr)
+	{
+	  gdbpy_print_stack ();
+	  return {};
+	}
     }
 
   return std::string (PyBytes_AsString (host_str.get ()));
