@@ -45,6 +45,9 @@ set logging enabled on|off
 show logging enabled
   These commands set or show whether logging is enabled or disabled.
 
+maint flush source-cache
+  Flush the contents of the source code cache.
+
 * Changed commands
 
 maint packet
