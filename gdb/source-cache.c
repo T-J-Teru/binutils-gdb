@@ -240,7 +240,11 @@ source_cache::ensure (struct symtab *s)
   m_source_map.push_back (std::move (result));
 
   if (m_source_map.size () > MAX_ENTRIES)
-    m_source_map.erase (m_source_map.begin ());
+    {
+      auto iter = m_source_map.begin ();
+      m_offset_cache.erase (iter->fullname);
+      m_source_map.erase (iter);
+    }
 
   return true;
 }
