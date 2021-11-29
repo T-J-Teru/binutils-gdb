@@ -120,8 +120,7 @@ cmdpy_function (const char *args, int from_tty, cmd_list_element *command)
 
   if (! args)
     args = "";
-  gdbpy_ref<> argobj (PyUnicode_Decode (args, strlen (args), host_charset (),
-					NULL));
+  gdbpy_ref<> argobj = host_string_to_python_string (args);
   if (argobj == NULL)
     {
       gdbpy_print_stack ();
@@ -181,8 +180,7 @@ cmdpy_completer_helper (struct cmd_list_element *command,
       return NULL;
     }
 
-  gdbpy_ref<> textobj (PyUnicode_Decode (text, strlen (text), host_charset (),
-					 NULL));
+  gdbpy_ref<> textobj = host_string_to_python_string (text);
   if (textobj == NULL)
     error (_("Could not convert argument to Python string."));
 
@@ -194,8 +192,7 @@ cmdpy_completer_helper (struct cmd_list_element *command,
     }
   else
     {
-      wordobj.reset (PyUnicode_Decode (word, strlen (word), host_charset (),
-				       NULL));
+      wordobj = host_string_to_python_string (word);
       if (wordobj == NULL)
 	error (_("Could not convert argument to Python string."));
     }

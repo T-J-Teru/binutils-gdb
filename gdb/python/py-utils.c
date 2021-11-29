@@ -152,10 +152,9 @@ python_string_to_host_string (PyObject *obj)
 /* Convert a host string to a python string.  */
 
 gdbpy_ref<>
-host_string_to_python_string (const char *str)
+host_string_to_python_string (const char *str, size_t len)
 {
-  return gdbpy_ref<> (PyString_Decode (str, strlen (str), host_charset (),
-				       NULL));
+  return gdbpy_ref<> (PyString_Decode (str, len, host_charset (), nullptr));
 }
 
 /* Return true if OBJ is a Python string or unicode object, false

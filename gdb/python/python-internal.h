@@ -22,6 +22,7 @@
 
 #include "extension.h"
 #include "extension-priv.h"
+#include "ui-file.h"
 
 /* These WITH_* macros are defined by the CPython API checker that
    comes with the Python plugin for GCC.  See:
@@ -715,7 +716,15 @@ gdb::unique_xmalloc_ptr<char> unicode_to_target_string (PyObject *unicode_str);
 gdb::unique_xmalloc_ptr<char> python_string_to_target_string (PyObject *obj);
 gdbpy_ref<> python_string_to_target_python_string (PyObject *obj);
 gdb::unique_xmalloc_ptr<char> python_string_to_host_string (PyObject *obj);
-gdbpy_ref<> host_string_to_python_string (const char *str);
+gdbpy_ref<> host_string_to_python_string (const char *str, size_t len);
+static inline gdbpy_ref<> host_string_to_python_string (const char *str)
+{
+  return host_string_to_python_string (str, strlen (str));
+}
+static inline gdbpy_ref<> host_string_to_python_string (const string_file &str)
+{
+  return host_string_to_python_string (str.c_str (), str.size ());
+}
 int gdbpy_is_string (PyObject *obj);
 gdb::unique_xmalloc_ptr<char> gdbpy_obj_to_string (PyObject *obj);
 

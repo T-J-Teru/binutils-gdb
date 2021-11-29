@@ -1033,8 +1033,7 @@ typy_str (PyObject *self)
       GDB_PY_HANDLE_EXCEPTION (except);
     }
 
-  return PyUnicode_Decode (thetype.c_str (), thetype.size (),
-			   host_charset (), NULL);
+  return host_string_to_python_string (thetype).release ();
 }
 
 /* Implement the richcompare method.  */

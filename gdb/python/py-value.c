@@ -743,7 +743,7 @@ valpy_format_string (PyObject *self, PyObject *args, PyObject *kw)
       GDB_PY_HANDLE_EXCEPTION (except);
     }
 
-  return PyUnicode_Decode (stb.c_str (), stb.size (), host_charset (), NULL);
+  return host_string_to_python_string (stb).release ();
 }
 
 /* A helper function that implements the various cast operators.  */
@@ -1149,7 +1149,7 @@ valpy_str (PyObject *self)
       GDB_PY_HANDLE_EXCEPTION (except);
     }
 
-  return PyUnicode_Decode (stb.c_str (), stb.size (), host_charset (), NULL);
+  return host_string_to_python_string (stb).release ();
 }
 
 /* Implements gdb.Value.is_optimized_out.  */

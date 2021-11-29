@@ -131,8 +131,7 @@ frapy_name (PyObject *self, PyObject *args)
 
   if (name)
     {
-      result = PyUnicode_Decode (name.get (), strlen (name.get ()),
-				 host_charset (), NULL);
+      result = host_string_to_python_string (name.get ()).release ();
     }
   else
     {
@@ -658,7 +657,7 @@ gdbpy_frame_stop_reason_string (PyObject *self, PyObject *args)
     }
 
   str = unwind_stop_reason_to_string ((enum unwind_stop_reason) reason);
-  return PyUnicode_Decode (str, strlen (str), host_charset (), NULL);
+  return host_string_to_python_string (str).release ();
 }
 
 /* Implements the equality comparison for Frame objects.
