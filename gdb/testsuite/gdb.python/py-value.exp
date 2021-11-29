@@ -600,6 +600,19 @@ proc test_add_to_history {} {
 	"TypeError: Could not convert Python object: .*"
 }
 
+# Create a value from a unicode string containing non-ascii
+# characters.  Print the value.
+proc test_non_ascii_values {} {
+    gdb_test_no_output "set host-charset UTF-8"
+    gdb_test_no_output "set target-charset UTF-8"
+    gdb_test_no_output "python arg = u\"\\xff\\x01abc\"" \
+	"create a unicode string"
+    gdb_test_no_output "python v = gdb.Value(arg)" \
+	"create value object containing non-ascii characters"
+    gdb_test "python print(v)" "\"\\\\303\\\\277\\\\001abc\"" \
+	"print value object containing non-ascii characters"
+}
+
 # Build C version of executable.  C++ is built later.
 if { [build_inferior "${binfile}" "c"] < 0 } {
     return -1
@@ -611,6 +624,9 @@ clean_restart ${binfile}
 # Skip all tests if Python scripting is not enabled.
 if { [skip_python_tests] } { continue }
 
+test_non_ascii_values
+return
+
 test_value_creation
 test_value_numeric_ops
 test_value_boolean
@@ -620,6 +636,7 @@ test_parse_and_eval
 test_value_hash
 test_float_conversion
 test_add_to_history
+test_non_ascii_values
 
 # The following tests require execution.
 

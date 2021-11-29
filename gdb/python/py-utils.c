@@ -154,7 +154,11 @@ python_string_to_host_string (PyObject *obj)
 gdbpy_ref<>
 host_string_to_python_string (const char *str, size_t len)
 {
-  return gdbpy_ref<> (PyString_Decode (str, len, host_charset (), nullptr));
+#ifdef IS_PY3K
+  return gdbpy_ref<> (PyUnicode_Decode (str, len, host_charset (), nullptr));
+#else
+  return gdbpy_ref<> (PyString_FromStringAndSize (str, len));
+#endif
 }
 
 /* Return true if OBJ is a Python string or unicode object, false
