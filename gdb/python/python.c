@@ -558,7 +558,7 @@ gdbpy_target_charset (PyObject *self, PyObject *args)
 {
   const char *cset = target_charset (python_gdbarch);
 
-  return PyUnicode_Decode (cset, strlen (cset), host_charset (), NULL);
+  return host_string_to_python_string (cset).release ();
 }
 
 /* Wrapper for target_wide_charset.  */
@@ -568,7 +568,7 @@ gdbpy_target_wide_charset (PyObject *self, PyObject *args)
 {
   const char *cset = target_wide_charset (python_gdbarch);
 
-  return PyUnicode_Decode (cset, strlen (cset), host_charset (), NULL);
+  return host_string_to_python_string (cset).release ();
 }
 
 /* A Python function which evaluates a string using the gdb CLI.  */
