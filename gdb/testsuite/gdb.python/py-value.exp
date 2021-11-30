@@ -603,8 +603,8 @@ proc test_add_to_history {} {
 # Create a value from a unicode string containing non-ascii
 # characters.  Print the value.
 proc test_non_ascii_values {} {
-    gdb_test_no_output "set host-charset UTF-8"
-    gdb_test_no_output "set target-charset UTF-8"
+    #gdb_test_no_output "set host-charset UTF-8"
+    #gdb_test_no_output "set target-charset UTF-8"
     gdb_test_no_output "python arg = u\"\\xff\\x01abc\"" \
 	"create a unicode string"
     gdb_test_no_output "python v = gdb.Value(arg)" \

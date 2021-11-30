@@ -155,7 +155,8 @@ gdbpy_ref<>
 host_string_to_python_string (const char *str, size_t len)
 {
 #ifdef IS_PY3K
-  return gdbpy_ref<> (PyUnicode_Decode (str, len, host_charset (), nullptr));
+  return gdbpy_ref<> (PyUnicode_Decode (str, len, host_charset (),
+					"backslashreplace"));
 #else
   return gdbpy_ref<> (PyString_FromStringAndSize (str, len));
 #endif

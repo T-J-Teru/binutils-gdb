@@ -1904,8 +1904,27 @@ convert_value_from_python (PyObject *obj)
 	}
       else if (gdbpy_is_string (obj))
 	{
-	  gdb::unique_xmalloc_ptr<char> s
-	    = python_string_to_target_string (obj);
+	  //gdb::unique_xmalloc_ptr<char> s
+	  //= python_string_to_target_string (obj);
+
+	  gdb::unique_xmalloc_ptr<char> s;
+#ifndef IS_PY3K
+	  if (PyString_Check (obj))
+	    {
+	      s.reset (xstrdup (PyString_AsString (obj)));
+	    }
+	  else
+#endif
+	    {
+	      gdb_assert (PyUnicode_Check (obj));
+
+	      gdbpy_ref<> str (PyUnicode_AsEncodedString (obj,
+							  host_charset (),
+							  "backslashreplace"));
+	      if (str != nullptr)
+		s.reset (xstrdup (PyBytes_AsString (str.get ())));
+	    }
+
 	  if (s != NULL)
 	    value = value_cstring (s.get (), strlen (s.get ()),
 				   builtin_type_pychar);
