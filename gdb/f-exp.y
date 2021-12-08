@@ -224,7 +224,7 @@ exp	:	'*' exp    %prec UNARY
 	;
 
 exp	:	'&' exp    %prec UNARY
-			{ pstate->wrap<unop_addr_operation> (); }
+			{ pstate->wrap<fortran_unop_addr_operation> (); }
 	;
 
 exp	:	'-' exp    %prec UNARY

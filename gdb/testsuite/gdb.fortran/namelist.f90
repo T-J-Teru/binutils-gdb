@@ -17,11 +17,13 @@
 
 program main
 
-  integer :: a, b
-  namelist /nml/ a, b
+  integer :: a, b, c
+  namelist /nml/ a, c
 
   a = 10
   b = 20
-  Write(*,nml) ! Display namelist
+  c = 30
+  Write(*, nml) ! Display namelist
+  print *, b
 
 end program main

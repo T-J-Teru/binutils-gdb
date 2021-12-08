@@ -986,6 +986,9 @@ eval_op_f_loc (struct type *expect_type, struct expression *exp,
   else
     result_type = builtin_f_type (exp->gdbarch)->builtin_integer_s8;
 
+  if (value_type (arg1)->code () == TYPE_CODE_NAMELIST)
+    error (_("invalid request for address of a namelist"));
+
   LONGEST result_value = value_address (arg1);
   return value_from_longest (result_type, result_value);
 }

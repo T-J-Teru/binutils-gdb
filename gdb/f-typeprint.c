@@ -305,12 +305,19 @@ f_language::f_type_print_base (struct type *type, struct ui_file *stream,
   if ((show <= 0) && (type->name () != NULL))
     {
       const char *prefix = "";
+      const char *suffix = "";
       if (type->code () == TYPE_CODE_UNION)
 	prefix = "Type, C_Union :: ";
-      else if (type->code () == TYPE_CODE_STRUCT
-               || type->code () == TYPE_CODE_NAMELIST)
+      else if (type->code () == TYPE_CODE_STRUCT)
 	prefix = "Type ";
-      fprintf_filtered (stream, "%*s%s%s", level, "", prefix, type->name ());
+      else if (type->code () == TYPE_CODE_NAMELIST)
+	{
+	  prefix = "namelist /";
+	  suffix = "/";
+	}
+
+      fprintf_filtered (stream, "%*s%s%s%s", level, "", prefix,
+			type->name (), suffix);
       return;
     }
 
@@ -392,9 +399,30 @@ f_language::f_type_print_base (struct type *type, struct ui_file *stream,
 	fprintf_filtered (stream, "%*scharacter*(*)", level, "");
       break;
 
+    case TYPE_CODE_NAMELIST:
+      fprintf_filtered (stream, "%*snamelist /", level, "");
+      fputs_filtered (type->name (), stream);
+      fprintf_filtered (stream, "/");
+      if (show > 0)
+	{
+	  fputs_filtered ("\n", stream);
+	  for (index = 0; index < type->num_fields (); index++)
+	    {
+	      f_type_print_base (type->field (index).type (), stream,
+				 show - 1, level + 4);
+	      fputs_filtered (" :: ", stream);
+	      fputs_styled (type->field (index).name (),
+			    variable_name_style.style (), stream);
+	      f_type_print_varspec_suffix (type->field (index).type (),
+					   stream, show - 1, 0, 0, 0, false);
+	      if (index < type->num_fields () - 1)
+		fputs_filtered ("\n", stream);
+	    }
+	}
+      break;
+
     case TYPE_CODE_STRUCT:
     case TYPE_CODE_UNION:
-    case TYPE_CODE_NAMELIST:
       if (type->code () == TYPE_CODE_UNION)
 	fprintf_filtered (stream, "%*sType, C_Union :: ", level, "");
       else

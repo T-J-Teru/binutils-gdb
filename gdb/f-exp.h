@@ -289,6 +289,27 @@ public:
   { return STRUCTOP_STRUCT; }
 };
 
+/* Wrapper around unop_addr_operation, catches attempts to take the address
+   of a namelist, and throws an error.  */
+class fortran_unop_addr_operation
+  : public unop_addr_operation
+{
+public:
+
+  using unop_addr_operation::unop_addr_operation;
+
+  value *evaluate (struct type *expect_type,
+		   struct expression *exp,
+		   enum noside noside) override
+  {
+    value *temp = std::get<0> (m_storage)->evaluate (expect_type, exp,
+						     EVAL_AVOID_SIDE_EFFECTS);
+    if (value_type (temp)->code () == TYPE_CODE_NAMELIST)
+      error (_("invalid request for address of a namelist"));
+    return unop_addr_operation::evaluate (expect_type, exp, noside);
+  }
+};
+
 } /* namespace expr */
 
 #endif /* FORTRAN_EXP_H */
