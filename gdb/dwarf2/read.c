@@ -21967,15 +21967,15 @@ new_symbol (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	case DW_TAG_enumeration_type:
 	case DW_TAG_namelist:
 	  if (die->tag == DW_TAG_namelist)
-            {
+	    {
 	      SYMBOL_ACLASS_INDEX (sym) = LOC_STATIC;
 	      SYMBOL_DOMAIN (sym) = VAR_DOMAIN;
-            }
+	    }
 	  else
-            {
+	    {
 	      SYMBOL_ACLASS_INDEX (sym) = LOC_TYPEDEF;
 	      SYMBOL_DOMAIN (sym) = STRUCT_DOMAIN;
-            }
+	    }
 
 	  {
 	    /* NOTE: carlton/2003-11-10: C++ class symbols shouldn't
