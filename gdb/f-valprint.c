@@ -295,6 +295,7 @@ f_language::value_print_inner (struct value *val, struct ui_file *stream,
 
     case TYPE_CODE_STRUCT:
     case TYPE_CODE_UNION:
+    case TYPE_CODE_NAMELIST:
       /* Starting from the Fortran 90 standard, Fortran supports derived
 	 types.  */
       fprintf_filtered (stream, "( ");
@@ -319,6 +320,16 @@ f_language::value_print_inner (struct value *val, struct ui_file *stream,
 				stream);
 		  fputs_filtered (" = ", stream);
 		}
+
+	      /* While printing namelist items, fetch the appropriate value
+	         field before printing its value.  */
+	      if (type->code () == TYPE_CODE_NAMELIST)
+	        {
+	          struct block_symbol symni = lookup_symbol
+	            (field_name, get_selected_block (0), VAR_DOMAIN, nullptr);
+	          if (symni.symbol != nullptr)
+	            field = value_of_variable (symni.symbol, symni.block);
+	        }
 
 	      common_val_print (field, stream, recurse + 1,
 				options, current_language);
