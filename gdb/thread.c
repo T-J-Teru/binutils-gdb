@@ -2050,6 +2050,26 @@ thread_name (thread_info *thread)
   return target_thread_name (thread);
 }
 
+/* See gdbthread.h.  */
+
+const char *
+thread_state_string (enum thread_state state)
+{
+  switch (state)
+    {
+    case THREAD_STOPPED:
+      return "THREAD_STOPPED";
+
+    case THREAD_RUNNING:
+      return "THREAD_RUNNING";
+
+    case THREAD_EXITED:
+      return "THREAD_EXITED";
+    }
+
+  gdb_assert_not_reached ("unknown thread state");
+}
+
 /* Return a new value for the selected thread's id.  Return a value of
    0 if no thread is selected.  If GLOBAL is true, return the thread's
    global number.  Otherwise return the per-inferior number.  */
