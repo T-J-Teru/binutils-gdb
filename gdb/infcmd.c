@@ -2611,20 +2611,9 @@ attach_command (const char *args, int from_tty)
 	/* The user requested an `attach&'; stop just one thread.  */
 	target_stop (inferior_ptid);
       else
-	{
-	  /* The user requested an `attach', so stop all threads of this
-	     inferior.  */
-	  target_stop (ptid_t (inferior_ptid.pid ()));
-
-	  for (thread_info *thread : inferior->non_exited_threads ())
-	    {
-	      gdb_assert (thread->executing ());
-	      gdb_assert (thread->resumed ());
-
-	      thread->set_executing (false);
-	      thread->set_resumed (false);
-	    }
-	}
+	/* The user requested an `attach', so stop all threads of this
+	   inferior.  */
+	target_stop (ptid_t (inferior_ptid.pid ()));
     }
 
   /* Check for exec file mismatch, and let the user solve it.  */

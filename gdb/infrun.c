@@ -4991,7 +4991,19 @@ stop_all_threads (void)
 
   gdb_assert (exists_non_stop_target ());
 
+  INFRUN_SCOPED_DEBUG_ENTER_EXIT;
   infrun_debug_printf ("starting");
+
+  if (debug_infrun)
+    {
+      infrun_debug_printf ("current threads:");
+      for (thread_info *thread : all_non_exited_threads ())
+	infrun_debug_printf ("  thread %s, executing = %d, resumed = %d, state = %s",
+			     thread->ptid.to_string ().c_str (),
+			     thread->executing (),
+			     thread->resumed (),
+			     thread_state_string (thread->state));
+    }
 
   scoped_restore_current_thread restore_thread;
 
