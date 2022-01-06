@@ -238,9 +238,31 @@ post_create_inferior (int from_tty)
   /* Be sure we own the terminal in case write operations are performed.  */ 
   target_terminal::ours_for_output ();
 
-  /* The inferior should not be resumed at this point.  */
-  for (thread_info *thread : current_inferior ()->threads ())
-    gdb_assert (!thread->resumed ());
+  if (debug_infrun)
+    {
+      infrun_debug_printf ("in post_create_inferior:");
+      for (thread_info *thread : current_inferior ()->non_exited_threads ())
+	infrun_debug_printf ("  thread %s, executing = %d, resumed = %d, state = %s",
+			     thread->ptid.to_string ().c_str (),
+			     thread->executing (),
+			     thread->resumed (),
+			     thread_state_string (thread->state));
+    }
+
+  /* When attaching to a multi-threaded process the "first" thread will be
+     stopped as part of the attach.  We then call stop_all_threads, which
+     will request that all threads stop.  When the first stop is processed
+     we will end up in here.
+
+     So, we expect that the "first" thread of the inferior should be
+     stopped, as well as one other random thread.  All of the other threads
+     should still be considered resumed, but will have a stop event
+     incoming.
+
+     As a consequence, we only make an assertion here about the currently
+     selected thread of the inferior.  Of the remaining threads, we only
+     expect one to be stopped, but we don't assert that.  */
+  gdb_assert (!inferior_thread ()->resumed ());
 
   /* If the target hasn't taken care of this already, do it now.
      Targets which need to access registers during to_open,

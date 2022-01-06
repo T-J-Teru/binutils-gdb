@@ -5039,6 +5039,8 @@ stop_all_threads (void)
       infrun_debug_printf ("pass=%d, iterations=%d", pass, iterations);
       while (1)
 	{
+	  infrun_debug_printf ("entering forever loop");
+
 	  int waits_needed = 0;
 
 	  for (auto *target : all_non_exited_process_targets ())
@@ -5094,7 +5096,12 @@ stop_all_threads (void)
 	    }
 
 	  if (waits_needed == 0)
-	    break;
+	    {
+	      infrun_debug_printf ("no waits needed, leaving forever loop");
+	      break;
+	    }
+
+	  infrun_debug_printf ("waits_needed=%d", waits_needed);
 
 	  /* If we find new threads on the second iteration, restart
 	     over.  We want to see two iterations in a row with all
@@ -5106,7 +5113,10 @@ stop_all_threads (void)
 	    {
 	      wait_one_event event = wait_one ();
 	      if (handle_one (event))
-		break;
+		{
+		  infrun_debug_printf ("event handled");
+		  break;
+		}
 	    }
 	}
     }
