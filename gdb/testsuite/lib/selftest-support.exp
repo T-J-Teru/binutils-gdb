@@ -46,7 +46,6 @@ proc find_gdb { arg } {
 proc selftest_setup { executable function } {
     global gdb_prompt
     global timeout
-    global INTERNAL_GDBFLAGS
 
     # load yourself into the debugger
     # This can take a relatively long time, particularly for testing where
@@ -90,7 +89,7 @@ proc selftest_setup { executable function } {
     set timeout 600
 
     set description "run until breakpoint at $function"
-    gdb_test_multiple "run $INTERNAL_GDBFLAGS" "$description" {
+    gdb_test_multiple "run [gdb_internal_flags]" "$description" {
         -re "Starting program.*Breakpoint \[0-9\]+,.*$function \\(.*\\).* at .*main.c:.*$gdb_prompt $" {
             pass "$description"
         }

@@ -127,7 +127,7 @@ proc run_stty {message result} {
 
 proc test_terminal_settings_preserved {} {
     global file_arg
-    global GDB INTERNAL_GDBFLAGS GDBFLAGS
+    global GDB GDBFLAGS
     global gdb_prompt
     global shell_prompt_re
 
@@ -142,7 +142,7 @@ proc test_terminal_settings_preserved {} {
     append EXTRA_GDBFLAGS " -ex \"set height unlimited\""
     append EXTRA_GDBFLAGS " -ex \"start\""
     append EXTRA_GDBFLAGS " --args \"$file_arg\""
-    send_gdb "$GDB $INTERNAL_GDBFLAGS $GDBFLAGS $EXTRA_GDBFLAGS [host_info gdb_opts]\n"
+    send_gdb "$GDB [gdb_internal_flags] $GDBFLAGS $EXTRA_GDBFLAGS [host_info gdb_opts]\n"
     gdb_expect {
 	-re "Don't know how to run.*$shell_prompt_re$" {
 	    unsupported $test
@@ -221,7 +221,7 @@ proc send_quit_command { test_name } {
 
 proc test_terminal_settings_preserved_after_cli_exit { cmds } {
     global file_arg
-    global GDB INTERNAL_GDBFLAGS GDBFLAGS
+    global GDB GDBFLAGS
     global gdb_prompt
     global shell_prompt_re
 
@@ -234,7 +234,7 @@ proc test_terminal_settings_preserved_after_cli_exit { cmds } {
     set stty_supported [run_stty "stty before" stty_before]
 
     set test "start gdb"
-    send_gdb "$GDB $INTERNAL_GDBFLAGS $GDBFLAGS [host_info gdb_opts] --args \"$file_arg\"\n"
+    send_gdb "$GDB [gdb_internal_flags] $GDBFLAGS [host_info gdb_opts] --args \"$file_arg\"\n"
     gdb_expect {
 	-re "$gdb_prompt $" {
 	    pass $test
@@ -282,7 +282,7 @@ proc test_terminal_settings_preserved_after_cli_exit { cmds } {
 
 proc test_terminal_settings_preserved_after_sigterm { } {
     global file_arg
-    global GDB INTERNAL_GDBFLAGS GDBFLAGS
+    global GDB GDBFLAGS
     global gdb_prompt
     global shell_prompt_re
 
@@ -302,7 +302,7 @@ proc test_terminal_settings_preserved_after_sigterm { } {
     set stty_supported [run_stty "stty before" stty_before]
 
     set test "start gdb"
-    send_gdb "$GDB $INTERNAL_GDBFLAGS $GDBFLAGS [host_info gdb_opts]\n"
+    send_gdb "$GDB [gdb_internal_flags] $GDBFLAGS [host_info gdb_opts]\n"
     gdb_expect {
 	-re "$gdb_prompt $" {
 	    pass $test

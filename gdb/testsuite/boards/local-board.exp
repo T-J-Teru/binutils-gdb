@@ -17,6 +17,8 @@
 # matches localhost.  Sourcing this script from a board file forces
 # the board to be NOT remote.
 
+clone_output "APB: local-board.exp"
+
 global board
 global board_info
 # Remove any target variant specifications from the name.
@@ -24,4 +26,4 @@ set baseboard [lindex [split $board "/"] 0]
 set board_info($baseboard,isremote) 0
 
 # Set sysroot to avoid sending files via the remote protocol.
-set GDBFLAGS "${GDBFLAGS} -iex \"set sysroot\""
+gdb_append_to_board_info gdb_opts "-iex \"set sysroot\""

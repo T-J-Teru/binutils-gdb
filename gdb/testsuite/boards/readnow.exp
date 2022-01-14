@@ -13,10 +13,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+clone_output "APB: readnow.exp"
+
 load_board_description "local-board"
 
 # Run all tests with -readnow
-set GDBFLAGS "${GDBFLAGS} -readnow"
+gdb_append_to_board_info gdb_opts "-readnow"
 
 # This is based on baseboards/unix.exp.
 # At the moment we only support systems that unix.exp supports.

@@ -55,7 +55,7 @@ set cmd \
     [concat \
 	 "(" \
 	 "ulimit -s $stack_limit;" \
-	 "$GDB $INTERNAL_GDBFLAGS $GDBFLAGS -batch -core=$corefile" \
+	 "$GDB [gdb_internal_flags] $GDBFLAGS -batch -core=$corefile" \
 	 ")"]
 verbose -log $cmd
 

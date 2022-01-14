@@ -36,7 +36,7 @@ if { [which curl] == 0 } {
 # by passing --quiet.
 
 if { [string first "with-debuginfod" \
-	 [eval exec $GDB --quiet $INTERNAL_GDBFLAGS --configuration]] == -1 } {
+	  [eval exec $GDB --quiet [gdb_internal_flags] --configuration]] == -1 } {
     untested "gdb not configured with debuginfod"
     return -1
 }

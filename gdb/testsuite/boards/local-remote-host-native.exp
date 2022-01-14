@@ -56,6 +56,14 @@ if { ![info exists HOST_DIR] } {
 
 if { $board_type == "host" } {
     set_board_info gdb_opts "-d \"${HOST_DIR}\""
+
+    global board
+    global target_info
+    clone_output "APB: board = $board"
+    if {[info exists target_info(host,name)]} {
+	set machine $target_info(host,name)
+	clone_output "APB: machine = $machine"
+    }
 }
 
 proc ${board}_spawn { board cmd } {

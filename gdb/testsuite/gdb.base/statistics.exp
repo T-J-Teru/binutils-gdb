@@ -19,7 +19,7 @@ gdb_exit
 
 # Inlined default_gdb_start.
 set use_gdb_stub [use_gdb_stub]
-set res [remote_spawn host "$GDB $INTERNAL_GDBFLAGS $GDBFLAGS [host_info gdb_opts] -statistics"]
+set res [remote_spawn host "$GDB [gdb_internal_flags] $GDBFLAGS [host_info gdb_opts] -statistics"]
 if { $res < 0 || $res == "" } {
     perror "Spawning $GDB failed."
     return
