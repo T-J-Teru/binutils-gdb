@@ -15,6 +15,60 @@
 
 standard_testfile
 
+# Count the number of probes of TYPE (either 'stap' or 'dtrace'),
+# from provider matching PROVIDER, with a name matching NAME, and from
+# an objec file matching OBJECT.
+#
+# The OBJECT is optional, in which case all objects will be matched.
+#
+# If any error condition is detected, then perror is called, and -1
+# returned.
+#
+# Otherwise, returns an integer, 0 or greater.
+proc gdb_count_probes { type provider name { object "" }} {
+    set cmd "info probes ${type} ${provider} ${name}"
+    if { $object != "" } {
+	set cmd "$cmd ${object}"
+    }
+
+    set probe_count 0
+    set no_probes_line false
+    gdb_test_multiple $cmd "" {
+	-re "^$cmd\r\n" {
+	    exp_continue
+	}
+	-re "^Type\\s+Provider\\s+Name\\s+Where\\s+Semaphore\\s+Object\\s*\r\n" {
+	    exp_continue
+	}
+	-re "^\\s*\r\n" {
+	    exp_continue
+	}
+	-re "^stap\[^\r\n\]+\r\n" {
+	    incr probe_count
+	    exp_continue
+	}
+	-re "^dtrace\[^\r\n\]+\r\n" {
+	    incr probe_count
+	    exp_continue
+	}
+	-re "^No probes matched\\.\r\n" {
+	    set no_probes_line true
+	    exp_continue
+	}
+	-re "^$::gdb_prompt $" {
+	    pass $gdb_test_name
+	}
+    }
+
+    if { [expr $no_probes_line && $probe_count > 0] \
+	     || [expr !$no_probes_line && $probe_count == 0] } {
+	perror "Mismatch between no probes found line, and probes count"
+	return -1
+    }
+
+    return $probe_count
+}
+
 # Run the tests.  We run the tests two different ways: once with a
 # plain probe, and once with a probe that has an associated semaphore.
 # This returns -1 on failure to compile or start, 0 otherwise.
@@ -119,6 +173,21 @@ proc stap_test {exec_name {args ""}} {
     " = $hex .This is another test message.*" \
     "print \$_probe_arg1 for probe ps"
 
+    # Reinit GDB, set a breakpoint on probe ps.
+    if { [gdb_count_probes stap test xmmreg] > 0 } {
+	delete_breakpoints
+	if {[runto "-pstap test:xmmreg"]} {
+	    pass "run to -pstap test:xmmreg"
+	} else {
+	    fail "run to -pstap test:xmmreg"
+	}
+
+	gdb_test "print \$_probe_argc" " = 1" \
+	    "print \$_probe_argc for probe xmmreg"
+	gdb_test "print/x \$_probe_arg0" " = 0x1234" \
+	    "check \$_probe_arg0 for probe xmmreg"
+    }
+
     return 0
 }
 
@@ -184,6 +253,21 @@ proc stap_test_no_debuginfo {exec_name {args ""}} {
     gdb_test "print (const char *) \$_probe_arg1" \
     " = $hex .This is another test message.*" \
     "print \$_probe_arg1 for probe ps"
+
+    # Reinit GDB, set a breakpoint on probe ps.
+    if { [gdb_count_probes stap test xmmreg] > 0 } {
+	delete_breakpoints
+	if {[runto "-pstap test:xmmreg"]} {
+	    pass "run to -pstap test:xmmreg"
+	} else {
+	    fail "run to -pstap test:xmmreg"
+	}
+
+	gdb_test "print \$_probe_argc" " = 1" \
+	    "print \$_probe_argc for probe xmmreg"
+	gdb_test "print/x \$_probe_arg0" " = 0x1234" \
+	    "check \$_probe_arg0 for probe xmmreg"
+    }
 
     return 0
 }
