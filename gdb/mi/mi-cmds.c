@@ -176,8 +176,6 @@ mi_command::mi_command (const char *name, int *suppress_notification)
 void
 mi_command::invoke (struct mi_parse *parse) const
 {
-  gdb::optional<scoped_restore_tmpl<int>> restore
-    = do_suppress_notification ();
   this->do_invoke (parse);
 }
 
