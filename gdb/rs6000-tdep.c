@@ -6310,6 +6310,21 @@ rs6000_program_breakpoint_here_p (gdbarch *gdbarch, CORE_ADDR address)
   return false;
 }
 
+/* Add all the expected register sets into GDBARCH.  */
+
+static void
+rs6000_add_reggroups (struct gdbarch *gdbarch)
+{
+  /* Add predefined register groups.  */
+  reggroup_add (gdbarch, all_reggroup);
+  reggroup_add (gdbarch, save_reggroup);
+  reggroup_add (gdbarch, restore_reggroup);
+  reggroup_add (gdbarch, system_reggroup);
+  reggroup_add (gdbarch, vector_reggroup);
+  reggroup_add (gdbarch, general_reggroup);
+  reggroup_add (gdbarch, float_reggroup);
+}
+
 /* Initialize the current architecture based on INFO.  If possible, re-use an
    architecture from ARCHES, which is a list of architectures already created
    during this debugging session.
@@ -7234,6 +7249,8 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
       frame_unwind_append_unwinder (gdbarch, &rs6000_frame_unwind);
       frame_base_append_sniffer (gdbarch, rs6000_frame_base_sniffer);
     }
+
+  rs6000_add_reggroups (gdbarch);
 
   set_tdesc_pseudo_register_type (gdbarch, rs6000_pseudo_register_type);
   set_tdesc_pseudo_register_reggroup_p (gdbarch,
