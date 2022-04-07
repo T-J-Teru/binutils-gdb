@@ -599,6 +599,8 @@ public:
 
     int idx = gdb_bfd_section_index (this->obfd, section);
     gdb_assert (idx < this->section_offsets.size ());
+    if (getenv ("APB_DEBUG") != NULL)
+      fprintf (stderr, "%s:%d idx = %d, size = %ld\n", __FILE__, __LINE__, idx, this->section_offsets.size ());
     return this->section_offsets[idx];
   }
 
