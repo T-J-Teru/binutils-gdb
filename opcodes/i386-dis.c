@@ -42,12 +42,14 @@
 #include <setjmp.h>
 typedef struct instr_info instr_info;
 
+#define STYLE_BUFFER_SIZE 10
+
 static int print_insn (bfd_vma, instr_info *);
 static void dofloat (instr_info *, int);
 static void OP_ST (instr_info *, int, int);
 static void OP_STi (instr_info *, int, int);
 static int putop (instr_info *, const char *, int);
-static void oappend (instr_info *, const char *);
+static void oappend (instr_info *, const char *, enum disassembler_style);
 static void append_seg (instr_info *);
 static void OP_indirE (instr_info *, int, int);
 static void print_operand_value (instr_info *, char *, int, bfd_vma);
@@ -166,6 +168,8 @@ struct instr_info
   char *obufp;
   char *mnemonicendp;
   char scratchbuf[100];
+  char style_buffer[STYLE_BUFFER_SIZE];
+  char staging_area[100];
   unsigned char *start_codep;
   unsigned char *insn_codep;
   unsigned char *codep;
@@ -248,6 +252,8 @@ struct instr_info
 
   enum x86_64_isa isa64;
 
+  int (*printf) (instr_info *ins, enum disassembler_style style,
+		 const char *fmt, ...) ATTRIBUTE_FPTR_PRINTF_3;
 };
 
 /* Mark parts used in the REX prefix.  When we are testing for
@@ -9300,9 +9306,73 @@ get_sib (instr_info *ins, int sizeflag)
 /* Like oappend (below), but S is a string starting with '%'.
    In Intel syntax, the '%' is elided.  */
 static void
-oappend_maybe_intel (instr_info *ins, const char *s)
+oappend_maybe_intel (instr_info *ins, const char *s,
+		     enum disassembler_style style)
 {
-  oappend (ins, s + ins->intel_syntax);
+  oappend (ins, s + ins->intel_syntax, style);
+}
+
+/* Wrap around a call to INS->info->fprintf_styled_func, printing FMT.
+   STYLE is the default style to use in the fprintf_styled_func calls,
+   however, FMT might include embedded style markers (see oappend_style),
+   these embedded markers are not printed, but instead change the style
+   used in the next fprintf_styled_func call.
+
+   Return non-zero to indicate the print call was a success.  */
+
+static int ATTRIBUTE_PRINTF_3
+i386_dis_printf (instr_info *ins, enum disassembler_style style,
+		 const char *fmt, ...)
+{
+  va_list ap;
+  enum disassembler_style curr_style = style;
+  char *start, *curr;
+
+  va_start (ap, fmt);
+  vsnprintf (ins->staging_area, 100, fmt, ap);
+  va_end (ap);
+
+  start = curr = ins->staging_area;
+
+  do
+    {
+      if (*curr == '\0' || *curr == '~')
+	{
+	  /* Output content between our START position and CURR.  */
+	  int len = curr - start;
+	  (*ins->info->fprintf_styled_func) (ins->info->stream, curr_style,
+					     "%.*s", len, start);
+	  if (*curr == '\0')
+	    break;
+
+	  /* Update the CURR_STYLE, it is possible here that if the input
+	     is corrupted in some way, then we may set CURR_STYLE to an
+	     invalid value.  Don't worry though, we check for that in a
+	     subsequent if block.  */
+	  ++curr;
+	  if (*curr >= '0' && *curr <= '9')
+	    curr_style = (enum disassembler_style) (*curr - '0');
+	  else if (*curr >= 'a' && *curr <= 'f')
+	    curr_style = (enum disassembler_style) (*curr - 'a' + 10);
+	  else
+	    curr_style = dis_style_text;
+
+	  /* Skip over the hex character, and the closing '~'.  Also
+	     validate that CURR_STYLE is set to a valid value.  */
+	  ++curr;
+	  if (*curr != '~' || curr_style > dis_style_comment_start)
+	    curr_style = dis_style_text;
+	  ++curr;
+
+	  /* Reset the START and CURR pointers to after the style marker.  */
+	  start = curr;
+	}
+      else
+	++curr;
+    }
+  while (true);
+
+  return 1;
 }
 
 static int
@@ -9317,6 +9387,7 @@ print_insn (bfd_vma pc, instr_info *ins)
   struct dis_private priv;
   int prefix_length;
 
+  ins->printf = i386_dis_printf;
   ins->isa64 = 0;
   ins->intel_mnemonic = !SYSV386_COMPAT;
   ins->op_is_jump = false;
@@ -9401,8 +9472,7 @@ print_insn (bfd_vma pc, instr_info *ins)
 
   if (ins->address_mode == mode_64bit && sizeof (bfd_vma) < 8)
     {
-      (*ins->info->fprintf_styled_func) (ins->info->stream, dis_style_text,
-					 _("64-bit address is disabled"));
+      ins->printf (ins, dis_style_text, _("64-bit address is disabled"));
       return -1;
     }
 
@@ -9451,16 +9521,14 @@ print_insn (bfd_vma pc, instr_info *ins)
 	{
 	  name = prefix_name (ins, priv.the_buffer[0], priv.orig_sizeflag);
 	  if (name != NULL)
-	    (*ins->info->fprintf_styled_func)
-	      (ins->info->stream, dis_style_mnemonic, "%s", name);
+	    ins->printf (ins, dis_style_mnemonic, "%s", name);
 	  else
 	    {
 	      /* Just print the first byte as a .byte instruction.  */
-	      (*ins->info->fprintf_styled_func)
-		(ins->info->stream, dis_style_assembler_directive, ".byte ");
-	      (*ins->info->fprintf_styled_func)
-		(ins->info->stream, dis_style_immediate, "0x%x",
-		 (unsigned int) priv.the_buffer[0]);
+	      ins->printf (ins, dis_style_assembler_directive,
+			   ".byte ");
+	      ins->printf (ins, dis_style_immediate, "0x%x",
+			   (unsigned int) priv.the_buffer[0]);
 	    }
 
 	  return 1;
@@ -9478,10 +9546,9 @@ print_insn (bfd_vma pc, instr_info *ins)
       for (i = 0;
 	   i < (int) ARRAY_SIZE (ins->all_prefixes) && ins->all_prefixes[i];
 	   i++)
-	(*ins->info->fprintf_styled_func)
-	  (ins->info->stream, dis_style_mnemonic, "%s%s",
-	   (i == 0 ? "" : " "), prefix_name (ins, ins->all_prefixes[i],
-					     sizeflag));
+	ins->printf (ins, dis_style_mnemonic, "%s%s",
+		     (i == 0 ? "" : " "),
+		     prefix_name (ins, ins->all_prefixes[i], sizeflag));
       return i;
     }
 
@@ -9496,11 +9563,9 @@ print_insn (bfd_vma pc, instr_info *ins)
       /* Handle ins->prefixes before fwait.  */
       for (i = 0; i < ins->fwait_prefix && ins->all_prefixes[i];
 	   i++)
-	(*ins->info->fprintf_styled_func)
-	  (ins->info->stream, dis_style_mnemonic, "%s ",
-	   prefix_name (ins, ins->all_prefixes[i], sizeflag));
-      (*ins->info->fprintf_styled_func)
-	(ins->info->stream, dis_style_mnemonic, "fwait");
+	ins->printf (ins, dis_style_mnemonic, "%s ",
+		     prefix_name (ins, ins->all_prefixes[i], sizeflag));
+      ins->printf (ins, dis_style_mnemonic, "fwait");
       return i + 1;
     }
 
@@ -9569,14 +9634,15 @@ print_insn (bfd_vma pc, instr_info *ins)
 		  /* Don't print {%k0}.  */
 		  if (ins->vex.mask_register_specifier)
 		    {
-		      oappend (ins, "{");
+		      oappend (ins, "{", dis_style_text);
 		      oappend_maybe_intel (ins,
 					   att_names_mask
-					   [ins->vex.mask_register_specifier]);
-		      oappend (ins, "}");
+					   [ins->vex.mask_register_specifier],
+					   dis_style_text);
+		      oappend (ins, "}", dis_style_text);
 		    }
 		  if (ins->vex.zeroing)
-		    oappend (ins, "{z}");
+		    oappend (ins, "{z}", dis_style_text);
 
 		  /* S/G insns require a mask and don't allow
 		     zeroing-masking.  */
@@ -9584,7 +9650,7 @@ print_insn (bfd_vma pc, instr_info *ins)
 		       || dp->op[0].bytemode == vex_vsib_q_w_dq_mode)
 		      && (ins->vex.mask_register_specifier == 0
 			  || ins->vex.zeroing))
-		    oappend (ins, "/(bad)");
+		    oappend (ins, "/(bad)", dis_style_text);
 		}
 	    }
 
@@ -9598,8 +9664,8 @@ print_insn (bfd_vma pc, instr_info *ins)
 		  ins->obufp = ins->op_out[i];
 		  if (*ins->obufp)
 		    continue;
-		  oappend (ins, names_rounding[ins->vex.ll]);
-		  oappend (ins, "bad}");
+		  oappend (ins, names_rounding[ins->vex.ll], dis_style_text);
+		  oappend (ins, "bad}", dis_style_text);
 		  break;
 		}
 	    }
@@ -9649,16 +9715,14 @@ print_insn (bfd_vma pc, instr_info *ins)
      are all 0s in inverted form.  */
   if (ins->need_vex && ins->vex.register_specifier != 0)
     {
-      (*ins->info->fprintf_styled_func) (ins->info->stream, dis_style_text,
-					 "(bad)");
+      ins->printf (ins, dis_style_text, "(bad)");
       return ins->end_codep - priv.the_buffer;
     }
 
   /* If EVEX.z is set, there must be an actual mask register in use.  */
   if (ins->vex.zeroing && ins->vex.mask_register_specifier == 0)
     {
-      (*ins->info->fprintf_styled_func) (ins->info->stream, dis_style_text,
-					 "(bad)");
+      ins->printf (ins, dis_style_text, "(bad)");
       return ins->end_codep - priv.the_buffer;
     }
 
@@ -9669,8 +9733,7 @@ print_insn (bfd_vma pc, instr_info *ins)
 	 the encoding invalid.  Most other PREFIX_OPCODE rules still apply.  */
       if (ins->need_vex ? !ins->vex.prefix : !(ins->prefixes & PREFIX_DATA))
 	{
-	  (*ins->info->fprintf_styled_func) (ins->info->stream,
-					     dis_style_text, "(bad)");
+	  ins->printf (ins, dis_style_text, "(bad)");
 	  return ins->end_codep - priv.the_buffer;
 	}
       ins->used_prefixes |= PREFIX_DATA;
@@ -9697,8 +9760,7 @@ print_insn (bfd_vma pc, instr_info *ins)
 	  || (ins->vex.evex && dp->prefix_requirement != PREFIX_DATA
 	      && !ins->vex.w != !(ins->used_prefixes & PREFIX_DATA)))
 	{
-	  (*ins->info->fprintf_styled_func) (ins->info->stream,
-					     dis_style_text, "(bad)");
+	  ins->printf (ins, dis_style_text, "(bad)");
 	  return ins->end_codep - priv.the_buffer;
 	}
       break;
@@ -9748,24 +9810,28 @@ print_insn (bfd_vma pc, instr_info *ins)
 	if (name == NULL)
 	  abort ();
 	prefix_length += strlen (name) + 1;
-	(*ins->info->fprintf_styled_func)
-	  (ins->info->stream, dis_style_mnemonic, "%s ", name);
+	ins->printf (ins, dis_style_mnemonic, "%s ", name);
       }
 
   /* Check maximum code length.  */
   if ((ins->codep - ins->start_codep) > MAX_CODE_LENGTH)
     {
-      (*ins->info->fprintf_styled_func)
-	(ins->info->stream, dis_style_text, "(bad)");
+      ins->printf (ins, dis_style_text, "(bad)");
       return MAX_CODE_LENGTH;
     }
 
-  ins->obufp = ins->mnemonicendp;
-  for (i = strlen (ins->obuf) + prefix_length; i < 6; i++)
-    oappend (ins, " ");
-  oappend (ins, " ");
-  (*ins->info->fprintf_styled_func)
-    (ins->info->stream, dis_style_mnemonic, "%s", ins->obuf);
+  i = strlen (ins->obuf);
+  if (ins->mnemonicendp == ins->obuf + i)
+    {
+      i += prefix_length;
+      if (i < 6)
+	i = 6 - i + 1;
+      else
+	i = 1;
+    }
+  else
+    i = 0;
+  ins->printf (ins, dis_style_mnemonic, "%s%*s", ins->obuf, i, "");
 
   /* The enter and bound instructions are printed with operands in the same
      order as the intel book; everything else is printed in reverse order.  */
@@ -9804,8 +9870,7 @@ print_insn (bfd_vma pc, instr_info *ins)
     if (*op_txt[i])
       {
 	if (needcomma)
-	  (*ins->info->fprintf_styled_func) (ins->info->stream,
-					     dis_style_text, ",");
+	  ins->printf (ins, dis_style_text, ",");
 	if (ins->op_index[i] != -1 && !ins->op_riprel[i])
 	  {
 	    bfd_vma target = (bfd_vma) ins->op_address[ins->op_index[i]];
@@ -9821,18 +9886,14 @@ print_insn (bfd_vma pc, instr_info *ins)
 	    (*ins->info->print_address_func) (target, ins->info);
 	  }
 	else
-	  (*ins->info->fprintf_styled_func) (ins->info->stream,
-					     dis_style_text, "%s",
-					     op_txt[i]);
+	  ins->printf (ins, dis_style_text, "%s", op_txt[i]);
 	needcomma = 1;
       }
 
   for (i = 0; i < MAX_OPERANDS; i++)
     if (ins->op_index[i] != -1 && ins->op_riprel[i])
       {
-	(*ins->info->fprintf_styled_func) (ins->info->stream,
-					   dis_style_comment_start,
-					   "        # ");
+	ins->printf (ins, dis_style_comment_start, "        # ");
 	(*ins->info->print_address_func) ((bfd_vma)
 			(ins->start_pc + (ins->codep - ins->start_codep)
 			 + ins->op_address[ins->op_index[i]]), ins->info);
@@ -10217,15 +10278,18 @@ static void
 OP_ST (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
        int sizeflag ATTRIBUTE_UNUSED)
 {
-  oappend_maybe_intel (ins, "%st");
+  oappend_maybe_intel (ins, "%st", dis_style_text);
 }
 
 static void
 OP_STi (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
 	int sizeflag ATTRIBUTE_UNUSED)
 {
-  sprintf (ins->scratchbuf, "%%st(%d)", ins->modrm.rm);
-  oappend_maybe_intel (ins, ins->scratchbuf);
+  oappend_maybe_intel (ins, "%st", dis_style_text);
+  oappend (ins, "(", dis_style_text);
+  sprintf (ins->scratchbuf, "%d", ins->modrm.rm);
+  oappend (ins, ins->scratchbuf, dis_style_immediate);
+  oappend (ins, ")", dis_style_text);
 }
 
 /* Capital letters in template are macros.  */
@@ -10329,7 +10393,7 @@ putop (instr_info *ins, const char *in_template, int sizeflag)
 		if (!ins->vex.evex || ins->vex.w)
 		  *ins->obufp++ = 'd';
 		else
-		  oappend (ins, "{bad}");
+		  oappend (ins, "{bad}", dis_style_text);
 		break;
 	      default:
 		abort ();
@@ -10424,7 +10488,7 @@ putop (instr_info *ins, const char *in_template, int sizeflag)
 	      if (!ins->vex.w)
 		*ins->obufp++ = 'h';
 	      else
-		oappend (ins, "{bad}");
+		oappend (ins, "{bad}", dis_style_text);
 	    }
 	  else
 	    abort ();
@@ -10608,7 +10672,7 @@ putop (instr_info *ins, const char *in_template, int sizeflag)
 	      if (!ins->vex.evex || !ins->vex.w)
 		*ins->obufp++ = 's';
 	      else
-		oappend (ins, "{bad}");
+		oappend (ins, "{bad}", dis_style_text);
 	      break;
 	    default:
 	      abort ();
@@ -10772,10 +10836,45 @@ putop (instr_info *ins, const char *in_template, int sizeflag)
   return 0;
 }
 
+/* Add a style marker "~X~" to *INS->obufp that encodes STYLE.  This
+   assumes that the buffer pointed to by INS->obufp has space.  In the
+   style marker 'X' is replaced with a single hex character that represents
+   STYLE.  */
+
 static void
-oappend (instr_info *ins, const char *s)
+oappend_style (instr_info *ins, enum disassembler_style style)
 {
+  int num = (int) style;
+
+  /* We currently assume that STYLE can be encoded as a single hex
+     character.  If more styles are added then this might start to fail,
+     and we'll need to expand this code.  */
+  if (num > 0xf)
+    abort ();
+
+  *ins->obufp++ = '~';
+  *ins->obufp++ = (num < 10 ? ('0' + num)
+		   : ((num < 16) ? ('a' + (num - 10)) : '0'));
+  *ins->obufp++ = '~';
+  *ins->obufp = '\0';
+}
+
+static void
+oappend (instr_info *ins, const char *s, enum disassembler_style style)
+{
+  oappend_style (ins, style);
   ins->obufp = stpcpy (ins->obufp, s);
+}
+
+/* Add a single character C to the buffer pointer to by INS->obufp, marking
+   the style for the character as STYLE.  */
+
+static void
+oappend_char (instr_info *ins, const char c, enum disassembler_style style)
+{
+  oappend_style (ins, style);
+  *ins->obufp++ = c;
+  *ins->obufp = '\0';
 }
 
 static void
@@ -10789,33 +10888,34 @@ append_seg (instr_info *ins)
   switch (ins->active_seg_prefix)
     {
     case PREFIX_CS:
-      oappend_maybe_intel (ins, "%cs:");
+      oappend_maybe_intel (ins, "%cs", dis_style_register);
       break;
     case PREFIX_DS:
-      oappend_maybe_intel (ins, "%ds:");
+      oappend_maybe_intel (ins, "%ds", dis_style_register);
       break;
     case PREFIX_SS:
-      oappend_maybe_intel (ins, "%ss:");
+      oappend_maybe_intel (ins, "%ss", dis_style_register);
       break;
     case PREFIX_ES:
-      oappend_maybe_intel (ins, "%es:");
+      oappend_maybe_intel (ins, "%es", dis_style_register);
       break;
     case PREFIX_FS:
-      oappend_maybe_intel (ins, "%fs:");
+      oappend_maybe_intel (ins, "%fs", dis_style_register);
       break;
     case PREFIX_GS:
-      oappend_maybe_intel (ins, "%gs:");
+      oappend_maybe_intel (ins, "%gs", dis_style_register);
       break;
     default:
       break;
     }
+  oappend_char (ins, ':', dis_style_text);
 }
 
 static void
 OP_indirE (instr_info *ins, int bytemode, int sizeflag)
 {
   if (!ins->intel_syntax)
-    oappend (ins, "*");
+    oappend (ins, "*", dis_style_text);
   OP_E (ins, bytemode, sizeflag);
 }
 
@@ -10931,14 +11031,14 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
 	  case x_mode:
 	  case evex_half_bcst_xmmq_mode:
 	    if (ins->vex.w)
-	      oappend (ins, "QWORD PTR ");
+	      oappend (ins, "QWORD PTR ", dis_style_text);
 	    else
-	      oappend (ins, "DWORD PTR ");
+	      oappend (ins, "DWORD PTR ", dis_style_text);
 	    break;
 	  case xh_mode:
 	  case evex_half_bcst_xmmqh_mode:
 	  case evex_half_bcst_xmmqdh_mode:
-	    oappend (ins, "WORD PTR ");
+	    oappend (ins, "WORD PTR ", dis_style_text);
 	    break;
 	  default:
 	    ins->vex.no_broadcast = true;
@@ -10951,17 +11051,17 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
     case b_mode:
     case b_swap_mode:
     case db_mode:
-      oappend (ins, "BYTE PTR ");
+      oappend (ins, "BYTE PTR ", dis_style_text);
       break;
     case w_mode:
     case w_swap_mode:
     case dw_mode:
-      oappend (ins, "WORD PTR ");
+      oappend (ins, "WORD PTR ", dis_style_text);
       break;
     case indir_v_mode:
       if (ins->address_mode == mode_64bit && ins->isa64 == intel64)
 	{
-	  oappend (ins, "QWORD PTR ");
+	  oappend (ins, "QWORD PTR ", dis_style_text);
 	  break;
 	}
       /* Fall through.  */
@@ -10969,7 +11069,7 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
       if (ins->address_mode == mode_64bit && ((sizeflag & DFLAG)
 					      || (ins->rex & REX_W)))
 	{
-	  oappend (ins, "QWORD PTR ");
+	  oappend (ins, "QWORD PTR ", dis_style_text);
 	  break;
 	}
       /* Fall through.  */
@@ -10978,62 +11078,62 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
     case dq_mode:
       USED_REX (REX_W);
       if (ins->rex & REX_W)
-	oappend (ins, "QWORD PTR ");
+	oappend (ins, "QWORD PTR ", dis_style_text);
       else if (bytemode == dq_mode)
-	oappend (ins, "DWORD PTR ");
+	oappend (ins, "DWORD PTR ", dis_style_text);
       else
 	{
 	  if (sizeflag & DFLAG)
-	    oappend (ins, "DWORD PTR ");
+	    oappend (ins, "DWORD PTR ", dis_style_text);
 	  else
-	    oappend (ins, "WORD PTR ");
+	    oappend (ins, "WORD PTR ", dis_style_text);
 	  ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
 	}
       break;
     case z_mode:
       if ((ins->rex & REX_W) || (sizeflag & DFLAG))
 	*ins->obufp++ = 'D';
-      oappend (ins, "WORD PTR ");
+      oappend (ins, "WORD PTR ", dis_style_text);
       if (!(ins->rex & REX_W))
 	ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
       break;
     case a_mode:
       if (sizeflag & DFLAG)
-	oappend (ins, "QWORD PTR ");
+	oappend (ins, "QWORD PTR ", dis_style_text);
       else
-	oappend (ins, "DWORD PTR ");
+	oappend (ins, "DWORD PTR ", dis_style_text);
       ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
       break;
     case movsxd_mode:
       if (!(sizeflag & DFLAG) && ins->isa64 == intel64)
-	oappend (ins, "WORD PTR ");
+	oappend (ins, "WORD PTR ", dis_style_text);
       else
-	oappend (ins, "DWORD PTR ");
+	oappend (ins, "DWORD PTR ", dis_style_text);
       ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
       break;
     case d_mode:
     case d_swap_mode:
-      oappend (ins, "DWORD PTR ");
+      oappend (ins, "DWORD PTR ", dis_style_text);
       break;
     case q_mode:
     case q_swap_mode:
-      oappend (ins, "QWORD PTR ");
+      oappend (ins, "QWORD PTR ", dis_style_text);
       break;
     case m_mode:
       if (ins->address_mode == mode_64bit)
-	oappend (ins, "QWORD PTR ");
+	oappend (ins, "QWORD PTR ", dis_style_text);
       else
-	oappend (ins, "DWORD PTR ");
+	oappend (ins, "DWORD PTR ", dis_style_text);
       break;
     case f_mode:
       if (sizeflag & DFLAG)
-	oappend (ins, "FWORD PTR ");
+	oappend (ins, "FWORD PTR ", dis_style_text);
       else
-	oappend (ins, "DWORD PTR ");
+	oappend (ins, "DWORD PTR ", dis_style_text);
       ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
       break;
     case t_mode:
-      oappend (ins, "TBYTE PTR ");
+      oappend (ins, "TBYTE PTR ", dis_style_text);
       break;
     case x_mode:
     case xh_mode:
@@ -11046,26 +11146,26 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
 	  switch (ins->vex.length)
 	    {
 	    case 128:
-	      oappend (ins, "XMMWORD PTR ");
+	      oappend (ins, "XMMWORD PTR ", dis_style_text);
 	      break;
 	    case 256:
-	      oappend (ins, "YMMWORD PTR ");
+	      oappend (ins, "YMMWORD PTR ", dis_style_text);
 	      break;
 	    case 512:
-	      oappend (ins, "ZMMWORD PTR ");
+	      oappend (ins, "ZMMWORD PTR ", dis_style_text);
 	      break;
 	    default:
 	      abort ();
 	    }
 	}
       else
-	oappend (ins, "XMMWORD PTR ");
+	oappend (ins, "XMMWORD PTR ", dis_style_text);
       break;
     case xmm_mode:
-      oappend (ins, "XMMWORD PTR ");
+      oappend (ins, "XMMWORD PTR ", dis_style_text);
       break;
     case ymm_mode:
-      oappend (ins, "YMMWORD PTR ");
+      oappend (ins, "YMMWORD PTR ", dis_style_text);
       break;
     case xmmq_mode:
     case evex_half_bcst_xmmqh_mode:
@@ -11076,13 +11176,13 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
       switch (ins->vex.length)
 	{
 	case 128:
-	  oappend (ins, "QWORD PTR ");
+	  oappend (ins, "QWORD PTR ", dis_style_text);
 	  break;
 	case 256:
-	  oappend (ins, "XMMWORD PTR ");
+	  oappend (ins, "XMMWORD PTR ", dis_style_text);
 	  break;
 	case 512:
-	  oappend (ins, "YMMWORD PTR ");
+	  oappend (ins, "YMMWORD PTR ", dis_style_text);
 	  break;
 	default:
 	  abort ();
@@ -11095,13 +11195,13 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
       switch (ins->vex.length)
 	{
 	case 128:
-	  oappend (ins, "WORD PTR ");
+	  oappend (ins, "WORD PTR ", dis_style_text);
 	  break;
 	case 256:
-	  oappend (ins, "DWORD PTR ");
+	  oappend (ins, "DWORD PTR ", dis_style_text);
 	  break;
 	case 512:
-	  oappend (ins, "QWORD PTR ");
+	  oappend (ins, "QWORD PTR ", dis_style_text);
 	  break;
 	default:
 	  abort ();
@@ -11115,13 +11215,13 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
       switch (ins->vex.length)
 	{
 	case 128:
-	  oappend (ins, "DWORD PTR ");
+	  oappend (ins, "DWORD PTR ", dis_style_text);
 	  break;
 	case 256:
-	  oappend (ins, "QWORD PTR ");
+	  oappend (ins, "QWORD PTR ", dis_style_text);
 	  break;
 	case 512:
-	  oappend (ins, "XMMWORD PTR ");
+	  oappend (ins, "XMMWORD PTR ", dis_style_text);
 	  break;
 	default:
 	  abort ();
@@ -11134,45 +11234,45 @@ intel_operand_size (instr_info *ins, int bytemode, int sizeflag)
       switch (ins->vex.length)
 	{
 	case 128:
-	  oappend (ins, "QWORD PTR ");
+	  oappend (ins, "QWORD PTR ", dis_style_text);
 	  break;
 	case 256:
-	  oappend (ins, "YMMWORD PTR ");
+	  oappend (ins, "YMMWORD PTR ", dis_style_text);
 	  break;
 	case 512:
-	  oappend (ins, "ZMMWORD PTR ");
+	  oappend (ins, "ZMMWORD PTR ", dis_style_text);
 	  break;
 	default:
 	  abort ();
 	}
       break;
     case o_mode:
-      oappend (ins, "OWORD PTR ");
+      oappend (ins, "OWORD PTR ", dis_style_text);
       break;
     case vex_vsib_d_w_dq_mode:
     case vex_vsib_q_w_dq_mode:
       if (!ins->need_vex)
 	abort ();
       if (ins->vex.w)
-	oappend (ins, "QWORD PTR ");
+	oappend (ins, "QWORD PTR ", dis_style_text);
       else
-	oappend (ins, "DWORD PTR ");
+	oappend (ins, "DWORD PTR ", dis_style_text);
       break;
     case mask_bd_mode:
       if (!ins->need_vex || ins->vex.length != 128)
 	abort ();
       if (ins->vex.w)
-	oappend (ins, "DWORD PTR ");
+	oappend (ins, "DWORD PTR ", dis_style_text);
       else
-	oappend (ins, "BYTE PTR ");
+	oappend (ins, "BYTE PTR ", dis_style_text);
       break;
     case mask_mode:
       if (!ins->need_vex)
 	abort ();
       if (ins->vex.w)
-	oappend (ins, "QWORD PTR ");
+	oappend (ins, "QWORD PTR ", dis_style_text);
       else
-	oappend (ins, "WORD PTR ");
+	oappend (ins, "WORD PTR ", dis_style_text);
       break;
     case v_bnd_mode:
     case v_bndmk_mode:
@@ -11221,7 +11321,7 @@ print_register (instr_info *ins, unsigned int reg, unsigned int rexmask,
     case bnd_swap_mode:
       if (reg > 0x3)
 	{
-	  oappend (ins, "(bad)");
+	  oappend (ins, "(bad)", dis_style_text);
 	  return;
 	}
       names = att_names_bnd;
@@ -11285,7 +11385,7 @@ print_register (instr_info *ins, unsigned int reg, unsigned int rexmask,
     case mask_mode:
       if (reg > 0x7)
 	{
-	  oappend (ins, "(bad)");
+	  oappend (ins, "(bad)", dis_style_text);
 	  return;
 	}
       names = att_names_mask;
@@ -11293,10 +11393,10 @@ print_register (instr_info *ins, unsigned int reg, unsigned int rexmask,
     case 0:
       return;
     default:
-      oappend (ins, INTERNAL_DISASSEMBLER_ERROR);
+      oappend (ins, INTERNAL_DISASSEMBLER_ERROR, dis_style_text);
       return;
     }
-  oappend_maybe_intel (ins, names[reg]);
+  oappend_maybe_intel (ins, names[reg], dis_style_register);
 }
 
 static void
@@ -11488,7 +11588,7 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	      || bytemode == vex_vsib_q_w_dq_mode
 	      || bytemode == vex_sibmem_mode)
 	    {
-	      oappend (ins, "(bad)");
+	      oappend (ins, "(bad)", dis_style_text);
 	      return;
 	    }
 	}
@@ -11505,7 +11605,7 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	      disp = get32s (ins);
 	      if (riprel && bytemode == v_bndmk_mode)
 		{
-		  oappend (ins, "(bad)");
+		  oappend (ins, "(bad)", dis_style_text);
 		  return;
 		}
 	    }
@@ -11560,11 +11660,14 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	      print_displacement (ins, ins->scratchbuf, disp);
 	    else
 	      print_operand_value (ins, ins->scratchbuf, 1, disp);
-	    oappend (ins, ins->scratchbuf);
+	    oappend (ins, ins->scratchbuf, dis_style_address_offset);
 	    if (riprel)
 	      {
 		set_op (ins, disp, 1);
-		oappend (ins, !addr32flag ? "(%rip)" : "(%eip)");
+		oappend_char (ins, '(', dis_style_text);
+		oappend (ins, !addr32flag ? "%rip" : "%eip",
+			 dis_style_register);
+		oappend_char (ins, ')', dis_style_text);
 	      }
 	  }
 
@@ -11578,17 +11681,17 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 
       if (havedisp || (ins->intel_syntax && riprel))
 	{
-	  *ins->obufp++ = ins->open_char;
+	  oappend_char (ins, ins->open_char, dis_style_text);
 	  if (ins->intel_syntax && riprel)
 	    {
 	      set_op (ins, disp, 1);
-	      oappend (ins, !addr32flag ? "rip" : "eip");
+	      oappend (ins, !addr32flag ? "rip" : "eip", dis_style_register);
 	    }
-	  *ins->obufp = '\0';
 	  if (havebase)
 	    oappend_maybe_intel (ins,
 				 (ins->address_mode == mode_64bit && !addr32flag
-				  ? att_names64 : att_names32)[rbase]);
+				  ? att_names64 : att_names32)[rbase],
+				 dis_style_register);
 	  if (ins->has_sib)
 	    {
 	      /* ESP/RSP won't allow index.  If base isn't ESP/RSP,
@@ -11599,41 +11702,34 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 		  || (havebase && base != ESP_REG_NUM))
 		{
 		  if (!ins->intel_syntax || havebase)
-		    {
-		      *ins->obufp++ = ins->separator_char;
-		      *ins->obufp = '\0';
-		    }
+		    oappend_char (ins, ins->separator_char, dis_style_text);
 		  if (indexes)
 		    {
 		      if (ins->address_mode == mode_64bit || vindex < 16)
-			oappend_maybe_intel (ins, indexes[vindex]);
+			oappend_maybe_intel (ins, indexes[vindex],
+					     dis_style_register);
 		      else
-			oappend (ins, "(bad)");
+			oappend (ins, "(bad)", dis_style_text);
 		    }
 		  else
 		    oappend_maybe_intel (ins,
 					 ins->address_mode == mode_64bit
 					 && !addr32flag ? att_index64
-							: att_index32);
+					 : att_index32, dis_style_text);
 
-		  *ins->obufp++ = ins->scale_char;
-		  *ins->obufp = '\0';
+		  oappend_char (ins, ins->scale_char, dis_style_text);
 		  sprintf (ins->scratchbuf, "%d", 1 << scale);
-		  oappend (ins, ins->scratchbuf);
+		  oappend (ins, ins->scratchbuf, dis_style_immediate);
 		}
 	    }
 	  if (ins->intel_syntax
 	      && (disp || ins->modrm.mod != 0 || base == 5))
 	    {
 	      if (!havedisp || (bfd_signed_vma) disp >= 0)
-		{
-		  *ins->obufp++ = '+';
-		  *ins->obufp = '\0';
-		}
+		  oappend_char (ins, '+', dis_style_text);
 	      else if (ins->modrm.mod != 1 && disp != -disp)
 		{
-		  *ins->obufp++ = '-';
-		  *ins->obufp = '\0';
+		  oappend_char (ins, '-', dis_style_text);
 		  disp = - (bfd_signed_vma) disp;
 		}
 
@@ -11641,11 +11737,10 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 		print_displacement (ins, ins->scratchbuf, disp);
 	      else
 		print_operand_value (ins, ins->scratchbuf, 1, disp);
-	      oappend (ins, ins->scratchbuf);
+	      oappend (ins, ins->scratchbuf, dis_style_text);
 	    }
 
-	  *ins->obufp++ = ins->close_char;
-	  *ins->obufp = '\0';
+	  oappend_char (ins, ins->close_char, dis_style_text);
 
 	  if (check_gather)
 	    {
@@ -11657,7 +11752,7 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	      if (!ins->vex.r)
 	        modrm_reg += 16;
 	      if (vindex == modrm_reg)
-		oappend (ins, "/(bad)");
+		oappend (ins, "/(bad)", dis_style_text);
 	    }
 	}
       else if (ins->intel_syntax)
@@ -11666,11 +11761,12 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	    {
 	      if (!ins->active_seg_prefix)
 		{
-		  oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg]);
-		  oappend (ins, ":");
+		  oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg],
+				       dis_style_text);
+		  oappend (ins, ":", dis_style_text);
 		}
 	      print_operand_value (ins, ins->scratchbuf, 1, disp);
-	      oappend (ins, ins->scratchbuf);
+	      oappend (ins, ins->scratchbuf, dis_style_text);
 	    }
 	}
     }
@@ -11681,7 +11777,7 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	   || bytemode == vex_vsib_d_w_dq_mode
 	   || bytemode == vex_vsib_q_w_dq_mode)
     {
-      oappend (ins, "(bad)");
+      oappend (ins, "(bad)", dis_style_text);
       return;
     }
   else
@@ -11717,47 +11813,42 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	if (ins->modrm.mod != 0 || ins->modrm.rm == 6)
 	  {
 	    print_displacement (ins, ins->scratchbuf, disp);
-	    oappend (ins, ins->scratchbuf);
+	    oappend (ins, ins->scratchbuf, dis_style_text);
 	  }
 
       if (ins->modrm.mod != 0 || ins->modrm.rm != 6)
 	{
-	  *ins->obufp++ = ins->open_char;
-	  *ins->obufp = '\0';
+	  oappend_char (ins, ins->open_char, dis_style_text);
 	  oappend (ins,
 		   (ins->intel_syntax ? intel_index16
-				      : att_index16)[ins->modrm.rm]);
+		    : att_index16)[ins->modrm.rm], dis_style_text);
 	  if (ins->intel_syntax
 	      && (disp || ins->modrm.mod != 0 || ins->modrm.rm == 6))
 	    {
 	      if ((bfd_signed_vma) disp >= 0)
-		{
-		  *ins->obufp++ = '+';
-		  *ins->obufp = '\0';
-		}
+		oappend_char (ins, '+', dis_style_text);
 	      else if (ins->modrm.mod != 1)
 		{
-		  *ins->obufp++ = '-';
-		  *ins->obufp = '\0';
+		  oappend_char (ins, '-', dis_style_text);
 		  disp = - (bfd_signed_vma) disp;
 		}
 
 	      print_displacement (ins, ins->scratchbuf, disp);
-	      oappend (ins, ins->scratchbuf);
+	      oappend (ins, ins->scratchbuf, dis_style_text);
 	    }
 
-	  *ins->obufp++ = ins->close_char;
-	  *ins->obufp = '\0';
+	  oappend_char (ins, ins->close_char, dis_style_text);
 	}
       else if (ins->intel_syntax)
 	{
 	  if (!ins->active_seg_prefix)
 	    {
-	      oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg]);
-	      oappend (ins, ":");
+	      oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg],
+				   dis_style_text);
+	      oappend (ins, ":", dis_style_text);
 	    }
 	  print_operand_value (ins, ins->scratchbuf, 1, disp & 0xffff);
-	  oappend (ins, ins->scratchbuf);
+	  oappend (ins, ins->scratchbuf, dis_style_text);
 	}
     }
   if (ins->vex.b)
@@ -11773,19 +11864,19 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	  if (bytemode == xh_mode)
 	    {
 	      if (ins->vex.w)
-		oappend (ins, "{bad}");
+		oappend (ins, "{bad}", dis_style_text);
 	      else
 		{
 		  switch (ins->vex.length)
 		    {
 		    case 128:
-		      oappend (ins, "{1to8}");
+		      oappend (ins, "{1to8}", dis_style_text);
 		      break;
 		    case 256:
-		      oappend (ins, "{1to16}");
+		      oappend (ins, "{1to16}", dis_style_text);
 		      break;
 		    case 512:
-		      oappend (ins, "{1to32}");
+		      oappend (ins, "{1to32}", dis_style_text);
 		      break;
 		    default:
 		      abort ();
@@ -11802,13 +11893,13 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	      switch (ins->vex.length)
 		{
 		case 128:
-		  oappend (ins, "{1to2}");
+		  oappend (ins, "{1to2}", dis_style_text);
 		  break;
 		case 256:
-		  oappend (ins, "{1to4}");
+		  oappend (ins, "{1to4}", dis_style_text);
 		  break;
 		case 512:
-		  oappend (ins, "{1to8}");
+		  oappend (ins, "{1to8}", dis_style_text);
 		  break;
 		default:
 		  abort ();
@@ -11820,13 +11911,13 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	      switch (ins->vex.length)
 		{
 		case 128:
-		  oappend (ins, "{1to4}");
+		  oappend (ins, "{1to4}", dis_style_text);
 		  break;
 		case 256:
-		  oappend (ins, "{1to8}");
+		  oappend (ins, "{1to8}", dis_style_text);
 		  break;
 		case 512:
-		  oappend (ins, "{1to16}");
+		  oappend (ins, "{1to16}", dis_style_text);
 		  break;
 		default:
 		  abort ();
@@ -11836,7 +11927,7 @@ OP_E_memory (instr_info *ins, int bytemode, int sizeflag)
 	    ins->vex.no_broadcast = true;
 	}
       if (ins->vex.no_broadcast)
-	oappend (ins, "{bad}");
+	oappend (ins, "{bad}", dis_style_text);
     }
 }
 
@@ -11866,7 +11957,7 @@ OP_G (instr_info *ins, int bytemode, int sizeflag)
 {
   if (ins->vex.evex && !ins->vex.r && ins->address_mode == mode_64bit)
     {
-      oappend (ins, "(bad)");
+      oappend (ins, "(bad)", dis_style_text);
       return;
     }
 
@@ -11969,7 +12060,7 @@ OP_REG (instr_info *ins, int code, int sizeflag)
     {
     case es_reg: case ss_reg: case cs_reg:
     case ds_reg: case fs_reg: case gs_reg:
-      oappend_maybe_intel (ins, att_names_seg[code - es_reg]);
+      oappend_maybe_intel (ins, att_names_seg[code - es_reg], dis_style_text);
       return;
     }
 
@@ -12019,10 +12110,10 @@ OP_REG (instr_info *ins, int code, int sizeflag)
 	}
       break;
     default:
-      oappend (ins, INTERNAL_DISASSEMBLER_ERROR);
+      oappend (ins, INTERNAL_DISASSEMBLER_ERROR, dis_style_text);
       return;
     }
-  oappend_maybe_intel (ins, s);
+  oappend_maybe_intel (ins, s, dis_style_register);
 }
 
 static void
@@ -12035,7 +12126,7 @@ OP_IMREG (instr_info *ins, int code, int sizeflag)
     case indir_dx_reg:
       if (!ins->intel_syntax)
 	{
-	  oappend (ins, "(%dx)");
+	  oappend (ins, "(%dx)", dis_style_text);
 	  return;
 	}
       s = att_names16[dx_reg - ax_reg];
@@ -12060,10 +12151,10 @@ OP_IMREG (instr_info *ins, int code, int sizeflag)
 	ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
       break;
     default:
-      oappend (ins, INTERNAL_DISASSEMBLER_ERROR);
+      oappend (ins, INTERNAL_DISASSEMBLER_ERROR, dis_style_text);
       return;
     }
-  oappend_maybe_intel (ins, s);
+  oappend_maybe_intel (ins, s, dis_style_register);
 }
 
 static void
@@ -12108,17 +12199,17 @@ OP_I (instr_info *ins, int bytemode, int sizeflag)
       break;
     case const_1_mode:
       if (ins->intel_syntax)
-	oappend (ins, "1");
+	oappend (ins, "1", dis_style_text);
       return;
     default:
-      oappend (ins, INTERNAL_DISASSEMBLER_ERROR);
+      oappend (ins, INTERNAL_DISASSEMBLER_ERROR, dis_style_text);
       return;
     }
 
   op &= mask;
   ins->scratchbuf[0] = '$';
   print_operand_value (ins, ins->scratchbuf + 1, 1, op);
-  oappend_maybe_intel (ins, ins->scratchbuf);
+  oappend_maybe_intel (ins, ins->scratchbuf, dis_style_immediate);
   ins->scratchbuf[0] = '\0';
 }
 
@@ -12136,7 +12227,7 @@ OP_I64 (instr_info *ins, int bytemode, int sizeflag)
 
   ins->scratchbuf[0] = '$';
   print_operand_value (ins, ins->scratchbuf + 1, 1, get64 (ins));
-  oappend_maybe_intel (ins, ins->scratchbuf);
+  oappend_maybe_intel (ins, ins->scratchbuf, dis_style_immediate);
   ins->scratchbuf[0] = '\0';
 }
 
@@ -12184,13 +12275,13 @@ OP_sI (instr_info *ins, int bytemode, int sizeflag)
 	op = get16 (ins);
       break;
     default:
-      oappend (ins, INTERNAL_DISASSEMBLER_ERROR);
+      oappend (ins, INTERNAL_DISASSEMBLER_ERROR, dis_style_text);
       return;
     }
 
   ins->scratchbuf[0] = '$';
   print_operand_value (ins, ins->scratchbuf + 1, 1, op);
-  oappend_maybe_intel (ins, ins->scratchbuf);
+  oappend_maybe_intel (ins, ins->scratchbuf, dis_style_immediate);
 }
 
 static void
@@ -12234,21 +12325,21 @@ OP_J (instr_info *ins, int bytemode, int sizeflag)
 	ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
       break;
     default:
-      oappend (ins, INTERNAL_DISASSEMBLER_ERROR);
+      oappend (ins, INTERNAL_DISASSEMBLER_ERROR, dis_style_text);
       return;
     }
   disp = ((ins->start_pc + (ins->codep - ins->start_codep) + disp) & mask)
 	 | segment;
   set_op (ins, disp, 0);
   print_operand_value (ins, ins->scratchbuf, 1, disp);
-  oappend (ins, ins->scratchbuf);
+  oappend (ins, ins->scratchbuf, dis_style_text);
 }
 
 static void
 OP_SEG (instr_info *ins, int bytemode, int sizeflag)
 {
   if (bytemode == w_mode)
-    oappend_maybe_intel (ins, att_names_seg[ins->modrm.reg]);
+    oappend_maybe_intel (ins, att_names_seg[ins->modrm.reg], dis_style_text);
   else
     OP_E (ins, ins->modrm.mod == 3 ? bytemode : w_mode, sizeflag);
 }
@@ -12273,7 +12364,7 @@ OP_DIR (instr_info *ins, int dummy ATTRIBUTE_UNUSED, int sizeflag)
     sprintf (ins->scratchbuf, "0x%x:0x%x", seg, offset);
   else
     sprintf (ins->scratchbuf, "$0x%x,$0x%x", seg, offset);
-  oappend (ins, ins->scratchbuf);
+  oappend (ins, ins->scratchbuf, dis_style_text);
 }
 
 static void
@@ -12294,12 +12385,13 @@ OP_OFF (instr_info *ins, int bytemode, int sizeflag)
     {
       if (!ins->active_seg_prefix)
 	{
-	  oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg]);
-	  oappend (ins, ":");
+	  oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg],
+			       dis_style_register);
+	  oappend (ins, ":", dis_style_text);
 	}
     }
   print_operand_value (ins, ins->scratchbuf, 1, off);
-  oappend (ins, ins->scratchbuf);
+  oappend (ins, ins->scratchbuf, dis_style_address_offset);
 }
 
 static void
@@ -12324,12 +12416,13 @@ OP_OFF64 (instr_info *ins, int bytemode, int sizeflag)
     {
       if (!ins->active_seg_prefix)
 	{
-	  oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg]);
-	  oappend (ins, ":");
+	  oappend_maybe_intel (ins, att_names_seg[ds_reg - es_reg],
+			       dis_style_text);
+	  oappend (ins, ":", dis_style_text);
 	}
     }
   print_operand_value (ins, ins->scratchbuf, 1, off);
-  oappend (ins, ins->scratchbuf);
+  oappend (ins, ins->scratchbuf, dis_style_address_offset);
 }
 
 static void
@@ -12350,9 +12443,8 @@ ptr_reg (instr_info *ins, int code, int sizeflag)
     s = att_names32[code - eAX_reg];
   else
     s = att_names16[code - eAX_reg];
-  oappend_maybe_intel (ins, s);
-  *ins->obufp++ = ins->close_char;
-  *ins->obufp = 0;
+  oappend_maybe_intel (ins, s, dis_style_register);
+  oappend_char (ins, ins->close_char, dis_style_text);
 }
 
 static void
@@ -12375,7 +12467,8 @@ OP_ESreg (instr_info *ins, int code, int sizeflag)
 	  intel_operand_size (ins, b_mode, sizeflag);
 	}
     }
-  oappend_maybe_intel (ins, "%es:");
+  oappend_maybe_intel (ins, "%es", dis_style_register);
+  oappend_char (ins, ':', dis_style_text);
   ptr_reg (ins, code, sizeflag);
 }
 
@@ -12425,7 +12518,7 @@ OP_C (instr_info *ins, int dummy ATTRIBUTE_UNUSED,
   else
     add = 0;
   sprintf (ins->scratchbuf, "%%cr%d", ins->modrm.reg + add);
-  oappend_maybe_intel (ins, ins->scratchbuf);
+  oappend_maybe_intel (ins, ins->scratchbuf, dis_style_text);
 }
 
 static void
@@ -12442,7 +12535,7 @@ OP_D (instr_info *ins, int dummy ATTRIBUTE_UNUSED,
     sprintf (ins->scratchbuf, "dr%d", ins->modrm.reg + add);
   else
     sprintf (ins->scratchbuf, "%%db%d", ins->modrm.reg + add);
-  oappend (ins, ins->scratchbuf);
+  oappend (ins, ins->scratchbuf, dis_style_text);
 }
 
 static void
@@ -12450,7 +12543,7 @@ OP_T (instr_info *ins, int dummy ATTRIBUTE_UNUSED,
       int sizeflag ATTRIBUTE_UNUSED)
 {
   sprintf (ins->scratchbuf, "%%tr%d", ins->modrm.reg);
-  oappend_maybe_intel (ins, ins->scratchbuf);
+  oappend_maybe_intel (ins, ins->scratchbuf, dis_style_text);
 }
 
 static void
@@ -12470,7 +12563,7 @@ OP_MMX (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
     }
   else
     names = att_names_mm;
-  oappend_maybe_intel (ins, names[reg]);
+  oappend_maybe_intel (ins, names[reg], dis_style_register);
 }
 
 static void
@@ -12501,7 +12594,7 @@ print_vector_reg (instr_info *ins, unsigned int reg, int bytemode)
     {
       if (reg >= 8)
 	{
-	  oappend (ins, "(bad)");
+	  oappend (ins, "(bad)", dis_style_text);
 	  return;
 	}
       names = att_names_tmm;
@@ -12543,7 +12636,7 @@ print_vector_reg (instr_info *ins, unsigned int reg, int bytemode)
     }
   else
     names = att_names_xmm;
-  oappend_maybe_intel (ins, names[reg]);
+  oappend_maybe_intel (ins, names[reg], dis_style_register);
 }
 
 static void
@@ -12603,7 +12696,7 @@ OP_EM (instr_info *ins, int bytemode, int sizeflag)
     }
   else
     names = att_names_mm;
-  oappend_maybe_intel (ins, names[reg]);
+  oappend_maybe_intel (ins, names[reg], dis_style_register);
 }
 
 /* cvt* are the only instructions in sse2 which have
@@ -12629,7 +12722,7 @@ OP_EMC (instr_info *ins, int bytemode, int sizeflag)
   MODRM_CHECK;
   ins->codep++;
   ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
-  oappend_maybe_intel (ins, att_names_mm[ins->modrm.rm]);
+  oappend_maybe_intel (ins, att_names_mm[ins->modrm.rm], dis_style_register);
 }
 
 static void
@@ -12637,7 +12730,7 @@ OP_MXC (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
 	int sizeflag ATTRIBUTE_UNUSED)
 {
   ins->used_prefixes |= (ins->prefixes & PREFIX_DATA);
-  oappend_maybe_intel (ins, att_names_mm[ins->modrm.reg]);
+  oappend_maybe_intel (ins, att_names_mm[ins->modrm.reg], dis_style_text);
 }
 
 static void
@@ -12813,7 +12906,7 @@ OP_3DNowSuffix (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
   ins->obufp = ins->mnemonicendp;
   mnemonic = Suffix3DNow[*ins->codep++ & 0xff];
   if (mnemonic)
-    oappend (ins, mnemonic);
+    ins->obufp = stpcpy (ins->obufp, mnemonic);
   else
     {
       /* Since a variable sized ins->modrm/ins->sib chunk is between the start
@@ -12902,7 +12995,7 @@ CMP_Fixup (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
       /* We have a reserved extension byte.  Output it directly.  */
       ins->scratchbuf[0] = '$';
       print_operand_value (ins, ins->scratchbuf + 1, 1, cmp_type);
-      oappend_maybe_intel (ins, ins->scratchbuf);
+      oappend_maybe_intel (ins, ins->scratchbuf, dis_style_text);
       ins->scratchbuf[0] = '\0';
     }
 }
@@ -12959,7 +13052,7 @@ BadOp (instr_info *ins)
 {
   /* Throw away prefixes and 1st. opcode byte.  */
   ins->codep = ins->insn_codep + 1;
-  oappend (ins, "(bad)");
+  ins->obufp = stpcpy (ins->obufp, "(bad)");
 }
 
 static void
@@ -13123,7 +13216,7 @@ XMM_Fixup (instr_info *ins, int reg, int sizeflag ATTRIBUTE_UNUSED)
 	  abort ();
 	}
     }
-  oappend_maybe_intel (ins, names[reg]);
+  oappend_maybe_intel (ins, names[reg], dis_style_text);
 }
 
 static void
@@ -13160,7 +13253,7 @@ OP_VEX (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
     {
       if (ins->vex.evex && !ins->vex.v)
 	{
-	  oappend (ins, "(bad)");
+	  oappend (ins, "(bad)", dis_style_text);
 	  return;
 	}
 
@@ -13172,7 +13265,7 @@ OP_VEX (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
   switch (bytemode)
     {
     case scalar_mode:
-      oappend_maybe_intel (ins, att_names_xmm[reg]);
+      oappend_maybe_intel (ins, att_names_xmm[reg], dis_style_text);
       return;
 
     case vex_vsib_d_w_dq_mode:
@@ -13183,9 +13276,9 @@ OP_VEX (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
       if (ins->vex.length == 128
 	  || (bytemode != vex_vsib_d_w_dq_mode
 	      && !ins->vex.w))
-	oappend_maybe_intel (ins, att_names_xmm[reg]);
+	oappend_maybe_intel (ins, att_names_xmm[reg], dis_style_text);
       else
-	oappend_maybe_intel (ins, att_names_ymm[reg]);
+	oappend_maybe_intel (ins, att_names_ymm[reg], dis_style_text);
 
       /* All 3 XMM/YMM registers must be distinct.  */
       modrm_reg = ins->modrm.reg;
@@ -13211,13 +13304,13 @@ OP_VEX (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
     case tmm_mode:
       /* All 3 TMM registers must be distinct.  */
       if (reg >= 8)
-	oappend (ins, "(bad)");
+	oappend (ins, "(bad)", dis_style_text);
       else
 	{
 	  /* This must be the 3rd operand.  */
 	  if (ins->obufp != ins->op_out[2])
 	    abort ();
-	  oappend_maybe_intel (ins, att_names_tmm[reg]);
+	  oappend_maybe_intel (ins, att_names_tmm[reg], dis_style_text);
 	  if (reg == ins->modrm.reg || reg == ins->modrm.rm)
 	    strcpy (ins->obufp, "/(bad)");
 	}
@@ -13254,7 +13347,7 @@ OP_VEX (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
 	case mask_mode:
 	  if (reg > 0x7)
 	    {
-	      oappend (ins, "(bad)");
+	      oappend (ins, "(bad)", dis_style_text);
 	      return;
 	    }
 	  names = att_names_mask;
@@ -13274,14 +13367,14 @@ OP_VEX (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
 	case mask_mode:
 	  if (reg > 0x7)
 	    {
-	      oappend (ins, "(bad)");
+	      oappend (ins, "(bad)", dis_style_text);
 	      return;
 	    }
 	  names = att_names_mask;
 	  break;
 	default:
 	  /* See PR binutils/20893 for a reproducer.  */
-	  oappend (ins, "(bad)");
+	  oappend (ins, "(bad)", dis_style_text);
 	  return;
 	}
       break;
@@ -13292,7 +13385,7 @@ OP_VEX (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
       abort ();
       break;
     }
-  oappend_maybe_intel (ins, names[reg]);
+  oappend_maybe_intel (ins, names[reg], dis_style_register);
 }
 
 static void
@@ -13335,7 +13428,7 @@ OP_REG_VexI4 (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
   if (bytemode == x_mode && ins->vex.length == 256)
     names = att_names_ymm;
 
-  oappend_maybe_intel (ins, names[reg]);
+  oappend_maybe_intel (ins, names[reg], dis_style_text);
 
   if (ins->vex.w)
     {
@@ -13352,7 +13445,7 @@ OP_VexI4 (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
 {
   ins->scratchbuf[0] = '$';
   print_operand_value (ins, ins->scratchbuf + 1, 1, ins->codep[-1] & 0xf);
-  oappend_maybe_intel (ins, ins->scratchbuf);
+  oappend_maybe_intel (ins, ins->scratchbuf, dis_style_text);
 }
 
 static void
@@ -13397,7 +13490,7 @@ VPCMP_Fixup (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
       /* We have a reserved extension byte.  Output it directly.  */
       ins->scratchbuf[0] = '$';
       print_operand_value (ins, ins->scratchbuf + 1, 1, cmp_type);
-      oappend_maybe_intel (ins, ins->scratchbuf);
+      oappend_maybe_intel (ins, ins->scratchbuf, dis_style_text);
       ins->scratchbuf[0] = '\0';
     }
 }
@@ -13449,7 +13542,7 @@ VPCOM_Fixup (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
       /* We have a reserved extension byte.  Output it directly.  */
       ins->scratchbuf[0] = '$';
       print_operand_value (ins, ins->scratchbuf + 1, 1, cmp_type);
-      oappend_maybe_intel (ins, ins->scratchbuf);
+      oappend_maybe_intel (ins, ins->scratchbuf, dis_style_text);
       ins->scratchbuf[0] = '\0';
     }
 }
@@ -13497,7 +13590,7 @@ PCLMUL_Fixup (instr_info *ins, int bytemode ATTRIBUTE_UNUSED,
       /* We have a reserved extension byte.  Output it directly.  */
       ins->scratchbuf[0] = '$';
       print_operand_value (ins, ins->scratchbuf + 1, 1, pclmul_type);
-      oappend_maybe_intel (ins, ins->scratchbuf);
+      oappend_maybe_intel (ins, ins->scratchbuf, dis_style_immediate);
       ins->scratchbuf[0] = '\0';
     }
 }
@@ -13526,7 +13619,7 @@ MOVSXD_Fixup (instr_info *ins, int bytemode, int sizeflag)
       *p++ = 'd';
       break;
     default:
-      oappend (ins, INTERNAL_DISASSEMBLER_ERROR);
+      oappend (ins, INTERNAL_DISASSEMBLER_ERROR, dis_style_text);
       break;
     }
 
@@ -13569,7 +13662,7 @@ DistinctDest_Fixup (instr_info *ins, int bytemode, int sizeflag)
       || (ins->modrm.mod == 3
 	  && modrm_reg == modrm_rm))
     {
-      oappend (ins, "(bad)");
+      oappend (ins, "(bad)", dis_style_text);
     }
   else
     OP_XMM (ins, bytemode, sizeflag);
@@ -13589,14 +13682,14 @@ OP_Rounding (instr_info *ins, int bytemode, int sizeflag ATTRIBUTE_UNUSED)
       /* Fall through.  */
     case evex_rounding_mode:
       ins->evex_used |= EVEX_b_used;
-      oappend (ins, names_rounding[ins->vex.ll]);
+      oappend (ins, names_rounding[ins->vex.ll], dis_style_text);
       break;
     case evex_sae_mode:
       ins->evex_used |= EVEX_b_used;
-      oappend (ins, "{");
+      oappend (ins, "{", dis_style_text);
       break;
     default:
       abort ();
     }
-  oappend (ins, "sae}");
+  oappend (ins, "sae}", dis_style_text);
 }
