@@ -5463,9 +5463,12 @@ linux_process_target::look_up_symbols ()
 void
 linux_process_target::request_interrupt ()
 {
+  struct process_info *proc = current_process ();
+  int pid = proc->pid;
+
   /* Send a SIGINT to the process group.  This acts just like the user
      typed a ^C on the controlling terminal.  */
-  ::kill (-signal_pid, SIGINT);
+  ::kill (-pid, SIGINT);
 }
 
 bool

@@ -122,9 +122,6 @@ extern void post_fork_inferior (int pid, const char *program);
 /* Get the gdb_environ being used in the current session.  */
 extern gdb_environ *get_environ ();
 
-extern unsigned long signal_pid;
-
-
 /* Description of the client remote protocol state for the currently
    connected client.  */
 

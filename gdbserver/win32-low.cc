@@ -678,9 +678,6 @@ win32_process_target::create_inferior (const char *program,
      (assuming success).  */
   cs.last_ptid = wait (ptid_t (windows_process.id), &cs.last_status, 0);
 
-  /* Necessary for handle_v_kill.  */
-  signal_pid = windows_process.id;
-
   return windows_process.id;
 }
 

@@ -119,13 +119,6 @@ private:
 static std::vector<char *> program_args;
 static std::string wrapper_argv;
 
-/* The PID of the originally created or attached inferior.  Used to
-   send signals to the process when GDB sends us an asynchronous interrupt
-   (user hitting Control-C in the client), and to wait for the child to exit
-   when no longer debugging it.  */
-
-unsigned long signal_pid;
-
 /* Set if you want to disable optional thread related packets support
    in gdbserver, for the sake of testing GDB against stubs that don't
    support them.  */
@@ -310,11 +303,6 @@ attach_inferior (int pid)
 
   fprintf (stderr, "Attached; pid = %d\n", pid);
   fflush (stderr);
-
-  /* FIXME - It may be that we should get the SIGNAL_PID from the
-     attach function, so that it can be the main thread instead of
-     whichever we were told to attach to.  */
-  signal_pid = pid;
 
   if (!non_stop)
     {
@@ -3104,18 +3092,22 @@ handle_v_kill (char *own_buf)
 {
   client_state &cs = get_client_state ();
   int pid;
-  char *p = &own_buf[6];
-  if (cs.multi_process)
-    pid = strtol (p, NULL, 16);
-  else
-    pid = signal_pid;
+  process_info *proc;
 
-  process_info *proc = find_process_pid (pid);
+  if (cs.multi_process)
+    {
+      char *p = &own_buf[6];
+
+      pid = strtol (p, NULL, 16);
+      proc = find_process_pid (pid);
+    }
+  else
+    proc = current_process ();
 
   if (proc != nullptr && kill_inferior (proc) == 0)
     {
       cs.last_status.set_signalled (GDB_SIGNAL_KILL);
-      cs.last_ptid = ptid_t (pid);
+      cs.last_ptid = ptid_t (proc->pid);
       discard_queued_stop_replies (cs.last_ptid);
       write_ok (own_buf);
     }
