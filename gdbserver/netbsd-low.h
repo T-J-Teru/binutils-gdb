@@ -73,7 +73,7 @@ public:
   int write_memory (CORE_ADDR memaddr, const unsigned char *myaddr,
 		    int len) override;
 
-  void request_interrupt () override;
+  void request_interrupt (process_info *proc) override;
 
   bool supports_read_auxv () override;
 

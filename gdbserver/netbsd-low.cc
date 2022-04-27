@@ -550,7 +550,7 @@ netbsd_process_target::write_memory (CORE_ADDR memaddr,
 /* Implement the request_interrupt target_ops method.  */
 
 void
-netbsd_process_target::request_interrupt ()
+netbsd_process_target::request_interrupt (process_info *proc)
 {
   ptid_t inferior_ptid = ptid_of (get_first_thread ());
 

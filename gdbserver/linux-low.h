@@ -174,7 +174,7 @@ public:
 
   void look_up_symbols () override;
 
-  void request_interrupt () override;
+  void request_interrupt (process_info *proc) override;
 
   bool supports_read_auxv () override;
 

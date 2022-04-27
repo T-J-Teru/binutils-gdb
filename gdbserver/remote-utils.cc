@@ -692,7 +692,7 @@ putpkt_binary_1 (char *buf, int cnt, int is_notif)
 
       /* Check for an input interrupt while we're here.  */
       if (cc == '\003' && current_thread != NULL)
-	the_target->request_interrupt ();
+	the_target->request_interrupt (get_thread_process (current_thread));
     }
   while (cc != '+');
 
@@ -761,7 +761,7 @@ input_interrupt (int unused)
 	  return;
 	}
 
-      the_target->request_interrupt ();
+      the_target->request_interrupt (current_process ());
     }
 }
 
@@ -932,7 +932,7 @@ getpkt (char *buf)
 	     check for an input interrupt.  */
 	  if (c == '\003')
 	    {
-	      the_target->request_interrupt ();
+	      the_target->request_interrupt (current_process ());
 	      continue;
 	    }
 
@@ -1005,7 +1005,7 @@ getpkt (char *buf)
     {
       /* Consume the interrupt character in the buffer.  */
       readchar ();
-      the_target->request_interrupt ();
+      the_target->request_interrupt (current_process ());
     }
 
   return bp - buf;

@@ -167,7 +167,7 @@ public:
 
   /* Send an interrupt request to the inferior process,
      however is appropriate.  */
-  virtual void request_interrupt () = 0;
+  virtual void request_interrupt (process_info *proc) = 0;
 
   /* Return true if the read_auxv target op is supported.  */
   virtual bool supports_read_auxv ();

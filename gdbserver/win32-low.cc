@@ -1368,7 +1368,7 @@ win32_process_target::write_memory (CORE_ADDR memaddr,
 
 /* Send an interrupt request to the inferior process. */
 void
-win32_process_target::request_interrupt ()
+win32_process_target::request_interrupt (process_info *proc)
 {
   if (GenerateConsoleCtrlEvent (CTRL_BREAK_EVENT, windows_process.id))
     return;
