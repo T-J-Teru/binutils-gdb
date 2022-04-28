@@ -25,6 +25,7 @@
 #include "opintl.h"
 #include "aarch64-dis.h"
 #include "elf-bfd.h"
+#include "safe-ctype.h"
 
 #define INSNLEN 4
 
@@ -3300,22 +3301,77 @@ print_operands (bfd_vma pc, const aarch64_opcode *opcode,
       aarch64_print_operand (str, sizeof (str), pc, opcode, opnds, i, &pcrel_p,
 			     &info->target, &notes, arch_variant);
 
+      enum disassembler_style style = dis_style_text;
+      switch (aarch64_get_operand_class (opcode->operands[i]))
+        {
+        case AARCH64_OPND_CLASS_INT_REG:
+        case AARCH64_OPND_CLASS_MODIFIED_REG:
+        case AARCH64_OPND_CLASS_FP_REG:
+        case AARCH64_OPND_CLASS_SIMD_REG:
+        case AARCH64_OPND_CLASS_SIMD_ELEMENT:
+        case AARCH64_OPND_CLASS_SISD_REG:
+        case AARCH64_OPND_CLASS_SIMD_REGLIST:
+        case AARCH64_OPND_CLASS_SVE_REG:
+        case AARCH64_OPND_CLASS_PRED_REG:
+          style = dis_style_register;
+          break;
+        case AARCH64_OPND_CLASS_ADDRESS:
+          style = dis_style_address;
+          break;
+        case AARCH64_OPND_CLASS_IMMEDIATE:
+          style = dis_style_immediate;
+          break;
+        case AARCH64_OPND_CLASS_SYSTEM:
+        case AARCH64_OPND_CLASS_COND:
+        case AARCH64_OPND_CLASS_NIL:
+        default:
+          style = dis_style_text;
+          break;
+        }
+
       /* Print the delimiter (taking account of omitted operand(s)).  */
       if (str[0] != '\0')
-	(*info->fprintf_func) (info->stream, "%s",
-			       num_printed++ == 0 ? "\t" : ", ");
+	(*info->fprintf_styled_func) (info->stream, dis_style_text, "%s",
+                                      num_printed++ == 0 ? "\t" : ", ");
 
       /* Print the operand.  */
       if (pcrel_p)
 	(*info->print_address_func) (info->target, info);
       else
-	(*info->fprintf_func) (info->stream, "%s", str);
+        {
+          /* The aarch64 operand printing embeds comments into some
+             operands.  Long term it would be nice to split these comments
+             out into the 'note' section, but for now we try to figure this
+             out here.  */
+	  const char *ch = strchr (str, '/');
+	  if (ch != NULL && *(ch + 1) == '/')
+	    {
+	      int len;
+
+	      do
+		{
+		  --ch;
+		}
+	      while (ch != str && ISSPACE (*ch));
+	      ++ch;
+	      len = ch - str;
+
+	      (*info->fprintf_styled_func) (info->stream, style, "%.*s",
+					    len, str);
+	      (*info->fprintf_styled_func) (info->stream,
+					    dis_style_comment_start, "%s",
+					    ch);
+	    }
+	  else
+	    (*info->fprintf_styled_func) (info->stream, style, "%s", str);
+        }
     }
 
     if (notes && !no_notes)
       {
 	*has_notes = true;
-	(*info->fprintf_func) (info->stream, "  // note: %s", notes);
+	(*info->fprintf_styled_func) (info->stream, dis_style_comment_start,
+                                      "  // note: %s", notes);
       }
 }
 
@@ -3348,10 +3404,12 @@ print_mnemonic_name (const aarch64_inst *inst, struct disassemble_info *info)
       char name[8];
 
       remove_dot_suffix (name, inst);
-      (*info->fprintf_func) (info->stream, "%s.%s", name, inst->cond->names[0]);
+      (*info->fprintf_styled_func) (info->stream, dis_style_mnemonic,
+                                    "%s.%s", name, inst->cond->names[0]);
     }
   else
-    (*info->fprintf_func) (info->stream, "%s", inst->opcode->name);
+    (*info->fprintf_styled_func) (info->stream, dis_style_mnemonic,
+                                  "%s", inst->opcode->name);
 }
 
 /* Decide whether we need to print a comment after the operands of
@@ -3368,9 +3426,10 @@ print_comment (const aarch64_inst *inst, struct disassemble_info *info)
       remove_dot_suffix (name, inst);
       num_conds = ARRAY_SIZE (inst->cond->names);
       for (i = 1; i < num_conds && inst->cond->names[i]; ++i)
-	(*info->fprintf_func) (info->stream, "%s %s.%s",
-			       i == 1 ? "  //" : ",",
-			       name, inst->cond->names[i]);
+	(*info->fprintf_styled_func) (info->stream, dis_style_comment_start,
+                                      "%s %s.%s",
+                                      i == 1 ? "  //" : ",",
+                                      name, inst->cond->names[i]);
     }
 }
 
@@ -3387,28 +3446,30 @@ print_verifier_notes (aarch64_operand_error *detail,
      would not have succeeded.  We can safely ignore these.  */
   assert (detail->non_fatal);
 
-  (*info->fprintf_func) (info->stream, "  // note: ");
+  (*info->fprintf_styled_func) (info->stream, dis_style_comment_start,
+                                "  // note: ");
   switch (detail->kind)
     {
     case AARCH64_OPDE_A_SHOULD_FOLLOW_B:
-      (*info->fprintf_func) (info->stream,
-			     _("this `%s' should have an immediately"
-			       " preceding `%s'"),
-			     detail->data[0].s, detail->data[1].s);
+      (*info->fprintf_styled_func) (info->stream, dis_style_text,
+                                    _("this `%s' should have an immediately"
+                                      " preceding `%s'"),
+                                    detail->data[0].s, detail->data[1].s);
       break;
 
     case AARCH64_OPDE_EXPECTED_A_AFTER_B:
-      (*info->fprintf_func) (info->stream,
-			     _("expected `%s' after previous `%s'"),
-			     detail->data[0].s, detail->data[1].s);
+      (*info->fprintf_styled_func) (info->stream, dis_style_text,
+                                    _("expected `%s' after previous `%s'"),
+                                    detail->data[0].s, detail->data[1].s);
       break;
 
     default:
       assert (detail->error);
-      (*info->fprintf_func) (info->stream, "%s", detail->error);
+      (*info->fprintf_styled_func) (info->stream, dis_style_text,
+                                    "%s", detail->error);
       if (detail->index >= 0)
-	(*info->fprintf_func) (info->stream, " at operand %d",
-			       detail->index + 1);
+	(*info->fprintf_styled_func) (info->stream, dis_style_text,
+                                      " at operand %d", detail->index + 1);
       break;
     }
 }
@@ -3500,8 +3561,13 @@ print_insn_aarch64_word (bfd_vma pc,
     case ERR_NYI:
       /* Handle undefined instructions.  */
       info->insn_type = dis_noninsn;
-      (*info->fprintf_func) (info->stream,".inst\t0x%08x ; %s",
-			     word, err_msg[ret]);
+      (*info->fprintf_styled_func) (info->stream,
+                                    dis_style_assembler_directive,
+                                    ".inst\t");
+      (*info->fprintf_styled_func) (info->stream, dis_style_immediate,
+                                    "0x%08x", word);
+      (*info->fprintf_styled_func) (info->stream, dis_style_comment_start,
+                                    " ; %s", err_msg[ret]);
       break;
     case ERR_OK:
       user_friendly_fixup (&inst);
@@ -3543,13 +3609,22 @@ print_insn_data (bfd_vma pc ATTRIBUTE_UNUSED,
   switch (info->bytes_per_chunk)
     {
     case 1:
-      info->fprintf_func (info->stream, ".byte\t0x%02x", word);
+      info->fprintf_styled_func (info->stream, dis_style_assembler_directive,
+                          ".byte\t");
+      info->fprintf_styled_func (info->stream, dis_style_immediate,
+                          "0x%02x", word);
       break;
     case 2:
-      info->fprintf_func (info->stream, ".short\t0x%04x", word);
+      info->fprintf_styled_func (info->stream, dis_style_assembler_directive,
+                          ".short\t");
+      info->fprintf_styled_func (info->stream, dis_style_immediate,
+                          "0x%04x", word);
       break;
     case 4:
-      info->fprintf_func (info->stream, ".word\t0x%08x", word);
+      info->fprintf_styled_func (info->stream, dis_style_assembler_directive,
+                          ".word\t");
+      info->fprintf_styled_func (info->stream, dis_style_immediate,
+                          "0x%08x", word);
       break;
     default:
       abort ();
