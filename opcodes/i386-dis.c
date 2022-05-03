@@ -42,6 +42,8 @@
 #include <setjmp.h>
 typedef struct instr_info instr_info;
 
+#define STYLE_MARKER_CHAR '~'
+
 static int print_insn (bfd_vma, instr_info *);
 static void dofloat (instr_info *, int);
 static void OP_ST (instr_info *, int, int);
@@ -9345,7 +9347,7 @@ i386_dis_printf (instr_info *ins, enum disassembler_style style,
 
   do
     {
-      if (*curr == '\0' || *curr == '~')
+      if (*curr == '\0' || *curr == STYLE_MARKER_CHAR)
 	{
 	  /* Output content between our START position and CURR.  */
 	  int len = curr - start;
@@ -9366,10 +9368,11 @@ i386_dis_printf (instr_info *ins, enum disassembler_style style,
 	  else
 	    curr_style = dis_style_text;
 
-	  /* Skip over the hex character, and the closing '~'.  Also
-	     validate that CURR_STYLE is set to a valid value.  */
+	  /* Skip over the hex character, and the closing
+	     STYLE_MARKER_CHAR.  Also validate that CURR_STYLE is set to a
+	     valid value.  */
 	  ++curr;
-	  if (*curr != '~' || curr_style > dis_style_comment_start)
+	  if (*curr != STYLE_MARKER_CHAR || curr_style > dis_style_comment_start)
 	    curr_style = dis_style_text;
 	  ++curr;
 
@@ -10860,10 +10863,10 @@ oappend_insert_style (instr_info *ins, enum disassembler_style style)
   if (num > 0xf)
     abort ();
 
-  *ins->obufp++ = '~';
+  *ins->obufp++ = STYLE_MARKER_CHAR;
   *ins->obufp++ = (num < 10 ? ('0' + num)
 		   : ((num < 16) ? ('a' + (num - 10)) : '0'));
-  *ins->obufp++ = '~';
+  *ins->obufp++ = STYLE_MARKER_CHAR;
 
   /* This final null character is not strictly necessary, after inserting a
      style marker we should always be inserting some additional content.
