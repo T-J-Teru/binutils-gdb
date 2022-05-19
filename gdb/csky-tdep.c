@@ -2665,7 +2665,7 @@ csky_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
        arches = gdbarch_list_lookup_by_info (arches->next, &info))
     {
       csky_gdbarch_tdep *tdep
-        = (csky_gdbarch_tdep *) gdbarch_tdep (arches->gdbarch);
+	= gdbarch_tdep<csky_gdbarch_tdep> (arches->gdbarch);
       if (fpu_abi != tdep->fpu_abi)
         continue;
       if (vdsp_version != tdep->vdsp_version)

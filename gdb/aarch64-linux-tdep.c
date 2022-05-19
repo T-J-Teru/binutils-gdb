@@ -286,7 +286,7 @@ aarch64_linux_sigframe_init (const struct tramp_frame *self,
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
   CORE_ADDR sp = get_frame_register_unsigned (this_frame, AARCH64_SP_REGNUM);
   CORE_ADDR sigcontext_addr = (sp + AARCH64_RT_SIGFRAME_UCONTEXT_OFFSET
 			       + AARCH64_UCONTEXT_SIGCONTEXT_OFFSET );
@@ -640,7 +640,7 @@ aarch64_linux_collect_sve_regset (const struct regset *regset,
   gdb_byte *header = (gdb_byte *) buf;
   struct gdbarch *gdbarch = regcache->arch ();
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
   uint64_t vq = tdep->vq;
 
   gdb_assert (buf != NULL);
@@ -676,7 +676,7 @@ aarch64_linux_iterate_over_regset_sections (struct gdbarch *gdbarch,
 					    void *cb_data,
 					    const struct regcache *regcache)
 {
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
 
   cb (".reg", AARCH64_LINUX_SIZEOF_GREGSET, AARCH64_LINUX_SIZEOF_GREGSET,
       &aarch64_linux_gregset, NULL, cb_data);
@@ -1743,7 +1743,7 @@ aarch64_linux_report_signal_info (struct gdbarch *gdbarch,
 				  struct ui_out *uiout,
 				  enum gdb_signal siggnal)
 {
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
 
   if (!tdep->has_mte () || siggnal != GDB_SIGNAL_SEGV)
     return;
@@ -1812,7 +1812,7 @@ aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 								    NULL };
   static const char *const stap_register_indirection_suffixes[] = { "]",
 								    NULL };
-  aarch64_gdbarch_tdep *tdep = (aarch64_gdbarch_tdep *) gdbarch_tdep (gdbarch);
+  aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
 
   tdep->lowest_pc = 0x8000;
 
