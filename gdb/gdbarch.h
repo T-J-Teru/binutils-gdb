@@ -58,7 +58,13 @@ struct inferior;
 
 #include "regcache.h"
 
-struct gdbarch_tdep {};
+/* The base class for every architecture's tdep sub-class.  We include a
+   virtual destructor so that sub-classes will have RTTI information.  */
+
+struct gdbarch_tdep
+{
+  virtual ~gdbarch_tdep() = default;
+};
 
 /* The architecture associated with the inferior through the
    connection to the target.
@@ -156,8 +162,9 @@ template<typename TDepType>
 static inline TDepType *
 gdbarch_tdep (struct gdbarch *gdbarch)
 {
-  struct gdbarch_tdep *tdep = gdbarch_tdep_1 (gdbarch);
-  return static_cast<TDepType *> (tdep);
+  TDepType *tdep = dynamic_cast<TDepType *> (gdbarch_tdep_1 (gdbarch));
+  gdb_assert (tdep != nullptr);
+  return tdep;
 }
 
 /* Mechanism for co-ordinating the selection of a specific
