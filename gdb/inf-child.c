@@ -30,6 +30,8 @@
 #include "inferior.h"
 #include <sys/stat.h>
 #include "inf-child.h"
+#include "gdbarch.h"
+#include "arch-utils.h"
 #include "gdbsupport/fileio.h"
 #include "gdbsupport/agent.h"
 #include "gdbsupport/gdb_wait.h"
@@ -410,6 +412,23 @@ inf_child_target::follow_exec (inferior *follow_inf, ptid_t ptid,
       switch_to_inferior_no_thread (orig_inf);
       maybe_unpush_target ();
     }
+}
+
+/* The inf_child_target represents the native target built into GDB, of
+   which there is only ever one.  If we attempt to start a native inferior
+   using a binary for an architecture not matching the native target then,
+   when we handle the first stop, we will end up trying to read registers
+   using the gdbarch functions from the native target, but passing in a
+   gdbarch object based on the architecture of the binary file.  This will
+   result in errors.
+
+   This check prevents this so long as everywhere user command that might
+   cause a new inferior to be created calls this function.  */
+
+bool
+inf_child_target::supports_architecture_p (struct gdbarch *gdbarch)
+{
+  return gdbarch_matches_default_arch (gdbarch);
 }
 
 /* See inf-child.h.  */

@@ -92,6 +92,8 @@ public:
 
   bool can_use_agent () override;
 
+  bool supports_architecture_p (struct gdbarch *gdbarch) override;
+
 protected:
   /* Unpush the target if it wasn't explicitly open with "target native"
      and there are no live inferiors left.  Note: if calling this as a

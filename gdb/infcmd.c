@@ -418,6 +418,10 @@ run_command_1 (const char *args, int from_tty, enum run_how run_how)
   if (non_stop && !run_target->supports_non_stop ())
     error (_("The target does not support running in non-stop mode."));
 
+  if (!run_target->supports_architecture_p (get_current_arch ()))
+    error (_("The target does not support architecture \"%s\"."),
+	   gdbarch_bfd_arch_info (get_current_arch ())->printable_name);
+
   /* Done.  Can now set breakpoints, change inferior args, etc.  */
 
   /* Insert temporary breakpoint in main function if requested.  */
@@ -2594,6 +2598,10 @@ attach_command (const char *args, int from_tty)
 
   if (non_stop && !attach_target->supports_non_stop ())
     error (_("Cannot attach to this target in non-stop mode"));
+
+  if (!attach_target->supports_architecture_p (get_current_arch ()))
+    error (_("The target does not support architecture \"%s\"."),
+	   gdbarch_bfd_arch_info (get_current_arch ())->printable_name);
 
   attach_target->attach (args, from_tty);
   /* to_attach should push the target, so after this point we

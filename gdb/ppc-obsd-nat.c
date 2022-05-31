@@ -39,6 +39,14 @@ struct ppc_obsd_nat_target final : public obsd_nat_target
 {
   void fetch_registers (struct regcache *, int) override;
   void store_registers (struct regcache *, int) override;
+
+  /* This target supports two architectures, check for them both here.  */
+
+  bool supports_architecture_p (struct gdbarch *gdbarch) override
+  {
+    bfd_architecture the_arch = gdbarch_bfd_arch_info (gdbarch)->arch;
+    return (the_arch == bfd_arch_rs6000 || the_arch == bfd_arch_powerpc);
+  }
 };
 
 static ppc_obsd_nat_target the_ppc_obsd_nat_target;

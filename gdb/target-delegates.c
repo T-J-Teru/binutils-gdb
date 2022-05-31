@@ -196,6 +196,7 @@ struct dummy_target : public target_ops
   bool supports_memory_tagging () override;
   bool fetch_memtags (CORE_ADDR arg0, size_t arg1, gdb::byte_vector &arg2, int arg3) override;
   bool store_memtags (CORE_ADDR arg0, size_t arg1, const gdb::byte_vector &arg2, int arg3) override;
+  bool supports_architecture_p (struct gdbarch *arg0) override;
 };
 
 struct debug_target : public target_ops
@@ -370,6 +371,7 @@ struct debug_target : public target_ops
   bool supports_memory_tagging () override;
   bool fetch_memtags (CORE_ADDR arg0, size_t arg1, gdb::byte_vector &arg2, int arg3) override;
   bool store_memtags (CORE_ADDR arg0, size_t arg1, const gdb::byte_vector &arg2, int arg3) override;
+  bool supports_architecture_p (struct gdbarch *arg0) override;
 };
 
 void
@@ -4530,6 +4532,32 @@ debug_target::store_memtags (CORE_ADDR arg0, size_t arg1, const gdb::byte_vector
   target_debug_print_const_gdb_byte_vector_r (arg2);
   gdb_puts (", ", gdb_stdlog);
   target_debug_print_int (arg3);
+  gdb_puts (") = ", gdb_stdlog);
+  target_debug_print_bool (result);
+  gdb_puts ("\n", gdb_stdlog);
+  return result;
+}
+
+bool
+target_ops::supports_architecture_p (struct gdbarch *arg0)
+{
+  return this->beneath ()->supports_architecture_p (arg0);
+}
+
+bool
+dummy_target::supports_architecture_p (struct gdbarch *arg0)
+{
+  return true;
+}
+
+bool
+debug_target::supports_architecture_p (struct gdbarch *arg0)
+{
+  bool result;
+  gdb_printf (gdb_stdlog, "-> %s->supports_architecture_p (...)\n", this->beneath ()->shortname ());
+  result = this->beneath ()->supports_architecture_p (arg0);
+  gdb_printf (gdb_stdlog, "<- %s->supports_architecture_p (", this->beneath ()->shortname ());
+  target_debug_print_struct_gdbarch_p (arg0);
   gdb_puts (") = ", gdb_stdlog);
   target_debug_print_bool (result);
   gdb_puts ("\n", gdb_stdlog);

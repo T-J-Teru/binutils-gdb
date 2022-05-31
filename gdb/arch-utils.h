@@ -300,4 +300,9 @@ extern void default_read_core_file_mappings
    struct bfd *cbfd,
    read_core_file_mappings_pre_loop_ftype pre_loop_cb,
    read_core_file_mappings_loop_ftype loop_cb);
+
+/* Return true if the bfd architecture of GDBARCH matches the default bfd
+   architecture.  */
+
+extern bool gdbarch_matches_default_arch (struct gdbarch *gdbarch);
 #endif /* ARCH_UTILS_H */

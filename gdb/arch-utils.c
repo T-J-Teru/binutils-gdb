@@ -1570,6 +1570,14 @@ target_gdbarch (void)
   return current_inferior ()->gdbarch;
 }
 
+/* See arch-utils.h.  */
+
+bool
+gdbarch_matches_default_arch (struct gdbarch *gdbarch)
+{
+  return gdbarch_bfd_arch_info (gdbarch)->arch == default_bfd_arch->arch;
+}
+
 void _initialize_gdbarch_utils ();
 void
 _initialize_gdbarch_utils ()

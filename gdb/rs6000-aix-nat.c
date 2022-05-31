@@ -91,6 +91,14 @@ public:
 
   ptid_t wait (ptid_t, struct target_waitstatus *, target_wait_flags) override;
 
+  /* This target supports two architectures, check for them both here.  */
+
+  bool supports_architecture_p (struct gdbarch *gdbarch) override
+  {
+    bfd_architecture the_arch = gdbarch_bfd_arch_info (gdbarch)->arch;
+    return (the_arch == bfd_arch_rs6000 || the_arch == bfd_arch_powerpc);
+  }
+
 protected:
 
   void post_startup_inferior (ptid_t ptid) override

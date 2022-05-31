@@ -1320,7 +1320,18 @@ struct target_ops
     virtual bool store_memtags (CORE_ADDR address, size_t len,
 				const gdb::byte_vector &tags, int type)
       TARGET_DEFAULT_NORETURN (tcomplain ());
-  };
+
+    /* Return false if the target does not support GDBARCH, otherwise,
+       return true.
+
+       The default reply of true does not guarantee that debugging an
+       inferior with architecture GDBARCH will succeed, other errors might
+       be thrown later on, but a return value of false is a clear
+       indication that we should not proceed attempting to use this
+       architecture with this target.  */
+    virtual bool supports_architecture_p (struct gdbarch *gdbarch)
+      TARGET_DEFAULT_RETURN (true);
+};
 
 /* Deleter for std::unique_ptr.  See comments in
    target_ops::~target_ops and target_ops::close about heap-allocated

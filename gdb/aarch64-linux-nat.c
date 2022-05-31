@@ -108,6 +108,14 @@ public:
   /* Write allocation tags to memory via PTRACE.  */
   bool store_memtags (CORE_ADDR address, size_t len,
 		      const gdb::byte_vector &tags, int type) override;
+
+  /* This target supports two architectures, check for them both here.  */
+
+  bool supports_architecture_p (struct gdbarch *gdbarch) override
+  {
+    bfd_architecture the_arch = gdbarch_bfd_arch_info (gdbarch)->arch;
+    return (the_arch == bfd_arch_aarch64 || the_arch == bfd_arch_arm);
+  }
 };
 
 static aarch64_linux_nat_target the_aarch64_linux_nat_target;

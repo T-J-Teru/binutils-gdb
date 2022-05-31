@@ -551,6 +551,14 @@ struct ppc_linux_nat_target final : public linux_nat_target
 
   void low_prepare_to_resume (struct lwp_info *) override;
 
+  /* This target supports two architectures, check for them both here.  */
+
+  bool supports_architecture_p (struct gdbarch *gdbarch) override
+  {
+    bfd_architecture the_arch = gdbarch_bfd_arch_info (gdbarch)->arch;
+    return (the_arch == bfd_arch_rs6000 || the_arch == bfd_arch_powerpc);
+  }
+
 private:
 
   void copy_thread_dreg_state (const ptid_t &parent_ptid,
