@@ -612,8 +612,8 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
   /* RISC-V instructions are always little-endian.  */
   info->endian_code = BFD_ENDIAN_LITTLE;
 
-  info->bytes_per_chunk = insnlen % 4 == 0 ? 4 : 2;
-  info->bytes_per_line = 8;
+  info->bytes_per_chunk = 2;
+  info->bytes_per_line = 4;
   /* We don't support constant pools, so this must be code.  */
   info->display_endian = info->endian_code;
   info->insn_info_valid = 1;
