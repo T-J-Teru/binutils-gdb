@@ -2536,6 +2536,10 @@ save_stop_reason (struct lwp_info *lp)
   gdb_assert (lp->stop_reason == TARGET_STOPPED_BY_NO_REASON);
   gdb_assert (lp->status != 0);
 
+  inferior *inf = find_inferior_ptid (linux_target, lp->ptid);
+  if (inf->starting_up)
+    return;
+
   if (!linux_target->low_status_is_event (lp->status))
     return;
 
