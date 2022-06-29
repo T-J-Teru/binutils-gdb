@@ -1251,6 +1251,9 @@ linux_nat_target::attach (const char *args, int from_tty)
 			 }
 		       return 0;
 		     });
+
+  /* Now the process is stopped we can fetch the target description.  */
+  target_find_description ();
 }
 
 /* Ptrace-detach the thread with pid PID.  */
