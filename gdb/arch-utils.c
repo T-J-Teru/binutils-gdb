@@ -480,10 +480,17 @@ choose_architecture_for_target (const struct target_desc *target_desc,
       if (tdesc_compatible_p (target_desc, selected))
 	return from_target;
 
+      /* The architecture of the BFD and the target are not compatible.
+	 Warn the user, and then use the architecture of the target.  If we
+	 select the architecture of the BFD, and are running on a native
+	 target, then we can end up trying to fetch registers using a
+	 gdbarch of the wrong architecture, e.g. in the case where GDB
+	 attaches to a running process of one architecture, while the
+	 symbol file loaded into GDB is for a different architecture.  */
       warning (_("Selected architecture %s is not compatible "
 		 "with reported target architecture %s"),
 	       selected->printable_name, from_target->printable_name);
-      return selected;
+      return from_target;
     }
 
   if (compat1 == NULL)
@@ -503,11 +510,14 @@ choose_architecture_for_target (const struct target_desc *target_desc,
     return compat1;
 
   /* We have no idea which one is better.  This is a bug, but not
-     a critical problem; warn the user.  */
+     a critical problem; warn the user, then use the architecture of the
+     target.  If we instead chose the architecture of the BFD, and we are
+     using a native target, then GDB can end up trying to fetch registers
+     from the target using an invalid gdbarch.  */
   warning (_("Selected architecture %s is ambiguous with "
 	     "reported target architecture %s"),
 	   selected->printable_name, from_target->printable_name);
-  return selected;
+  return from_target;
 }
 
 /* Functions to manipulate the architecture of the target.  */
