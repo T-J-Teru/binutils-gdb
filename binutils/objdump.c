@@ -139,6 +139,9 @@ static enum color_selection
     extended				/* --disassembler-color=extended-color.  */
   } disassembler_color = on_if_terminal_output;
 
+/* The environment variable to read for color information.  */
+static const char *objdump_colors_var = "OBJDUMP_COLORS";
+
 static int dump_any_debugging;
 static int demangle_flags = DMGL_ANSI | DMGL_PARAMS;
 
@@ -2153,6 +2156,32 @@ objdump_sprintf (SFILE *f, const char *format, ...)
   f->pos += n;
 
   return n;
+}
+
+/* Figure out a default disassembler color mode.  */
+
+static enum color_selection
+objdump_default_disassembler_color_mode (void)
+{
+  enum color_selection mode;
+
+  if (isatty (1))
+    {
+      const char *tmp = getenv (objdump_colors_var);
+
+      if (tmp == NULL || strncmp (tmp, "color", 5) == 0)
+	mode = on;
+      if (strncmp (tmp, "extended", 8) == 0)
+	mode = extended;
+      else if (strncmp (tmp, "off", 3) == 0)
+	mode = off;
+      else
+	mode = on;
+    }
+  else
+    mode = off;
+
+  return mode;
 }
 
 /* Return an integer greater than, or equal to zero, representing the color
@@ -5931,7 +5960,7 @@ main (int argc, char **argv)
     }
 
   if (disassembler_color == on_if_terminal_output)
-    disassembler_color = isatty (1) ? on : off;
+    disassembler_color = objdump_default_disassembler_color_mode ();
 
   if (show_version)
     print_version ("objdump");

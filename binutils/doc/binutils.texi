@@ -2830,6 +2830,8 @@ after it has previously been enabled then use
 
 If this option is not specified then the default is to enable color
 output if displaying to a terminal, but not otherwise.
+@xref{Customizing Objdump's Colors}, for more information on
+controlling the colors objdump uses in its disassembler output.
 
 @item -W[lLiaprmfFsoORtUuTgAckK]
 @itemx --dwarf[=rawline,=decodedline,=info,=abbrev,=pubnames,=aranges,=macro,=frames,=frames-interp,=str,=str-offsets,=loc,=Ranges,=pubtypes,=trace_info,=trace_abbrev,=trace_aranges,=gdb_index,=addr,=cu_index,=links,=follow-links]
@@ -3009,6 +3011,26 @@ option directs the disassembler to disassemble those blocks, just like
 any other data.
 @end table
 
+@anchor{Customizing Objdump's Colors}
+@section Customizing Objdump's Colors
+
+The environment variable @code{OBJDUMP_COLORS} can be used to control
+the colors objdump uses for it's disassembler output.
+
+When objdump disassembles to a terminal, and the
+@option{--disassembler-color} argument is not used, objdump will, by
+default, behave as if @option{--disassembler-color=color} had been
+used.
+
+If @code{OBJDUMP_COLORS} is set to @code{off} then objdump will behave
+as if @option{--disassembler-color=off} was given by default.
+
+If @code{OBJDUMP_COLORS} is set to @code{color} then objdump will
+behave as if @option{--disassembler-color=color} was given by default.
+
+If @code{OBJDUMP_COLORS} is set to @code{extended} then objdump will
+behave as if @option{--disassembler-color=extended-color} was given by
+default.
 @c man end
 
 @ignore
