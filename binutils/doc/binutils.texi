@@ -3017,20 +3017,81 @@ any other data.
 The environment variable @code{OBJDUMP_COLORS} can be used to control
 the colors objdump uses for it's disassembler output.
 
+The format of @code{OBJDUMP_COLORS} is given by @var{<objdump_colors>}
+in:
+
+@smallexample
+<objdump_colors> ::= <mode_selection> ":" <style_list>
+                   | <mode_selection>
+                   | <style_list>
+
+<mode_selection> ::= "OFF" | "B" | "X"
+
+<style_list> ::= <style_item>
+               | <style_item> ":" <style_list>
+
+<style_item> ::= <style_code> "=" <escape_string>
+
+<style_code> ::= "ad" | "ao" | "as" | "cm" | "im"
+               | "mn" | "rg" | "sm" | "sy" | "tx"
+@end smallexample
+
 When objdump disassembles to a terminal, and the
 @option{--disassembler-color} argument is not used, objdump will, by
 default, behave as if @option{--disassembler-color=color} had been
 used.
 
-If @code{OBJDUMP_COLORS} is set to @code{off} then objdump will behave
-as if @option{--disassembler-color=off} was given by default.
+If @var{<mode_selection>} is set to @code{off} then objdump will
+behave as if @option{--disassembler-color=off} was given by default.
 
-If @code{OBJDUMP_COLORS} is set to @code{color} then objdump will
-behave as if @option{--disassembler-color=color} was given by default.
+If @var{<mode_selection>} is set to @code{color} then objdump will behave
+as if @option{--disassembler-color=color} was given by default.
 
-If @code{OBJDUMP_COLORS} is set to @code{extended} then objdump will
-behave as if @option{--disassembler-color=extended-color} was given by
+If @var{<mode_selection>} is set to @code{extended} then objdump will behave
+as if @option{--disassembler-color=extended-color} was given by
 default.
+
+Each @var{<style_code>} is a two letter sequence that identifies a
+particular part of the disassembler output, the valid codes are:
+
+@itemize @bullet
+@item ad
+The style used to for numerical addresses.
+@item ao
+The style used for numerical address offsets.
+@item as
+The style used for assembler directives.
+@item cm
+The style used for comments.
+@item im
+The style used for numerical immediates.
+@item mn
+The style used for the primary instruction mnemonic.
+@item rg
+The style used for register names.
+@item sm
+The style used for any secondary mnemonics within an instruction.
+@item sy
+The style used for symbol names.
+@item tx
+The style used for anything that is not covered by any of the above
+styles.  This style should not usually be modified, this will leave
+this text styled the same as the rest of objdump's output.
+@end itemize
+
+Each @var{<style_item>} associates a @var{<style_code>} with an
+@var{<escape_string>}.  Each escape string is a series of digits and
+@code{;} characters, and will be used as part of an escape sequence to
+add styling to the disassembler output.  Each @var{<escape_string>}
+has @code{\033[} added as a prefix, and @code{m} added as a suffix to
+create the complete escape sequence.
+
+Alternatively, if an @var{<escape_string>} is empty then no styling is
+added to this element of the disassembler output.
+
+Any styles specified in the @var{<style_list>} override the
+corresponding style in the objdump output.  Any style not specified in
+the @var{<style_list>} will retain its default styling.
 @c man end
 
 @ignore
