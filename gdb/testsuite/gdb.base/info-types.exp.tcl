@@ -16,6 +16,113 @@
 # Check that 'info types' produces the expected output for an inferior
 # containing a number of different types.
 
+
+# Run the 'info types' command, and place the results into RESULT_VAR,
+# which should be the name of a variable in the callers scope.
+#
+# RESULT_VAR will be cleared, and set to an associative array, the
+# keys of this associative array will be the line numbers, and the
+# value for each line number will be a list of the types GDB
+# understands to be declared on that line.
+#
+# Some types don't have a line number for their declartion
+# (e.g. builtin types), these are placed into a list for the special
+# line number 'NONE'.
+#
+# Finally, only types from the reported in SRCFILE are collected, any
+# types reported from other files (e.g. libraries linked into the
+# test) should be ignored.
+proc collect_output { result_var } {
+    upvar $result_var result_obj
+
+    array set result_obj {}
+
+    set collect_lines false
+    gdb_test_multiple "info types" "" {
+	-re "^info types\r\n" {
+	    exp_continue
+	}
+
+	-re "^\r\n" {
+	    exp_continue
+	}
+
+	-re "^All defined types:\r\n" {
+	    exp_continue
+	}
+
+	-re "^File (\[^\r\n\]+)\r\n" {
+	    set filename $expect_out(1,string)
+	    set collect_lines [regexp [string_to_regexp $::srcfile] $filename]
+	    exp_continue
+	}
+
+	-re "^($::decimal):\\s+(\[^\r\n\]+);\r\n" {
+	    set lineno $expect_out(1,string)
+	    set text $expect_out(2,string)
+	    if { $collect_lines } {
+		if { ! [info exists result_obj($lineno)] } {
+		    set result_obj($lineno) [list]
+		}
+		lappend result_obj($lineno) $text
+	    }
+	    exp_continue
+	}
+
+	-re "^\\s+(\[^\r\n;\]+)\r\n" {
+	    set text $expect_out(1,string)
+	    if { $collect_lines } {
+		if { ![info exists result_obj(NONE)] } {
+		    set result_obj(NONE) [list]
+		}
+		lappend result_obj(NONE) $text
+	    }
+	    exp_continue
+	}
+
+	-re "^$::gdb_prompt $" {
+	}
+    }
+}
+
+# RESULT_VAR is the name of a variable in the parent scope that
+# contains an associative array of results as returned from the
+# collect_output proc.
+#
+# LINE is a line number, or the empty string, and TEXT is the
+# declaration of a type that GDB should have seen on that line.
+#
+# This proc checks in RESULT_VAR for a matching entry to LINE and
+# TEXT, and, if a matching entry is found, calls pass, otherwise, fail
+# is called.  The testname used for the pass/fail call is based on
+# LINE and TEXT.
+#
+# If LINE is the empty string then this proc looks for a result
+# associated with the special line number 'NONE', see collect_output
+# for more details.
+proc require_line { result_var line text } {
+    upvar $result_var result_obj
+
+    set testname "check for $text"
+    if { $line != "" } {
+	set testname "$testname on line $line"
+    } else {
+	set line "NONE"
+    }
+
+    if { ![info exists result_obj($line)] } {
+	fail $testname
+	return
+    }
+
+    if { [lsearch -exact $result_obj($line) $text] < 0 } {
+	fail $testname
+	return
+    }
+
+    pass $testname
+}
+
 # Run 'info types' test, compiling the test file for language LANG,
 # which should be either 'c' or 'c++'.
 proc run_test { lang } {
@@ -38,79 +145,71 @@ proc run_test { lang } {
 	return 0
     }
 
-    set file_re "File .*[string_to_regexp $srcfile]:"
+    # Run 'info types' and place the results in RESULT_OBJ.
+    collect_output result_obj
+
+    # Some results are common to C and C++.  These are the builtin
+    # types which are not declared on any specific line.
+    require_line result_obj "" "double"
+    require_line result_obj "" "float"
+    require_line result_obj "" "int"
+
+    # These typedefs are common to C and C++, but GDB should see a
+    # specific line number for these type declarations.
+    require_line result_obj "16" "typedef int my_int_t"
+    require_line result_obj "17" "typedef float my_float_t"
+    require_line result_obj "18" "typedef int nested_int_t"
+    require_line result_obj "19" "typedef float nested_float_t"
 
     if { $lang == "c++" } {
-	set output_lines \
-	    [list \
-		 "^All defined types:" \
-		 ".*" \
-		 $file_re \
-		 "98:\[\t \]+CL;" \
-		 "42:\[\t \]+anon_struct_t;" \
-		 "65:\[\t \]+anon_union_t;" \
-		 "21:\[\t \]+baz_t;" \
-		 "33:\[\t \]+enum_t;" \
-		 "56:\[\t \]+union_t;" \
-		 "52:\[\t \]+typedef enum {\\.\\.\\.} anon_enum_t;" \
-		 "45:\[\t \]+typedef anon_struct_t anon_struct_t;" \
-		 "68:\[\t \]+typedef anon_union_t anon_union_t;" \
-		 "28:\[\t \]+typedef baz_t baz;" \
-		 "31:\[\t \]+typedef baz_t \\* baz_ptr;" \
-		 "27:\[\t \]+typedef baz_t baz_t;" \
-		 "\[\t \]+double" \
-		 "\[\t \]+float" \
-		 "\[\t \]+int" \
-		 "103:\[\t \]+typedef CL my_cl;" \
-		 "38:\[\t \]+typedef enum_t my_enum_t;" \
-		 "17:\[\t \]+typedef float my_float_t;" \
-		 "16:\[\t \]+typedef int my_int_t;" \
-		 "104:\[\t \]+typedef CL \\* my_ptr;" \
-		 "54:\[\t \]+typedef enum {\\.\\.\\.} nested_anon_enum_t;" \
-		 "47:\[\t \]+typedef anon_struct_t nested_anon_struct_t;" \
-		 "70:\[\t \]+typedef anon_union_t nested_anon_union_t;" \
-		 "30:\[\t \]+typedef baz_t nested_baz;" \
-		 "29:\[\t \]+typedef baz_t nested_baz_t;" \
-		 "39:\[\t \]+typedef enum_t nested_enum_t;" \
-		 "19:\[\t \]+typedef float nested_float_t;" \
-		 "18:\[\t \]+typedef int nested_int_t;" \
-		 "62:\[\t \]+typedef union_t nested_union_t;(" \
-		 "\[\t \]+unsigned int)?" \
-		 "($|\r\n.*)"]
-    } else {
-	set output_lines \
-	    [list \
-		 "^All defined types:" \
-		 ".*" \
-		 $file_re \
-		 "52:\[\t \]+typedef enum {\\.\\.\\.} anon_enum_t;" \
-		 "45:\[\t \]+typedef struct {\\.\\.\\.} anon_struct_t;" \
-		 "68:\[\t \]+typedef union {\\.\\.\\.} anon_union_t;" \
-		 "28:\[\t \]+typedef struct baz_t baz;" \
-		 "31:\[\t \]+typedef struct baz_t \\* baz_ptr;" \
-		 "21:\[\t \]+struct baz_t;" \
-		 "\[\t \]+double" \
-		 "33:\[\t \]+enum enum_t;" \
-		 "\[\t \]+float" \
-		 "\[\t \]+int" \
-		 "38:\[\t \]+typedef enum enum_t my_enum_t;" \
-		 "17:\[\t \]+typedef float my_float_t;" \
-		 "16:\[\t \]+typedef int my_int_t;" \
-		 "54:\[\t \]+typedef enum {\\.\\.\\.} nested_anon_enum_t;" \
-		 "47:\[\t \]+typedef struct {\\.\\.\\.} nested_anon_struct_t;" \
-		 "70:\[\t \]+typedef union {\\.\\.\\.} nested_anon_union_t;" \
-		 "30:\[\t \]+typedef struct baz_t nested_baz;" \
-		 "29:\[\t \]+typedef struct baz_t nested_baz_t;" \
-		 "39:\[\t \]+typedef enum enum_t nested_enum_t;" \
-		 "19:\[\t \]+typedef float nested_float_t;" \
-		 "18:\[\t \]+typedef int nested_int_t;" \
-		 "62:\[\t \]+typedef union union_t nested_union_t;" \
-		 "56:\[\t \]+union union_t;(" \
-		 "\[\t \]+unsigned int)?" \
-		 "($|\r\n.*)"]
-    }
+	# These results are specific to 'C++'.
+	require_line result_obj "21" "baz_t"
+	require_line result_obj "27" "typedef baz_t baz_t"
+	require_line result_obj "28" "typedef baz_t baz"
+	require_line result_obj "29" "typedef baz_t nested_baz_t"
+	require_line result_obj "30" "typedef baz_t nested_baz"
+	require_line result_obj "31" "typedef baz_t * baz_ptr"
+	require_line result_obj "33" "enum_t"
+	require_line result_obj "38" "typedef enum_t my_enum_t"
+	require_line result_obj "39" "typedef enum_t nested_enum_t"
+	require_line result_obj "52" "typedef enum {...} anon_enum_t"
+	require_line result_obj "54" "typedef enum {...} nested_anon_enum_t"
+	require_line result_obj "56" "union_t"
+	require_line result_obj "62" "typedef union_t nested_union_t"
+	require_line result_obj "98" "CL"
+	require_line result_obj "103" "typedef CL my_cl"
+	require_line result_obj "104" "typedef CL * my_ptr"
 
-    gdb_test_lines "info types" "" [multi_line {*}$output_lines]
+	if { [test_compiler_info "gcc-*"] } {
+	    # GCC give a name to anonymous structs and unions.  Not
+	    # all compilers do this, e.g. Clang does not.
+	    require_line result_obj "42" "anon_struct_t"
+	    require_line result_obj "45" "typedef anon_struct_t anon_struct_t"
+	    require_line result_obj "47" "typedef anon_struct_t nested_anon_struct_t"
+	    require_line result_obj "65" "anon_union_t"
+	    require_line result_obj "68" "typedef anon_union_t anon_union_t"
+	    require_line result_obj "70" "typedef anon_union_t nested_anon_union_t"
+	}
+
+    } else {
+	# These results are specific to 'C'.
+	require_line result_obj "21" "struct baz_t"
+	require_line result_obj "28" "typedef struct baz_t baz"
+	require_line result_obj "29" "typedef struct baz_t nested_baz_t"
+	require_line result_obj "30" "typedef struct baz_t nested_baz"
+	require_line result_obj "31" "typedef struct baz_t * baz_ptr"
+	require_line result_obj "33" "enum enum_t"
+	require_line result_obj "38" "typedef enum enum_t my_enum_t"
+	require_line result_obj "39" "typedef enum enum_t nested_enum_t"
+	require_line result_obj "45" "typedef struct {...} anon_struct_t"
+	require_line result_obj "47" "typedef struct {...} nested_anon_struct_t"
+	require_line result_obj "52" "typedef enum {...} anon_enum_t"
+	require_line result_obj "54" "typedef enum {...} nested_anon_enum_t"
+	require_line result_obj "56" "union union_t"
+	require_line result_obj "62" "typedef union union_t nested_union_t"
+	require_line result_obj "68" "typedef union {...} anon_union_t"
+	require_line result_obj "70" "typedef union {...} nested_anon_union_t"
+    }
 }
 
 run_test $lang
