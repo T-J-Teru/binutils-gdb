@@ -128,6 +128,11 @@ public:
   /* See definition.  */
   void info_proc_mappings (struct gdbarch *gdbarch);
 
+  /* The core_target only works for the inferior in which it was initially
+     opened, and can't be copied to some other inferior's target_stack.  */
+  bool is_shareable () override
+  { return false; }
+
 private: /* per-core data */
 
   /* Get rid of the core inferior.  */

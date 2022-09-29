@@ -101,6 +101,13 @@
      (gdb) disable $_hit_bpnum
   are both disabling the breakpoint.
 
+* The add-inferior, clone-inferior, and MI -add-inferior commands will
+  now give a warning, and create the new inferior without a
+  connection, when the current inferior, at the time the command is
+  given, is a core-file target.  The core-file target could never
+  really be shared between inferiors, GDB is now more vocal about what
+  is going on.
+
 * New commands
 
 maintenance set ignore-prologue-end-flag on|off

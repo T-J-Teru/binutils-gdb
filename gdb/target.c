@@ -1196,6 +1196,12 @@ target_stack::push (target_ops *t)
   if (m_stack[stratum].get () != nullptr)
     unpush (m_stack[stratum].get ());
 
+  /* If this target can't be shared, then check that the target doesn't
+     already appear on some other target stack.  */
+  if (!t->is_shareable ())
+    for (inferior *inf : all_inferiors ())
+      gdb_assert (!inf->target_is_pushed (t));
+
   /* Now add the new one.  */
   m_stack[stratum] = std::move (ref);
 
@@ -3231,6 +3237,14 @@ target_ops::fileio_readlink (struct inferior *inf, const char *filename,
 {
   *target_errno = FILEIO_ENOSYS;
   return {};
+}
+
+/* See target.h.  */
+
+bool
+target_ops::is_shareable ()
+{
+  return true;
 }
 
 /* See target.h.  */

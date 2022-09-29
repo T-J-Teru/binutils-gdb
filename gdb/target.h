@@ -1321,6 +1321,14 @@ struct target_ops
     virtual bool store_memtags (CORE_ADDR address, size_t len,
 				const gdb::byte_vector &tags, int type)
       TARGET_DEFAULT_NORETURN (tcomplain ());
+
+    /* Return true if this target can be shared on multiple target_stacks,
+       or false if this target should only appear on a single target_stack.
+       When this function returns false multiple separate instances of the
+       same target_ops sub-class can still appear on different
+       target_stacks, but the same concrete instance can only appear on a
+       single target_stack.  */
+    virtual bool is_shareable ();
   };
 
 /* Deleter for std::unique_ptr.  See comments in

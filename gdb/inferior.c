@@ -819,6 +819,22 @@ switch_to_inferior_and_push_target (inferior *new_inf,
      symbols.  */
   switch_to_inferior_no_thread (new_inf);
 
+  if (!no_connection && proc_target != nullptr
+      && !proc_target->is_shareable ())
+    {
+      if (proc_target->connection_string () != nullptr)
+	warning (_("can't share connection %d (%s %s) between inferiors"),
+		 proc_target->connection_number,
+		 proc_target->shortname (),
+		 proc_target->connection_string ());
+      else
+	warning (_("can't share connection %d (%s) between inferiors"),
+		 proc_target->connection_number,
+		 proc_target->shortname ());
+
+      proc_target = nullptr;
+    }
+
   /* Reuse the target for new inferior.  */
   if (!no_connection && proc_target != NULL)
     {
