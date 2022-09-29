@@ -3,6 +3,13 @@
 
 *** Changes since GDB 17
 
+* The add-inferior, clone-inferior, and MI -add-inferior commands will
+  now give a warning, and create the new inferior without a
+  connection, when the current inferior, at the time the command is
+  given, is a core-file target.  The core-file target could never
+  really be shared between inferiors, GDB is now more vocal about what
+  is going on.
+
 *** Changes in GDB 17
 
 * Debugging Linux programs that use x86-64 or x86-64 with 32-bit pointer
