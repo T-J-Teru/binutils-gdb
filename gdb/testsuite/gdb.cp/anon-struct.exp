@@ -14,10 +14,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# This test is used to verify GDB's abiility to refer to linkage names
+# for types and functions.
+
 standard_testfile .cc
 
 if { [prepare_for_testing "failed to prepare" ${testfile} ${srcfile} {debug c++}] } {
      return -1
+}
+
+if {[test_compiler_info clang-*-*]} {
+    untested "clang does not use linkage name in this case"
+    return
 }
 
 if { [is_aarch32_target] } {
