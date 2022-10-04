@@ -23,6 +23,11 @@ if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug c++}]} {
     return -1
 }
 
+if {[test_compiler_info clang-*-*]} {
+    untested "clang does not add debuginfo for standard libraries"
+    return
+}
+
 proc do_typeid_tests {started} {
     global hex
 
