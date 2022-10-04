@@ -102,16 +102,32 @@ if { [is_aarch32_target] } {
 	{type = void \(single_constructor \* const\)} \
 	"simple object class, ptype constructor"
 
-    gdb_test "print test1.~gnu_obj_1" \
-	{ = {void \(gnu_obj_1 \* const, int\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} \
-	"simple object instance, print destructor"
-    gdb_test "ptype test1.~gnu_obj_1" \
-	{type = void \(gnu_obj_1 \* const, int\)} \
-	"simple object instance, ptype destructor"
+    gdb_test_multiple "print test1.~gnu_obj_1" "simple object instance, print destructor" {
+	-re -wrap { = {void \(gnu_obj_1 \* const, int\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} {
+	    pass $gdb_test_name
+	}
+	-re -wrap { = {void \(gnu_obj_1 \* const\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} {
+	    pass $gdb_test_name
+	}
+    }
+	
+    gdb_test_multiple "ptype test1.~gnu_obj_1" "simple object instance, ptype destructor" {
+	-re -wrap {type = void \(gnu_obj_1 \* const, int\)} {
+	    pass $gdb_test_name
+	}
+	-re -wrap {type = void \(gnu_obj_1 \* const\)} {
+	    pass $gdb_test_name
+	}
+    }
 
-    gdb_test "print test1.'~gnu_obj_1'" \
-	{ = {void \(gnu_obj_1 \*( const)?, int\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} \
-	"simple object instance, print quoted destructor"
+    gdb_test_multiple "print test1.'~gnu_obj_1'" "simple object instance, print quoted destructor" {
+	-re -wrap { = {void \(gnu_obj_1 \*( const)?, int\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} {
+	    pass $gdb_test_name
+	}
+	-re -wrap { = {void \(gnu_obj_1 \*( const)?\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} {
+	    pass $gdb_test_name
+	}
+    }
 
     gdb_test "ptype gnu_obj_1::'~gnu_obj_1'" \
 	{type = void \(gnu_obj_1 \* const\)} \
