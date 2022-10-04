@@ -26,6 +26,11 @@ if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug c++}]} {
     return -1
 }
 
+if {[test_compiler_info clang-*-*]} {
+    untested "clang does not place the class in the register"
+    return
+}
+
 proc test_call_register_class {} {
     global gdb_prompt
 
