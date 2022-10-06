@@ -886,6 +886,7 @@ bppy_init (PyObject *self, PyObject *args, PyObject *kwargs)
 	case bp_breakpoint:
 	case bp_hardware_breakpoint:
 	  {
+	    gdb::unique_xmalloc_ptr<char> cond_string;
 	    location_spec_up locspec;
 	    symbol_name_match_type func_name_match_type
 	      = (qualified != NULL && PyObject_IsTrue (qualified)
@@ -901,6 +902,15 @@ bppy_init (PyObject *self, PyObject *args, PyObject *kwargs)
 		locspec  = string_to_location_spec (&copy,
 						    current_language,
 						    func_name_match_type);
+
+		copy = skip_spaces (copy);
+		if (*copy != '\0')
+		  {
+		    if (PyObject_HasAttrString (self, stop_func))
+		      error ("can't have condition and a stop method");
+
+		    cond_string = make_unique_xstrdup (copy);
+		  }
 	      }
 	    else
 	      {
@@ -927,8 +937,9 @@ bppy_init (PyObject *self, PyObject *args, PyObject *kwargs)
 	      = breakpoint_ops_for_location_spec (locspec.get (), false);
 
 	    create_breakpoint (gdbpy_enter::get_gdbarch (),
-			       locspec.get (), NULL, -1, NULL, false,
-			       0,
+			       locspec.get (), NULL, -1, cond_string.get (),
+			       false,
+			       (cond_string.get () == nullptr ? 0 : 1),
 			       temporary_bp, type,
 			       0,
 			       AUTO_BOOLEAN_TRUE,
@@ -1070,12 +1081,12 @@ int
 gdbpy_breakpoint_has_cond (const struct extension_language_defn *extlang,
 			   struct breakpoint *b)
 {
-  PyObject *py_bp;
+  fprintf (stderr, "In gdbpy_breakpoint_has_cond\n");
 
   if (b->py_bp_object == NULL)
     return 0;
 
-  py_bp = (PyObject *) b->py_bp_object;
+  PyObject *py_bp = (PyObject *) b->py_bp_object;
 
   gdbpy_enter enter_py (b->gdbarch);
   return PyObject_HasAttrString (py_bp, stop_func);
