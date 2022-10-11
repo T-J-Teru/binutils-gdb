@@ -2436,6 +2436,7 @@ op ppi_tab[] =
     "return;",
   },
   { "","", "(if cc) plds Dz,MACL",	"111111cc....zzzz",
+    "res = MACL;",
     "if (0xa05f >> z & 1)",
     "  RAISE_EXCEPTION (SIGILL);",
     "else",
@@ -3259,6 +3260,7 @@ ppi_gensim (void)
   printf ("  int z;\n");
   printf ("  int res, res_grd;\n");
   printf ("  int carry, overflow, greater_equal;\n");
+  printf ("  res = 0;\n");
   printf ("\n");
   printf ("  switch (ppi_table[iword >> 4]) {\n");
 

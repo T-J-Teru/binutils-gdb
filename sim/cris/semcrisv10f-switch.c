@@ -12058,10 +12058,11 @@ if (NESI (ANDSI (tmp_tmp, SLLSI (1, 7)), 0)) {
 
 {
   BI tmp_truthval;
-  tmp_truthval = ({   SI tmp_tmpcond;
-  BI tmp_condres;
+  SI tmp_tmpcond;
+  BI tmp_condres = 0;
   tmp_tmpcond = FLD (f_operand2);
-; if (EQSI (tmp_tmpcond, 0)) {
+
+if (EQSI (tmp_tmpcond, 0)) {
   tmp_condres = NOTBI (CPU (h_cbit));
 }
  else if (EQSI (tmp_tmpcond, 1)) {
@@ -12108,8 +12109,10 @@ if (NESI (ANDSI (tmp_tmp, SLLSI (1, 7)), 0)) {
 }
  else if (EQSI (tmp_tmpcond, 15)) {
   tmp_condres = CPU (h_pbit);
-}
-; tmp_condres; });
+ }
+
+  tmp_truthval = tmp_condres;
+ 
 crisv10f_branch_taken (current_cpu, pc, FLD (i_o_pcrel), tmp_truthval);
 {
   {
@@ -12190,10 +12193,12 @@ if (tmp_truthval) {
 
 {
   BI tmp_truthval;
-  tmp_truthval = ({   SI tmp_tmpcond;
-  BI tmp_condres;
+  SI tmp_tmpcond;
+  BI tmp_condres = 0;
+
   tmp_tmpcond = FLD (f_operand2);
-; if (EQSI (tmp_tmpcond, 0)) {
+
+if (EQSI (tmp_tmpcond, 0)) {
   tmp_condres = NOTBI (CPU (h_cbit));
 }
  else if (EQSI (tmp_tmpcond, 1)) {
@@ -12241,7 +12246,10 @@ if (tmp_truthval) {
  else if (EQSI (tmp_tmpcond, 15)) {
   tmp_condres = CPU (h_pbit);
 }
-; tmp_condres; });
+
+tmp_truthval = tmp_condres;
+
+ 
 crisv10f_branch_taken (current_cpu, pc, FLD (i_o_word_pcrel), tmp_truthval);
 {
   {
@@ -13063,10 +13071,11 @@ SET_H_VBIT_MOVE (0);
 
 {
   BI tmp_truthval;
-  tmp_truthval = ({   SI tmp_tmpcond;
-  BI tmp_condres;
+  SI tmp_tmpcond;
+  BI tmp_condres = 0;
+
   tmp_tmpcond = FLD (f_operand2);
-; if (EQSI (tmp_tmpcond, 0)) {
+if (EQSI (tmp_tmpcond, 0)) {
   tmp_condres = NOTBI (CPU (h_cbit));
 }
  else if (EQSI (tmp_tmpcond, 1)) {
@@ -13113,8 +13122,10 @@ SET_H_VBIT_MOVE (0);
 }
  else if (EQSI (tmp_tmpcond, 15)) {
   tmp_condres = CPU (h_pbit);
-}
-; tmp_condres; });
+ }
+
+ tmp_truthval = tmp_condres;
+
   {
     SI opval = ZEXTBISI (tmp_truthval);
     SET_H_GR (FLD (f_operand1), opval);

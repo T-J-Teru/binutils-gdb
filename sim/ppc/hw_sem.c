@@ -148,6 +148,8 @@ hw_sem_init_data(device *me)
       error("hw_sem_init_data() semget failed\n");
   }
 
+  /* Silence warnings about help being used uninitialized.  */
+  memset (&help, 0, sizeof (help));
   sem->count = semctl( sem->id, 0, GETVAL, help );
   if (sem->count == -1)
     error("hw_sem_init_data() semctl -- get value failed\n");
@@ -239,6 +241,9 @@ hw_sem_io_read_buffer(device *me,
       error("hw_sem_io_read_buffer() invalid address - unknown error\n");
       break; 
   }
+
+  /* Avoid warnings about help being used uninitialized.  */
+  memset (&help, 0, sizeof (help));
 
   /* assume target is big endian */
   u32 = H2T_4(semctl( sem->id, 0, GETVAL, help ));
