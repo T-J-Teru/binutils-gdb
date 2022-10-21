@@ -1,0 +1,200 @@
+# Copyright 2022 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+# Test connecting and disconnecting at shared library events.
+
+if {[skip_shlib_tests]} {
+    untested "could not run to main"
+    return 0
+}
+
+standard_testfile .cc
+
+# Reuse an existing library, we don't care about the library contents
+# for this test.
+set libfile so-disc-shr
+set libsrc "${srcdir}/${subdir}/${libfile}.c"
+set libname "${libfile}.so"
+set libobj [standard_output_file ${libname}]
+
+# Compile the shared library.
+if { [gdb_compile_shlib $libsrc $libobj {debug}] != ""} {
+    return -1
+}
+
+# Compile the test executable.
+if [ build_executable "failed to prepare" $testfile $srcfile \
+	 [list shlib_load debug c++ additional_flags=-DSHLIB_NAME="${libobj}"]] {
+    return -1
+}
+
+proc validate_library_load {inferior_pid memfd} {
+
+    # Turn on the solib-events so we can see that gdb resolves
+    # everything correctly.
+    gdb_test_no_output "set stop-on-solib-events 1"
+
+    # Now continue forward until the solib event is detected, and
+    # check that the loaded library is found through the /proc/PID/fd
+    # rather than /proc/self/fd.
+    #
+    # We need to handle the possibility of the interesting event
+    # showing the first, or second time we stop, as depending on which
+    # mechanism GDB is using to handle the shared library events (the
+    # newer probes based interface, or the old non-probes interface),
+    # the library will be reported at the first or second stop.
+    set saw_expected_event false
+    set saw_no_event_stop false
+    gdb_test_multiple "continue" "continue to solib evnt" {
+	-re "^continue\r\n" {
+	    exp_continue
+	}
+
+	-re "^Continuing\\.\r\n" {
+	    exp_continue
+	}
+
+	-early -re "Stopped due to shared library event \\(no libraries added or removed\\)\r\n" {
+	    # This non-interesting event shows up first when using the
+	    # probes based mechanism for dealing with shared library
+	    # events.
+	    #
+	    # We set a flag here, and, once the prompt has appeared,
+	    # we send another continue, the next event will contain
+	    # the information we want.
+	    set saw_no_event_stop true
+	    exp_continue
+	}
+
+	-re "Stopped due to shared library event:\r\n  Inferior loaded (?:target:)?/proc/${inferior_pid}/fd/$memfd\r\n" {
+	    # This event, which includes the information we are
+	    # looking for, occurs first when using the non-probes
+	    # based mechanism for handling shared library events, and
+	    # occurs second when using the probes mechanism.
+	    #
+	    # Either way, record here that we say the output we expect.
+	    set saw_expected_event true
+	    exp_continue
+	}
+
+	-re "$::gdb_prompt $" {
+	    if {$saw_no_event_stop} {
+		set saw_no_event_stop false
+		send_gdb "continue\n"
+		exp_continue
+	    } else {
+		gdb_assert {$saw_expected_event} $gdb_test_name
+	    }
+	}
+    }
+
+    # Turn off solib events.  We're only interested in validating the
+    # loads for now.
+    gdb_test_no_output "set stop-on-solib-events 0"
+}
+
+# Start GDB and run to the point where the test program tries to dlopen a file
+# from within /proc/self/fd/.  Catch the shared library event and check that
+# we actually try to load a file from /proc/<INFERIOR-PID>/fd/.
+#
+# If SYSROOT is not the empty string, then this is set as the value of GDB's
+# sysroot immediately after starting GDB.  The only value that is (currently)
+# supported, other than the empty string, is 'target:'.
+proc do_test { {sysroot ""} } {
+    clean_restart $::binfile
+
+    if {$sysroot != ""} {
+	gdb_test_no_output "set sysroot ${sysroot}"
+    }
+
+    gdb_load_shlib $::libobj
+
+    if ![runto_main] then {
+	return 0
+    }
+
+    # Get inferior's PID for later.
+    set inferior_pid [get_inferior_pid]
+
+    # Run to the 'break-here' marker.
+    gdb_breakpoint [gdb_get_line_number "break-here"]
+    gdb_continue_to_breakpoint "break-here" ".* break-here .*"
+
+    set memfd ""
+    gdb_test_multiple "p mem_fd" "Get file descriptor" {
+	-re -wrap "\\\$$::decimal = (\[^\r\n\]*)" {
+	    set memfd $expect_out(1,string)
+	    pass $gdb_test_name
+	}
+    }
+
+    # The first call to open_library (in the test program) is done
+    # with a canonical path.
+    with_test_prefix "canonical path" {
+	gdb_breakpoint "open_library"
+	gdb_continue_to_breakpoint "open_library"
+	validate_library_load $inferior_pid $memfd
+    }
+
+    # The second call to open_library (in the test program) is done
+    # with a non-canonical path, however, GDB should resolve this to a
+    # canonical path for display to the user, so the output we see
+    # should be unchanged.
+    with_test_prefix "non-canonical path" {
+	gdb_breakpoint "open_library"
+	gdb_continue_to_breakpoint "open_library"
+	validate_library_load $inferior_pid $memfd
+    }
+}
+
+# First run of the test.
+do_test
+
+# Possible second run of the test.  If we are using a remote target then we
+# should consider setting the sysroot to 'target:' and re-running the test.
+if {[target_info exists gdb_protocol]
+    && ([target_info gdb_protocol] == "remote"
+	|| [target_info gdb_protocol] == "extended-remote")} {
+    # GDB will already be running after the first call to do_test, so we can
+    # take a peek at the current sysroot setting, and decide if we should
+    # repeat the test with a different setting.
+
+    set new_sysroot ""
+    gdb_test_multiple "show sysroot" "" {
+	-wrap -re "The current system root is \"\"\\." {
+	    pass $gdb_test_name
+
+	    # Repeat the test with 'target:' sysroot.
+	    set new_sysroot "target:"
+	}
+	-wrap -re "The current system root is \"target:\"\\." {
+	    pass $gdb_test_name
+
+	    # Nothing else to do, we already tested with target: sysroot.
+	}
+	-re "$gdb_prompt $" {
+	    pass $gdb_test_name
+
+	    # If already testing with any other sysroot, we probably should
+	    # not try to adjust things, so don't do any further testing.
+	}
+    }
+
+    with_test_prefix "sysroot $new_sysroot" {
+	if { $new_sysroot != "" } {
+	    do_test $new_sysroot
+	}
+    }
+}

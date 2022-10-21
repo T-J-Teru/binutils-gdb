@@ -50,6 +50,7 @@
 #include "gdb_bfd.h"
 #include "gdbsupport/filestuff.h"
 #include "gdbsupport/scoped_fd.h"
+#include "gdbsupport/pathstuff.h"
 #include "debuginfod-support.h"
 #include "source.h"
 #include "cli/cli-style.h"
@@ -78,6 +79,54 @@ show_solib_search_path (struct ui_file *file, int from_tty,
 #else
 #  define DOS_BASED_FILE_SYSTEM 0
 #endif
+
+/* Fix references to files in /proc/self/fd/ when opening a shared library.
+
+   SO_NAME is the name of the shared library being loaded.  This function
+   returns a possibly modified name which should be used as the path to the
+   shared library.
+
+   If SO_NAME starts with /proc/self, then the returned name will be
+   modified to start with /proc/PID where 'PID' is the pid of the current
+   inferior.  */
+
+static gdb::unique_xmalloc_ptr<char>
+filter_proc_self_filenames (gdb::unique_xmalloc_ptr<char> so_name)
+{
+  /* In order to figure out if SO_NAME points at a file in /proc/self we
+     need to canonicalize the path.  However, the whole point here is that
+     if SO_NAME does point at /proc/self then GDB will think this is its
+     self, while the inferior actually means its /proc/self.  A result of
+     this is that the file being referenced within the inferior's
+     /proc/self, might not exist within GDB's /proc/self, a call to
+     gdb_realpath would then fail.
+
+     To avoid this problem we call gdb_realpath_keepfile, this only tries
+     to canonicalize the basename of SO_NAME, and leaves the final filename
+     untouched.  */
+  so_name
+    = make_unique_xstrdup (gdb_realpath_keepfile (so_name.get ()).c_str ());
+
+  /* A result of the above canonicalization is that /proc/self will have
+     been replaced with /proc/<pid of gdb>, so that's what we need to check
+     for.  Of course, it could be the case that the inferior really did try
+     to dlopen a file within GDB's /proc/<pid> directory, in which case
+     we're going to do the wrong thing here, but that seems far less likely
+     than calling dlopen on a file within the inferior's own directory.  */
+  std::string prefix = string_printf ("/proc/%ld", (long) getpid ());
+
+  /* Is the canonical path inside GDB's /proc/<pid> directory?  */
+  if (!startswith (so_name.get (), prefix.c_str ()))
+    return so_name;
+
+  /* Get the part of the path after /proc/<pid>.  For example given
+     '/proc/123/fd' we find the '/fd' part.  */
+  const char *tail = so_name.get () + strlen (prefix.c_str ());
+
+  /* Build a replacement path within the inferiors directory.  */
+  int inferior_pid = inferior_ptid.pid ();
+  return xstrprintf ("/proc/%d%s", inferior_pid, tail);
+}
 
 /* Return the full pathname of a binary file (the main executable or a
    shared library file), or NULL if not found.  If FD is non-NULL, *FD
@@ -168,6 +217,9 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
 	}
     }
 
+  temp_pathname.reset (xstrdup (in_pathname));
+  temp_pathname = filter_proc_self_filenames (std::move (temp_pathname));
+
   /* Note, we're interested in IS_TARGET_ABSOLUTE_PATH, not
      IS_ABSOLUTE_PATH.  The latter is for host paths only, while
      IN_PATHNAME is a target path.  For example, if we're supposed to
@@ -180,9 +232,7 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
        3rd attempt, c:/foo/bar.dll ==> /sysroot/foo/bar.dll
   */
 
-  if (!IS_TARGET_ABSOLUTE_PATH (fskind, in_pathname) || sysroot == NULL)
-    temp_pathname.reset (xstrdup (in_pathname));
-  else
+  if (IS_TARGET_ABSOLUTE_PATH (fskind, in_pathname) && sysroot != nullptr)
     {
       bool need_dir_separator;
 
@@ -209,7 +259,7 @@ solib_find_1 (const char *in_pathname, int *fd, bool is_solib)
       /* Cat the prefixed pathname together.  */
       temp_pathname.reset (concat (sysroot,
 				   need_dir_separator ? SLASH_STRING : "",
-				   in_pathname, (char *) NULL));
+				   temp_pathname.get (), nullptr));
     }
 
   /* Handle files to be accessed via the target.  */
