@@ -18,6 +18,19 @@
 
 if { [skip_cplus_tests] } { continue }
 
+# This test relies on a GCC extension to place a structure into a
+# named register.  As a result this test will only work with GCC.  But
+# also, only a few architectures have a register named.  Any
+# architecture not explicitly supported in the source file will fail
+# to compile.
+#
+# However, the test gdb.dwarf2/dw2-call-method-register.exp is a
+# reimplementation of this test using the DWARF assembler, and should
+# work for any architecture, with any compiler (that supports the
+# DWARF assembler).  This test is retained mostly so we can track that
+# nothing weird happens w.r.t. how GDB handles GCC's register extension.
+if { ![test_compiler_info {gcc-*-*} c++] } { continue }
+
 load_lib "cp-support.exp"
 
 standard_testfile .cc
