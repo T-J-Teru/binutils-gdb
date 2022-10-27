@@ -1154,7 +1154,8 @@ gnuv3_get_typeid (struct value *value)
 	= lookup_minimal_symbol (sym_name.c_str (), NULL, NULL);
 
       if (minsym.minsym == NULL)
-	error (_("could not find typeinfo symbol for '%s'"), name);
+	error (_("could not find typeinfo symbol '%s' for '%s'"),
+	       sym_name.c_str (), name);
 
       result = value_at_lazy (typeinfo_type, minsym.value_address ());
     }

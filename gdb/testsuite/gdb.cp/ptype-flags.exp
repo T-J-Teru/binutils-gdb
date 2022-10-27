@@ -30,7 +30,7 @@ if ![runto_main] then {
     return
 }
 
-if {[test_compiler_info {clang-*-*}]} {
+if {[test_compiler_info {clang-*-*} c++]} {
     set using_clang true
 } else {
     set using_clang false

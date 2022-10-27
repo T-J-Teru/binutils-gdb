@@ -18,7 +18,7 @@ if { [skip_cplus_tests] } { return }
 
 standard_testfile .cc
 
-if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug c++ additional_flags=-Wno-non-c-typedef-for-linkage}]} {
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug c++}]} {
     return -1
 }
 

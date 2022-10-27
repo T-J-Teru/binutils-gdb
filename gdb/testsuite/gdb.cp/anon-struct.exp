@@ -23,10 +23,10 @@ if { [prepare_for_testing "failed to prepare" ${testfile} ${srcfile} {debug c++}
      return -1
 }
 
-if {[test_compiler_info clang-*-*]} {
-    untested "clang does not use linkage name in this case"
-    return
-}
+# if {[test_compiler_info clang-*-*]} {
+#     untested "clang does not use linkage name in this case"
+#     return
+# }
 
 if { [is_aarch32_target] } {
     gdb_test "ptype t::t" "type = struct t {\r\n    C m;\r\n} \\*\\(t \\* const\\)" \

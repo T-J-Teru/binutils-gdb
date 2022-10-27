@@ -15,49 +15,10 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include <typeinfo>
-
-int i;
-char *cp;
-const char *ccp;
-char ca[5];
-
-struct Base
+int
+main ()
 {
-  virtual ~Base() { }
-};
-
-struct VB1 : public virtual Base
-{
-};
-
-struct VB2 : public virtual Base
-{
-};
-
-struct Derived : public VB1, VB2
-{
-};
-
-Derived d;
-
-Base *b = &d;
-VB1 *vb1 = &d;
-VB1 *vb2 = &d;
-
-const Base *bv = &d;
-
-volatile const std::type_info *global;
-
-int main ()
-{
-  const std::type_info &xi = typeid(i);
-  global = &typeid(i);
-  const std::type_info &xcp = typeid(cp);
-  const std::type_info &xccp = typeid(ccp);
-  const std::type_info &xca = typeid(ca);
-  const std::type_info &xd = typeid(d);
-  const std::type_info &xb = typeid(b);
-
+  asm ("main_label: .globl main_label");
   return 0;
 }
+

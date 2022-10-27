@@ -102,6 +102,10 @@ if { [is_aarch32_target] } {
 	{type = void \(single_constructor \* const\)} \
 	"simple object class, ptype constructor"
 
+    gdb_test "print test1.~gnu_obj_1" \
+	{ = {void \(gnu_obj_1 \* const(?:, int)?\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} \
+	"simple object instance, print destructor XXX"
+
     gdb_test_multiple "print test1.~gnu_obj_1" "simple object instance, print destructor" {
 	-re -wrap { = {void \(gnu_obj_1 \* const, int\)} 0x[0-9a-f]+ <gnu_obj_1::~gnu_obj_1\(\)>} {
 	    pass $gdb_test_name

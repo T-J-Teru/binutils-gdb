@@ -33,11 +33,13 @@ if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug c++ addit
 
 proc test_ptype_class_objects {} {
 
-    if {[test_compiler_info {clang*}]} {
+    if {[test_compiler_info {clang*} c++]} {
 	set clang_used true
     } else {
 	set clang_used false
     }
+
+    verbose -log "APB: clang_used = ${clang_used}"
     # Simple type.
 
     cp_test_ptype_class \
