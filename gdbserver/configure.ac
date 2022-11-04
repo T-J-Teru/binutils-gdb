@@ -194,6 +194,8 @@ ACX_BUGURL([http://www.gnu.org/software/gdb/bugs/])
 AC_DEFINE_UNQUOTED([PKGVERSION], ["$PKGVERSION"], [Additional package description])
 AC_DEFINE_UNQUOTED([REPORT_BUGS_TO], ["$REPORT_BUGS_TO"], [Bug reporting address])
 
+GDB_PKGVERSION_SUFFIX
+
 # Check for various supplementary target information (beyond the
 # triplet) which might affect the choices in configure.srv.
 case "${target}" in

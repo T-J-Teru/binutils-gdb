@@ -13,6 +13,9 @@ m4_include(../gdbsupport/compiler-type.m4)
 dnl This gets AM_GDB_WARNINGS.
 m4_include(../gdbsupport/warning.m4)
 
+dnl This gets GDB_PKGVERSION_SUFFIX.
+m4_include(../gdbsupport/pkgversion-suffix.m4)
+
 dnl codeset.m4 is needed for common.m4, but not for
 dnl anything else in gdbserver.
 m4_include(../config/codeset.m4)

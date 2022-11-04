@@ -21,6 +21,9 @@ m4_include(../gdbsupport/compiler-type.m4)
 # This gets AM_GDB_WARNINGS.
 m4_include(../gdbsupport/warning.m4)
 
+dnl This gets GDB_PKGVERSION_SUFFIX.
+m4_include(../gdbsupport/pkgversion-suffix.m4)
+
 # AM_GDB_UBSAN
 m4_include(sanitize.m4)
 

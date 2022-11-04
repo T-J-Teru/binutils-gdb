@@ -642,6 +642,9 @@
 /* Additional package description */
 #undef PKGVERSION
 
+/* A string to append to the version number */
+#undef PKGVERSION_SUFFIX
+
 /* Define to 1 if the "%H, %D and %DD" formats work to print decfloats. */
 #undef PRINTF_HAS_DECFLOAT
 

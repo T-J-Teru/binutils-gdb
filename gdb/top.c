@@ -1444,7 +1444,8 @@ print_gdb_version (struct ui_file *stream, bool interactive)
      program to parse, and is just canonical program name and version
      number, which starts after last space.  */
 
-  std::string v_str = string_printf ("GNU gdb %s%s", PKGVERSION, version);
+  std::string v_str = string_printf ("GNU gdb %s%s%s", PKGVERSION, version,
+				     PKGVERSION_SUFFIX);
   gdb_printf (stream, "%ps\n",
 	      styled_string (version_style.style (), v_str.c_str ()));
 

@@ -402,6 +402,9 @@
 /* Additional package description */
 #undef PKGVERSION
 
+/* A string to append to the version number */
+#undef PKGVERSION_SUFFIX
+
 /* Define to 1 if the "%ll" format works to print long longs. */
 #undef PRINTF_HAS_LONG_LONG
 
