@@ -354,11 +354,17 @@ bool expand_symtabs_matching
 void map_symbol_filenames (gdb::function_view<symbol_filename_ftype> fun,
 			   bool need_fullname);
 
+
 /* Target-agnostic function to load the sections of an executable into memory.
 
    ARGS should be in the form "EXECUTABLE [OFFSET]", where OFFSET is an
    optional offset to apply to each section.  */
 extern void generic_load (const char *args, int from_tty);
+
+/* build-id support.  */
+extern struct bfd_build_id *build_id_addr_get (CORE_ADDR addr);
+extern void debug_print_missing (const char *binary, const char *debug);
+#define BUILD_ID_MAIN_EXECUTABLE_FILENAME _("the main executable file")
 
 /* From minidebug.c.  */
 

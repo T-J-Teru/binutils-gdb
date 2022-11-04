@@ -731,7 +731,8 @@ coff_symfile_read (struct objfile *objfile, symfile_add_flags symfile_flags)
     {
       std::vector<std::string> warnings_vector;
       std::string debugfile
-	= find_separate_debug_file_by_buildid (objfile, &warnings_vector);
+	= find_separate_debug_file_by_buildid (objfile, &warnings_vector,
+					       nullptr);
 
       if (debugfile.empty ())
 	debugfile

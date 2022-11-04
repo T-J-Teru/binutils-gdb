@@ -38,14 +38,19 @@ extern int build_id_verify (bfd *abfd,
    can be found, return NULL.  */
 
 extern gdb_bfd_ref_ptr build_id_to_debug_bfd (size_t build_id_len,
-					      const bfd_byte *build_id);
+					      const bfd_byte *build_id,
+					      char **link_return = NULL);
+
+extern char *build_id_to_filename (const struct bfd_build_id *build_id,
+				   char **link_return);
 
 /* Find and open a BFD for an executable file given a build-id.  If no BFD
    can be found, return NULL.  The returned reference to the BFD must be
    released by the caller.  */
 
 extern gdb_bfd_ref_ptr build_id_to_exec_bfd (size_t build_id_len,
-					     const bfd_byte *build_id);
+					     const bfd_byte *build_id,
+					     char **link_return);
 
 /* Find the separate debug file for OBJFILE, by using the build-id
    associated with OBJFILE's BFD.  If successful, returns the file name for the
@@ -58,7 +63,8 @@ extern gdb_bfd_ref_ptr build_id_to_exec_bfd (size_t build_id_len,
    approach, then any warnings will be printed.  */
 
 extern std::string find_separate_debug_file_by_buildid
-  (struct objfile *objfile, std::vector<std::string> *warnings_vector);
+  (struct objfile *objfile, std::vector<std::string> *warnings_vector,
+   gdb::unique_xmalloc_ptr<char> *build_id_filename_return);
 
 /* Return an hex-string representation of BUILD_ID.  */
 

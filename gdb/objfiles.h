@@ -874,6 +874,10 @@ public:
   bool skip_jit_symbol_lookup = false;
 };
 
+/* This file was loaded according to the BUILD_ID_CORE_LOADS rules.  */
+
+#define OBJF_BUILD_ID_CORE_LOADED static_cast<enum objfile_flag>(1 << 12)
+
 /* A deleter for objfile.  */
 
 struct objfile_deleter

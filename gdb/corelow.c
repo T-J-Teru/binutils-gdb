@@ -22,6 +22,10 @@
 #include <signal.h>
 #include <fcntl.h>
 #include "frame.h"		/* required by inferior.h */
+#include "auxv.h"
+#include "build-id.h"
+#include "elf/common.h"
+#include "gdbcmd.h"
 #include "inferior.h"
 #include "infrun.h"
 #include "symtab.h"
@@ -377,6 +381,8 @@ add_to_thread_list (asection *asect, asection *reg_sect, inferior *inf)
     switch_to_thread (thr);			/* Yes, make it current.  */
 }
 
+static bool build_id_core_loads = true;
+
 /* Issue a message saying we have no core to debug, if FROM_TTY.  */
 
 static void
@@ -564,8 +570,10 @@ locate_exec_from_corefile_build_id (bfd *abfd, int from_tty)
   if (build_id == nullptr)
     return;
 
+  char *build_id_filename;
   gdb_bfd_ref_ptr execbfd
-    = build_id_to_exec_bfd (build_id->size, build_id->data);
+    = build_id_to_exec_bfd (build_id->size, build_id->data,
+			    &build_id_filename);
 
   if (execbfd == nullptr)
     {
@@ -593,7 +601,12 @@ locate_exec_from_corefile_build_id (bfd *abfd, int from_tty)
       exec_file_attach (bfd_get_filename (execbfd.get ()), from_tty);
       symbol_file_add_main (bfd_get_filename (execbfd.get ()),
 			    symfile_add_flag (from_tty ? SYMFILE_VERBOSE : 0));
+      if (current_program_space->symfile_object_file != NULL)
+	current_program_space->symfile_object_file->flags |=
+	  OBJF_BUILD_ID_CORE_LOADED;
     }
+  else
+    debug_print_missing (BUILD_ID_MAIN_EXECUTABLE_FILENAME, build_id_filename);
 }
 
 /* See gdbcore.h.  */
@@ -1473,4 +1486,11 @@ _initialize_corelow ()
 	   maintenance_print_core_file_backed_mappings,
 	   _("Print core file's file-backed mappings."),
 	   &maintenanceprintlist);
+
+  add_setshow_boolean_cmd ("build-id-core-loads", class_files,
+			   &build_id_core_loads, _("\
+Set whether CORE-FILE loads the build-id associated files automatically."), _("\
+Show whether CORE-FILE loads the build-id associated files automatically."),
+			   NULL, NULL, NULL,
+			   &setlist, &showlist);
 }
