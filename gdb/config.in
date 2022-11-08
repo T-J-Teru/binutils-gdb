@@ -36,6 +36,9 @@
 /* Define to BFD's default target vector. */
 #undef DEFAULT_BFD_VEC
 
+/* librpm version specific library name to dlopen. */
+#undef DLOPEN_LIBRPM
+
 /* Handle .ctf type-info sections */
 #undef ENABLE_LIBCTF
 
@@ -258,6 +261,9 @@
 
 /* Define to 1 if you have the `m' library (-lm). */
 #undef HAVE_LIBM
+
+/* Define if librpm library is being used. */
+#undef HAVE_LIBRPM
 
 /* Define to 1 if you have the <libunwind-ia64.h> header file. */
 #undef HAVE_LIBUNWIND_IA64_H

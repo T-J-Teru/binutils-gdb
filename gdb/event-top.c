@@ -43,6 +43,7 @@
 #include "async-event.h"
 #include "bt-utils.h"
 #include "pager.h"
+#include "symfile.h"
 
 /* readline include files.  */
 #include "readline/readline.h"
@@ -403,6 +404,8 @@ display_gdb_prompt (const char *new_prompt)
 
   /* Reset the nesting depth used when trace-commands is set.  */
   reset_command_nest_depth ();
+
+  debug_flush_missing ();
 
   /* Do not call the python hook on an explicit prompt change as
      passed to this function, as this forms a secondary/local prompt,
@@ -788,7 +791,10 @@ command_line_handler (gdb::unique_xmalloc_ptr<char> &&rl)
       command_handler (cmd);
 
       if (ui->prompt_state != PROMPTED)
-	display_gdb_prompt (0);
+	{
+	  debug_flush_missing ();
+	  display_gdb_prompt (0);
+	}
     }
 }
 

@@ -364,6 +364,7 @@ extern void generic_load (const char *args, int from_tty);
 /* build-id support.  */
 extern struct bfd_build_id *build_id_addr_get (CORE_ADDR addr);
 extern void debug_print_missing (const char *binary, const char *debug);
+extern void debug_flush_missing (void);
 #define BUILD_ID_MAIN_EXECUTABLE_FILENAME _("the main executable file")
 
 /* From minidebug.c.  */
