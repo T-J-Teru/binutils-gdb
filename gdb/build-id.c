@@ -780,10 +780,10 @@ missing_rpm_enlist_1 (const char *filename, int verify_vendor)
   static rpmts (*rpmtsCreate_p) (void);
   extern rpmts rpmtsFree(rpmts ts);
   static rpmts (*rpmtsFree_p) (rpmts ts);
-  extern rpmdbMatchIterator rpmtsInitIterator(const rpmts ts, rpmTag rpmtag,
+  extern rpmdbMatchIterator rpmtsInitIterator(const rpmts ts, rpmDbiTagVal rpmtag,
                                               const void * keyp, size_t keylen);
   static rpmdbMatchIterator (*rpmtsInitIterator_p) (const rpmts ts,
-						    rpmTag rpmtag,
+						    rpmDbiTagVal rpmtag,
 						    const void *keyp,
 						    size_t keylen);
 #else	/* !DLOPEN_LIBRPM */
@@ -838,7 +838,7 @@ missing_rpm_enlist_1 (const char *filename, int verify_vendor)
 	      && (rpmdbNextIterator_p = (Header (*) (rpmdbMatchIterator mi)) dlsym (h, "rpmdbNextIterator"))
 	      && (rpmtsCreate_p = (rpmts (*) (void)) dlsym (h, "rpmtsCreate"))
 	      && (rpmtsFree_p = (rpmts (*) (rpmts ts)) dlsym (h, "rpmtsFree"))
-	      && (rpmtsInitIterator_p = (rpmdbMatchIterator (*) (const rpmts ts, rpmTag rpmtag, const void *keyp, size_t keylen)) dlsym (h, "rpmtsInitIterator"))))
+	      && (rpmtsInitIterator_p = (rpmdbMatchIterator (*) (const rpmts ts, rpmDbiTagVal rpmtag, const void *keyp, size_t keylen)) dlsym (h, "rpmtsInitIterator"))))
 	  {
 	    warning (_("Opened library \"%s\" is incompatible (%s), "
 		      "missing debuginfos notifications will not be displayed"),
@@ -926,7 +926,7 @@ missing_rpm_enlist_1 (const char *filename, int verify_vendor)
 
 	  /* RPMDBI_PACKAGES requires keylen == sizeof (int).  */
 	  /* RPMDBI_LABEL is an interface for NVR-based dbiFindByLabel().  */
-	  mi_debuginfo = rpmtsInitIterator_p (ts, (rpmTag) RPMDBI_LABEL, debuginfo, 0);
+	  mi_debuginfo = rpmtsInitIterator_p (ts, (rpmDbiTagVal) RPMDBI_LABEL, debuginfo, 0);
 	  xfree (debuginfo);
 	  if (mi_debuginfo)
 	    {
