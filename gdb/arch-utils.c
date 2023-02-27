@@ -933,7 +933,7 @@ default_program_breakpoint_here_p (struct gdbarch *gdbarch,
   if (bpoint == nullptr)
     return false;
 
-  gdb_byte *target_mem = (gdb_byte *) alloca (len);
+  gdb::byte_vector target_mem (len);
 
   /* Enable the automatic memory restoration from breakpoints while
      we read the memory.  Otherwise we may find temporary breakpoints, ones
@@ -941,11 +941,11 @@ default_program_breakpoint_here_p (struct gdbarch *gdbarch,
   scoped_restore restore_memory
     = make_scoped_restore_show_memory_breakpoints (0);
 
-  if (target_read_memory (address, target_mem, len) == 0)
+  if (target_read_memory (address, target_mem.data (), len) == 0)
     {
       /* Check if this is a breakpoint instruction for this architecture,
 	 including ones used by GDB.  */
-      if (memcmp (target_mem, bpoint, len) == 0)
+      if (memcmp (target_mem.data (), bpoint, len) == 0)
 	return true;
     }
 
@@ -1012,7 +1012,6 @@ default_guess_tracepoint_registers (struct gdbarch *gdbarch,
 				    CORE_ADDR addr)
 {
   int pc_regno = gdbarch_pc_regnum (gdbarch);
-  gdb_byte *regs;
 
   /* This guessing code below only works if the PC register isn't
      a pseudo-register.  The value of a pseudo-register isn't stored
@@ -1023,10 +1022,10 @@ default_guess_tracepoint_registers (struct gdbarch *gdbarch,
   if (pc_regno < 0 || pc_regno >= gdbarch_num_regs (gdbarch))
     return;
 
-  regs = (gdb_byte *) alloca (register_size (gdbarch, pc_regno));
-  store_unsigned_integer (regs, register_size (gdbarch, pc_regno),
+  gdb::byte_vector regs (register_size (gdbarch, pc_regno));
+  store_unsigned_integer (regs.data (), register_size (gdbarch, pc_regno),
 			  gdbarch_byte_order (gdbarch), addr);
-  regcache->raw_supply (pc_regno, regs);
+  regcache->raw_supply (pc_regno, regs.data ());
 }
 
 int
