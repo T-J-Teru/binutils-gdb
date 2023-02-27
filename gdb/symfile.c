@@ -3429,13 +3429,12 @@ static void
 read_target_long_array (CORE_ADDR memaddr, unsigned int *myaddr,
 			int len, int size, enum bfd_endian byte_order)
 {
-  /* FIXME (alloca): Not safe if array is very large.  */
-  gdb_byte *buf = (gdb_byte *) alloca (len * size);
-  int i;
+  gdb::byte_vector buf (len * size);
 
-  read_memory (memaddr, buf, len * size);
-  for (i = 0; i < len; i++)
-    myaddr[i] = extract_unsigned_integer (size * i + buf, size, byte_order);
+  read_memory (memaddr, buf.data (), len * size);
+  for (int i = 0; i < len; i++)
+    myaddr[i] = extract_unsigned_integer (size * i + buf.data (), size,
+					  byte_order);
 }
 
 /* Find and grab a copy of the target _ovly_table
