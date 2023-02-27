@@ -951,11 +951,11 @@ address_from_register (int regnum, frame_info_ptr frame)
      pointer types.  Avoid constructing a value object in those cases.  */
   if (gdbarch_convert_register_p (gdbarch, regnum, type))
     {
-      gdb_byte *buf = (gdb_byte *) alloca (type->length ());
+      gdb::byte_vector buf (type->length ());
       int optim, unavail, ok;
 
       ok = gdbarch_register_to_value (gdbarch, frame, regnum, type,
-				      buf, &optim, &unavail);
+				      buf.data (), &optim, &unavail);
       if (!ok)
 	{
 	  /* This function is used while computing a location expression.
@@ -965,7 +965,7 @@ address_from_register (int regnum, frame_info_ptr frame)
 	  error_value_optimized_out ();
 	}
 
-      return unpack_long (type, buf);
+      return unpack_long (type, buf.data ());
     }
 
   value = gdbarch_value_from_register (gdbarch, type, regnum, null_frame_id);
