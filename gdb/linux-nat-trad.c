@@ -32,7 +32,6 @@ linux_nat_trad_target::fetch_register (struct regcache *regcache, int regnum)
   struct gdbarch *gdbarch = regcache->arch ();
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   CORE_ADDR addr;
-  gdb_byte *buf;
   size_t size;
   pid_t pid;
   int i;
@@ -49,7 +48,8 @@ linux_nat_trad_target::fetch_register (struct regcache *regcache, int regnum)
   pid = get_ptrace_pid (regcache->ptid ());
 
   size = register_size (gdbarch, regnum);
-  buf = (gdb_byte *) alloca (size);
+  gdb::byte_vector buf_storage (size);
+  gdb_byte *buf = buf_storage.data ();
 
   /* Read the register contents from the inferior a chunk at a time.  */
   for (i = 0; i < size; i += sizeof (PTRACE_TYPE_RET))
@@ -95,7 +95,6 @@ linux_nat_trad_target::store_register (const struct regcache *regcache,
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   CORE_ADDR addr;
   size_t size;
-  gdb_byte *buf;
   pid_t pid;
   int i;
 
@@ -108,7 +107,8 @@ linux_nat_trad_target::store_register (const struct regcache *regcache,
   pid = get_ptrace_pid (regcache->ptid ());
 
   size = register_size (gdbarch, regnum);
-  buf = (gdb_byte *) alloca (size);
+  gdb::byte_vector buf_storage (size);
+  gdb_byte *buf = buf_storage.data ();
 
   /* Write the register contents into the inferior a chunk at a time.  */
   regcache->raw_collect (regnum, buf);
