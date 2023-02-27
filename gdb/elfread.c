@@ -839,7 +839,6 @@ elf_gnu_ifunc_resolve_by_got (const char *name, CORE_ADDR *addr_p)
 	 size_t ptr_size = ptr_type->length ();
 	 CORE_ADDR pointer_address, addr;
 	 asection *plt;
-	 gdb_byte *buf = (gdb_byte *) alloca (ptr_size);
 	 bound_minimal_symbol msym;
 
 	 msym = lookup_minimal_symbol (name_got_plt, NULL, objfile);
@@ -855,9 +854,11 @@ elf_gnu_ifunc_resolve_by_got (const char *name, CORE_ADDR *addr_p)
 
 	 if (msym.minsym->size () != ptr_size)
 	   return 0;
-	 if (target_read_memory (pointer_address, buf, ptr_size) != 0)
+
+	 gdb::byte_vector buf (ptr_size);
+	 if (target_read_memory (pointer_address, buf.data (), ptr_size) != 0)
 	   return 0;
-	 addr = extract_typed_address (buf, ptr_type);
+	 addr = extract_typed_address (buf.data (), ptr_type);
 	 addr = gdbarch_convert_from_func_ptr_addr
 	   (gdbarch, addr, current_inferior ()->top_target ());
 	 addr = gdbarch_addr_bits_remove (gdbarch, addr);
