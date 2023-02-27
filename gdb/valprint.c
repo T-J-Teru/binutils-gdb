@@ -2203,13 +2203,13 @@ generic_emit_char (int c, struct type *type, struct ui_file *stream,
 {
   enum bfd_endian byte_order
     = type_byte_order (type);
-  gdb_byte *c_buf;
   bool need_escape = false;
 
-  c_buf = (gdb_byte *) alloca (type->length ());
-  pack_long (c_buf, type, c);
+  gdb::byte_vector c_buf (type->length ());
+  pack_long (c_buf.data (), type, c);
 
-  wchar_iterator iter (c_buf, type->length (), encoding, type->length ());
+  wchar_iterator iter (c_buf.data (), type->length (), encoding,
+		       type->length ());
 
   /* This holds the printable form of the wchar_t data.  */
   auto_obstack wchar_buf;
@@ -2667,16 +2667,15 @@ val_print_string (struct type *elttype, const char *encoding,
 					  width, byte_order) == 0;
   if (len == -1 && !found_nul)
     {
-      gdb_byte *peekbuf;
-
       /* We didn't find a NUL terminator we were looking for.  Attempt
 	 to peek at the next character.  If not successful, or it is not
 	 a null byte, then force ellipsis to be printed.  */
 
-      peekbuf = (gdb_byte *) alloca (width);
+      gdb::byte_vector peekbuf (width);
 
-      if (target_read_memory (addr, peekbuf, width) == 0
-	  && extract_unsigned_integer (peekbuf, width, byte_order) != 0)
+      if (target_read_memory (addr, peekbuf.data (), width) == 0
+	  && extract_unsigned_integer (peekbuf.data (),
+				       width, byte_order) != 0)
 	force_ellipsis = 1;
     }
   else if ((len >= 0 && err != 0) || (len > bytes_read / width))
