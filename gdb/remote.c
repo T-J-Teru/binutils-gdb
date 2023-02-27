@@ -8554,7 +8554,6 @@ remote_target::fetch_register_using_p (struct regcache *regcache,
   struct gdbarch *gdbarch = regcache->arch ();
   struct remote_state *rs = get_remote_state ();
   char *buf, *p;
-  gdb_byte *regp = (gdb_byte *) alloca (register_size (gdbarch, reg->regnum));
   int i;
 
   if (m_features.packet_support (PACKET_p) == PACKET_DISABLE)
@@ -8593,6 +8592,7 @@ remote_target::fetch_register_using_p (struct regcache *regcache,
     }
 
   /* Otherwise, parse and supply the value.  */
+  gdb::byte_vector regp (register_size (gdbarch, reg->regnum));
   p = buf;
   i = 0;
   while (p[0] != 0)
@@ -8603,7 +8603,7 @@ remote_target::fetch_register_using_p (struct regcache *regcache,
       regp[i++] = fromhex (p[0]) * 16 + fromhex (p[1]);
       p += 2;
     }
-  regcache->raw_supply (reg->regnum, regp);
+  regcache->raw_supply (reg->regnum, regp.data ());
   return 1;
 }
 
@@ -8862,7 +8862,7 @@ remote_target::store_register_using_P (const struct regcache *regcache,
   struct remote_state *rs = get_remote_state ();
   /* Try storing a single register.  */
   char *buf = rs->buf.data ();
-  gdb_byte *regp = (gdb_byte *) alloca (register_size (gdbarch, reg->regnum));
+  gdb::byte_vector regp (register_size (gdbarch, reg->regnum));
   char *p;
 
   if (m_features.packet_support (PACKET_P) == PACKET_DISABLE)
@@ -8873,8 +8873,8 @@ remote_target::store_register_using_P (const struct regcache *regcache,
 
   xsnprintf (buf, get_remote_packet_size (), "P%s=", phex_nz (reg->pnum, 0));
   p = buf + strlen (buf);
-  regcache->raw_collect (reg->regnum, regp);
-  bin2hex (regp, p, register_size (gdbarch, reg->regnum));
+  regcache->raw_collect (reg->regnum, regp.data ());
+  bin2hex (regp.data (), p, register_size (gdbarch, reg->regnum));
   putpkt (rs->buf);
   getpkt (&rs->buf, 0);
 
@@ -8900,30 +8900,26 @@ remote_target::store_registers_using_G (const struct regcache *regcache)
 {
   struct remote_state *rs = get_remote_state ();
   remote_arch_state *rsa = rs->get_remote_arch_state (regcache->arch ());
-  gdb_byte *regs;
-  char *p;
 
-  /* Extract all the registers in the regcache copying them into a
-     local buffer.  */
-  {
-    int i;
+  /* Extract all the registers in the REGCACHE copying them into a local
+     buffer REGS.
 
-    regs = (gdb_byte *) alloca (rsa->sizeof_g_packet);
-    memset (regs, 0, rsa->sizeof_g_packet);
-    for (i = 0; i < gdbarch_num_regs (regcache->arch ()); i++)
-      {
-	struct packet_reg *r = &rsa->regs[i];
+     Use std::vector<gdb_byte> here (instead of gdb::byte_vector) because
+     we want the contents to be zero initialized.  */
+  std::vector<gdb_byte> regs (rsa->sizeof_g_packet);
+  for (int i = 0; i < gdbarch_num_regs (regcache->arch ()); i++)
+    {
+      struct packet_reg *r = &rsa->regs[i];
 
-	if (r->in_g_packet)
-	  regcache->raw_collect (r->regnum, regs + r->offset);
-      }
-  }
+      if (r->in_g_packet)
+	regcache->raw_collect (r->regnum, regs.data () + r->offset);
+    }
 
   /* Command describes registers byte by byte,
      each byte encoded as two hex characters.  */
-  p = rs->buf.data ();
+  char *p = rs->buf.data ();
   *p++ = 'G';
-  bin2hex (regs, p, rsa->sizeof_g_packet);
+  bin2hex (regs.data (), p, rsa->sizeof_g_packet);
   putpkt (rs->buf);
   getpkt (&rs->buf, 0);
   if (packet_check_result (rs->buf) == PACKET_ERROR)
