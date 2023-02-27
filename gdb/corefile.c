@@ -334,10 +334,10 @@ read_code_unsigned_integer (CORE_ADDR memaddr, int len,
 CORE_ADDR
 read_memory_typed_address (CORE_ADDR addr, struct type *type)
 {
-  gdb_byte *buf = (gdb_byte *) alloca (type->length ());
+  gdb::byte_vector buf (type->length ());
 
-  read_memory (addr, buf, type->length ());
-  return extract_typed_address (buf, type);
+  read_memory (addr, buf.data (), type->length ());
+  return extract_typed_address (buf.data (), type);
 }
 
 /* See gdbcore.h.  */
@@ -370,10 +370,10 @@ write_memory_unsigned_integer (CORE_ADDR addr, int len,
 			       enum bfd_endian byte_order,
 			       ULONGEST value)
 {
-  gdb_byte *buf = (gdb_byte *) alloca (len);
+  gdb::byte_vector buf (len);
 
-  store_unsigned_integer (buf, len, byte_order, value);
-  write_memory (addr, buf, len);
+  store_unsigned_integer (buf.data (), len, byte_order, value);
+  write_memory (addr, buf.data (), len);
 }
 
 /* Store VALUE at ADDR in the inferior as a LEN-byte signed
@@ -383,10 +383,10 @@ write_memory_signed_integer (CORE_ADDR addr, int len,
 			     enum bfd_endian byte_order,
 			     LONGEST value)
 {
-  gdb_byte *buf = (gdb_byte *) alloca (len);
+  gdb::byte_vector buf (len);
 
-  store_signed_integer (buf, len, byte_order, value);
-  write_memory (addr, buf, len);
+  store_signed_integer (buf.data (), len, byte_order, value);
+  write_memory (addr, buf.data (), len);
 }
 
 /* The current default bfd target.  Points to storage allocated for
