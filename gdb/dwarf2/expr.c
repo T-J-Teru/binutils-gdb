@@ -1155,12 +1155,12 @@ dwarf_expr_context::fetch_address (int n)
      for those architectures which require it.  */
   if (gdbarch_integer_to_address_p (arch))
     {
-      gdb_byte *buf = (gdb_byte *) alloca (this->m_addr_size);
-      type *int_type = get_unsigned_type (arch,
-					  result_val->type ());
+      gdb::byte_vector buf (this->m_addr_size);
+      type *int_type = get_unsigned_type (arch, result_val->type ());
 
-      store_unsigned_integer (buf, this->m_addr_size, byte_order, result);
-      return gdbarch_integer_to_address (arch, int_type, buf);
+      store_unsigned_integer (buf.data (), this->m_addr_size, byte_order,
+			      result);
+      return gdbarch_integer_to_address (arch, int_type, buf.data ());
     }
 
   return (CORE_ADDR) result;
@@ -1883,7 +1883,6 @@ dwarf_expr_context::execute_stack_op (const gdb_byte *op_ptr,
 	case DW_OP_GNU_deref_type:
 	  {
 	    int addr_size = (op == DW_OP_deref ? this->m_addr_size : *op_ptr++);
-	    gdb_byte *buf = (gdb_byte *) alloca (addr_size);
 	    CORE_ADDR addr = fetch_address (0);
 	    struct type *type;
 
@@ -1898,21 +1897,25 @@ dwarf_expr_context::execute_stack_op (const gdb_byte *op_ptr,
 	    else
 	      type = address_type;
 
-	    this->read_mem (buf, addr, addr_size);
+	    gdb::byte_vector buf (std::max ((ULONGEST) addr_size,
+					    type->length ()));
+
+	    this->read_mem (buf.data (), addr, addr_size);
 
 	    /* If the size of the object read from memory is different
 	       from the type length, we need to zero-extend it.  */
 	    if (type->length () != addr_size)
 	      {
 		ULONGEST datum =
-		  extract_unsigned_integer (buf, addr_size, byte_order);
+		  extract_unsigned_integer (buf.data (), addr_size,
+					    byte_order);
 
-		buf = (gdb_byte *) alloca (type->length ());
-		store_unsigned_integer (buf, type->length (),
+		store_unsigned_integer (buf.data (), type->length (),
 					byte_order, datum);
 	      }
 
-	    result_val = value_from_contents_and_address (type, buf, addr);
+	    result_val = value_from_contents_and_address (type, buf.data (),
+							  addr);
 	    break;
 	  }
 
