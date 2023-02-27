@@ -2443,7 +2443,7 @@ static void
 printf_c_string (struct ui_file *stream, const char *format,
 		 struct value *value)
 {
-  const gdb_byte *str;
+  gdb::byte_vector str;
 
   if (value->type ()->code () != TYPE_CODE_PTR
       && value->lval () == lval_internalvar
@@ -2455,11 +2455,10 @@ printf_c_string (struct ui_file *stream, const char *format,
 	 character.  This protects against corrupted C-style strings that lack
 	 the terminating null char.  It also allows Ada-style strings (not
 	 null terminated) to be printed without problems.  */
-      gdb_byte *tem_str = (gdb_byte *) alloca (len + 1);
+      str.resize (len + 1);
 
-      memcpy (tem_str, value->contents ().data (), len);
-      tem_str [len] = 0;
-      str = tem_str;
+      memcpy (str.data (), value->contents ().data (), len);
+      str [len] = 0;
     }
   else
     {
@@ -2474,31 +2473,30 @@ printf_c_string (struct ui_file *stream, const char *format,
 	  return;
 	}
 
-      /* This is a %s argument.  Find the length of the string.  */
-      size_t len;
-
-      for (len = 0;; len++)
+      /* This is a %s argument.  Build the string in STR which is
+	 currently empty.  */
+      gdb_assert (str.size () == 0);
+      for (size_t len = 0;; len++)
 	{
 	  gdb_byte c;
 
 	  QUIT;
 	  read_memory (tem + len, &c, 1);
+	  str.push_back (c);
 	  if (c == 0)
 	    break;
 	}
 
-      /* Copy the string contents into a string inside GDB.  */
-      gdb_byte *tem_str = (gdb_byte *) alloca (len + 1);
-
-      if (len != 0)
-	read_memory (tem, tem_str, len);
-      tem_str[len] = 0;
-      str = tem_str;
+      /* We will have passed through the above loop at least once, and will
+	 only exit the loop when we have pushed a zero byte onto the end of
+	 STR.  */
+      gdb_assert (str.size () > 0);
+      gdb_assert (str.back () == 0);
     }
 
   DIAGNOSTIC_PUSH
   DIAGNOSTIC_IGNORE_FORMAT_NONLITERAL
-    gdb_printf (stream, format, (char *) str);
+    gdb_printf (stream, format, (char *) str.data ());
   DIAGNOSTIC_POP
 }
 
@@ -2539,23 +2537,23 @@ printf_wide_c_string (struct ui_file *stream, const char *format,
 
       /* This is a %s argument.  Find the length of the string.  */
       enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-      gdb_byte *buf = (gdb_byte *) alloca (wcwidth);
+      gdb::byte_vector buf (wcwidth);
 
       for (len = 0;; len += wcwidth)
 	{
 	  QUIT;
-	  read_memory (tem + len, buf, wcwidth);
-	  if (extract_unsigned_integer (buf, wcwidth, byte_order) == 0)
+	  read_memory (tem + len, buf.data (), wcwidth);
+	  if (extract_unsigned_integer (buf.data (), wcwidth, byte_order) == 0)
 	    break;
 	}
 
       /* Copy the string contents into a string inside GDB.  */
-      gdb_byte *tem_str = (gdb_byte *) alloca (len + wcwidth);
+      gdb::byte_vector tem_str (len + wcwidth);
 
       if (len != 0)
-	read_memory (tem, tem_str, len);
+	read_memory (tem, tem_str.data (), len);
       memset (&tem_str[len], 0, wcwidth);
-      str = tem_str;
+      str = tem_str.data ();
     }
 
   auto_obstack output;
