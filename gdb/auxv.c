@@ -86,7 +86,6 @@ ld_so_xfer_auxv (gdb_byte *readbuf,
   struct type *ptr_type = builtin_type (target_gdbarch ())->builtin_data_ptr;
   size_t ptr_size = ptr_type->length ();
   size_t auxv_pair_size = 2 * ptr_size;
-  gdb_byte *ptr_buf = (gdb_byte *) alloca (ptr_size);
   LONGEST retval;
   size_t block;
 
@@ -123,10 +122,11 @@ ld_so_xfer_auxv (gdb_byte *readbuf,
      we might need a valgrind extension to make it work.  This is PR
      11440.  */
 
-  if (target_read_memory (pointer_address, ptr_buf, ptr_size) != 0)
+  gdb::byte_vector ptr_buf (ptr_size);
+  if (target_read_memory (pointer_address, ptr_buf.data (), ptr_size) != 0)
     return TARGET_XFER_E_IO;
 
-  data_address = extract_typed_address (ptr_buf, ptr_type);
+  data_address = extract_typed_address (ptr_buf.data (), ptr_type);
 
   /* Possibly still not initialized such as during an inferior
      startup.  */
@@ -151,11 +151,11 @@ ld_so_xfer_auxv (gdb_byte *readbuf,
 
   if (offset >= auxv_pair_size)
     {
-      if (target_read_memory (data_address - auxv_pair_size, ptr_buf,
+      if (target_read_memory (data_address - auxv_pair_size, ptr_buf.data (),
 			      ptr_size) != 0)
 	return TARGET_XFER_E_IO;
 
-      if (extract_typed_address (ptr_buf, ptr_type) == AT_NULL)
+      if (extract_typed_address (ptr_buf.data (), ptr_type) == AT_NULL)
 	return TARGET_XFER_EOF;
     }
 
