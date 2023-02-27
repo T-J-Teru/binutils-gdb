@@ -430,11 +430,9 @@ static void
 emit_numeric_character (struct type *type, unsigned long value,
 			struct obstack *output)
 {
-  gdb_byte *buffer;
-
-  buffer = (gdb_byte *) alloca (type->length ());
-  pack_long (buffer, type, value);
-  obstack_grow (output, buffer, type->length ());
+  gdb::byte_vector buffer (type->length ());
+  pack_long (buffer.data (), type, value);
+  obstack_grow (output, buffer.data (), type->length ());
 }
 
 /* Convert an octal escape sequence.  TYPE is the target character
