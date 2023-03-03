@@ -558,15 +558,15 @@ enum print_stop_action
 
 struct breakpoint_ops
 {
-  /* Create SALs from location spec, storing the result in
-     linespec_result.
-
-     For an explanation about the arguments, see the function
-     `create_sals_from_location_spec_default'.
+  /* Create SALs from LOCSPEC, storing the result in linespec_result
+     CANONICAL.  If SEARCH_PSPACE is not nullptr then only results in the
+     corresponding program space are returned.  If SEARCH_PSPACE is nullptr
+     then results for all program spaces are returned.
 
      This function is called inside `create_breakpoint'.  */
   void (*create_sals_from_location_spec) (location_spec *locspec,
-					  struct linespec_result *canonical);
+					  linespec_result *canonical,
+					  program_space *search_pspace);
 
   /* This method will be responsible for creating a breakpoint given its SALs.
      Usually, it just calls `create_breakpoints_sal' (for ordinary
@@ -698,8 +698,12 @@ struct breakpoint : public intrusive_list_node<breakpoint>
 
   /* Reevaluate a breakpoint.  This is necessary after symbols change
      (e.g., an executable or DSO was loaded, or the inferior just
-     started).  */
-  virtual void re_set ()
+     started).
+
+     FILTER_PSPACE is the program space in which symbols may have changed,
+     or can be nullptr to indicate that all program spaces may have
+     changed.  */
+  virtual void re_set (program_space *filter_pspace)
   {
     /* Nothing to re-set.  */
   }
@@ -927,7 +931,7 @@ struct code_breakpoint : public breakpoint
   /* Add a location for SAL to this breakpoint.  */
   bp_location *add_location (const symtab_and_line &sal);
 
-  void re_set () override;
+  void re_set (program_space *pspace) override;
   int insert_location (struct bp_location *) override;
   int remove_location (struct bp_location *,
 		       enum remove_bp_reason reason) override;
@@ -949,7 +953,7 @@ protected:
      struct program_space *search_pspace);
 
   /* Helper method that does the basic work of re_set.  */
-  void re_set_default ();
+  void re_set_default (program_space *pspace);
 
   /* Find the SaL locations corresponding to the given LOCATION.
      On return, FOUND will be 1 if any SaL was found, zero otherwise.  */
@@ -971,7 +975,7 @@ struct watchpoint : public breakpoint
 {
   using breakpoint::breakpoint;
 
-  void re_set () override;
+  void re_set (program_space *pspace) override;
   int insert_location (struct bp_location *) override;
   int remove_location (struct bp_location *,
 		       enum remove_bp_reason reason) override;

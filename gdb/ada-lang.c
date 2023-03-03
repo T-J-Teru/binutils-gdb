@@ -12176,7 +12176,7 @@ struct ada_catchpoint : public code_breakpoint
   }
 
   struct bp_location *allocate_location () override;
-  void re_set () override;
+  void re_set (program_space *pspace) override;
   void check_status (struct bpstat *bs) override;
   enum print_stop_action print_it (const bpstat *bs) const override;
   bool print_one (const bp_location **) const override;
@@ -12268,11 +12268,11 @@ ada_catchpoint::allocate_location ()
    catchpoint kinds.  */
 
 void
-ada_catchpoint::re_set ()
+ada_catchpoint::re_set (program_space *pspace)
 {
   /* Call the base class's method.  This updates the catchpoint's
      locations.  */
-  this->code_breakpoint::re_set ();
+  this->code_breakpoint::re_set (pspace);
 
   /* Reparse the exception conditional expressions.  One for each
      location.  */
