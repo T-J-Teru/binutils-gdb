@@ -8488,8 +8488,25 @@ code_breakpoint::code_breakpoint (struct gdbarch *gdbarch_,
 	warning (_("Couldn't determine the static tracepoint marker to probe"));
     }
 
+  /* Find the program space in which a thread-specific breakpoint applies.
+     We'll use this later to reduce the number of locations we add.  */
+  struct program_space *pspace = nullptr;
+  if (thread != -1)
+    {
+      struct thread_info *thr = find_thread_global_id (thread);
+      gdb_assert (thr != nullptr);
+      gdb_assert (thr->inf != nullptr);
+      pspace = thr->inf->pspace;
+    }
+
   for (const auto &sal : sals)
     {
+      /* If we have a thread-specific breakpoint then PSPACE will not be
+	 nullptr.  If that is the case then only add a location for SAL if
+	 it is in the correct program space.  */
+      if (pspace != nullptr && sal.pspace != pspace)
+	continue;
+
       if (from_tty)
 	{
 	  struct gdbarch *loc_gdbarch = get_sal_arch (sal);
@@ -12722,9 +12739,26 @@ update_breakpoint_locations (code_breakpoint *b,
 
   existing_locations = hoist_existing_locations (b, filter_pspace);
 
+  /* Find the program space in which a thread-specific breakpoint applies.
+     We'll use this later to reduce the number of locations we add.  */
+  struct program_space *pspace = nullptr;
+  if (b->thread != -1)
+    {
+      struct thread_info *thr = find_thread_global_id (b->thread);
+      gdb_assert (thr != nullptr);
+      gdb_assert (thr->inf != nullptr);
+      pspace = thr->inf->pspace;
+    }
+
   for (const auto &sal : sals)
     {
       struct bp_location *new_loc;
+
+      /* If we have a thread-specific breakpoint then PSPACE will not be
+	 nullptr.  If that is the case then only add a location for SAL if
+	 it is in the correct program space.  */
+      if (pspace != nullptr && sal.pspace != pspace)
+	continue;
 
       switch_to_program_space_and_thread (sal.pspace);
 
