@@ -96,6 +96,12 @@ show always-read-ctf
    without a thread restriction.  The same is also true for the 'task'
    field of an Ada task-specific breakpoint.
 
+** It is no longer possible to create a thread-specific breakpoint for
+   a thread that doesn't exist using '-break-insert -p ID'.  Creating
+   breakpoints for non-existent threads is not allowed when using the
+   CLI, that the MI allowed it was a long standing bug, which has now
+   been fixed.
+
 *** Changes in GDB 13
 
 * MI version 1 is deprecated, and will be removed in GDB 14.
