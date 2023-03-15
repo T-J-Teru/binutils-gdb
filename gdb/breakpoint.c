@@ -9000,6 +9000,10 @@ create_breakpoint (struct gdbarch *gdbarch,
 
   gdb_assert (ops != NULL);
 
+  /* If PARSE_EXTRA is true then the thread-id will be parsed from
+     EXTRA_STRING, otherwise, ensure THREAD is valid.  */
+  gdb_assert (parse_extra || thread == -1 || thread > 0);
+
   /* If extra_string isn't useful, set it to NULL.  */
   if (extra_string != NULL && *extra_string == '\0')
     extra_string = NULL;

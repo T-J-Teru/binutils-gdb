@@ -1589,6 +1589,12 @@ enum breakpoint_create_flags
    the FORCE_CONDITION parameter is ignored and the corresponding argument
    is parsed from EXTRA_STRING.
 
+   The THREAD should be a global thread number, the created breakpoint will
+   only apply for that thread.  If the breakpoint should apply for all
+   threads then pass -1.  However, if PARSE_EXTRA is non-zero then the
+   THREAD parameter is ignored and an optional thread number will be parsed
+   from EXTRA_STRING.
+
    If INTERNAL is non-zero, the breakpoint number will be allocated
    from the internal breakpoint count.
 
