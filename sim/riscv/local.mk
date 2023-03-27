@@ -46,3 +46,11 @@ noinst_LIBRARIES += %D%/libsim.a
 	$(SIM_COMMON_LIBS)
 
 noinst_PROGRAMS += %D%/run
+
+%C%_gdbsim_%C%_SOURCES =
+%C%_gdbsim_%C%_LDADD = \
+	server/libserver.a \
+	%D%/libsim.a \
+	$(SIM_COMMON_LIBS)
+
+noinst_PROGRAMS += %D%/gdbsim-%C%

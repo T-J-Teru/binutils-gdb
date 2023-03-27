@@ -289,7 +289,8 @@ TESTS = testsuite/common/bits32m0$(EXEEXT) \
 @SIM_ENABLE_ARCH_pru_TRUE@am__append_93 = pru/libsim.a
 @SIM_ENABLE_ARCH_pru_TRUE@am__append_94 = pru/run
 @SIM_ENABLE_ARCH_riscv_TRUE@am__append_95 = riscv/libsim.a
-@SIM_ENABLE_ARCH_riscv_TRUE@am__append_96 = riscv/run
+@SIM_ENABLE_ARCH_riscv_TRUE@am__append_96 = riscv/run \
+@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/gdbsim-riscv
 @SIM_ENABLE_ARCH_rl78_TRUE@am__append_97 = rl78/libsim.a
 @SIM_ENABLE_ARCH_rl78_TRUE@am__append_98 = rl78/run
 @SIM_ENABLE_ARCH_rx_TRUE@am__append_99 = rx/libsim.a
@@ -361,7 +362,39 @@ CONFIG_CLEAN_FILES = aarch64/.gdbinit arm/.gdbinit avr/.gdbinit \
 	rl78/.gdbinit rx/.gdbinit sh/.gdbinit erc32/.gdbinit \
 	v850/.gdbinit example-synacor/.gdbinit arch-subdir.mk .gdbinit
 CONFIG_CLEAN_VPATH_FILES =
-LIBRARIES = $(noinst_LIBRARIES)
+am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
+am__vpath_adj = case $$p in \
+    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
+    *) f=$$p;; \
+  esac;
+am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
+am__install_max = 40
+am__nobase_strip_setup = \
+  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
+am__nobase_strip = \
+  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
+am__nobase_list = $(am__nobase_strip_setup); \
+  for p in $$list; do echo "$$p $$p"; done | \
+  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
+  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
+    if (++n[$$2] == $(am__install_max)) \
+      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
+    END { for (dir in files) print dir, files[dir] }'
+am__base_list = \
+  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
+  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
+am__uninstall_files_from_dir = { \
+  test -z "$$files" \
+    || { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
+    || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
+         $(am__cd) "$$dir" && rm -f $$files; }; \
+  }
+am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(armdocdir)" \
+	"$(DESTDIR)$(dtbdir)" "$(DESTDIR)$(erc32docdir)" \
+	"$(DESTDIR)$(frvdocdir)" "$(DESTDIR)$(or1kdocdir)" \
+	"$(DESTDIR)$(ppcdocdir)" "$(DESTDIR)$(rxdocdir)" \
+	"$(DESTDIR)$(pkgincludedir)"
+LIBRARIES = $(lib_LIBRARIES) $(noinst_LIBRARIES)
 ARFLAGS = cru
 AM_V_AR = $(am__v_AR_@AM_V@)
 am__v_AR_ = $(am__v_AR_@AM_DEFAULT_V@)
@@ -856,6 +889,10 @@ rx_libsim_a_AR = $(AR) $(ARFLAGS)
 @SIM_ENABLE_ARCH_rx_TRUE@	rx/modules.$(OBJEXT)
 rx_libsim_a_OBJECTS = $(am_rx_libsim_a_OBJECTS) \
 	$(nodist_rx_libsim_a_OBJECTS)
+server_libserver_a_AR = $(AR) $(ARFLAGS)
+server_libserver_a_LIBADD =
+am_server_libserver_a_OBJECTS = server/main.$(OBJEXT)
+server_libserver_a_OBJECTS = $(am_server_libserver_a_OBJECTS)
 sh_libsim_a_AR = $(AR) $(ARFLAGS)
 @SIM_ENABLE_ARCH_sh_TRUE@sh_libsim_a_DEPENDENCIES = sh/interp.o \
 @SIM_ENABLE_ARCH_sh_TRUE@	$(patsubst \
@@ -928,7 +965,8 @@ am__EXEEXT_7 = testsuite/common/bits32m0$(EXEEXT) \
 @SIM_ENABLE_ARCH_or1k_TRUE@am__EXEEXT_33 = or1k/run$(EXEEXT)
 @SIM_ENABLE_ARCH_ppc_TRUE@am__EXEEXT_34 = ppc/run$(EXEEXT)
 @SIM_ENABLE_ARCH_pru_TRUE@am__EXEEXT_35 = pru/run$(EXEEXT)
-@SIM_ENABLE_ARCH_riscv_TRUE@am__EXEEXT_36 = riscv/run$(EXEEXT)
+@SIM_ENABLE_ARCH_riscv_TRUE@am__EXEEXT_36 = riscv/run$(EXEEXT) \
+@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/gdbsim-riscv$(EXEEXT)
 @SIM_ENABLE_ARCH_rl78_TRUE@am__EXEEXT_37 = rl78/run$(EXEEXT)
 @SIM_ENABLE_ARCH_rx_TRUE@am__EXEEXT_38 = rx/run$(EXEEXT)
 @SIM_ENABLE_ARCH_sh_TRUE@am__EXEEXT_39 = sh/run$(EXEEXT)
@@ -1109,6 +1147,11 @@ am_pru_run_OBJECTS =
 pru_run_OBJECTS = $(am_pru_run_OBJECTS)
 @SIM_ENABLE_ARCH_pru_TRUE@pru_run_DEPENDENCIES = pru/nrun.o \
 @SIM_ENABLE_ARCH_pru_TRUE@	pru/libsim.a $(am__DEPENDENCIES_4)
+am_riscv_gdbsim_riscv_OBJECTS =
+riscv_gdbsim_riscv_OBJECTS = $(am_riscv_gdbsim_riscv_OBJECTS)
+@SIM_ENABLE_ARCH_riscv_TRUE@riscv_gdbsim_riscv_DEPENDENCIES =  \
+@SIM_ENABLE_ARCH_riscv_TRUE@	server/libserver.a riscv/libsim.a \
+@SIM_ENABLE_ARCH_riscv_TRUE@	$(am__DEPENDENCIES_4)
 am_riscv_run_OBJECTS =
 riscv_run_OBJECTS = $(am_riscv_run_OBJECTS)
 @SIM_ENABLE_ARCH_riscv_TRUE@riscv_run_DEPENDENCIES = riscv/nrun.o \
@@ -1225,14 +1268,14 @@ SOURCES = $(aarch64_libsim_a_SOURCES) \
 	$(nodist_pru_libsim_a_SOURCES) $(riscv_libsim_a_SOURCES) \
 	$(nodist_riscv_libsim_a_SOURCES) $(rl78_libsim_a_SOURCES) \
 	$(nodist_rl78_libsim_a_SOURCES) $(rx_libsim_a_SOURCES) \
-	$(nodist_rx_libsim_a_SOURCES) $(sh_libsim_a_SOURCES) \
-	$(nodist_sh_libsim_a_SOURCES) $(v850_libsim_a_SOURCES) \
-	$(nodist_v850_libsim_a_SOURCES) $(aarch64_run_SOURCES) \
-	$(arm_run_SOURCES) $(avr_run_SOURCES) $(bfin_run_SOURCES) \
-	$(bpf_run_SOURCES) $(cr16_gencode_SOURCES) $(cr16_run_SOURCES) \
-	$(cris_run_SOURCES) $(cris_rvdummy_SOURCES) \
-	$(d10v_gencode_SOURCES) $(d10v_run_SOURCES) \
-	$(erc32_run_SOURCES) erc32/sis.c \
+	$(nodist_rx_libsim_a_SOURCES) $(server_libserver_a_SOURCES) \
+	$(sh_libsim_a_SOURCES) $(nodist_sh_libsim_a_SOURCES) \
+	$(v850_libsim_a_SOURCES) $(nodist_v850_libsim_a_SOURCES) \
+	$(aarch64_run_SOURCES) $(arm_run_SOURCES) $(avr_run_SOURCES) \
+	$(bfin_run_SOURCES) $(bpf_run_SOURCES) $(cr16_gencode_SOURCES) \
+	$(cr16_run_SOURCES) $(cris_run_SOURCES) \
+	$(cris_rvdummy_SOURCES) $(d10v_gencode_SOURCES) \
+	$(d10v_run_SOURCES) $(erc32_run_SOURCES) erc32/sis.c \
 	$(example_synacor_run_SOURCES) $(frv_run_SOURCES) \
 	$(ft32_run_SOURCES) $(h8300_run_SOURCES) \
 	$(igen_filter_SOURCES) $(igen_gen_SOURCES) \
@@ -1245,8 +1288,9 @@ SOURCES = $(aarch64_libsim_a_SOURCES) \
 	$(microblaze_run_SOURCES) $(mips_run_SOURCES) \
 	$(mn10300_run_SOURCES) $(moxie_run_SOURCES) \
 	$(msp430_run_SOURCES) $(or1k_run_SOURCES) $(ppc_run_SOURCES) \
-	$(pru_run_SOURCES) $(riscv_run_SOURCES) $(rl78_run_SOURCES) \
-	$(rx_run_SOURCES) $(sh_gencode_SOURCES) $(sh_run_SOURCES) \
+	$(pru_run_SOURCES) $(riscv_gdbsim_riscv_SOURCES) \
+	$(riscv_run_SOURCES) $(rl78_run_SOURCES) $(rx_run_SOURCES) \
+	$(sh_gencode_SOURCES) $(sh_run_SOURCES) \
 	testsuite/common/alu-tst.c testsuite/common/bits-gen.c \
 	testsuite/common/bits32m0.c testsuite/common/bits32m31.c \
 	testsuite/common/bits64m0.c testsuite/common/bits64m63.c \
@@ -1264,37 +1308,6 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
-am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
-am__vpath_adj = case $$p in \
-    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
-    *) f=$$p;; \
-  esac;
-am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
-am__install_max = 40
-am__nobase_strip_setup = \
-  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
-am__nobase_strip = \
-  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
-am__nobase_list = $(am__nobase_strip_setup); \
-  for p in $$list; do echo "$$p $$p"; done | \
-  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
-  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
-    if (++n[$$2] == $(am__install_max)) \
-      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
-    END { for (dir in files) print dir, files[dir] }'
-am__base_list = \
-  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
-  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
-am__uninstall_files_from_dir = { \
-  test -z "$$files" \
-    || { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
-    || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
-         $(am__cd) "$$dir" && rm -f $$files; }; \
-  }
-am__installdirs = "$(DESTDIR)$(armdocdir)" "$(DESTDIR)$(dtbdir)" \
-	"$(DESTDIR)$(erc32docdir)" "$(DESTDIR)$(frvdocdir)" \
-	"$(DESTDIR)$(or1kdocdir)" "$(DESTDIR)$(ppcdocdir)" \
-	"$(DESTDIR)$(rxdocdir)" "$(DESTDIR)$(pkgincludedir)"
 DATA = $(armdoc_DATA) $(dtb_DATA) $(erc32doc_DATA) $(frvdoc_DATA) \
 	$(or1kdoc_DATA) $(ppcdoc_DATA) $(rxdoc_DATA)
 am__pkginclude_HEADERS_DIST = $(srcroot)/include/sim/callback.h \
@@ -1999,6 +2012,10 @@ testsuite_common_CPPFLAGS = \
 	-I$(srcdir)/common \
 	-I$(srcroot)/include \
 	-I../bfd
+
+lib_LIBRARIES = server/libserver.a
+server_libserver_a_SOURCES = \
+	server/main.c
 
 @SIM_ENABLE_ARCH_aarch64_TRUE@nodist_aarch64_libsim_a_SOURCES = \
 @SIM_ENABLE_ARCH_aarch64_TRUE@	aarch64/modules.c
@@ -2938,6 +2955,12 @@ testsuite_common_CPPFLAGS = \
 @SIM_ENABLE_ARCH_riscv_TRUE@	riscv/libsim.a \
 @SIM_ENABLE_ARCH_riscv_TRUE@	$(SIM_COMMON_LIBS)
 
+@SIM_ENABLE_ARCH_riscv_TRUE@riscv_gdbsim_riscv_SOURCES = 
+@SIM_ENABLE_ARCH_riscv_TRUE@riscv_gdbsim_riscv_LDADD = \
+@SIM_ENABLE_ARCH_riscv_TRUE@	server/libserver.a \
+@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/libsim.a \
+@SIM_ENABLE_ARCH_riscv_TRUE@	$(SIM_COMMON_LIBS)
+
 @SIM_ENABLE_ARCH_rl78_TRUE@nodist_rl78_libsim_a_SOURCES = \
 @SIM_ENABLE_ARCH_rl78_TRUE@	rl78/modules.c
 
@@ -3066,7 +3089,7 @@ all: $(BUILT_SOURCES) config.h
 .SUFFIXES: .c .lo .log .o .obj .test .test$(EXEEXT) .trs
 am--refresh: Makefile
 	@:
-$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(srcdir)/common/local.mk $(srcdir)/igen/local.mk $(srcdir)/testsuite/local.mk $(srcdir)/testsuite/common/local.mk $(srcdir)/aarch64/local.mk $(srcdir)/arm/local.mk $(srcdir)/avr/local.mk $(srcdir)/bfin/local.mk $(srcdir)/bpf/local.mk $(srcdir)/cr16/local.mk $(srcdir)/cris/local.mk $(srcdir)/d10v/local.mk $(srcdir)/erc32/local.mk $(srcdir)/example-synacor/local.mk $(srcdir)/frv/local.mk $(srcdir)/ft32/local.mk $(srcdir)/h8300/local.mk $(srcdir)/iq2000/local.mk $(srcdir)/lm32/local.mk $(srcdir)/m32c/local.mk $(srcdir)/m32r/local.mk $(srcdir)/m68hc11/local.mk $(srcdir)/mcore/local.mk $(srcdir)/microblaze/local.mk $(srcdir)/mips/local.mk $(srcdir)/mn10300/local.mk $(srcdir)/moxie/local.mk $(srcdir)/msp430/local.mk $(srcdir)/or1k/local.mk $(srcdir)/ppc/local.mk $(srcdir)/pru/local.mk $(srcdir)/riscv/local.mk $(srcdir)/rl78/local.mk $(srcdir)/rx/local.mk $(srcdir)/sh/local.mk $(srcdir)/v850/local.mk $(am__configure_deps)
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(srcdir)/common/local.mk $(srcdir)/igen/local.mk $(srcdir)/testsuite/local.mk $(srcdir)/testsuite/common/local.mk $(srcdir)/server/local.mk $(srcdir)/aarch64/local.mk $(srcdir)/arm/local.mk $(srcdir)/avr/local.mk $(srcdir)/bfin/local.mk $(srcdir)/bpf/local.mk $(srcdir)/cr16/local.mk $(srcdir)/cris/local.mk $(srcdir)/d10v/local.mk $(srcdir)/erc32/local.mk $(srcdir)/example-synacor/local.mk $(srcdir)/frv/local.mk $(srcdir)/ft32/local.mk $(srcdir)/h8300/local.mk $(srcdir)/iq2000/local.mk $(srcdir)/lm32/local.mk $(srcdir)/m32c/local.mk $(srcdir)/m32r/local.mk $(srcdir)/m68hc11/local.mk $(srcdir)/mcore/local.mk $(srcdir)/microblaze/local.mk $(srcdir)/mips/local.mk $(srcdir)/mn10300/local.mk $(srcdir)/moxie/local.mk $(srcdir)/msp430/local.mk $(srcdir)/or1k/local.mk $(srcdir)/ppc/local.mk $(srcdir)/pru/local.mk $(srcdir)/riscv/local.mk $(srcdir)/rl78/local.mk $(srcdir)/rx/local.mk $(srcdir)/sh/local.mk $(srcdir)/v850/local.mk $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -3088,7 +3111,7 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe)'; \
 	    cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe);; \
 	esac;
-$(srcdir)/common/local.mk $(srcdir)/igen/local.mk $(srcdir)/testsuite/local.mk $(srcdir)/testsuite/common/local.mk $(srcdir)/aarch64/local.mk $(srcdir)/arm/local.mk $(srcdir)/avr/local.mk $(srcdir)/bfin/local.mk $(srcdir)/bpf/local.mk $(srcdir)/cr16/local.mk $(srcdir)/cris/local.mk $(srcdir)/d10v/local.mk $(srcdir)/erc32/local.mk $(srcdir)/example-synacor/local.mk $(srcdir)/frv/local.mk $(srcdir)/ft32/local.mk $(srcdir)/h8300/local.mk $(srcdir)/iq2000/local.mk $(srcdir)/lm32/local.mk $(srcdir)/m32c/local.mk $(srcdir)/m32r/local.mk $(srcdir)/m68hc11/local.mk $(srcdir)/mcore/local.mk $(srcdir)/microblaze/local.mk $(srcdir)/mips/local.mk $(srcdir)/mn10300/local.mk $(srcdir)/moxie/local.mk $(srcdir)/msp430/local.mk $(srcdir)/or1k/local.mk $(srcdir)/ppc/local.mk $(srcdir)/pru/local.mk $(srcdir)/riscv/local.mk $(srcdir)/rl78/local.mk $(srcdir)/rx/local.mk $(srcdir)/sh/local.mk $(srcdir)/v850/local.mk $(am__empty):
+$(srcdir)/common/local.mk $(srcdir)/igen/local.mk $(srcdir)/testsuite/local.mk $(srcdir)/testsuite/common/local.mk $(srcdir)/server/local.mk $(srcdir)/aarch64/local.mk $(srcdir)/arm/local.mk $(srcdir)/avr/local.mk $(srcdir)/bfin/local.mk $(srcdir)/bpf/local.mk $(srcdir)/cr16/local.mk $(srcdir)/cris/local.mk $(srcdir)/d10v/local.mk $(srcdir)/erc32/local.mk $(srcdir)/example-synacor/local.mk $(srcdir)/frv/local.mk $(srcdir)/ft32/local.mk $(srcdir)/h8300/local.mk $(srcdir)/iq2000/local.mk $(srcdir)/lm32/local.mk $(srcdir)/m32c/local.mk $(srcdir)/m32r/local.mk $(srcdir)/m68hc11/local.mk $(srcdir)/mcore/local.mk $(srcdir)/microblaze/local.mk $(srcdir)/mips/local.mk $(srcdir)/mn10300/local.mk $(srcdir)/moxie/local.mk $(srcdir)/msp430/local.mk $(srcdir)/or1k/local.mk $(srcdir)/ppc/local.mk $(srcdir)/pru/local.mk $(srcdir)/riscv/local.mk $(srcdir)/rl78/local.mk $(srcdir)/rx/local.mk $(srcdir)/sh/local.mk $(srcdir)/v850/local.mk $(am__empty):
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	$(SHELL) ./config.status --recheck
@@ -3181,6 +3204,37 @@ arch-subdir.mk: $(top_builddir)/config.status $(srcdir)/arch-subdir.mk.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
 .gdbinit: $(top_builddir)/config.status $(srcdir)/gdbinit.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
+install-libLIBRARIES: $(lib_LIBRARIES)
+	@$(NORMAL_INSTALL)
+	@list='$(lib_LIBRARIES)'; test -n "$(libdir)" || list=; \
+	list2=; for p in $$list; do \
+	  if test -f $$p; then \
+	    list2="$$list2 $$p"; \
+	  else :; fi; \
+	done; \
+	test -z "$$list2" || { \
+	  echo " $(MKDIR_P) '$(DESTDIR)$(libdir)'"; \
+	  $(MKDIR_P) "$(DESTDIR)$(libdir)" || exit 1; \
+	  echo " $(INSTALL_DATA) $$list2 '$(DESTDIR)$(libdir)'"; \
+	  $(INSTALL_DATA) $$list2 "$(DESTDIR)$(libdir)" || exit $$?; }
+	@$(POST_INSTALL)
+	@list='$(lib_LIBRARIES)'; test -n "$(libdir)" || list=; \
+	for p in $$list; do \
+	  if test -f $$p; then \
+	    $(am__strip_dir) \
+	    echo " ( cd '$(DESTDIR)$(libdir)' && $(RANLIB) $$f )"; \
+	    ( cd "$(DESTDIR)$(libdir)" && $(RANLIB) $$f ) || exit $$?; \
+	  else :; fi; \
+	done
+
+uninstall-libLIBRARIES:
+	@$(NORMAL_UNINSTALL)
+	@list='$(lib_LIBRARIES)'; test -n "$(libdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(libdir)'; $(am__uninstall_files_from_dir)
+
+clean-libLIBRARIES:
+	-test -z "$(lib_LIBRARIES)" || rm -f $(lib_LIBRARIES)
 
 clean-noinstLIBRARIES:
 	-test -z "$(noinst_LIBRARIES)" || rm -f $(noinst_LIBRARIES)
@@ -3628,6 +3682,19 @@ rx/libsim.a: $(rx_libsim_a_OBJECTS) $(rx_libsim_a_DEPENDENCIES) $(EXTRA_rx_libsi
 	$(AM_V_at)-rm -f rx/libsim.a
 	$(AM_V_AR)$(rx_libsim_a_AR) rx/libsim.a $(rx_libsim_a_OBJECTS) $(rx_libsim_a_LIBADD)
 	$(AM_V_at)$(RANLIB) rx/libsim.a
+server/$(am__dirstamp):
+	@$(MKDIR_P) server
+	@: > server/$(am__dirstamp)
+server/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) server/$(DEPDIR)
+	@: > server/$(DEPDIR)/$(am__dirstamp)
+server/main.$(OBJEXT): server/$(am__dirstamp) \
+	server/$(DEPDIR)/$(am__dirstamp)
+
+server/libserver.a: $(server_libserver_a_OBJECTS) $(server_libserver_a_DEPENDENCIES) $(EXTRA_server_libserver_a_DEPENDENCIES) server/$(am__dirstamp)
+	$(AM_V_at)-rm -f server/libserver.a
+	$(AM_V_AR)$(server_libserver_a_AR) server/libserver.a $(server_libserver_a_OBJECTS) $(server_libserver_a_LIBADD)
+	$(AM_V_at)$(RANLIB) server/libserver.a
 sh/$(am__dirstamp):
 	@$(MKDIR_P) sh
 	@: > sh/$(am__dirstamp)
@@ -3845,6 +3912,10 @@ pru/run$(EXEEXT): $(pru_run_OBJECTS) $(pru_run_DEPENDENCIES) $(EXTRA_pru_run_DEP
 	@rm -f pru/run$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(pru_run_OBJECTS) $(pru_run_LDADD) $(LIBS)
 
+riscv/gdbsim-riscv$(EXEEXT): $(riscv_gdbsim_riscv_OBJECTS) $(riscv_gdbsim_riscv_DEPENDENCIES) $(EXTRA_riscv_gdbsim_riscv_DEPENDENCIES) riscv/$(am__dirstamp)
+	@rm -f riscv/gdbsim-riscv$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(riscv_gdbsim_riscv_OBJECTS) $(riscv_gdbsim_riscv_LDADD) $(LIBS)
+
 riscv/run$(EXEEXT): $(riscv_run_OBJECTS) $(riscv_run_DEPENDENCIES) $(EXTRA_riscv_run_DEPENDENCIES) riscv/$(am__dirstamp)
 	@rm -f riscv/run$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(riscv_run_OBJECTS) $(riscv_run_LDADD) $(LIBS)
@@ -3925,6 +3996,7 @@ mostlyclean-compile:
 	-rm -f riscv/*.$(OBJEXT)
 	-rm -f rl78/*.$(OBJEXT)
 	-rm -f rx/*.$(OBJEXT)
+	-rm -f server/*.$(OBJEXT)
 	-rm -f sh/*.$(OBJEXT)
 	-rm -f testsuite/common/*.$(OBJEXT)
 	-rm -f v850/*.$(OBJEXT)
@@ -3994,6 +4066,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@riscv/$(DEPDIR)/modules.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@rl78/$(DEPDIR)/modules.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@rx/$(DEPDIR)/modules.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@server/$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sh/$(DEPDIR)/gencode.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sh/$(DEPDIR)/modules.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@testsuite/common/$(DEPDIR)/alu-tst.Po@am__quote@
@@ -4576,7 +4649,7 @@ check: $(BUILT_SOURCES)
 all-am: Makefile $(LIBRARIES) $(PROGRAMS) $(DATA) $(HEADERS) config.h
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(armdocdir)" "$(DESTDIR)$(dtbdir)" "$(DESTDIR)$(erc32docdir)" "$(DESTDIR)$(frvdocdir)" "$(DESTDIR)$(or1kdocdir)" "$(DESTDIR)$(ppcdocdir)" "$(DESTDIR)$(rxdocdir)" "$(DESTDIR)$(pkgincludedir)"; do \
+	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(armdocdir)" "$(DESTDIR)$(dtbdir)" "$(DESTDIR)$(erc32docdir)" "$(DESTDIR)$(frvdocdir)" "$(DESTDIR)$(or1kdocdir)" "$(DESTDIR)$(ppcdocdir)" "$(DESTDIR)$(rxdocdir)" "$(DESTDIR)$(pkgincludedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: $(BUILT_SOURCES)
@@ -4674,6 +4747,8 @@ distclean-generic:
 	-rm -f rl78/$(am__dirstamp)
 	-rm -f rx/$(DEPDIR)/$(am__dirstamp)
 	-rm -f rx/$(am__dirstamp)
+	-rm -f server/$(DEPDIR)/$(am__dirstamp)
+	-rm -f server/$(am__dirstamp)
 	-rm -f sh/$(DEPDIR)/$(am__dirstamp)
 	-rm -f sh/$(am__dirstamp)
 	-rm -f testsuite/common/$(DEPDIR)/$(am__dirstamp)
@@ -4688,12 +4763,13 @@ maintainer-clean-generic:
 	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 clean: clean-recursive
 
-clean-am: clean-checkPROGRAMS clean-generic clean-libtool \
-	clean-noinstLIBRARIES clean-noinstPROGRAMS mostlyclean-am
+clean-am: clean-checkPROGRAMS clean-generic clean-libLIBRARIES \
+	clean-libtool clean-noinstLIBRARIES clean-noinstPROGRAMS \
+	mostlyclean-am
 
 distclean: distclean-recursive
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
-	-rm -rf aarch64/$(DEPDIR) arm/$(DEPDIR) avr/$(DEPDIR) bfin/$(DEPDIR) bpf/$(DEPDIR) common/$(DEPDIR) cr16/$(DEPDIR) cris/$(DEPDIR) d10v/$(DEPDIR) erc32/$(DEPDIR) example-synacor/$(DEPDIR) frv/$(DEPDIR) ft32/$(DEPDIR) h8300/$(DEPDIR) igen/$(DEPDIR) iq2000/$(DEPDIR) lm32/$(DEPDIR) m32c/$(DEPDIR) m32r/$(DEPDIR) m68hc11/$(DEPDIR) mcore/$(DEPDIR) microblaze/$(DEPDIR) mips/$(DEPDIR) mn10300/$(DEPDIR) moxie/$(DEPDIR) msp430/$(DEPDIR) or1k/$(DEPDIR) pru/$(DEPDIR) riscv/$(DEPDIR) rl78/$(DEPDIR) rx/$(DEPDIR) sh/$(DEPDIR) testsuite/common/$(DEPDIR) v850/$(DEPDIR)
+	-rm -rf aarch64/$(DEPDIR) arm/$(DEPDIR) avr/$(DEPDIR) bfin/$(DEPDIR) bpf/$(DEPDIR) common/$(DEPDIR) cr16/$(DEPDIR) cris/$(DEPDIR) d10v/$(DEPDIR) erc32/$(DEPDIR) example-synacor/$(DEPDIR) frv/$(DEPDIR) ft32/$(DEPDIR) h8300/$(DEPDIR) igen/$(DEPDIR) iq2000/$(DEPDIR) lm32/$(DEPDIR) m32c/$(DEPDIR) m32r/$(DEPDIR) m68hc11/$(DEPDIR) mcore/$(DEPDIR) microblaze/$(DEPDIR) mips/$(DEPDIR) mn10300/$(DEPDIR) moxie/$(DEPDIR) msp430/$(DEPDIR) or1k/$(DEPDIR) pru/$(DEPDIR) riscv/$(DEPDIR) rl78/$(DEPDIR) rx/$(DEPDIR) server/$(DEPDIR) sh/$(DEPDIR) testsuite/common/$(DEPDIR) v850/$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-DEJAGNU distclean-compile \
 	distclean-generic distclean-hdr distclean-libtool \
@@ -4719,7 +4795,7 @@ install-dvi: install-dvi-recursive
 
 install-dvi-am:
 
-install-exec-am: install-exec-local
+install-exec-am: install-exec-local install-libLIBRARIES
 
 install-html: install-html-recursive
 
@@ -4744,7 +4820,7 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
 	-rm -rf $(top_srcdir)/autom4te.cache
-	-rm -rf aarch64/$(DEPDIR) arm/$(DEPDIR) avr/$(DEPDIR) bfin/$(DEPDIR) bpf/$(DEPDIR) common/$(DEPDIR) cr16/$(DEPDIR) cris/$(DEPDIR) d10v/$(DEPDIR) erc32/$(DEPDIR) example-synacor/$(DEPDIR) frv/$(DEPDIR) ft32/$(DEPDIR) h8300/$(DEPDIR) igen/$(DEPDIR) iq2000/$(DEPDIR) lm32/$(DEPDIR) m32c/$(DEPDIR) m32r/$(DEPDIR) m68hc11/$(DEPDIR) mcore/$(DEPDIR) microblaze/$(DEPDIR) mips/$(DEPDIR) mn10300/$(DEPDIR) moxie/$(DEPDIR) msp430/$(DEPDIR) or1k/$(DEPDIR) pru/$(DEPDIR) riscv/$(DEPDIR) rl78/$(DEPDIR) rx/$(DEPDIR) sh/$(DEPDIR) testsuite/common/$(DEPDIR) v850/$(DEPDIR)
+	-rm -rf aarch64/$(DEPDIR) arm/$(DEPDIR) avr/$(DEPDIR) bfin/$(DEPDIR) bpf/$(DEPDIR) common/$(DEPDIR) cr16/$(DEPDIR) cris/$(DEPDIR) d10v/$(DEPDIR) erc32/$(DEPDIR) example-synacor/$(DEPDIR) frv/$(DEPDIR) ft32/$(DEPDIR) h8300/$(DEPDIR) igen/$(DEPDIR) iq2000/$(DEPDIR) lm32/$(DEPDIR) m32c/$(DEPDIR) m32r/$(DEPDIR) m68hc11/$(DEPDIR) mcore/$(DEPDIR) microblaze/$(DEPDIR) mips/$(DEPDIR) mn10300/$(DEPDIR) moxie/$(DEPDIR) msp430/$(DEPDIR) or1k/$(DEPDIR) pru/$(DEPDIR) riscv/$(DEPDIR) rl78/$(DEPDIR) rx/$(DEPDIR) server/$(DEPDIR) sh/$(DEPDIR) testsuite/common/$(DEPDIR) v850/$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
@@ -4762,34 +4838,37 @@ ps: ps-recursive
 ps-am:
 
 uninstall-am: uninstall-armdocDATA uninstall-dtbDATA \
-	uninstall-erc32docDATA uninstall-frvdocDATA uninstall-local \
-	uninstall-or1kdocDATA uninstall-pkgincludeHEADERS \
-	uninstall-ppcdocDATA uninstall-rxdocDATA
+	uninstall-erc32docDATA uninstall-frvdocDATA \
+	uninstall-libLIBRARIES uninstall-local uninstall-or1kdocDATA \
+	uninstall-pkgincludeHEADERS uninstall-ppcdocDATA \
+	uninstall-rxdocDATA
 
 .MAKE: $(am__recursive_targets) all check check-am install install-am \
 	install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am \
 	am--refresh check check-DEJAGNU check-TESTS check-am clean \
-	clean-checkPROGRAMS clean-cscope clean-generic clean-libtool \
-	clean-noinstLIBRARIES clean-noinstPROGRAMS cscope \
-	cscopelist-am ctags ctags-am distclean distclean-DEJAGNU \
-	distclean-compile distclean-generic distclean-hdr \
-	distclean-libtool distclean-tags dvi dvi-am html html-am info \
-	info-am install install-am install-armdocDATA install-data \
-	install-data-am install-data-local install-dtbDATA install-dvi \
-	install-dvi-am install-erc32docDATA install-exec \
-	install-exec-am install-exec-local install-frvdocDATA \
-	install-html install-html-am install-info install-info-am \
-	install-man install-or1kdocDATA install-pdf install-pdf-am \
-	install-pkgincludeHEADERS install-ppcdocDATA install-ps \
-	install-ps-am install-rxdocDATA install-strip installcheck \
-	installcheck-am installdirs installdirs-am maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-compile \
-	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	recheck tags tags-am uninstall uninstall-am \
-	uninstall-armdocDATA uninstall-dtbDATA uninstall-erc32docDATA \
-	uninstall-frvdocDATA uninstall-local uninstall-or1kdocDATA \
+	clean-checkPROGRAMS clean-cscope clean-generic \
+	clean-libLIBRARIES clean-libtool clean-noinstLIBRARIES \
+	clean-noinstPROGRAMS cscope cscopelist-am ctags ctags-am \
+	distclean distclean-DEJAGNU distclean-compile \
+	distclean-generic distclean-hdr distclean-libtool \
+	distclean-tags dvi dvi-am html html-am info info-am install \
+	install-am install-armdocDATA install-data install-data-am \
+	install-data-local install-dtbDATA install-dvi install-dvi-am \
+	install-erc32docDATA install-exec install-exec-am \
+	install-exec-local install-frvdocDATA install-html \
+	install-html-am install-info install-info-am \
+	install-libLIBRARIES install-man install-or1kdocDATA \
+	install-pdf install-pdf-am install-pkgincludeHEADERS \
+	install-ppcdocDATA install-ps install-ps-am install-rxdocDATA \
+	install-strip installcheck installcheck-am installdirs \
+	installdirs-am maintainer-clean maintainer-clean-generic \
+	mostlyclean mostlyclean-compile mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am recheck tags tags-am \
+	uninstall uninstall-am uninstall-armdocDATA uninstall-dtbDATA \
+	uninstall-erc32docDATA uninstall-frvdocDATA \
+	uninstall-libLIBRARIES uninstall-local uninstall-or1kdocDATA \
 	uninstall-pkgincludeHEADERS uninstall-ppcdocDATA \
 	uninstall-rxdocDATA
 

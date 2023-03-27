@@ -104,6 +104,7 @@ SIM_COMPILE = \
 include common/local.mk
 include igen/local.mk
 include testsuite/local.mk
+include server/local.mk
 
 ## Arch includes must come after common/local.mk.
 if SIM_ENABLE_ARCH_aarch64
