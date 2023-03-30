@@ -105,6 +105,10 @@
   'inferior' keyword with either the 'thread' or 'task' keywords when
   creating a breakpoint.
 
+* For breakpoints that are created in the 'pending' state, any
+  'thread' or 'task' keywords are parsed at the time the breakpoint is
+  created, rather than at the time the breakpoint becomes non-pending.
+
 * New commands
 
 set debug breakpoint on|off
