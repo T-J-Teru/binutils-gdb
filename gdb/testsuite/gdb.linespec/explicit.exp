@@ -574,7 +574,7 @@ namespace eval $testfile {
 	      allow-pending]} {
 	fail "set $tst"
     } else {
-	gdb_test "info break" ".*PENDING.*myfunction if foofoofoo == 1.*" $tst
+	gdb_test "info break" ".*PENDING.*myfunction\r\n\\s+stop only if foofoofoo == 1.*" $tst
     }
 
     gdb_exit
@@ -585,7 +585,7 @@ namespace eval $testfile {
 	      allow-pending]} {
 	fail "set $tst"
     } else {
-	gdb_test "info break" ".*PENDING.*myfunction if arg == 0" $tst
+	gdb_test "info break" ".*PENDING.*myfunction\r\n\\s+stop only if arg == 0" $tst
 
 	gdb_load [standard_output_file $exefile]
 	gdb_test "info break" \

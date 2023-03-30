@@ -67,6 +67,10 @@
     break foo thread 1 task 1
     watch var thread 2 task 3
 
+* For breakpoints that are created in the 'pending' state, any
+  'thread' or 'task' keywords are parsed at the time the breakpoint is
+  created, rather than at the time the breakpoint becomes non-pending.
+
 * New commands
 
 maintenance print record-instruction [ N ]

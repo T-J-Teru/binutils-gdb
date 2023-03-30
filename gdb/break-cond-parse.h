@@ -1,0 +1,47 @@
+/* Copyright (C) 2023 Free Software Foundation, Inc.
+
+   This file is part of GDB.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+#if !defined (BREAK_COND_PARSE_H)
+#define BREAK_COND_PARSE_H 1
+
+/* Given TOK, a string possibly containing a condition, thread, task and
+   force-condition flag, as accepted by the 'break' command, extract the
+   condition string, thread and task numbers, and the force_condition flag,
+   then set *COND_STRING, *THREAD, *TASK, and *FORCE.
+
+   As TOK is parsed, if an unknown keyword is encountered before the 'if'
+   keyword then everything starting from the unknown keyword is placed into
+   *REST.
+
+   Both *COND and *REST are initialized to nullptr.  If no 'if' keyword is
+   found then *COND will be returned as nullptr.  If no unknown content is
+   found then *REST is returned as nullptr.
+
+   If no thread is found, *THREAD is set to -1.  If no task is found, *TASK
+   is set to -1.  If the -force-condition flag is not found then *FORCE is
+   set to false.
+
+   Due to the free-form nature that the string TOK might take (a 'thread'
+   keyword can appear before or after an 'if' condition) then we end up
+   having to check for keywords from both the start of TOK and the end of
+   TOK.  */
+
+extern void create_breakpoint_parse_arg_string
+  (const char *tok, gdb::unique_xmalloc_ptr<char> *cond_string,
+   int *thread, int *task, gdb::unique_xmalloc_ptr<char> *rest, bool *force);
+
+#endif
