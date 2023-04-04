@@ -70,6 +70,15 @@
 
 static bool arm_debug;
 
+/* Implement 'show debug arm' command.  */
+
+static void
+show_arm_debug (struct ui_file *file, int from_tty,
+		struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file, _("ARM debugging is %s.\n"), value);
+}
+
 /* Print an "arm" debug statement.  */
 
 #define arm_debug_printf(fmt, ...) \
@@ -597,6 +606,16 @@ static CORE_ADDR arm_analyze_prologue
 
 bool arm_apcs_32 = true;
 bool arm_unwind_secure_frames = true;
+
+/* Implement 'show arm apcs32' command.  */
+
+static void
+show_arm_apcs32 (struct ui_file *file, int from_tty,
+		 struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file, _("Usage of ARM 32-bit mode is %s.\n"), value);
+}
+
 
 /* Return the bit mask in ARM_PS_REGNUM that indicates Thumb mode.  */
 
@@ -11023,9 +11042,7 @@ _initialize_arm_tdep ()
 			   _("Set usage of ARM 32-bit mode."),
 			   _("Show usage of ARM 32-bit mode."),
 			   _("When off, a 26-bit PC will be used."),
-			   NULL,
-			   NULL, /* FIXME: i18n: Usage of ARM 32-bit
-				    mode is %s.  */
+			   NULL, show_arm_apcs32,
 			   &setarmcmdlist, &showarmcmdlist);
 
   /* Add a command to allow the user to force the FPU model.  */
@@ -11076,8 +11093,7 @@ vfp - VFP co-processor."),
 			   _("Set ARM debugging."),
 			   _("Show ARM debugging."),
 			   _("When on, arm-specific debugging is enabled."),
-			   NULL,
-			   NULL, /* FIXME: i18n: "ARM debugging is %s.  */
+			   NULL, show_arm_debug,
 			   &setdebuglist, &showdebuglist);
 
 #if GDB_SELF_TEST

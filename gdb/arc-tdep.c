@@ -90,6 +90,15 @@ struct arc_frame_cache
 
 bool arc_debug;
 
+/* Implement 'show debug arc' command.  */
+
+static void
+show_arc_debug (struct ui_file *file, int from_tty,
+		  struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file, _("ARC specific debugging is %s.\n"), value);
+}
+
 /* List of "maintenance print arc" commands.  */
 
 static struct cmd_list_element *maintenance_print_arc_list = NULL;
@@ -2472,5 +2481,6 @@ _initialize_arc_tdep ()
 			   _("Set ARC specific debugging."),
 			   _("Show ARC specific debugging."),
 			   _("When set, ARC specific debugging is enabled."),
-			   NULL, NULL, &setdebuglist, &showdebuglist);
+			   NULL, show_arc_debug,
+			   &setdebuglist, &showdebuglist);
 }
