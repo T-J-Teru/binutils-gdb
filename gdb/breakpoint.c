@@ -8517,19 +8517,17 @@ code_breakpoint::code_breakpoint (struct gdbarch *gdbarch_,
       /* Do not set breakpoint locations conditions yet.  As locations
 	 are inserted, they get sorted based on their addresses.  Let
 	 the list stabilize to have reliable location numbers.  */
-
-      /* Dynamic printf requires and uses additional arguments on the
-	 command line, otherwise it's an error.  */
-      if (type == bp_dprintf)
-	{
-	  if (extra_string != nullptr)
-	    update_dprintf_command_list (this);
-	  else
-	    error (_("Format string required"));
-	}
-      else if (extra_string != nullptr)
-	error (_("Garbage '%s' at end of command"), extra_string.get ());
     }
+
+  /* Dynamic printf requires and uses additional arguments on the
+     command line, otherwise it's an error.  */
+  if (type == bp_dprintf)
+    {
+      gdb_assert (extra_string != nullptr);
+      update_dprintf_command_list (this);
+    }
+  else if (extra_string != nullptr)
+    error (_("Garbage '%s' at end of command"), extra_string.get ());
 
   /* The order of the locations is now stable.  Set the location
      condition using the location's number.  */
