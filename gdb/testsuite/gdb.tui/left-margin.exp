@@ -1,0 +1,84 @@
+# Copyright 2023 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check the sizes of the left margin in the src and asm windows.
+
+require allow_tui_tests
+
+tuiterm_env
+
+standard_testfile
+
+if {[prepare_for_testing "failed to prepare" ${testfile} ${srcfile}]} {
+    return -1
+}
+
+Term::clean_restart 24 80 $binfile
+if {![Term::enter_tui]} {
+    unsupported "TUI not supported"
+    return
+}
+
+# Check the src or asm window (which fills the first 15 lines of the
+# screen) for a line matching REGEX.  Return true if a matching line
+# is found, otherwise, return false.
+proc check_window {regex} {
+    set found false
+    for { set i 1 } { $i < 14 } { incr i } {
+	set ln [Term::get_line $i]
+	if {[regexp -- $regex $ln]} {
+	    set found true
+	    break
+	}
+    }
+    return $found
+}
+
+# Switch to asm layout and check the left margin.
+Term::command "layout asm"
+gdb_assert {[check_window "\\|   $hex <main>.*"]} \
+    "check left margin in asm window"
+
+# Switch to src layout and check the left margin.
+Term::command "layout src"
+set lineno [gdb_get_line_number "return 0"]
+gdb_assert {[check_window "\\|       $lineno   return 0"]} \
+    "check left margin in src window with full width line numbers"
+
+# Compact the line numbers and check the margin.
+Term::command "set tui compact-source on"
+gdb_assert {[check_window "\\|   $lineno  return 0"]} \
+    "check left margin in src window with compact line numbers"
+
+# Try to reproduce the margin corruption from bug PR gdb/30325.
+with_test_prefix "narrow window" {
+    Term::clean_restart 24 60 $binfile
+    if {![Term::enter_tui]} {
+	unsupported "TUI not supported"
+	return
+    }
+
+    Term::command "layout asm"
+    set found_bad_line false
+    for { set i 1 } { $i < 14 } { incr i } {
+	set ln [Term::get_line $i]
+	if {![regexp -- "\\|\\s+0x" $ln]} {
+	    set found_bad_line true
+	    break
+	}
+    }
+    gdb_assert {!$found_bad_line} \
+	"left margin is not corrupted"
+}
