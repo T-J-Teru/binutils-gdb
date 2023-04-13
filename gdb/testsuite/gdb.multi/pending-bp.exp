@@ -1,0 +1,115 @@
+# Copyright 2023 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Tests related to pending breakpoints in a multi-inferior environment.
+
+require allow_shlib_tests !use_gdb_stub
+
+standard_testfile
+
+set libname $testfile-lib
+set srcfile_lib $srcdir/$subdir/$libname.c
+set binfile_lib [standard_output_file $libname.so]
+
+if { [gdb_compile_shlib $srcfile_lib $binfile_lib {}] != "" } {
+    untested "failed to compile shared library 1"
+    return -1
+}
+
+set binfile_lib_target [gdb_download_shlib $binfile_lib]
+
+if { [build_executable "failed to prepare" $testfile $srcfile \
+	  [list debug \
+	       additional_flags=-DSHLIB_NAME=\"$binfile_lib_target\" \
+	       shlib_load pthreads]] } {
+    return -1
+}
+
+# Used to override delete_breakpoints when we don't want breakpoints
+# deleted.
+proc do_nothing {} {}
+
+# Start two inferiors, both running the same test binary.  The arguments
+# INF_1_STOP and INF_2_STOP are source code patterns that are passed to
+# gdb_get_line_number to figure out where each inferior should be stopped.
+#
+# This proc does a clean_restart and leaves inferior 2 selected.  Also the
+# 'breakpoint pending' flag is enabled, so pending breakpoints can be created
+# without GDB prompting the user.
+proc do_test_setup { inf_1_stop inf_2_stop } {
+    clean_restart ${::binfile}
+
+    gdb_locate_shlib $::binfile_lib
+
+    if ![runto_main] {
+	return false
+    }
+
+    gdb_breakpoint [gdb_get_line_number ${inf_1_stop}] temporary
+    gdb_continue_to_breakpoint "move inferior 1 into position"
+
+    gdb_test "add-inferior -exec ${::binfile}" \
+	"Added inferior 2.*" "add inferior 2"
+    gdb_test "inferior 2" "Switching to inferior 2 .*" "switch to inferior 2"
+
+    with_override delete_breakpoints do_nothing {
+	if {![runto_main]} {
+	    return false
+	}
+    }
+
+    gdb_breakpoint [gdb_get_line_number ${inf_2_stop}] temporary
+    gdb_continue_to_breakpoint "move inferior 2 into position"
+
+    gdb_test_no_output "set breakpoint pending on"
+
+    return true
+}
+
+# Check that when a breakpoint is in the pending state, but that breakpoint
+# does have some locations (those locations themselves are pending), GDB
+# doesn't display the inferior list in the 'info breakpoints' output.
+proc_with_prefix test_no_inf_display {} {
+    do_test_setup "Break before close" "Break before open"
+
+    # Create a breakpoint on 'foo'.  This will find a location in inferior 1,
+    # but will not find a location in inferior 2 -- the shared library is not
+    # yet loaded in that inferior.
+    gdb_breakpoint "foo"
+    set bpnum [get_integer_valueof "\$bpnum" "*INVALID*" \
+		   "get foo breakpoint number"]
+
+    # Check the 'info breakpoints' output.  Notice we display the inferior
+    # list at the end of the breakpoint line.
+    gdb_test "info breakpoint $bpnum" \
+	"$bpnum\\s+breakpoint\\s+keep\\s+y\\s+$::hex\\s+<foo\[^>\]*>\\s+inf 1" \
+	"check info breakpoints while breakpoint is inserted"
+
+    # Ensure we are in inferior 1, move the inferior forward until the shared
+    # library has been unloaded.  The breakpoint on 'foo' will return to the
+    # pending state.
+    gdb_test "inferior 1" "Switching to inferior 1 .*"
+    gdb_breakpoint [gdb_get_line_number "Break after close"] temporary
+    gdb_continue_to_breakpoint "after close library"
+
+    # Check the 'info breakpoints' output, check there is no 'inf 1' at the
+    # end of the breakpoint line.
+    gdb_test "info breakpoint $bpnum" \
+	"$bpnum\\s+breakpoint\\s+keep\\s+y\\s+<PENDING>\\s+foo" \
+	"check info breakpoints while breakpoint is pending"
+}
+
+# Run all the tests.
+test_no_inf_display
