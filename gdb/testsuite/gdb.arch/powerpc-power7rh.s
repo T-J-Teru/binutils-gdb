@@ -122,14 +122,3 @@ func:
 	.long  0xedc07834    /* frsqrtes f14,f15           */
 	.long  0xedc07835    /* frsqrtes. f14,f15          */
 	.long  0x7c43271e    /* isel    r2,r3,r4,28        */
-	.long  0x7f7bdb78    /* yield                      */
-	.long  0x60420000    /* ori     r2,r2,0            */
-	.long  0x60000000    /* nop                        */
-	.long  0x7fbdeb78    /* mdoio                      */
-	.long  0x7fdef378    /* mdoom                      */
-	.long  0x7d40e2a6    /* mfppr   r10                */
-	.long  0x7d62e2a6    /* mfppr32 r11                */
-	.long  0x7d80e3a6    /* mtppr   r12                */
-	.long  0x7da2e3a6    /* mtppr32 r13                */
-	.long  0x7d605264    /* tlbie   r10,r11            */
-	.section	.note.GNU-stack,"",@progbits
