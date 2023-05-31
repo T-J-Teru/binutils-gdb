@@ -1267,15 +1267,16 @@ static SCM
 gdbscm_lookup_type (SCM name_scm, SCM rest)
 {
   SCM keywords[] = { block_keyword, SCM_BOOL_F };
-  char *name;
+  char *name_str;
   SCM block_scm = SCM_BOOL_F;
   int block_arg_pos = -1;
   const struct block *block = NULL;
   struct type *type;
 
   gdbscm_parse_function_args (FUNC_NAME, SCM_ARG1, keywords, "s#O",
-			      name_scm, &name,
+			      name_scm, &name_str,
 			      rest, &block_arg_pos, &block_scm);
+  gdb::unique_xmalloc_ptr<char> name (name_str);
 
   if (block_arg_pos != -1)
     {
@@ -1284,13 +1285,9 @@ gdbscm_lookup_type (SCM name_scm, SCM rest)
       block = bkscm_scm_to_block (block_scm, block_arg_pos, FUNC_NAME,
 				  &exception);
       if (block == NULL)
-	{
-	  xfree (name);
-	  gdbscm_throw (exception);
-	}
+	gdbscm_throw (exception);
     }
-  type = tyscm_lookup_typename (name, block);
-  xfree (name);
+  type = tyscm_lookup_typename (name.get (), block);
 
   if (type != NULL)
     return tyscm_scm_from_type (type);
