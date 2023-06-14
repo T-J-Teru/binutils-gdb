@@ -2728,6 +2728,8 @@ insert_bp_location (struct bp_location *bl,
   if (!should_be_inserted (bl) || (bl->inserted && !bl->needs_update))
     return 0;
 
+  infrun_debug_printf ("bl->address = %s", paddress (bl->gdbarch, bl->address));
+
   /* Note we don't initialize bl->target_info, as that wipes out
      the breakpoint location's shadow_contents if the breakpoint
      is still inserted at that location.  This in turn breaks
@@ -3874,6 +3876,8 @@ update_breakpoints_after_exec (void)
 int
 detach_breakpoints (ptid_t ptid)
 {
+  INFRUN_SCOPED_DEBUG_ENTER_EXIT;
+
   int val = 0;
   scoped_restore save_inferior_ptid = make_scoped_restore (&inferior_ptid);
   struct inferior *inf = current_inferior ();
@@ -3898,6 +3902,10 @@ detach_breakpoints (ptid_t ptid)
 	  || bl->loc_type == bp_loc_software_watchpoint)
 	continue;
 
+      infrun_debug_printf ("bl->address = %s%s",
+			   paddress (bl->gdbarch, bl->address),
+			   (bl->inserted ? "" : "\tnot inseted"));
+
       if (bl->inserted)
 	val |= remove_breakpoint_1 (bl, DETACH_BREAKPOINT);
     }
@@ -3915,6 +3923,8 @@ static int
 remove_breakpoint_1 (struct bp_location *bl, enum remove_bp_reason reason)
 {
   int val;
+
+  infrun_debug_printf ("bl->address = %s", paddress (bl->gdbarch, bl->address));
 
   /* BL is never in moribund_locations by our callers.  */
   gdb_assert (bl->owner != NULL);
@@ -3960,10 +3970,15 @@ remove_breakpoint_1 (struct bp_location *bl, enum remove_bp_reason reason)
 	      && !memory_validate_breakpoint (bl->gdbarch, &bl->target_info))
 	    val = 0;
 	  else
-	    val = bl->owner->remove_location (bl, reason);
+	    {
+	      infrun_debug_printf ("removing the location");
+	      val = bl->owner->remove_location (bl, reason);
+	    }
 	}
       else
 	{
+	  gdb_assert_not_reached ("this should not be used");
+
 	  /* This breakpoint is in an overlay section.
 	     Did we set a breakpoint at the LMA?  */
 	  if (!overlay_events_enabled)
@@ -4024,7 +4039,10 @@ remove_breakpoint_1 (struct bp_location *bl, enum remove_bp_reason reason)
 	val = 0;
 
       if (val)
-	return val;
+	{
+	  infrun_debug_printf ("failed to remove the breakpoint");
+	  return val;
+	}
       bl->inserted = (reason == DETACH_BREAKPOINT);
     }
   else if (bl->loc_type == bp_loc_hardware_watchpoint)

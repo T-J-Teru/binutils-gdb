@@ -80,6 +80,10 @@ default_memory_remove_breakpoint (struct gdbarch *gdbarch,
 
   gdbarch_sw_breakpoint_from_kind (gdbarch, bp_tgt->kind, &bplen);
 
+  infrun_debug_printf ("at %s, restore bytes %s",
+		       paddress (gdbarch, bp_tgt->placed_address),
+		       bytes_to_string (bp_tgt->shadow_contents, bplen).c_str ());
+
   return target_write_raw_memory (bp_tgt->placed_address, bp_tgt->shadow_contents,
 				  bplen);
 }

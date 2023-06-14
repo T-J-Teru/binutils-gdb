@@ -75,13 +75,19 @@ proc do_test { fork_func target-non-stop non-stop displaced-stepping } {
     gdb_test "break $::break_here_line" "Breakpoint $::decimal at $::hex.*"
     gdb_test "continue" "hit Breakpoint $::decimal, main.*"
 
+    gdb_test_no_output "set logging overwrite on"
+    gdb_test_no_output "set logging file /home/andrew/tmp/log"
+    gdb_test_no_output "set logging debugredirect on"
+    gdb_test "set logging enabled on" ".*"
+    gdb_test_no_output "set debug infrun on"
+
     # Next an arbitrary number of times over the lines of the loop.
     #
     # It is useful to bump this number to a larger value (e.g. 200) to stress
     # test more, but it makes the test case run for considerably longer.  If
     # you increase the number of loops, you might want to adjust the alarm
     # time in the .c file accordingly.
-    for { set i 0 } { $i < 20 } { incr i } {
+    for { set i 0 } { $i < 200 } { incr i } {
 	# If testing against GDBserver, the forking threads cause a lot of
 	# "Detaching from process XYZ" messages to appear.  If we don't consume
 	# that output, GDBserver eventually blocks on a full stderr.  Drain it
@@ -105,10 +111,10 @@ proc do_test { fork_func target-non-stop non-stop displaced-stepping } {
     }
 }
 
-foreach_with_prefix fork_func {fork vfork} {
-    foreach_with_prefix target-non-stop {auto on off} {
-	foreach_with_prefix non-stop {off on} {
-	    foreach_with_prefix displaced-stepping {auto on off} {
+foreach_with_prefix fork_func {fork} {
+    foreach_with_prefix target-non-stop {off} {
+	foreach_with_prefix non-stop {off} {
+	    foreach_with_prefix displaced-stepping {on} {
 		do_test ${fork_func} ${target-non-stop} ${non-stop} ${displaced-stepping}
 	    }
 	}

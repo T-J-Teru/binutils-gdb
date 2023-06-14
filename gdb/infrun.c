@@ -727,6 +727,8 @@ set_last_target_status_stopped (thread_info *tp)
 static bool
 follow_fork ()
 {
+  INFRUN_SCOPED_DEBUG_ENTER_EXIT;
+
   bool follow_child = (follow_fork_mode_string == follow_fork_mode_child);
   bool should_resume = true;
 
@@ -3479,6 +3481,19 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal)
 		continue;
 	      }
 
+	    /* In all-stop mode, a vfork will be handled as soon as it
+	       arrives; all threads will be stopped, and then the vfork
+	       parent thread will be resumed in order to block until the
+	       vfork completes (the child calls exec or exit).
+
+	       While the parent waits for the vfork to complete all
+	       breakpoints will have been removed, so it is critical that
+	       we don't allow any other thread to resume.
+
+	       However, as any vfork will have been fully handled, we don't
+	       expect to see an in-progress vfork at this point.  */
+	    gdb_assert (tp->inf->thread_waiting_for_vfork_done == nullptr);
+
 	    /* If a thread of that inferior is waiting for a vfork-done
 	       (for a detached vfork child to exec or exit), breakpoints are
 	       removed.  We must not resume any thread of that inferior, other
@@ -3503,19 +3518,56 @@ proceed (CORE_ADDR addr, enum gdb_signal siggnal)
 	  }
       }
     else if (!cur_thr->resumed ()
-	     && !thread_is_in_step_over_chain (cur_thr)
-	     /* In non-stop, forbid resuming a thread if some other thread of
-		that inferior is waiting for a vfork-done event (this means
-		breakpoints are out for this inferior).  */
-	     && !(non_stop
-		  && cur_thr->inf->thread_waiting_for_vfork_done != nullptr))
+	     && !thread_is_in_step_over_chain (cur_thr))
       {
-	/* The thread wasn't started, and isn't queued, run it now.  */
-	execution_control_state ecs (cur_thr);
-	switch_to_thread (cur_thr);
-	keep_going_pass_signal (&ecs);
-	if (!ecs.wait_some_more)
-	  error (_("Command aborted."));
+
+	do
+	  {
+	    /* In all-stop mode, a vfork will be handled as soon as it
+	       arrives; all threads will be stopped, and then the vfork
+	       parent thread will be resumed in order to block until the
+	       vfork completes (the child calls exec or exit).
+
+	       While the parent waits for the vfork to complete all
+	       breakpoints will have been removed, so it is critical that
+	       we don't allow any other thread to resume.
+
+	       However, as any vfork will have been fully handled, we don't
+	       expect to see an in-progress vfork at this point.  */
+	    if (!non_stop)
+	      gdb_assert (cur_thr->inf->thread_waiting_for_vfork_done
+			  == nullptr);
+
+	    /* In non-stop mode, it is possible that a thread is already
+	       stopped when some other thread performs a vfork.  When this
+	       happens the user might try to resume a stopped thread.
+
+	       However, while the vfork is being handled all breakpoints
+	       are removed from the inferior (really program space), so it
+	       is important that we don't allow the thread to actually
+	       restart here.
+
+	       The thread will be resumed once the vfork has completed, see
+	       restart_thread called from handle_vfork_done.  */
+	    if (non_stop
+		&& cur_thr->inf->thread_waiting_for_vfork_done != nullptr)
+	      {
+		infrun_debug_printf ("[%s] another thread of this inferior is "
+				     "waiting for vfork-done",
+				     cur_thr->ptid.to_string ().c_str ());
+		gdb_assert (cur_thr->inf->thread_waiting_for_vfork_done
+			    != cur_thr);
+		continue;
+	      }
+
+	    /* The thread wasn't started, and isn't queued, run it now.  */
+	    execution_control_state ecs (cur_thr);
+	    switch_to_thread (cur_thr);
+	    keep_going_pass_signal (&ecs);
+	    if (!ecs.wait_some_more)
+	      error (_("Command aborted."));
+	  }
+	while (false);
       }
 
     disable_commit_resumed.reset_and_commit ();

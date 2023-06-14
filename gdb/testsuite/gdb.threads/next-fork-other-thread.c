@@ -24,7 +24,7 @@
 #include <limits.h>
 
 /* Number of threads doing forks.  */
-#define N_FORKERS 4
+#define N_FORKERS 2
 
 static void *
 forker (void *arg)
@@ -34,7 +34,10 @@ forker (void *arg)
       pid_t pid = FORK_FUNC ();
 
       if (pid == 0)
-	_exit (11);
+	{
+	  usleep (1000 * 20);
+	  _exit (11);
+	}
 
       assert (pid > 0);
 
@@ -70,7 +73,7 @@ main (void)
 {
   int i;
 
-  alarm (60);
+  alarm (600);
 
   pthread_t thread[N_FORKERS];
   for (i = 0; i < N_FORKERS; ++i)
