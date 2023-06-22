@@ -26,6 +26,25 @@
 /* Number of threads doing forks.  */
 #define N_FORKERS 2
 
+static void
+sleep_a_bit (void)
+{
+  usleep (1000 * 50);
+}
+
+static void
+delay_loop (int limit)
+{
+  int i;
+
+  for (i = 0; i < limit; ++i) /* for loop */
+    {
+      sleep_a_bit ();  /* break here */
+      sleep_a_bit ();  /* other line */
+    }
+}
+
+
 static void *
 forker (void *arg)
 {
@@ -35,7 +54,8 @@ forker (void *arg)
 
       if (pid == 0)
 	{
-	  usleep (1000 * 20);
+	  //usleep (1000 * 20);
+	  delay_loop (1);
 	  _exit (11);
 	}
 
@@ -62,12 +82,6 @@ forker (void *arg)
   return NULL;
 }
 
-static void
-sleep_a_bit (void)
-{
-  usleep (1000 * 50);
-}
-
 int
 main (void)
 {
@@ -82,11 +96,7 @@ main (void)
       assert (ret == 0);
     }
 
-  for (i = 0; i < INT_MAX; ++i) /* for loop */
-    {
-      sleep_a_bit ();  /* break here */
-      sleep_a_bit ();  /* other line */
-    }
+  delay_loop (INT_MAX);
 
   for (i = 0; i < N_FORKERS; ++i)
     pthread_join (thread[i], NULL);

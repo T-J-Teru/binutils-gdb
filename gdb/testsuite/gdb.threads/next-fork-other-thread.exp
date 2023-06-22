@@ -73,13 +73,15 @@ proc do_test { fork_func target-non-stop non-stop displaced-stepping } {
     # Leave the breakpoint in: it will force GDB to step over it while next-ing,
     # which exercises some additional code paths.
     gdb_test "break $::break_here_line" "Breakpoint $::decimal at $::hex.*"
-    gdb_test "continue" "hit Breakpoint $::decimal, main.*"
+    gdb_test "continue" "hit Breakpoint $::decimal, delay_loop.*"
 
     gdb_test_no_output "set logging overwrite on"
     gdb_test_no_output "set logging file /home/andrew/tmp/log"
     gdb_test_no_output "set logging debugredirect on"
     gdb_test "set logging enabled on" ".*"
     gdb_test_no_output "set debug infrun on"
+    gdb_test_no_output "set debug linux-nat on"
+    ## gdb_test_no_output "set trace-commands on"
 
     # Next an arbitrary number of times over the lines of the loop.
     #
@@ -112,7 +114,7 @@ proc do_test { fork_func target-non-stop non-stop displaced-stepping } {
 }
 
 foreach_with_prefix fork_func {fork} {
-    foreach_with_prefix target-non-stop {off} {
+    foreach_with_prefix target-non-stop {on} {
 	foreach_with_prefix non-stop {off} {
 	    foreach_with_prefix displaced-stepping {on} {
 		do_test ${fork_func} ${target-non-stop} ${non-stop} ${displaced-stepping}

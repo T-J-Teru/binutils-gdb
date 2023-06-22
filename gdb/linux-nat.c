@@ -1293,6 +1293,8 @@ get_detach_signal (struct lwp_info *lp)
 static void
 detach_one_lwp (struct lwp_info *lp, int *signo_p)
 {
+  LINUX_NAT_SCOPED_DEBUG_ENTER_EXIT;
+
   int lwpid = lp->ptid.lwp ();
   int signo;
 
@@ -1395,6 +1397,8 @@ detach_callback (struct lwp_info *lp)
 void
 linux_nat_target::detach (inferior *inf, int from_tty)
 {
+  LINUX_NAT_SCOPED_DEBUG_ENTER_EXIT;
+
   struct lwp_info *main_lwp;
   int pid = inf->pid;
 
@@ -2735,8 +2739,21 @@ select_event_lwp (ptid_t filter, struct lwp_info **orig_lp, int *status)
 	((num_events * (double) rand ()) / (RAND_MAX + 1.0));
 
       if (num_events > 1)
-	linux_nat_debug_printf ("Found %d events, selecting #%d",
-				num_events, random_selector);
+	{
+	  linux_nat_debug_printf ("Found %d events, selecting #%d",
+				  num_events, random_selector);
+
+	  iterate_over_lwps (filter, [&] (struct lwp_info *lp)
+	  {
+	    if (lp->resumed && lwp_status_pending_p (lp))
+	      {
+		std::string pending_status = pending_status_str (lp);
+		linux_nat_debug_printf ("  -> %s", pending_status.c_str ());
+	      }
+	    return 0;
+	  });
+
+	}
 
       event_lp
 	= (iterate_over_lwps
