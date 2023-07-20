@@ -44782,6 +44782,36 @@ The remote server created a new process.
 A badly formed request or an error was encountered.
 @end table
 
+@item qDefaultExecAndArgs
+@cindex query executable, remote request
+@cindex query program arguments, remote request
+@cindex @samp{qDefaultExecAndArgs} packet
+Return the program filename and argument string with which the remote
+server was started, if the remote server was started with such things.
+If the remote server was started without the filename of a program to
+execute, or without any arguments, then the reply indicates this.
+
+Reply:
+@table @samp
+@item U
+The program filename and arguments are not set.  If @var{GDBN} wants
+to start a new inferior, for example with @samp{vRun}, then it will
+need to provide the program filename to use.
+
+@item S;@var{PP@dots{}};@var{AA@dots{}}
+The program filename provided to the remote server when it started was
+@var{PP@dots{}}, which is a hex encoded string, and the argument
+string passed to the program when started by the server was
+@var{AA@dots{}}, which is also a hex encoded string.
+
+It is valid for either, or both, of @var{PP@dots{}} and
+@var{AA@dots{}} to be the empty string.
+
+@item E @var{NN}
+@itemx E.errtext
+Indicates an error was encountered.
+@end table
+
 @item Qbtrace:bts
 Enable branch tracing for the current thread using Branch Trace Store.
 

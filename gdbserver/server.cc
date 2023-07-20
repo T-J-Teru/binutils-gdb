@@ -2697,6 +2697,39 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
       return;
     }
 
+  if (strcmp ("qDefaultExecAndArgs", own_buf) == 0)
+    {
+      if (program_path.get () == nullptr)
+	sprintf (own_buf, "U");
+      else
+	{
+	  std::string packet ("S;");
+
+	  packet += bin2hex ((const gdb_byte *) program_path.get (),
+			     strlen (program_path.get ()));
+	  packet += ";";
+
+	  std::string args;
+	  for (const char * arg : program_args)
+	    {
+	      if (!args.empty ())
+		args += " ";
+	      args += std::string (arg);
+	    }
+	  packet += bin2hex ((const gdb_byte *) args.c_str (), args.size ());
+
+	  if (packet.size () > PBUFSIZ)
+	    {
+	      sprintf (own_buf, "E.Program name and arguments too long.");
+	      return;
+	    }
+
+	  strcpy (own_buf, packet.c_str ());
+	  *new_packet_len_p = packet.size ();
+	}
+      return;
+    }
+
   /* Otherwise we didn't know what packet it was.  Say we didn't
      understand it.  */
   own_buf[0] = 0;
