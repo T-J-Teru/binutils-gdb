@@ -2697,6 +2697,40 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
       return;
     }
 
+  if (strcmp ("qDefaultExecAndArgs", own_buf) == 0)
+    {
+      if (program_path.get () == nullptr)
+	sprintf (own_buf, "U");
+      else
+	{
+	  std::string packet ("S;");
+
+	  packet += bin2hex ((const gdb_byte *) program_path.get (),
+			     strlen (program_path.get ()));
+	  packet += ";";
+
+	  printf ("APB: Sending out default args:\n");
+	  for (const char * arg : program_args)
+	    printf ("APB:   arg '%s'\n", arg);
+
+	  for (const char * arg : program_args)
+	    {
+	      packet += bin2hex ((const gdb_byte *) arg, strlen (arg));
+	      packet += ";";
+	    }
+
+	  if (packet.size () > PBUFSIZ)
+	    {
+	      sprintf (own_buf, "E.Program name and arguments too long.");
+	      return;
+	    }
+
+	  strcpy (own_buf, packet.c_str ());
+	  *new_packet_len_p = packet.size ();
+	}
+      return;
+    }
+
   /* Otherwise we didn't know what packet it was.  Say we didn't
      understand it.  */
   own_buf[0] = 0;
@@ -3053,6 +3087,11 @@ handle_v_run (char *own_buf)
   /* Free the old argv and install the new one.  */
   free_vector_argv (program_args);
   program_args = new_argv;
+
+  printf ("APB: Setting new args:\n");
+  for (const char * arg : program_args)
+    printf ("APB:   arg '%s'\n", arg);
+
 
   target_create_inferior (program_path.get (), program_args);
 

@@ -105,6 +105,14 @@
   'inferior' keyword with either the 'thread' or 'task' keywords when
   creating a breakpoint.
 
+* When connecting to a remote server, if the server supports the
+  qDefaultExecAndArgs packet, then GDB will copy the argument string
+  from the server and update the 'args' setting, as if 'set args ...'
+  had been used.  This means that the arguments are visible from GDB
+  using 'show args', and that, if using the extended-remote protocol,
+  subsequent runs of the inferior will use the same arguments as the
+  first run.
+
 * New commands
 
 set debug breakpoint on|off
@@ -285,6 +293,13 @@ info main
      methods.  These reflect GDB's internal idea of whether a type
      might be array- or string-like, even if they do not have the
      corresponding type code.
+
+* New remote packets
+
+qDefaultExecAndArgs
+  This packet returns the executable filename and argument string with
+  which the server was started.  If no such information was given to
+  the server then this is reflected in the reply.
 
 *** Changes in GDB 13
 

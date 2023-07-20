@@ -44844,6 +44844,44 @@ The remote server created a new process.
 A badly formed request or an error was encountered.
 @end table
 
+@cindex query executable, remote request
+@cindex query program arguments, remote request
+@cindex @samp{qDefaultExecAndArgs} packet
+@item qDefaultExecAndArgs
+Return the program filename and argument strings with which the remote
+server was started, if the remote server was started with such things.
+If the remote server was started without the filename of a program to
+execute, or without any arguments, then the reply indicates this.
+
+Reply:
+@table @samp
+@item U
+The program filename and arguments are not set.  If @value{GDBN} wants
+to start a new inferior, for example with @samp{vRun}, then it will
+need to provide the program filename to use.
+
+@item S;@var{prog};@var{arg 1};@var{arg 2};@dots{};@var{arg n};
+@itemx S;@var{prog};
+@itemx S;;@var{arg 1};@var{arg 2};@dots{};@var{arg n};
+@itemx S;;
+The program filename provided to the remote server when it started was
+@var{prog}, which is a hex encoded string.  Each of the argument
+strings passed to the program when started by the server were @var{arg
+1} to @var{arg n}, which are also hex encoded strings.
+
+If no arguments were passed when the inferior started then the
+argument strings can be dropped from the reply packet.
+
+It is valid for @var{prog} to be the empty string, this indicates that
+the server has no default program set, @value{GDBN} will need to
+supply a program name in order to start a new inferior.  An empty
+@var{prog} can still have default arguments if this is required.
+
+@item E @var{NN}
+@itemx E.errtext
+Indicates an error was encountered.
+@end table
+
 @item Qbtrace:bts
 Enable branch tracing for the current thread using Branch Trace Store.
 
