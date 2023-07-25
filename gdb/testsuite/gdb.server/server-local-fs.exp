@@ -1,0 +1,138 @@
+# This testcase is part of GDB, the GNU debugger.
+#
+# Copyright 2023 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check that GDB can detect when the remote target and GDB running on
+# the same host and can automatically choose to ignore the 'target:'
+# prefix in the sysroot.
+
+load_lib gdbserver-support.exp
+
+standard_testfile
+
+require allow_gdbserver_tests
+
+# This test requires that GDB and the remote be on the same host.
+require {!is_remote host}
+
+if { [build_executable "failed to prepare" ${testfile}] } {
+    return -1
+}
+
+# Call after connecting to a remote target, return true if the
+# GDB/GDBserver combo supports the qMachineId packet, otherwise,
+# return false.
+
+proc supports_qMachineId {} {
+    gdb_test_multiple "show remote fetch-machine-id-packet" "" {
+	-re -wrap "Support for the 'qMachineId' packet on the current remote target is \"auto\", currently disabled\\." {
+	    return false
+	}
+	-re -wrap "Support for the 'qMachineId' packet on the current remote target is \"off\"\\." {
+	    return false
+	}
+	-re -wrap "Support for the 'qMachineId' packet on the current remote target is \"auto\", currently enabled\\." {
+	    return true
+	}
+	-re -wrap "Support for the 'qMachineId' packet on the current remote target is \"on\"\\." {
+	    return true
+	}
+    }
+}
+
+clean_restart $binfile
+
+# This test is all about ignoring the 'target:' prefix in the sysroot.
+# If the test is being run with some board that sets a specific
+# sysroot value then this test might now work, so just don't try.
+gdb_test_multiple "show sysroot" "" {
+    -re -wrap "The current system root is \"target:\"\\." {
+	pass $gdb_test_name
+    }
+    -re -wrap "The current system root is \"\"\\." {
+	gdb_test_no_output "set sysroot target:"
+	send_gdb "show sysroot\n"
+	exp_continue
+    }
+    -re -wrap "" {
+	# Any other sysroot setting is not going to work with this
+	# test.
+	unsupport "unsupported sysroot setting"
+	return
+    }
+}
+
+# Start a gdbserver and connect to it from GDB.  Check to see if GDB
+# downloads any files from the remote target.
+#
+# FS_MODE is used to set 'remote local-filesystem'.
+#
+# Depending on whether the target is remote or local, and the value of
+# FS_MODE, this test might, or might not, expect to see files being
+# downloaded.
+proc test_for_remote_read { fs_mode } {
+
+    clean_restart $::binfile
+
+    # We already checked that the sysroot setting either is already
+    # 'target:', or is '', but can be set to 'target:', so at this
+    # point we just force the sysroot setting.
+    gdb_test_no_output "set sysroot target:"
+
+    # Setup whether GDB thinks the remote filesystem is local or not.
+    gdb_test_no_output "set remote local-filesystem $fs_mode"
+
+    # Disconnect in case we are using extended-remote and are already
+    # connected.
+    gdb_test "disconnect" ".*"
+
+    # Start the gdbserver.
+    set res [gdbserver_spawn ""]
+    set gdbserver_protocol [lindex $res 0]
+    set gdbserver_gdbport [lindex $res 1]
+
+    # Connect to gdbserver.
+    gdb_test_multiple "target $gdbserver_protocol $gdbserver_gdbport" \
+	"connect to gdbserver" {
+	-re -wrap "Reading \[^\r\n\]+ from remote target\.\.\.\r\n.*" {
+	    if {$fs_mode eq "off"
+		|| [is_remote target]
+		|| ![supports_qMachineId]} {
+		pass $gdb_test_name
+	    } else {
+		fail $gdb_test_name
+	    }
+	}
+	-re -wrap "" {
+	    if {![is_remote target]
+		&& $fs_mode ne "off"} {
+		pass $gdb_test_name
+	    } else {
+		fail $gdb_test_name
+	    }
+	}
+    }
+}
+
+foreach_with_prefix fs_mode { auto on off } {
+    if {$fs_mode eq "on" && [is_remote target]} {
+	# It doesn't make sense to force GDB to try and use the local
+	# filesystem when the target is actually remote.
+	continue
+    }
+
+    test_for_remote_read $fs_mode
+}

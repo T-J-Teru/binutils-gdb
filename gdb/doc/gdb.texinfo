@@ -21949,6 +21949,7 @@ to specify the search directories for target libraries.
 @cindex system root, alternate
 @kindex set solib-absolute-prefix
 @kindex set sysroot
+@anchor{set sysroot}
 @item set sysroot @var{path}
 Use @var{path} as the system root for the program being debugged.  Any
 absolute shared library paths will be prefixed with @var{path}; many
@@ -21976,6 +21977,15 @@ provided by prefixing @var{path} with @file{remote:}}.  If you want
 to specify a local system root using a directory that happens to be
 named @file{target:} or @file{remote:}, you need to use some
 equivalent variant of the name like @file{./target:}.
+
+If @value{GDBN} is connected to a remote target, but the remote target
+is running on the same host as @value{GDBN}, then @value{GDBN} is able
+to avoid fetching files from the remote target, effectively ignoring
+the @file{target:} prefix in the sysroot.  @value{GDBN} uses the
+@code{qMachineId} packet (@pxref{Machine-Id Packet}) to determine if a
+remote target and @value{GDBN} are running on the same host or not.
+This behaviour can be controlled using @code{set remote
+local-filesystem} (@pxref{set remote local-filesystem}).
 
 For targets with an MS-DOS based filesystem, such as MS-Windows,
 @value{GDBN} tries prefixing a few variants of the target
@@ -24023,6 +24033,26 @@ Select the file used for @code{run} with @code{target
 extended-remote}.  This should be set to a filename valid on the
 target system.  If it is not set, the target will use a default
 filename (e.g.@: the last program run).
+
+@anchor{set remote local-filesystem}
+@item set remote local-filesystem @r{[}auto@r{|}on@r{|}off@r{]}
+@itemx show remote local-filesystem
+@cindex filesystem, for remote target
+When set to @samp{on}, @value{GDBN} will ignore any @file{target:}
+prefix in the sysroot setting (@pxref{set sysroot,,Setting the
+sysroot}) when accessing files on a remote target.  The result of this
+is that @value{GDBN} will act as though @value{GDBN} and the remote
+target are sharing a filesystem.
+
+When set to @samp{off}, @value{GDBN} treats a @file{target:} prefix in
+the usual way; files will be copied from the remote target before
+being read.
+
+When set to @samp{auto}, which is the default, @value{GDBN} will use
+the @code{qMachineId} packet (@pxref{Machine-Id Packet}) to determine
+if the remote target and @value{GDBN} are running on the same host,
+and can access the same filesystem, in which case, this setting act as
+if @samp{on}.  Otherwise, this setting acts as if @samp{off}.
 
 @item set remote interrupt-sequence
 @cindex interrupt remote programs

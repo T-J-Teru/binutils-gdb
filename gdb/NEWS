@@ -113,6 +113,13 @@
   subsequent runs of the inferior will use the same arguments as the
   first run.
 
+* For remote targets that support the qMachineId packet, if GDB
+  believes that the remote target is on the same host as GDB itself,
+  and that GDB can access the same files as the remote target, then
+  GDB will take advantage of this to access files directly, rather
+  than copying them from the remote target.  This behaviour can be
+  disable using the new command 'set remote local-filesystem off'.
+
 * New commands
 
 set debug breakpoint on|off
@@ -139,6 +146,24 @@ show always-read-ctf
 
 info main
   Get main symbol to identify entry point into program.
+
+set remote local-filesystem on|off|auto
+show remote local-filesystem
+  When 'on' GDB will assume that its local filesystem is the same
+  filesystem as the remote target, this effectively means GDB will
+  ignore any 'target:' prefix in the sysroot setting.  When 'off' GDB
+  will use the sysroot value to determine if a path is remote or not;
+  a sysroot starting 'target:' indicates that paths should be treated
+  as remote.
+
+  The default value for this setting is 'auto', in this mode GDB will
+  make use of the qMachineId packet to determine if the remote target
+  is on the same host as GDB or not.  For remote targets that don't
+  support qMachineId, or in cases where the qMachineId indicates that
+  the remote target is truly remote, GDB will behave as if this
+  setting is 'off'.  Only when qMachineId is supported, and qMachineId
+  indicates the remote target is on the same host as GDB, will GDB
+  treat this setting as 'on'.
 
 * New convenience function "$_shell", to execute a shell command and
   return the result.  This lets you run shell commands in expressions.
