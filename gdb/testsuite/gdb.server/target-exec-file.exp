@@ -52,6 +52,10 @@ set target_exec [gdb_remote_download target $binfile]
 # prompt us if this is the right thing to do.
 gdb_test_no_output "set confirm off"
 
+# This test is checking GDB can/will read files from the remote when
+# appropriate.  Disable local filesystem detection.
+gdb_test_no_output "set remote local-filesystem off"
+
 # Start gdbserver, but always in extended-remote mode, and then
 # connect to it from GDB.
 set res [gdbserver_start "--multi" $target_exec]

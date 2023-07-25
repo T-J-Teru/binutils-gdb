@@ -1440,6 +1440,52 @@ is_remote_target (process_stratum_target *target)
   return as_remote_target (target) != nullptr;
 }
 
+/* Get a pointer to the current remote target.  If not connected to a
+   remote target, return NULL.  */
+
+static remote_target *
+get_current_remote_target ()
+{
+  target_ops *proc_target = current_inferior ()->process_target ();
+  return dynamic_cast<remote_target *> (proc_target);
+}
+
+/* Should GDB assume that the remote target is on the same local
+   filesystem?  For example, when starting a target using the '|'
+   notation, the target will be on the local machine.
+
+   When this is set to auto GDB will try to figure this out itself, while
+   setting this to true forces GDB to assume the remote is actually
+   local.  */
+
+static enum auto_boolean remote_filesystem_is_local = AUTO_BOOLEAN_AUTO;
+
+/* Implement 'show remote local-filesystem'.  */
+
+static void
+show_remote_local_filesystem (struct ui_file *file, int from_tty,
+			      struct cmd_list_element *cmd,
+			      const char *value)
+{
+  if (remote_filesystem_is_local == AUTO_BOOLEAN_AUTO)
+    {
+      remote_target *remote = get_current_remote_target ();
+
+      if (remote == nullptr)
+	gdb_printf (file, _("Whether the remote filesystem is local to GDB "
+			    "is \"auto\" (current target is not remote).\n"));
+      else if (target_filesystem_is_local ())
+	gdb_printf (file, _("Whether the remote filesystem is local to GDB "
+			    "is \"auto\" (currently \"on\").\n"));
+      else
+	gdb_printf (file, _("Whether the remote filesystem is local to GDB "
+			    "is \"auto\" (currently \"off\").\n"));
+    }
+  else
+    gdb_printf (file, _("Whether the remote filesystem is local to GDB "
+			"is \"%s\".\n"), value);
+}
+
 /* An enum used to track where the per-program-space remote exec-file data
    came from.  This is useful when deciding which warnings to give to the
    user.  */
@@ -1967,16 +2013,6 @@ remote_arch_state::remote_arch_state (struct gdbarch *gdbarch)
      little.  */
   if (this->sizeof_g_packet > ((this->remote_packet_size - 32) / 2))
     this->remote_packet_size = (this->sizeof_g_packet * 2 + 32);
-}
-
-/* Get a pointer to the current remote target.  If not connected to a
-   remote target, return NULL.  */
-
-static remote_target *
-get_current_remote_target ()
-{
-  target_ops *proc_target = current_inferior ()->process_target ();
-  return dynamic_cast<remote_target *> (proc_target);
 }
 
 /* Return the current allowed size of a remote packet.  This is
@@ -13227,49 +13263,60 @@ remote_target::fileio_fstat (int fd, struct stat *st, fileio_error *remote_errno
 bool
 remote_target::filesystem_is_local ()
 {
-  /* Valgrind GDB presents itself as a remote target but works
-     on the local filesystem: it does not implement remote get
-     and users are not expected to set a sysroot.  To handle
-     this case we treat the remote filesystem as local if the
-     sysroot is exactly TARGET_SYSROOT_PREFIX and if the stub
-     does not support vFile:open.  */
-  if (gdb_sysroot == TARGET_SYSROOT_PREFIX)
+  if (remote_filesystem_is_local == AUTO_BOOLEAN_AUTO)
     {
-      packet_support ps = m_features.packet_support (PACKET_vFile_open);
+      /* If the remote appears to be on the same local machine then assume
+	 the filesystem is local.  */
+      struct remote_state *rs = get_remote_state ();
+      if (rs->remote_target_is_local_p)
+	return true;
 
-      if (ps == PACKET_SUPPORT_UNKNOWN)
+      /* Valgrind GDB presents itself as a remote target but works
+	 on the local filesystem: it does not implement remote get
+	 and users are not expected to set a sysroot.  To handle
+	 this case we treat the remote filesystem as local if the
+	 sysroot is exactly TARGET_SYSROOT_PREFIX and if the stub
+	 does not support vFile:open.  */
+      if (gdb_sysroot == TARGET_SYSROOT_PREFIX)
 	{
-	  int fd;
-	  fileio_error remote_errno;
+	  packet_support ps = m_features.packet_support (PACKET_vFile_open);
 
-	  /* Try opening a file to probe support.  The supplied
-	     filename is irrelevant, we only care about whether
-	     the stub recognizes the packet or not.  */
-	  fd = remote_hostio_open (NULL, "just probing",
-				   FILEIO_O_RDONLY, 0700, 0,
-				   &remote_errno);
-
-	  if (fd >= 0)
-	    remote_hostio_close (fd, &remote_errno);
-
-	  ps = m_features.packet_support (PACKET_vFile_open);
-	}
-
-      if (ps == PACKET_DISABLE)
-	{
-	  static int warning_issued = 0;
-
-	  if (!warning_issued)
+	  if (ps == PACKET_SUPPORT_UNKNOWN)
 	    {
-	      warning (_("remote target does not support file"
-			 " transfer, attempting to access files"
-			 " from local filesystem."));
-	      warning_issued = 1;
+	      int fd;
+	      fileio_error remote_errno;
+
+	      /* Try opening a file to probe support.  The supplied
+		 filename is irrelevant, we only care about whether
+		 the stub recognizes the packet or not.  */
+	      fd = remote_hostio_open (NULL, "just probing",
+				       FILEIO_O_RDONLY, 0700, 0,
+				       &remote_errno);
+
+	      if (fd >= 0)
+		remote_hostio_close (fd, &remote_errno);
+
+	      ps = m_features.packet_support (PACKET_vFile_open);
 	    }
 
-	  return true;
+	  if (ps == PACKET_DISABLE)
+	    {
+	      static int warning_issued = 0;
+
+	      if (!warning_issued)
+		{
+		  warning (_("remote target does not support file"
+			     " transfer, attempting to access files"
+			     " from local filesystem."));
+		  warning_issued = 1;
+		}
+
+	      return true;
+	    }
 	}
     }
+  else if (remote_filesystem_is_local == AUTO_BOOLEAN_TRUE)
+    return true;
 
   return false;
 }
@@ -16206,6 +16253,25 @@ this setting is not used."),
 				   show_remote_exec_file,
 				   &remote_set_cmdlist,
 				   &remote_show_cmdlist);
+
+  add_setshow_auto_boolean_cmd ("local-filesystem", class_files,
+				&remote_filesystem_is_local, _("\
+Set whether the remote's filesystem is local to GDB."), _("\
+Show whether the remote's filesystem is local to GDB."), _("\
+When 'on', GDB assumes that the remote target's filesystem is the same\n\
+local filesystem as GDB sees.  GDB can avoid transferring files over\n\
+the remote protocol, and will instead access the files directly.\n\
+When 'off', GDB will always fetch files using the remote protocol,\n\
+e.g. when an inferior loads a library, GDB will read the libraries\n\
+debug information using the remote protocol, which is slower than\n\
+accessing the library directly.\n\
+\n\
+The default for the setting is 'auto', in which case GDB will try to\n\
+detect when the remote target is running on the same host as GDB."),
+				nullptr,
+				show_remote_local_filesystem,
+				&remote_set_cmdlist,
+				&remote_show_cmdlist);
 
   add_setshow_boolean_cmd ("range-stepping", class_run,
 			   &use_range_stepping, _("\
