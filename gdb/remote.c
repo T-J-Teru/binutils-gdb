@@ -1392,6 +1392,9 @@ public:
 
   void post_attach (int) override;
   bool supports_disable_randomization () override;
+
+private:
+  std::string get_exec_file_for_create_inferior (const char *exec_file);
 };
 
 struct stop_reply : public notif_event
@@ -11042,6 +11045,78 @@ directory: %s"),
     }
 }
 
+/* Return the path for the executable that GDB should ask the remote target
+   to use when starting an inferior.  EXEC_FILE is GDB's idea of the
+   current inferior (e.g. set with the 'file' command), however, this is
+   often not the right thing for a remote target to use, which is why GDB
+   also has the 'set remote exec-file' command.
+
+   If the user has 'set remote exec-file', then this function returns the
+   path the user set.  Otherwise, if it is possible that GDB and the remote
+   target can see the same filesystem, this function will return
+   EXEC_FILE.  */
+
+std::string
+extended_remote_target::get_exec_file_for_create_inferior
+  (const char *exec_file)
+{
+  const remote_exec_file_info &info
+    = get_remote_exec_file_info (current_program_space);
+
+  /* Historically, when the remote target started a new inferior GDB would
+     ignore the filename from GDB core and would use whatever value the
+     user had set in 'remote exec-file'.
+
+     Now we try to maintain this behaviour, but build upon this to make it
+     smarter.
+
+     However, if EXEC_FILE is nullptr then GDB core has not told us about
+     any executable that it would like to run, so the only option we have
+     is to use the 'remote exec-file' value.
+
+     If INFO.SECOND is ::VALUE_FROM_REMOTE or ::VALUE_FROM_GDB then there
+     is a value in 'remote exec-file', so we should not do anything with
+     EXEC_FILE and just retain the backward compatible behaviour; start the
+     remote using the 'remote exec-file' value.
+
+     If INFO.SECOND is ::DEFAULT_VALUE then the user hasn't set a 'remote
+     exec-file' value, but the remote target was unable to tell us if it
+     has a default executable set.  In this case, to maintain backward
+     compatibility we have to send the empty string from 'remote exec-file'
+     as the remote target might have a default executable set.
+
+     If INFO.SECOND is ::UNSET_VALUE then the user hasn't set a 'remote
+     exec-file' value, and the remote target has specifically told us that
+     it has no default executable set, so sending the empty string value
+     from 'remote exec-file' is going to fail, lets see if we can do
+     anything with EXEC_FILE to make the users life better.  */
+  if (exec_file != nullptr
+      && info.second == remote_exec_source::UNSET_VALUE)
+    {
+      /* If the user has set the core exec file to a file on the target
+	 then we can just strip the target prefix and use that as the
+	 remote exec file name.  */
+      if (is_target_filename (exec_file))
+	return exec_file + strlen (TARGET_SYSROOT_PREFIX);
+
+      /* If the sysroot has been set to something that does not have a
+	 'target:' prefix then GDB will not be trying to fetch files from
+	 the remote anyway, so we can assume that the executable is visible
+	 to both the remote and GDB.
+
+	 Otherwise, if GDB is able to determine that the remote filesystem
+	 is actually local, then we are still OK to use the local
+	 executable.  */
+      if (!is_target_filename (gdb_sysroot)
+	  || target_filesystem_is_local ())
+	return exec_file;
+    }
+
+  /* The user has set the remote exec-file, or GDB doesn't think the remote
+     target and GDB can see the same filesystem.  */
+  return info.first;
+}
+
 /* In the extended protocol we want to be able to do things like
    "run" and have them basically work as expected.  So we need
    a special create_inferior function.  We support changing the
@@ -11056,7 +11131,9 @@ extended_remote_target::create_inferior (const char *exec_file,
   int run_worked;
   char *stop_reply;
   struct remote_state *rs = get_remote_state ();
-  const std::string &remote_exec_file = get_remote_exec_file ();
+
+  std::string remote_exec_file
+    = get_exec_file_for_create_inferior (exec_file);
 
   /* If running asynchronously, register the target file descriptor
      with the event loop.  */
