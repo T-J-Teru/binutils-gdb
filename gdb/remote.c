@@ -1396,6 +1396,9 @@ public:
 
   void post_attach (int) override;
   bool supports_disable_randomization () override;
+
+private:
+  std::string get_exec_file_for_create_inferior (const char *exec_file);
 };
 
 struct stop_reply : public notif_event
@@ -11031,6 +11034,51 @@ directory: %s"),
     }
 }
 
+/* Return the path for the executable that GDB should ask the remote target
+   to use when starting an inferior.  EXEC_FILE is GDB's idea of the
+   current inferior (e.g. set with the 'file' command), however, this is
+   often not the right thing for a remote target to use, which is why GDB
+   also has the 'set remote exec-file' command.
+
+   If the user has 'set remote exec-file', then this function returns the
+   path the user set.  Otherwise, if it is possible that GDB and the remote
+   target can see the same filesystem, this function will return
+   EXEC_FILE.  */
+
+std::string
+extended_remote_target::get_exec_file_for_create_inferior
+  (const char *exec_file)
+{
+  const remote_exec_file_info &info
+    = get_remote_exec_file_info (current_program_space);
+
+  /* If INFO.SECOND is remote_exec_source::DEFAULT_VALUE, then this
+     indicates that the remote target has failed to inform us if it has a
+     default-executable set or not, maybe the remote doesn't support the
+     qDefaultExecAndArgs packet?  In this case, we pass the empty string to
+     the remote and expect it to use the default executable (if one is
+     set).  */
+  if (exec_file != nullptr
+      && info.second == remote_exec_source::UNSET_VALUE)
+    {
+      /* If the sysroot has been set to something that does not have a
+	 'target:' prefix then GDB will not be trying to fetch files from
+	 the remote anyway, so we can assume that the executable is visible
+	 to both the remote and GDB.
+
+	 Otherwise, if GDB is able to determine that the remote filesystem
+	 is actually local, then we are still OK to use the local
+	 executable.  */
+      if (!is_target_filename (gdb_sysroot)
+	  || target_filesystem_is_local ())
+	return exec_file;
+    }
+
+  /* The user has set the remote exec-file, or GDB doesn't think the remote
+     target and GDB can see the same filesystem.  */
+  return info.first;
+}
+
 /* In the extended protocol we want to be able to do things like
    "run" and have them basically work as expected.  So we need
    a special create_inferior function.  We support changing the
@@ -11045,7 +11093,9 @@ extended_remote_target::create_inferior (const char *exec_file,
   int run_worked;
   char *stop_reply;
   struct remote_state *rs = get_remote_state ();
-  const std::string &remote_exec_file = get_remote_exec_file ();
+
+  std::string remote_exec_file
+    = get_exec_file_for_create_inferior (exec_file);
 
   /* If running asynchronously, register the target file descriptor
      with the event loop.  */
