@@ -1171,6 +1171,7 @@ COMMON_SFILES = \
 	reggroups.c \
 	remote.c \
 	remote-fileio.c \
+	remote-machine-id.c \
 	remote-notif.c \
 	reverse.c \
 	run-on-main-thread.c \
@@ -1447,6 +1448,7 @@ HFILES_NO_SRCDIR = \
 	regset.h \
 	remote.h \
 	remote-fileio.h \
+	remote-machine-id.h \
 	remote-notif.h \
 	riscv-fbsd-tdep.h \
 	riscv-ravenscar-thread.h \
@@ -1567,6 +1569,7 @@ HFILES_NO_SRCDIR = \
 	nat/gdb_thread_db.h \
 	nat/fork-inferior.h \
 	nat/linux-btrace.h \
+	nat/linux-machine-id.h \
 	nat/linux-namespaces.h \
 	nat/linux-nat.h \
 	nat/linux-osdata.h \

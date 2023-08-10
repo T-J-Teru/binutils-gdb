@@ -41792,6 +41792,7 @@ Show the current setting of the target wait timeout.
 * Traceframe Info Format::
 * Branch Trace Format::
 * Branch Trace Configuration Format::
+* Machine-Id Details::
 @end menu
 
 @node Overview
@@ -44882,6 +44883,49 @@ supply a program name in order to start a new inferior.  An empty
 Indicates an error was encountered.
 @end table
 
+@anchor{Machine-Id Packet}
+@cindex query remote machine-id, remote request
+@cindex @samp{qMachineId} packet
+@item qMachineId
+Access a remote @dfn{machine-id}.  The machine-id returned in response
+to this packet is compared to a machine-id created on the host the
+debugger is running on, if the two machine-ids match then the debugger
+will assume that the remote server and the debugger are running on the
+same machine, and can access the same files, the debugger will use
+this knowledge to avoid unnecessary copying of files from the remote
+(@pxref{File-I/O Remote Protocol Extension}).
+
+Reply:
+@table @samp
+@item predicate;@var{key}=@var{value}@r{[};@var{key}=@var{value}@r{]*}
+Returning a string starting with @samp{predicate;}, followed by one or
+more @var{key}=@var{value} pairs, defines a machine-id.  Each
+@var{key} and @var{value} is a non-empty string that must not contain
+the characters @samp{;} or @samp{=}.  Each @var{key} must be unique
+within a single reply.  See @ref{Machine-Id Details}, for details of
+valid @var{key}s and their @var{value}s.
+
+@item remote
+Returning the string @samp{remote} indicates that the remote server
+should always be considered truly remote, and files the debugger needs
+to access should be first copied from the remote.
+
+@item local
+Returning the string @samp{local} indicates that the remote server
+should always be treated as running on the same host as the debugger.
+The debugger will avoid copying files from the remote server, and will
+instead try to access files directly.
+
+Sending this reply will rarely be appropriate, as it implies certainty
+about where the remote server and debugger are running, however, in
+some tightly controlled environments this might be appropriate.  Using
+a @samp{predicate} based reply would be better if at all possible.
+
+@item E @var{NN}
+@itemx E.errtext
+Indicates an error was encountered.
+@end table
+
 @item Qbtrace:bts
 Enable branch tracing for the current thread using Branch Trace Store.
 
@@ -47588,6 +47632,88 @@ The formal DTD for the branch trace configuration format is given below:
 <!ELEMENT pt	EMPTY>
 <!ATTLIST pt	size	CDATA	#IMPLIED>
 @end smallexample
+
+@node Machine-Id Details
+@section Machine-Id Details
+@cindex machine-id key-value pair details
+
+This section describes the valid @var{key}s and @var{values}s that can
+be returned in response to the @samp{qMachineId} packet
+(@pxref{Machine-Id Packet}), specifically, when using a
+@samp{predicate;} based reply.  Other reply types for the
+@samp{qMachineId} packet don't include @var{key}s and @var{value}s.
+
+There are two types of @var{key}, master keys and secondary keys.  A
+reply should contain exactly one master key, and zero or more
+secondary keys.  The set of valid secondary keys will depend on which
+master key is used.
+
+No @var{key} of @var{value} can contain the characters @samp{;} or
+@samp{=}.
+
+The order of the @var{key}/@var{value} pairs in the reply does not
+matter.
+
+Currently supported master and secondary keys are described below:
+
+@table @samp
+@item linux-boot-id
+The value for this master key contains the contents of the first line
+of the file @file{/proc/sys/kernel/random/boot_id} with any @samp{-}
+characters filtered out.
+
+@table @samp
+@item cuserid
+The value for this secondary key contains a username string associated
+with the effective user ID of the remote server process.
+
+@item namespaces
+The value for this secondary key contains a set of namespace
+identifiers for the remote server process.  Currently the only two
+namespaces that are identified are @file{mnt} and @file{user}.  The
+format of this string is @samp{mnt:@var{mnt-id},user:@var{user-id}}.
+
+The @var{mnt-id} and @var{user-id} are either the character @samp{-}
+if the particular namespace is not support on this host, or is the
+inode of the underlying namespace (as obtained by a @code{stat()}
+call) formatted in hex without any @samp{0x} prefix.
+
+An example of this string is:
+
+@smallexample
+mnt:f0000000,user:effffffd
+@end smallexample
+@end table
+
+An example reply using @samp{linux-boot-id} and all secondary keys is
+below, due to length the line below had to be wrapped to fit on the
+page, but the actual format does not include any extra newlines or
+white space:
+
+@smallexample
+@c Not sure if wrapping this is the best solution.  If I don't wrap
+@c it, then in the pdf version of the manual this overflows the page
+@c and is truncated, but if I do wrap it, then maybe it's not clear to
+@c the reader what the actual format is?
+predicate;linux-boot-id=28d154b3b1518383b3b4efcbd221fa7d;
+       cuserid=username;
+       namespaces=mnt:f0000000,user:effffffd
+@end smallexample
+
+@end table
+
+When matching a machine-id @value{GDBN} first checks the reply for a
+master key that it understands.  If a suitable key is found
+@value{GDBN} checks that the value for the master key matches its
+value for the master key.  If the master key value matches, then
+@value{GDBN} checks all the remaining @var{key}/@var{value} pairs;
+each @var{key} must be known secondary key associated with the
+previously matched master key, and the secondary @var{value} must
+match @value{GDBN}'s computed value.
+
+If all @var{key}s are known, and their @var{value}s match, then
+@value{GDBN} considers the machine-id a match, otherwise, the
+machine-id is considered non-matching.
 
 @include agentexpr.texi
 

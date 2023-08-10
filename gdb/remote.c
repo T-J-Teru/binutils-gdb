@@ -80,6 +80,7 @@
 #include "async-event.h"
 #include "gdbsupport/selftest.h"
 #include "cli/cli-style.h"
+#include "remote-machine-id.h"
 
 /* The remote target.  */
 
@@ -305,6 +306,9 @@ enum {
 
   /* Support the qDefaultExecAndArgs packet.  */
   PACKET_qDefaultExecAndArgs,
+
+  /* Support the qMachineId packet.  */
+  PACKET_qMachineId,
 
   PACKET_MAX
 };
@@ -556,6 +560,15 @@ public: /* data */
      remote_wait()/wait_for_inferior() have gained a timeout parameter
      this can go away.  */
   bool wait_forever_enabled_p = true;
+
+  /* Set to true if the remote target returned a machine-id (see
+     qMachineId packet) which matched one of the registered validation
+     objects.  This indicates that the remote target is running on the
+     same host as GDB (and can see the same filesystem as GDB.
+
+     Otherwise, this is false, which indicates the remote target should be
+     treated as truly remote.  */
+  bool remote_target_is_local_p = false;
 
 private:
   /* Mapping of remote protocol data for each gdbarch.  Usually there
@@ -1336,6 +1349,12 @@ private:
 
   /* Fetch the executable filename and argument string from the remote.  */
   remote_exec_and_args_info fetch_default_executable_and_arguments ();
+
+  /* Send the qMachineId packet and process the reply.  Update the
+     remote_state::remote_target_is_local_p field based on the result.  We
+     assume that when this is called remote_target_is_local_p will be
+     false by default.  */
+  void fetch_remote_machine_id ();
 
   bool start_remote_1 (int from_tty, int extended_p);
 
@@ -5084,6 +5103,151 @@ quote_arg_string (const std::string &arg)
   return res;
 }
 
+/* Extract a machine-id key/value pair from the null-terminated string
+   **STRP, and update STRP to point to the first character after the parsed
+   key/value pair, including skipping any ';' that appears after the
+   key/value pair.
+
+   A key/value pair consists of two strings separated by an '=' character,
+   neither string will contain a '=' or ';' character.
+
+   Characters are read from *STRP until '=', ';' or the null character are
+   found, this forms the key string.  If ';' or null character were found
+   then the value string is empty.  Otherwise, '=' was found, the '=' is
+   skipped, and character are read until ';' or the null character are
+   found, this forms the value string.
+
+   This function will throw an error if the key string is found to be zero
+   length (e.g. '=abc' is invalid), or if the value string contains a '='
+   character (e.g. 'foo=def=ghi' is invalid).
+
+   The pair <key, value> is then returned.  */
+
+static
+std::pair<std::string, std::string> extract_kv_pair (const char **strp)
+{
+  gdb_assert (strp != nullptr);
+  gdb_assert (*strp != nullptr);
+  gdb_assert (**strp != '\0');
+
+  std::string key, value;
+  const char *str = *strp;
+  while (*str != '=' && *str != ';' && *str != '\0')
+    {
+      key += *str;
+      ++str;
+    }
+
+  if (key.empty ())
+    error (_("empty key while parsing '%s'"), *strp);
+
+  if (*str == '\0' || *str == ';')
+    {
+      if (*str == ';')
+	++str;
+      *strp = str;
+      return { key, "" };
+    }
+
+  gdb_assert (*str == '=');
+  ++str;
+
+  while (*str != ';' && *str != '\0')
+    {
+      if (*str == '=')
+	error (_("found '=' character in value string while parsing '%s'"),
+	       *strp);
+      value += *str;
+      ++str;
+    }
+
+  if (*str == ';')
+    ++str;
+  *strp = str;
+  return { key, value };
+}
+
+/* See declaration in class above.   */
+
+void
+remote_target::fetch_remote_machine_id ()
+{
+  struct remote_state *rs = get_remote_state ();
+
+  /* This should only be called for newly created remote_target objects, so
+     the remote_state::remote_target_is_local_p within the remote_target
+     should be false by default.  */
+  gdb_assert (!rs->remote_target_is_local_p);
+
+  if (m_features.packet_support (PACKET_qMachineId) == PACKET_DISABLE)
+    return;
+
+  putpkt ("qMachineId");
+  getpkt (&rs->buf, 0);
+
+  auto packet_result = m_features.packet_ok (rs->buf, PACKET_qMachineId);
+  if (packet_result == PACKET_UNKNOWN)
+    return;
+
+  if (packet_result == PACKET_ERROR)
+    {
+      warning (_("Remote error: %s"), rs->buf.data ());
+      return;
+    }
+
+  /* If the machine-id is the string 'remote' then we are done.  The
+     remote_target_is_local_p field is false by default.  */
+  const char *id = rs->buf.data ();
+  if (startswith (id, "remote") && (id[6] == ';' || id[6] == '\0'))
+    return;
+
+  /* If the machine-id is the string 'local' then the remote claims to
+     "know" that it is on the same machine as GDB.  Good luck with that.  */
+  if (startswith (id, "local") && (id[5] == ';' || id[5] == '\0'))
+    {
+      rs->remote_target_is_local_p = true;
+      return;
+    }
+
+  /* If the machine-id starts with the string 'predicate;', then
+     everything after that string is the part of the machine-id that we
+     need to match against to confirm we are on the same machine as the
+     remote target.  */
+  static const char *predicate_prefix = "predicate;";
+  if (!startswith (id, predicate_prefix))
+    return;
+  id += strlen (predicate_prefix);
+
+  /* Split the ID string into key/value pairs.  */
+  std::unordered_map<std::string, std::string> kv;
+  try
+    {
+      while (*id != '\0')
+	{
+	  auto kv_pair = extract_kv_pair (&id);
+	  kv.emplace (std::move (kv_pair.first), std::move (kv_pair.second));
+	}
+    }
+  catch (const gdb_exception &ex)
+    {
+      /* Let the user know something went wrong, and then return, treating
+	 the target as truly remote.  */
+      warning (_("Error parsing qMachineId packet: %s"), ex.what ());
+      return;
+    }
+
+  /* If there were no predicates, then this looks like a badly behaved
+     remote target, warn the user, and assume the target is remote.  */
+  if (kv.empty ())
+    {
+      warning (_("no machine-id predicates in qMachineId packet reply"));
+      return;
+    }
+
+  /* Check to see if the remote machine is actually local.  */
+  rs->remote_target_is_local_p = validate_machine_id (kv);
+}
+
 /* See declaration in class above.   */
 
 remote_exec_and_args_info
@@ -5229,6 +5393,8 @@ remote_target::start_remote_1 (int from_tty, int extended_p)
       if (m_features.packet_ok (rs->buf, PACKET_QStartNoAckMode) == PACKET_OK)
 	rs->noack_mode = 1;
     }
+
+  fetch_remote_machine_id ();
 
   auto exec_and_args = fetch_default_executable_and_arguments ();
 
@@ -15955,6 +16121,9 @@ Show the maximum size of the address (in bits) in a memory packet."), NULL,
 
   add_packet_config_cmd (PACKET_qDefaultExecAndArgs, "qDefaultExecAndArgs",
 			 "fetch-exec-and-args", 0);
+
+  add_packet_config_cmd (PACKET_qMachineId, "qMachineId",
+			 "fetch-machine-id", 0);
 
   /* Assert that we've registered "set remote foo-packet" commands
      for all packet configs.  */

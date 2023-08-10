@@ -73,4 +73,18 @@ extern int linux_mntns_unlink (pid_t pid, const char *filename);
 extern ssize_t linux_mntns_readlink (pid_t pid, const char *filename,
 				     char *buf, size_t bufsiz);
 
+/* Return an identification string representing namespace TYPE.  The
+   string has the format 'name:inode' or 'name:-'.  If something goes
+   wrong obtaining the information about namespace TYPE then an empty
+   string is returned.
+
+   The 'name' part of the returned string is the short name found in
+   /proc/self/ns/, e.g. 'mnt', 'user', etc.
+
+   The 'inode' part of the returned string is the inode of the underlying
+   namespace formatted as hex but with no '0x' prefix.  The character '-'
+   is returned if namespace TYPE is not supported on this host.  */
+
+extern std::string linux_ns_id (enum linux_ns_type type);
+
 #endif /* NAT_LINUX_NAMESPACES_H */

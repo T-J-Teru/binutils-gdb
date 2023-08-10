@@ -442,6 +442,14 @@ process_stratum_target::store_memtags (CORE_ADDR address, size_t len,
   gdb_assert_not_reached ("target op store_memtags not supported");
 }
 
+/* See target.h.  */
+
+std::string
+process_stratum_target::get_machine_id () const
+{
+  return "";
+}
+
 int
 process_stratum_target::read_offsets (CORE_ADDR *text, CORE_ADDR *data)
 {

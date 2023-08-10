@@ -317,6 +317,8 @@ public:
 
   bool supports_catch_syscall () override;
 
+  std::string get_machine_id () const override;
+
   /* Return the information to access registers.  This has public
      visibility because proc-service uses it.  */
   virtual const regs_info *get_regs_info () = 0;

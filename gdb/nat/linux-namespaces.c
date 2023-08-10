@@ -1049,3 +1049,16 @@ linux_mntns_readlink (pid_t pid, const char *filename,
 
   return ret;
 }
+
+/* See nat/linux-namespaces.h.  */
+
+std::string
+linux_ns_id (enum linux_ns_type type)
+{
+  struct linux_ns *ns = linux_ns_get_namespace (type);
+  gdb_assert (ns->initialized);
+  if (!ns->supported)
+    return (std::string (ns->filename) + ":-");
+  return (std::string (ns->filename) + ":"
+	  + string_printf ("%llx", (unsigned long long) ns->id));
+}

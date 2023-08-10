@@ -301,6 +301,11 @@ qDefaultExecAndArgs
   which the server was started.  If no such information was given to
   the server then this is reflected in the reply.
 
+qMachineId
+  This packet returns an identifier that allows GDB to determine if
+  the remote server and GDB are running on the same host, and can see
+  the same filesystem.
+
 *** Changes in GDB 13
 
 * MI version 1 is deprecated, and will be removed in GDB 14.
