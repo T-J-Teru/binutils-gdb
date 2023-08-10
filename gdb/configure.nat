@@ -58,7 +58,7 @@ case ${gdb_host} in
 		proc-service.o \
 		linux-thread-db.o linux-nat.o nat/linux-osdata.o linux-fork.o \
 		nat/linux-procfs.o nat/linux-ptrace.o nat/linux-waitpid.o \
-		nat/linux-personality.o nat/linux-namespaces.o'
+		nat/linux-personality.o nat/linux-machine-id.o nat/linux-namespaces.o'
 	NAT_CDEPS='$(srcdir)/proc-service.list'
 	LOADLIBES='-ldl $(RDYNAMIC)'
 	;;

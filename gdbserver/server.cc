@@ -2730,6 +2730,18 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
       return;
     }
 
+  if (strcmp ("qMachineId", own_buf) == 0)
+    {
+      std::string machine_id = the_target->get_machine_id ();
+      if (!machine_id.empty ())
+	machine_id = std::string ("predicate;") + machine_id;
+      else
+	machine_id = std::string ("remote");
+
+      strcpy (own_buf, machine_id.c_str ());
+      return;
+    }
+
   /* Otherwise we didn't know what packet it was.  Say we didn't
      understand it.  */
   own_buf[0] = 0;

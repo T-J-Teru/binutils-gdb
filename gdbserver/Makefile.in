@@ -220,6 +220,7 @@ SFILES = \
 	$(srcdir)/../gdb/nat/aarch64-mte-linux-ptrace.c \
 	$(srcdir)/../gdb/nat/aarch64-sve-linux-ptrace.c \
 	$(srcdir)/../gdb/nat/linux-btrace.c \
+	$(srcdir)/../gdb/nat/linux-machine-id.c \
 	$(srcdir)/../gdb/nat/linux-namespaces.c \
 	$(srcdir)/../gdb/nat/linux-osdata.c \
 	$(srcdir)/../gdb/nat/linux-personality.c \

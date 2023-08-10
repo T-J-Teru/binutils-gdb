@@ -69,6 +69,8 @@
 #include "gdbsupport/scope-exit.h"
 #include "gdbsupport/gdb-sigmask.h"
 #include "gdbsupport/common-debug.h"
+#include "remote-machine-id.h"
+#include "nat/linux-machine-id.h"
 #include <unordered_map>
 
 /* This comment documents high-level logic of this file.
@@ -4491,6 +4493,35 @@ current_lwp_ptid (void)
   return inferior_ptid;
 }
 
+struct linux_nat_machine_id_validation : public machine_id_validation
+{
+  linux_nat_machine_id_validation ()
+    : machine_id_validation ("linux-boot-id")
+  { /* Nothing.  */ }
+
+  bool check_master_key (const std::string &value) override
+  {
+    std::string boot_id = gdb_linux_machine_id_linux_boot_id ();
+    if (boot_id.empty ())
+      return false;
+    return boot_id == value;
+  }
+
+  bool check_secondary_key (const std::string &key,
+			    const std::string &value) override
+  {
+    if (key == "cuserid")
+      {
+	std::string username = gdb_linux_machine_cuserid ();
+	if (username.empty ())
+	  return false;
+	return username == value;
+      }
+
+    return false;
+  }
+};
+
 void _initialize_linux_nat ();
 void
 _initialize_linux_nat ()
@@ -4528,6 +4559,10 @@ Enables printf debugging output."),
   sigemptyset (&blocked_mask);
 
   lwp_lwpid_htab_create ();
+
+  std::unique_ptr<linux_nat_machine_id_validation> validation
+    (new linux_nat_machine_id_validation);
+  register_machine_id_validation (std::move (validation));
 }
 
 

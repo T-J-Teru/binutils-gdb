@@ -61,6 +61,7 @@
 #include <elf.h>
 #endif
 #include "nat/linux-namespaces.h"
+#include "nat/linux-machine-id.h"
 
 #ifndef O_LARGEFILE
 #define O_LARGEFILE 0
@@ -6938,6 +6939,24 @@ linux_process_target::thread_pending_child (thread_info *thread)
     return nullptr;
 
   return get_lwp_thread (child);
+}
+
+/* See target.h.  */
+
+std::string
+linux_process_target::get_machine_id () const
+{
+  std::string boot_id = gdb_linux_machine_id_linux_boot_id ();
+  if (boot_id.empty ())
+    return "";
+  boot_id = "linux-boot-id=" + boot_id;
+
+  std::string username = gdb_linux_machine_cuserid ();
+  if (username.empty ())
+    return "";
+  username = "cuserid=" + username;
+
+  return boot_id + ";" + username;
 }
 
 /* Default implementation of linux_target_ops method "set_pc" for

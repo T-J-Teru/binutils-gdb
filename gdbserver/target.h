@@ -508,6 +508,15 @@ public:
      Returns true if successful and false otherwise.  */
   virtual bool store_memtags (CORE_ADDR address, size_t len,
 			      const gdb::byte_vector &tags, int type);
+
+  /* Return a string representing a machine-id suitable for returning
+     within a qMachineId packet response, but don't include the
+     'predicate;' prefix.
+
+     If the current target doesn't support machine-id, or if we fail to
+     build the machine-id for any reason, then return an empty string, the
+     server will send back a suitable reply to the debugger.  */
+  virtual std::string get_machine_id () const;
 };
 
 extern process_stratum_target *the_target;
