@@ -1860,16 +1860,6 @@ remote_target::get_remote_state ()
   return &m_remote_state;
 }
 
-/* Fetch the remote exec-file from the current program space.  */
-
-static const std::string &
-get_remote_exec_file ()
-{
-  const remote_exec_file_info &info
-    = get_remote_exec_file_info (current_program_space);
-  return info.first;
-}
-
 /* Set the remote exec file for PSPACE.  */
 
 static void
@@ -1896,7 +1886,9 @@ set_remote_exec_file_cb (const std::string &filename)
 static const std::string &
 get_remote_exec_file_cb ()
 {
-  return get_remote_exec_file ();
+  const remote_exec_file_info &info
+    = get_remote_exec_file_info (current_program_space);
+  return info.first;
 }
 
 /* Implement the "show remote exec-file" command.  */
