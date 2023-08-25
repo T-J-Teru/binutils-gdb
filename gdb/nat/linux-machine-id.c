@@ -18,6 +18,8 @@
 #include "gdbsupport/common-defs.h"
 
 #include "nat/linux-machine-id.h"
+#include "nat/linux-namespaces.h"
+
 #include "safe-ctype.h"
 
 #include <unistd.h>
@@ -49,7 +51,7 @@ gdb_linux_machine_id_linux_boot_id ()
 /* See nat/linux-machine-id.h.  */
 
 std::string
-gdb_linux_machine_cuserid ()
+gdb_linux_machine_id_cuserid ()
 {
   char cuserid_str[L_cuserid];
   char *res = cuserid (cuserid_str);
@@ -57,4 +59,27 @@ gdb_linux_machine_cuserid ()
     return "";
 
   return std::string (cuserid_str);
+}
+
+/* See nat/linux-machine-id.h.  */
+
+std::string
+gdb_linux_machine_id_namespaces ()
+{
+  std::vector<std::string> namespaces;
+  namespaces.emplace_back (linux_ns_id (LINUX_NS_MNT));
+  namespaces.emplace_back (linux_ns_id (LINUX_NS_USER));
+
+  /* Ensure namespaces are sorted alphabetically.  */
+  std::sort (namespaces.begin (), namespaces.end ());
+
+  std::string str;
+  for (const std::string &n : namespaces)
+    {
+      if (!str.empty ())
+	str += ",";
+      str += n;
+    }
+
+  return str;
 }

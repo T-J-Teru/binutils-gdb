@@ -73,4 +73,7 @@ extern int linux_mntns_unlink (pid_t pid, const char *filename);
 extern ssize_t linux_mntns_readlink (pid_t pid, const char *filename,
 				     char *buf, size_t bufsiz);
 
+/* ... */
+extern std::string linux_ns_id (enum linux_ns_type type);
+
 #endif /* NAT_LINUX_NAMESPACES_H */

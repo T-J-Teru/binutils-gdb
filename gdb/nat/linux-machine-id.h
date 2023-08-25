@@ -39,6 +39,10 @@ extern std::string gdb_linux_machine_id_linux_boot_id ();
    and used by GDB to check the value returned in for a qMachineId
    packet.  */
 
-extern std::string gdb_linux_machine_cuserid ();
+extern std::string gdb_linux_machine_id_cuserid ();
+
+/* ... */
+
+extern std::string gdb_linux_machine_id_namespaces ();
 
 #endif /* NAT_LINUX_MACHINE_ID_H */

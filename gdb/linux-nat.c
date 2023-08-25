@@ -4512,10 +4512,17 @@ struct linux_nat_machine_id_validation : public machine_id_validation
   {
     if (key == "cuserid")
       {
-	std::string username = gdb_linux_machine_cuserid ();
+	std::string username = gdb_linux_machine_id_cuserid ();
 	if (username.empty ())
 	  return false;
 	return username == value;
+      }
+    else if (key == "namespaces")
+      {
+	std::string namespaces = gdb_linux_machine_id_namespaces ();
+	if (namespaces.empty ())
+	  return false;
+	return namespaces == value;
       }
 
     return false;

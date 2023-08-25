@@ -6951,12 +6951,17 @@ linux_process_target::get_machine_id () const
     return "";
   boot_id = "linux-boot-id=" + boot_id;
 
-  std::string username = gdb_linux_machine_cuserid ();
+  std::string username = gdb_linux_machine_id_cuserid ();
   if (username.empty ())
     return "";
   username = "cuserid=" + username;
 
-  return boot_id + ";" + username;
+  std::string namespaces = gdb_linux_machine_id_namespaces ();
+  if (namespaces.empty ())
+    return "";
+  namespaces = "namespaces=" + namespaces;
+
+  return boot_id + ";" + username + ";" + namespaces;
 }
 
 /* Default implementation of linux_target_ops method "set_pc" for
