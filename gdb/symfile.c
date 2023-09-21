@@ -2480,7 +2480,24 @@ reread_symbols (int from_tty)
       else
 	filename = objfile_name (objfile);
 
-      int res = stat (filename, &new_statbuf);
+      int res;
+      if (is_target_filename (filename))
+	{
+	  fileio_error target_errno;
+
+	  scoped_target_fileio_open fd (nullptr,
+					(filename
+					 + strlen (TARGET_SYSROOT_PREFIX)),
+					FILEIO_O_RDONLY, 0, false,
+					&target_errno);
+	  if (fd.get () == -1)
+	    res = -1;
+	  else
+	    res = target_fileio_fstat (fd.get (), &new_statbuf,
+				       &target_errno);
+	}
+      else
+	res = stat (filename, &new_statbuf);
       if (res != 0)
 	{
 	  warning (_("`%ps' has disappeared; keeping its symbols."),

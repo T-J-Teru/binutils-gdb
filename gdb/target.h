@@ -2235,6 +2235,45 @@ extern gdb::unique_xmalloc_ptr<char> target_fileio_read_stralloc
    with EIO.  */
 extern void fileio_handles_invalidate_target (target_ops *targ);
 
+/* A class that performs a target_fileio_open within a scope.  On leaving
+   the scope target_fileio_close is called.
+
+   If the close fails then a warning is issued.  */
+struct scoped_target_fileio_open
+{
+  /* Call target_fileio_open passing all the arguments through.  See
+     target_fileio_open for the meaning of all arguments.  */
+  scoped_target_fileio_open (struct inferior *inf,
+			     const char *filename, int flags,
+			     int mode, bool warn_if_slow,
+			     fileio_error *target_errno)
+    : m_filename (filename)
+  {
+    m_fd = target_fileio_open (inf, filename, flags, mode, warn_if_slow,
+			       target_errno);
+  }
+
+  /* Close the file that was opened in the constructor, issue a warning if
+     the close fails.  */
+  ~scoped_target_fileio_open ();
+
+  /* Return the file descriptor for the opened file.  This can only be used
+     with target_fileio_* calls.  This will return -1 if the open failed.  */
+  int get () const
+  {
+    return m_fd;
+  }
+
+private:
+  /* The filename that we opened.  Stored so we can give a warning if the
+     close fails for any reason.  */
+  std::string m_filename;
+
+  /* The target file descriptor for the opened file, or -1 if the open
+     failed for any reason.  */
+  int m_fd = -1;
+};
+
 /* Tracepoint-related operations.  */
 
 extern void target_trace_init ();

@@ -54,6 +54,7 @@
 #include "target-connection.h"
 #include "valprint.h"
 #include "cli/cli-decode.h"
+#include "cli/cli-style.h"
 
 static void generic_tls_error (void) ATTRIBUTE_NORETURN;
 
@@ -3577,6 +3578,20 @@ target_fileio_read_stralloc (struct inferior *inf, const char *filename)
   return gdb::unique_xmalloc_ptr<char> (bufstr);
 }
 
+/* See target.h.  */
+
+scoped_target_fileio_open::~scoped_target_fileio_open ()
+{
+  if (m_fd != -1)
+    {
+      fileio_error target_errno;
+      if (target_fileio_close (m_fd, &target_errno) != 0)
+	warning (_("failed to close %ps: %s"),
+		 styled_string (file_name_style.style (),
+				m_filename.c_str ()),
+		 safe_strerror (fileio_error_to_host (target_errno)));
+    }
+}
 
 static int
 default_region_ok_for_hw_watchpoint (struct target_ops *self,
