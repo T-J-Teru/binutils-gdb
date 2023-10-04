@@ -99,6 +99,19 @@ read_inferior_memory (CORE_ADDR memaddr, unsigned char *myaddr, int len)
 /* See target/target.h.  */
 
 int
+target_create_inferior
+  (const char *program,
+   const std::vector<gdb::unique_xmalloc_ptr<char>> &program_args)
+{
+  std::vector<char *> args (program_args.size ());
+  for (const gdb::unique_xmalloc_ptr<char> &a : program_args)
+    args.emplace_back (a.get ());
+  return the_target->create_inferior (program, args);
+}
+
+/* See target/target.h.  */
+
+int
 target_read_memory (CORE_ADDR memaddr, gdb_byte *myaddr, ssize_t len)
 {
   return read_inferior_memory (memaddr, myaddr, len);

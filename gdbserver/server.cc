@@ -121,7 +121,7 @@ private:
   /* The program name, adjusted if needed.  */
   std::string m_path;
 } program_path;
-static std::vector<char *> program_args;
+static std::vector<gdb::unique_xmalloc_ptr<char>> program_args;
 static std::string wrapper_argv;
 
 /* The PID of the originally created or attached inferior.  Used to
@@ -3005,7 +3005,7 @@ handle_v_run (char *own_buf)
 {
   client_state &cs = get_client_state ();
   char *p, *next_p;
-  std::vector<char *> new_argv;
+  std::vector<gdb::unique_xmalloc_ptr<char>> new_argv;
   gdb::unique_xmalloc_ptr<char> new_program_name;
   int i;
 
@@ -3025,7 +3025,7 @@ handle_v_run (char *own_buf)
       else if (p == next_p)
 	{
 	  /* Empty argument.  */
-	  new_argv.push_back (xstrdup (""));
+	  new_argv.push_back (make_unique_xstrdup (""));
 	}
       else
 	{
@@ -3036,14 +3036,13 @@ handle_v_run (char *own_buf)
 	  if (arg == nullptr)
 	    {
 	      write_enn (own_buf);
-	      free_vector_argv (new_argv);
 	      return;
 	    }
 
 	  if (i == 0)
 	    new_program_name = std::move (arg);
 	  else
-	    new_argv.push_back (arg.release ());
+	    new_argv.push_back (std::move (arg));
 	}
       if (*next_p == '\0')
 	break;
@@ -3056,7 +3055,6 @@ handle_v_run (char *own_buf)
       if (program_path.get () == nullptr)
 	{
 	  write_enn (own_buf);
-	  free_vector_argv (new_argv);
 	  return;
 	}
     }
@@ -3064,8 +3062,7 @@ handle_v_run (char *own_buf)
     program_path.set (new_program_name.get ());
 
   /* Free the old argv and install the new one.  */
-  free_vector_argv (program_args);
-  program_args = new_argv;
+  program_args = std::move (new_argv);
 
   target_create_inferior (program_path.get (), program_args);
 
@@ -3920,7 +3917,7 @@ captured_main (int argc, char *argv[])
       n = argc - (next_arg - argv);
       program_path.set (next_arg[0]);
       for (i = 1; i < n; i++)
-	program_args.push_back (xstrdup (next_arg[i]));
+	program_args.push_back (make_unique_xstrdup (next_arg[i]));
 
       /* Wait till we are at first instruction in program.  */
       target_create_inferior (program_path.get (), program_args);

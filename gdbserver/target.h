@@ -514,8 +514,21 @@ extern process_stratum_target *the_target;
 
 void set_target_ops (process_stratum_target *);
 
-#define target_create_inferior(program, program_args)	\
-  the_target->create_inferior (program, program_args)
+/* Start a new process.  This is a wrapper around
+   process_stratum_target::create_inferior, PROGRAM_ARGS is copied into a
+   new vector of a different type prior to calling
+   process_stratum_target::create_inferior.
+
+   PROGRAM is the path to the program to execute.
+
+   PROGRAM_ARGS is a vector of argument strings to be pased to the inferior
+   as its argv array (along with PROGRAM as the 0th argument).
+
+   Returns the new PID on success, -1 on failure.  Registers the new
+   process with the process list.  */
+extern int target_create_inferior
+  (const char *program,
+   const std::vector<gdb::unique_xmalloc_ptr<char>> &program_args);
 
 #define target_post_create_inferior()			 \
   the_target->post_create_inferior ()
