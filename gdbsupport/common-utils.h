@@ -136,10 +136,6 @@ extern char *skip_to_space (char *inp);
 
 extern const char *skip_to_space (const char *inp);
 
-/* Assumes that V is an argv for a program, and iterates through
-   freeing all the elements.  */
-extern void free_vector_argv (std::vector<char *> &v);
-
 /* Return true if VALUE is in [LOW, HIGH].  */
 
 template <typename T>

@@ -368,17 +368,6 @@ skip_to_space (char *chp)
 
 /* See gdbsupport/common-utils.h.  */
 
-void
-free_vector_argv (std::vector<char *> &v)
-{
-  for (char *el : v)
-    xfree (el);
-
-  v.clear ();
-}
-
-/* See gdbsupport/common-utils.h.  */
-
 ULONGEST
 align_up (ULONGEST v, int n)
 {
