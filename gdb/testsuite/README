@@ -571,6 +571,10 @@ noargs
 
   GDB does not support argument passing for inferior.
 
+gdb,noshell
+
+  The board doesn't support starting inferiors under a shell.
+
 no_long_long
 
   The board does not support type long long.

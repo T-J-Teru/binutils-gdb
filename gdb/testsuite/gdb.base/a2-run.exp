@@ -166,9 +166,13 @@ gdb_run_cmd
 setup_xfail "arm-*-coff"
 gdb_test_stdio "" "720" "" "run \"$testfile\" again after setting args"
 
-# GOAL: Test that shell is being used with "run".  For remote debugging
-# targets, there is no guarantee that a "shell" (whatever that is) is used.
-if {![is_remote target]} {
+# The following test relies on starting the inferior through a shell.
+if {![target_info exists gdb,noshell]} {
+    if {[target_info gdb_protocol] == "remote"
+	|| [target_info gdb_protocol] == "extended-remote"} {
+	setup_xfail "*-*-*" gdb/28392
+    }
+
     gdb_test_stdio "run `echo 8`" \
 	"40320" "" "run \"$testfile\" with shell"
 }
