@@ -55,10 +55,22 @@ proc initial_setup_simple { startup_with_shell run_args } {
     }
 }
 
+# Some of these tests will not work when using the remote protocol due
+# to bug PR gdb/28392.
+if {[target_info gdb_protocol] == "remote"
+    || [target_info gdb_protocol] == "extended-remote"} {
+    set using_remote_protocol true
+} else {
+    set using_remote_protocol false
+}
+
 ## Run the actual tests
 
 with_test_prefix "startup_with_shell = on; run_args = *.unique-extension" {
     initial_setup_simple "on" "$unique_file_dir/*.unique-extension"
+    if {$using_remote_protocol} {
+	setup_xfail "*-*-*" gdb/28392
+    }
     gdb_test "print argv\[1\]" "\\\$$decimal = $hex \"$unique_file\"" \
 	"first argument expanded"
 }
@@ -72,6 +84,9 @@ with_test_prefix "startup_with_shell = off; run_args = *.unique-extension" {
 with_test_prefix "startup_with_shell = on; run_args = \$TEST" {
     set env(TEST) "1234"
     initial_setup_simple "on" "\$TEST"
+    if {$using_remote_protocol} {
+	setup_xfail "*-*-*" gdb/28392
+    }
     gdb_test "print argv\[1\]" "\\\$$decimal = $hex \"1234\"" \
 	"testing first argument"
     unset env(TEST)
