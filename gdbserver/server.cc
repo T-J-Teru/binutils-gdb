@@ -3025,6 +3025,10 @@ handle_v_run (char *own_buf)
   free_vector_argv (program_args);
   program_args = new_argv;
 
+  fprintf (stderr, "APB: Remote received arguments:\n");
+  for (const auto &a : program_args)
+    fprintf (stderr, "APB:     '%s'\n", a);
+
   target_create_inferior (program_path.get (), program_args);
 
   if (cs.last_status.kind () == TARGET_WAITKIND_STOPPED)

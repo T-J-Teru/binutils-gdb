@@ -165,12 +165,77 @@ inferior::tty ()
   return m_terminal;
 }
 
+#include "temp-args.c"
+
 /* See inferior.h.  */
 
 void
-inferior::set_args (gdb::array_view<char * const> args)
+inferior::set_args (std::string args)
 {
-  set_args (construct_inferior_arguments (args));
+  m_args = std::move (args);
+
+
+  std::vector<std::string> v1;
+
+  fprintf (stderr, "APB: inferior::set_args (%s):\n", m_args.c_str ());
+  gdb_argv argv (m_args.c_str ());
+  for (int i = 0; argv[i] != nullptr; i++)
+    {
+      v1.push_back (std::string (argv[i]));
+      fprintf (stderr, "APB:     '%s'\n", argv[i]);
+    }
+
+  fprintf (stderr, "APB: ... and using gdb_split_args class:\n");
+  std::vector<char *> remote_args;
+  gdb_split_args argx (m_args);
+  for (const auto &a : argx)
+    {
+      fprintf (stderr, "APB:     '%s'\n", a.c_str ());
+      remote_args.push_back (xstrdup (a.c_str ()));
+    }
+
+  std::string remote_str
+    = construct_inferior_arguments (remote_args, escape_white_space);
+  fprintf (stderr, "APB: remote arguments are '%s'\n", remote_str.c_str ());
+
+  std::vector<std::string> v2;
+  gdb_argv argv2 (remote_str.c_str ());
+  for (int i = 0; argv2[i] != nullptr; i++)
+    {
+      v2.push_back (std::string (argv2[i]));
+      fprintf (stderr, "APB:     '%s'\n", argv2[i]);
+    }
+
+  bool bad_args = v1.size () != v2.size ();
+  if (!bad_args)
+    {
+      for (int i = 0; i < v1.size (); ++i)
+	{
+	  if (v1[i] != v2[i])
+	    {
+	      bad_args = true;
+	      break;
+	    }
+	}
+    }
+
+  if (bad_args)
+    {
+      fprintf (stderr, "APB: *\n");
+      fprintf (stderr, "APB: * BAD: Arguments don't match.\n");
+      fprintf (stderr, "APB: *\n");
+    }
+
+  free_vector_argv (remote_args);
+};
+
+/* See inferior.h.  */
+
+void
+inferior::set_args (gdb::array_view<char * const> args,
+		    escape_string_func_t escape_func)
+{
+  set_args (construct_inferior_arguments (args, escape_func));
 }
 
 void

@@ -10454,6 +10454,8 @@ remote_target::extended_remote_disable_randomization (int val)
     error (_("Bogus QDisableRandomization reply from target: %s"), reply);
 }
 
+#include "temp-args.c"
+
 int
 remote_target::extended_remote_run (const std::string &args)
 {
@@ -10478,14 +10480,34 @@ remote_target::extended_remote_run (const std::string &args)
     {
       int i;
 
-      gdb_argv argv (args.c_str ());
-      for (i = 0; argv[i] != NULL; i++)
+      if (getenv ("APB_OLD_WAY") != nullptr)
 	{
-	  if (strlen (argv[i]) * 2 + 1 + len >= get_remote_packet_size ())
-	    error (_("Argument list too long for run packet"));
-	  rs->buf[len++] = ';';
-	  len += 2 * bin2hex ((gdb_byte *) argv[i], rs->buf.data () + len,
-			      strlen (argv[i]));
+	  gdb_argv argv (args.c_str ());
+	  fprintf (stderr, "APB: Sending arguments to remote (old way):\n");
+	  for (i = 0; argv[i] != NULL; i++)
+	    {
+	      fprintf (stderr, "APB:     '%s'\n", argv[i]);
+	      if (strlen (argv[i]) * 2 + 1 + len >= get_remote_packet_size ())
+		error (_("Argument list too long for run packet"));
+	      rs->buf[len++] = ';';
+	      len += 2 * bin2hex ((gdb_byte *) argv[i], rs->buf.data () + len,
+				  strlen (argv[i]));
+	    }
+	}
+      else
+	{
+	  gdb_split_args argv (args);
+	  fprintf (stderr, "APB: Sending arguments to remote (new way):\n");
+	  for (const auto &a : argv)
+	    {
+	      fprintf (stderr, "APB:     '%s'\n", a.c_str ());
+	      if (strlen (a.c_str ()) * 2 + 1 + len >= get_remote_packet_size ())
+		error (_("Argument list too long for run packet"));
+	      rs->buf[len++] = ';';
+	      len += 2 * bin2hex ((gdb_byte *) a.c_str (),
+				  rs->buf.data () + len,
+				  strlen (a.c_str ()));
+	    }
 	}
     }
 

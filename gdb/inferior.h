@@ -520,13 +520,11 @@ public:
   /* Set the argument string to use when running this inferior.
 
      An empty string can be used to represent "no arguments".  */
-  void set_args (std::string args)
-  {
-    m_args = std::move (args);
-  };
+  void set_args (std::string args);
 
   /* Set the argument string from some strings.  */
-  void set_args (gdb::array_view<char * const> args);
+  void set_args (gdb::array_view<char * const> args,
+		 escape_string_func_t escape_func);
 
   /* Get the argument string to use when running this inferior.
 

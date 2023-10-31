@@ -57,9 +57,21 @@ extern const std::string &get_inferior_cwd ();
    the target is started up with a shell.  */
 extern bool startup_with_shell;
 
+/* Return a version of ARG that has special shell characters escaped.  */
+extern std::string escape_shell_characters (const char *arg);
+
+/* Return a version of ARG that has whitespace characters escaped.  */
+
+extern std::string escape_white_space (const char *arg);
+
+/* ... */
+
+using escape_string_func_t = std::string (*) (const char *arg);
+
 /* Compute command-line string given argument vector. This does the
    same shell processing as fork_inferior.  */
 extern std::string
-construct_inferior_arguments (gdb::array_view<char * const>);
+construct_inferior_arguments (gdb::array_view<char * const>,
+			      escape_string_func_t escape_func);
 
 #endif /* COMMON_COMMON_INFERIOR_H */
