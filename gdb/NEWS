@@ -59,6 +59,14 @@
   this flag is used gdbserver will not escape special shell characters
   within the inferior arguments.
 
+* There have been changes to how inferior arguments are passed to
+  remote targets.  When using the latest GDB and gdbserver the new
+  single-inf-arg will be used for argument passing.  When using remote
+  targets that don't support single-inf-arg, GDB will now escape
+  special shell characters (except for whitespace and quotes) within
+  arguments before passing them to the remote target.  Remote targets
+  will need updating to take this into account.
+
 * Python API
 
   ** Added gdb.record.clear.  Clears the trace data of the current recording.
