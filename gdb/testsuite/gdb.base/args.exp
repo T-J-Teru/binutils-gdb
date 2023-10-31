@@ -95,31 +95,6 @@ proc args_test { name arglist {re_esc_list {}} {re_no_esc_list {}} } {
 			set arg {\\\"}
 		    }
 
-		    # If we are starting with a shell, we're not
-		    # escaping special shell characters in arguments
-		    # passed to GDB, we're using a remote target, and
-		    # the arguments contain a shell variable
-		    # (indicated with a '$'), then this test will
-		    # currently fail if we are splitting the
-		    # arguments.
-		    if { $startup_with_shell eq "on"
-			 && $arg_flag eq "no-escape-args"
-			 && [gdb_protocol_is_remote]
-			 && [string first "\$" $arglist] != -1 } {
-			gdb_test_multiple "show remote single-inferior-argument-feature-packet" "" {
-			    -re -wrap "Support for the 'single-inferior-argument-feature' packet on the current remote target is \"(on|off)\"\\.(.*)" {
-				set value $expect_out(1,string)
-				pass $gdb_test_name
-				if { $value eq "off" } {
-				    setup_xfail "*-*-*" gdb/28392
-				}
-			    }
-			    -re -wrap "Support for the 'single-inferior-argument-feature' packet on the current remote target is \"auto\", currently enabled\\.(.*)" {
-				pass $gdb_test_name
-			    }
-			}
-		    }
-
 		    gdb_test "print argv\[$i\]" \
 			"\\\$$::decimal = $::hex \"$arg\"" \
 			"argv\[$i\] for $name"
