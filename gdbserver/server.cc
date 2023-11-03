@@ -121,7 +121,20 @@ private:
   /* The program name, adjusted if needed.  */
   std::string m_path;
 } program_path;
-static std::vector<char *> program_args;
+
+/* All program arguments are merged into a single string.  This is similar
+   to how GDB manages the inferior arguments, and actually makes our lives
+   easier; the rules for how arguments are merged into a single string
+   differ depending on where the arguments come from.  Arguments arriving
+   form the gdbserver command line are quoted, while arguments arriving
+   from GDB (via a vRun packet) are already quoted.
+
+   NOTE: The comment above is ahead of its time.  The differences between
+   how the PROGRAM_ARGS string is built up have not yet been implemented.
+   A later patch in this series will make this change, and remove this
+   note.  */
+static std::string program_args;
+
 static std::string wrapper_argv;
 
 /* The PID of the originally created or attached inferior.  Used to
@@ -3452,9 +3465,8 @@ handle_v_run (char *own_buf)
   else
     program_path.set (new_program_name.get ());
 
-  /* Free the old argv and install the new one.  */
-  free_vector_argv (program_args);
-  program_args = new_argv;
+  program_args = construct_inferior_arguments (new_argv);
+  free_vector_argv (new_argv);
 
   try
     {
@@ -4344,8 +4356,10 @@ captured_main (int argc, char *argv[])
 
       n = argc - (next_arg - argv);
       program_path.set (next_arg[0]);
+      std::vector<char *> temp_arg_vector;
       for (i = 1; i < n; i++)
-	program_args.push_back (xstrdup (next_arg[i]));
+	temp_arg_vector.push_back (next_arg[i]);
+      program_args = construct_inferior_arguments (temp_arg_vector);
 
       /* Wait till we are at first instruction in program.  */
       target_create_inferior (program_path.get (), program_args);
