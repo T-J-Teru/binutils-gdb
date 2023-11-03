@@ -368,6 +368,7 @@ noinst_LIBRARIES = libgdbsupport.a
 @HAVE_PIPE_OR_PIPE2_TRUE@eventpipe = event-pipe.cc
 libgdbsupport_a_SOURCES = \
     agent.cc \
+    arg-passing.cc \
     btrace-common.cc \
     cleanups.cc \
     common-debug.cc \

@@ -122,6 +122,37 @@ escape_white_space (const char * arg)
 /* See common-inferior.h.  */
 
 std::string
+escape_some_stuff (const char * arg)
+{
+#ifdef __MINGW32__
+  /* This holds all the characters considered special to the
+     Windows shells.  */
+
+  // TODO: Need to figure out what goes here!!
+  static const char special[] = "\"!&*|[]{}<>?`~^=;, \t\n";
+#else
+  /* ...  */
+  const char *special;
+
+  if (getenv ("APB_WITH_BS") != NULL)
+    special = "\\\"' \t\n";
+  else
+    special = "\"' \t\n";
+#endif
+
+  return escape_characters (arg, special);
+}
+
+
+std::string
+escape_nothing (const char *arg)
+{
+  return arg;
+}
+
+/* See common-inferior.h.  */
+
+std::string
 construct_inferior_arguments (gdb::array_view<char * const> argv,
 			      escape_string_func_t escape_func)
 {

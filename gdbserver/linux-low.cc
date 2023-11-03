@@ -61,6 +61,7 @@
 #include <elf.h>
 #endif
 #include "nat/linux-namespaces.h"
+#include "gdbsupport/arg-passing.h"
 
 #ifndef O_LARGEFILE
 #define O_LARGEFILE 0
@@ -960,7 +961,7 @@ linux_ptrace_fun ()
 
 int
 linux_process_target::create_inferior (const char *program,
-				       const std::vector<char *> &program_args)
+				       const std::string &program_args)
 {
   client_state &cs = get_client_state ();
   struct lwp_info *new_lwp;
@@ -970,14 +971,14 @@ linux_process_target::create_inferior (const char *program,
   {
     maybe_disable_address_space_randomization restore_personality
       (cs.disable_randomization);
-    std::string str_program_args
-      = construct_inferior_arguments (program_args,
-				      escape_white_space);
-    fprintf (stderr, "APB: linux-low.cc, str_program_args = '%s'\n",
-	     str_program_args.c_str ());
+
+    remote_arg_handler *handler = remote_arg_handler_factory::get ();
+
+    fprintf (stderr, "APB: linux-low.cc, using '%s', program_args (%s)\n",
+	     handler->name (), program_args.c_str ());
 
     pid = fork_inferior (program,
-			 str_program_args.c_str (),
+			 program_args.c_str (),
 			 get_environ ()->envp (), linux_ptrace_fun,
 			 NULL, NULL, NULL, NULL);
   }

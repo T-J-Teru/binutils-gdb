@@ -64,6 +64,14 @@ extern std::string escape_shell_characters (const char *arg);
 
 extern std::string escape_white_space (const char *arg);
 
+/* ....  */
+
+extern std::string escape_some_stuff (const char *arg);
+
+/* ... */
+
+extern std::string escape_nothing (const char *arg);
+
 /* ... */
 
 using escape_string_func_t = std::string (*) (const char *arg);

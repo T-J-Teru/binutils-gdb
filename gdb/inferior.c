@@ -174,52 +174,79 @@ inferior::set_args (std::string args)
 {
   m_args = std::move (args);
 
-
-  std::vector<std::string> v1;
-
   fprintf (stderr, "APB: inferior::set_args (%s):\n", m_args.c_str ());
-  gdb_argv argv (m_args.c_str ());
-  for (int i = 0; argv[i] != nullptr; i++)
-    {
-      v1.push_back (std::string (argv[i]));
-      fprintf (stderr, "APB:     '%s'\n", argv[i]);
-    }
 
-  fprintf (stderr, "APB: ... and using gdb_split_args class:\n");
   std::vector<char *> remote_args;
-  gdb_split_args argx (m_args);
-  for (const auto &a : argx)
-    {
-      fprintf (stderr, "APB:     '%s'\n", a.c_str ());
-      remote_args.push_back (xstrdup (a.c_str ()));
-    }
 
-  std::string remote_str
-    = construct_inferior_arguments (remote_args, escape_white_space);
-  fprintf (stderr, "APB: remote arguments are '%s'\n", remote_str.c_str ());
-
-  std::vector<std::string> v2;
-  gdb_argv argv2 (remote_str.c_str ());
-  for (int i = 0; argv2[i] != nullptr; i++)
+  if (startup_with_shell)
     {
-      v2.push_back (std::string (argv2[i]));
-      fprintf (stderr, "APB:     '%s'\n", argv2[i]);
-    }
+      fprintf (stderr, "APB: ... split using gdb_argv class:\n");
 
-  bool bad_args = v1.size () != v2.size ();
-  if (!bad_args)
-    {
-      for (int i = 0; i < v1.size (); ++i)
+      gdb_argv argv (m_args.c_str ());
+      for (int i = 0; argv[i] != nullptr; i++)
 	{
-	  if (v1[i] != v2[i])
-	    {
-	      bad_args = true;
-	      break;
-	    }
+	  fprintf (stderr, "APB:     '%s'\n", argv[i]);
+	  remote_args.push_back (xstrdup (argv[i]));
+	}
+    }
+  else
+    {
+      fprintf (stderr, "APB: ... split using gdb_split_args class:\n");
+      gdb_split_args argx (m_args);
+      for (const auto &a : argx)
+	{
+	  fprintf (stderr, "APB:     '%s'\n", a.c_str ());
+	  remote_args.push_back (xstrdup (a.c_str ()));
 	}
     }
 
-  if (bad_args)
+  std::vector<std::string> remote_arg_strings;
+  for (const auto & a : remote_args)
+    remote_arg_strings.push_back (std::string (a));
+
+  std::string remote_str;
+
+  if (getenv ("APB_DO_NOTHING") != nullptr)
+    remote_str
+      = construct_inferior_arguments (remote_args, escape_nothing);
+  else if (getenv ("APB_DO_SMART") != nullptr)
+    {
+      if (startup_with_shell)
+	remote_str
+	  = construct_inferior_arguments (remote_args, escape_shell_characters);
+      else
+	remote_str
+	  = construct_inferior_arguments (remote_args, escape_some_stuff);
+    }
+  else
+    remote_str
+      = construct_inferior_arguments (remote_args, escape_some_stuff);
+
+  fprintf (stderr, "APB: remote arguments are (%s)\n", remote_str.c_str ());
+
+  std::vector<std::string> v1;
+  if (startup_with_shell)
+    {
+      fprintf (stderr, "APB: ... splitting remote with gdb_argv:\n");
+      gdb_argv argv (remote_str.c_str ());
+      for (int i = 0; argv[i] != nullptr; i++)
+	{
+	  v1.push_back (std::string (argv[i]));
+	  fprintf (stderr, "APB:     '%s'\n", argv[i]);
+	}
+    }
+  else
+    {
+      fprintf (stderr, "APB: ... splitting remote with gdb_split_args:\n");
+      gdb_split_args argv (remote_str);
+      for (const auto & a : argv)
+	{
+	  v1.push_back (a);
+	  fprintf (stderr, "APB:     '%s'\n", a.c_str ());
+	}
+    }
+
+  if (v1 != remote_arg_strings)
     {
       fprintf (stderr, "APB: *\n");
       fprintf (stderr, "APB: * BAD: Arguments don't match.\n");

@@ -79,6 +79,7 @@
 #include <unordered_map>
 #include "async-event.h"
 #include "gdbsupport/selftest.h"
+#include "gdbsupport/arg-passing.h"
 
 /* The remote target.  */
 
@@ -10478,8 +10479,23 @@ remote_target::extended_remote_run (const std::string &args)
 
   if (!args.empty ())
     {
-      int i;
+      remote_arg_handler *handler = remote_arg_handler_factory::get ();
+      std::vector<std::string> split_args = handler->split (args);
 
+      fprintf (stderr, "APB: Sending arguments to remote (%s):\n",
+	       handler->name ());
+
+      for (const auto &a : split_args)
+	{
+	  fprintf (stderr, "APB:     '%s'\n", a.c_str ());
+	  if (strlen (a.c_str ()) * 2 + 1 + len >= get_remote_packet_size ())
+	    error (_("Argument list too long for run packet"));
+	  rs->buf[len++] = ';';
+	  len += 2 * bin2hex ((gdb_byte *) a.c_str (), rs->buf.data () + len,
+			      strlen (a.c_str ()));
+	}
+
+#if 0
       if (getenv ("APB_OLD_WAY") != nullptr)
 	{
 	  gdb_argv argv (args.c_str ());
@@ -10509,6 +10525,7 @@ remote_target::extended_remote_run (const std::string &args)
 				  strlen (a.c_str ()));
 	    }
 	}
+#endif
     }
 
   rs->buf[len++] = '\0';

@@ -226,7 +226,7 @@ char **buildargv (const char *input)
 		      bsquote = 0;
 		      *arg++ = *input;
 		    }
-		  else if (*input == '\\')
+		  else if (*input == '\\' && !squote)
 		    {
 		      bsquote = 1;
 		    }

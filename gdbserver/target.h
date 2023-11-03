@@ -83,7 +83,7 @@ public:
      Returns the new PID on success, -1 on failure.  Registers the new
      process with the process list.  */
   virtual int create_inferior (const char *program,
-			       const std::vector<char *> &program_args) = 0;
+			       const std::string &program_args) = 0;
 
   /* Do additional setup after a new process is created, including
      exec-wrapper completion.  */

@@ -41,6 +41,7 @@ endif
 
 libgdbsupport_a_SOURCES = \
     agent.cc \
+    arg-passing.cc \
     btrace-common.cc \
     cleanups.cc \
     common-debug.cc \

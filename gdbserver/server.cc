@@ -50,6 +50,8 @@
 #include "gdbsupport/gdb_select.h"
 #include "gdbsupport/scoped_restore.h"
 #include "gdbsupport/search.h"
+#include "gdbsupport/common-inferior.h"
+#include "gdbsupport/arg-passing.h"
 
 /* PBUFSIZ must also be at least as big as IPA_CMD_BUF_SIZE, because
    the client state data is passed directly to some agent
@@ -121,7 +123,8 @@ private:
   /* The program name, adjusted if needed.  */
   std::string m_path;
 } program_path;
-static std::vector<char *> program_args;
+//static std::vector<char *> program_args;
+static std::string program_args;
 static std::string wrapper_argv;
 
 /* The PID of the originally created or attached inferior.  Used to
@@ -3022,11 +3025,14 @@ handle_v_run (char *own_buf)
     program_path.set (new_program_name);
 
   /* Free the old argv and install the new one.  */
-  free_vector_argv (program_args);
-  program_args = new_argv;
+  //free_vector_argv (program_args);
+  //program_args = new_argv;
+
+  remote_arg_handler *handler = remote_arg_handler_factory::get ();
+  program_args = handler->join (new_argv);
 
   fprintf (stderr, "APB: Remote received arguments:\n");
-  for (const auto &a : program_args)
+  for (const auto &a : new_argv)
     fprintf (stderr, "APB:     '%s'\n", a);
 
   target_create_inferior (program_path.get (), program_args);
@@ -3881,8 +3887,11 @@ captured_main (int argc, char *argv[])
 
       n = argc - (next_arg - argv);
       program_path.set (next_arg[0]);
+      std::vector<char *> xxx;
       for (i = 1; i < n; i++)
-	program_args.push_back (xstrdup (next_arg[i]));
+	xxx.push_back (next_arg[i]);
+      program_args = construct_inferior_arguments (xxx,
+						   escape_shell_characters);
 
       /* Wait till we are at first instruction in program.  */
       target_create_inferior (program_path.get (), program_args);
