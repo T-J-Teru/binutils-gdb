@@ -523,7 +523,8 @@ public:
   };
 
   /* Set the argument string from some strings.  */
-  void set_args (gdb::array_view<char * const> args);
+  void set_args (gdb::array_view<char * const> args,
+		 escape_args_func escape_func);
 
   /* Get the argument string to use when running this inferior.
 

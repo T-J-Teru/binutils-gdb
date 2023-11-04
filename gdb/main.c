@@ -1075,8 +1075,8 @@ captured_main_1 (struct captured_main_args *context)
       symarg = argv[optind];
       execarg = argv[optind];
       ++optind;
-      current_inferior ()->set_args
-	(gdb::array_view<char * const> (&argv[optind], argc - optind));
+      gdb::array_view<char * const> arg_view (&argv[optind], argc - optind);
+      current_inferior ()->set_args (arg_view, escape_shell_characters);
     }
   else
     {

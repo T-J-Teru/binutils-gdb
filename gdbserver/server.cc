@@ -3465,7 +3465,8 @@ handle_v_run (char *own_buf)
   else
     program_path.set (new_program_name.get ());
 
-  program_args = construct_inferior_arguments (new_argv);
+  program_args = construct_inferior_arguments (new_argv,
+					       escape_shell_characters);
   free_vector_argv (new_argv);
 
   try
@@ -4359,7 +4360,8 @@ captured_main (int argc, char *argv[])
       std::vector<char *> temp_arg_vector;
       for (i = 1; i < n; i++)
 	temp_arg_vector.push_back (next_arg[i]);
-      program_args = construct_inferior_arguments (temp_arg_vector);
+      program_args = construct_inferior_arguments (temp_arg_vector,
+						   escape_shell_characters);
 
       /* Wait till we are at first instruction in program.  */
       target_create_inferior (program_path.get (), program_args);

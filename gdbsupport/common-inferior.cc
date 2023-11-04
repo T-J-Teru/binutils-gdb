@@ -27,7 +27,26 @@ bool startup_with_shell = true;
 /* See common-inferior.h.  */
 
 std::string
-construct_inferior_arguments (gdb::array_view<char * const> argv)
+construct_inferior_arguments (gdb::array_view<char * const> argv,
+			      escape_args_func escape_func)
+{
+  std::string result;
+
+  for (const char *a : argv)
+    {
+      if (!result.empty ())
+	result += " ";
+
+      result += escape_func (a);
+    }
+
+  return result;
+}
+
+/* See common-inferior.h.  */
+
+std::string
+escape_shell_characters (const char *arg)
 {
   std::string result;
 
@@ -43,55 +62,49 @@ construct_inferior_arguments (gdb::array_view<char * const> argv)
   static const char special[] = "\"!#$&*()\\|[]{}<>?'`~^; \t\n";
   static const char quote = '\'';
 #endif
-  for (int i = 0; i < argv.size (); ++i)
-    {
-      if (i > 0)
-	result += ' ';
 
-      /* Need to handle empty arguments specially.  */
-      if (argv[i][0] == '\0')
+  /* Need to handle empty arguments specially.  */
+  if (arg[0] == '\0')
+    {
+      result += quote;
+      result += quote;
+    }
+  else
+    {
+#ifdef __MINGW32__
+      bool quoted = false;
+
+      if (strpbrk (arg, special))
 	{
-	  result += quote;
+	  quoted = true;
 	  result += quote;
 	}
-      else
+#endif
+      for (const char *cp = arg; *cp; ++cp)
 	{
-#ifdef __MINGW32__
-	  bool quoted = false;
-
-	  if (strpbrk (argv[i], special))
+	  if (*cp == '\n')
 	    {
-	      quoted = true;
+	      /* A newline cannot be quoted with a backslash (it just
+		 disappears), only by putting it inside quotes.  */
+	      result += quote;
+	      result += '\n';
 	      result += quote;
 	    }
-#endif
-	  for (char *cp = argv[i]; *cp != '\0'; ++cp)
+	  else
 	    {
-	      if (*cp == '\n')
-		{
-		  /* A newline cannot be quoted with a backslash (it
-		     just disappears), only by putting it inside
-		     quotes.  */
-		  result += quote;
-		  result += '\n';
-		  result += quote;
-		}
-	      else
-		{
 #ifdef __MINGW32__
-		  if (*cp == quote)
+	      if (*cp == quote)
 #else
-		    if (strchr (special, *cp) != NULL)
+	      if (strchr (special, *cp) != NULL)
 #endif
-		      result += '\\';
-		  result += *cp;
-		}
+		result += '\\';
+	      result += *cp;
 	    }
-#ifdef __MINGW32__
-	  if (quoted)
-	    result += quote;
-#endif
 	}
+#ifdef __MINGW32__
+      if (quoted)
+	result += quote;
+#endif
     }
 
   return result;

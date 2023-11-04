@@ -52,9 +52,20 @@ extern const std::string &get_inferior_cwd ();
    the target is started up with a shell.  */
 extern bool startup_with_shell;
 
-/* Compute command-line string given argument vector. This does the
-   same shell processing as fork_inferior.  */
+/* The type for a function used by construct_inferior_arguments to add any
+   quoting needed to an individual argument before combining all the
+   arguments into a single string.  */
+using escape_args_func = std::string (*) (const char *arg);
+
+/* Return a version of ARG that has special shell characters escaped.  */
+extern std::string escape_shell_characters (const char *arg);
+
+/* Pass each element of ARGS through ESCAPE_FUNC and combine the results
+   into a single string, separating each element with a single space
+   character.  */
+
 extern std::string
-construct_inferior_arguments (gdb::array_view<char * const>);
+construct_inferior_arguments (gdb::array_view<char * const> args,
+			      escape_args_func escape_func);
 
 #endif /* COMMON_COMMON_INFERIOR_H */
