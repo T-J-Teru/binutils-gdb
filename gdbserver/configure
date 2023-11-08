@@ -630,6 +630,7 @@ srv_xmlbuiltin
 GDBSERVER_LIBS
 GDBSERVER_DEPFILES
 RDYNAMIC
+gdb_version_suffix
 REPORT_BUGS_TEXI
 REPORT_BUGS_TO
 PKGVERSION
@@ -767,6 +768,7 @@ enable_build_warnings
 enable_gdb_build_warnings
 with_pkgversion
 with_bugurl
+with_gdb_version_suffix
 with_libthread_db
 enable_inprocess_agent
 '
@@ -1435,6 +1437,8 @@ Optional Packages:
   --with-ust-lib=PATH   Specify the directory for the installed UST library
   --with-pkgversion=PKG   Use PKG in the version string in place of "GDB"
   --with-bugurl=URL       Direct users to URL to report a bug
+  --with-gdb-version-suffix=STRING
+                          Append STRING to the end of the version number
   --with-libthread-db=PATH
                           use given libthread_db directly
 
@@ -12373,6 +12377,22 @@ _ACEOF
 cat >>confdefs.h <<_ACEOF
 #define REPORT_BUGS_TO "$REPORT_BUGS_TO"
 _ACEOF
+
+
+
+
+# Check whether --with-gdb-version-suffix was given.
+if test "${with_gdb_version_suffix+set}" = set; then :
+  withval=$with_gdb_version_suffix; case "$withval" in
+    yes) as_fn_error $? "version suffix not specified" "$LINENO" 5 ;;
+    no)  gdb_version_suffix= ;;
+    *)   gdb_version_suffix="$withval" ;;
+   esac
+else
+  gdb_version_suffix=""
+fi
+
+
 
 
 # Check for various supplementary target information (beyond the

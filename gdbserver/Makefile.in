@@ -31,6 +31,9 @@ CONFIG_SRC_SUBDIR = @CONFIG_SRC_SUBDIR@
 
 install_sh = @install_sh@
 
+# An optional string to append to the version number.
+gdb_version_suffix = @gdb_version_suffix@
+
 SHELL = @SHELL@
 EXEEXT = @EXEEXT@
 
@@ -445,7 +448,7 @@ force:
 
 version-generated.cc: Makefile $(srcdir)/../gdb/version.in $(srcdir)/../bfd/version.h $(srcdir)/../gdbsupport/create-version.sh
 	$(ECHO_GEN) $(SHELL) $(srcdir)/../gdbsupport/create-version.sh $(srcdir)/../gdb \
-		$(host_alias) $(target_alias) $@
+		$(host_alias) $(target_alias) $@ $(gdb_version_suffix)
 
 xml-builtin-generated.cc: stamp-xml; @true
 stamp-xml: $(XML_DIR)/feature_to_c.sh Makefile $(XML_FILES)

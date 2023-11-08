@@ -26,10 +26,12 @@ srcdir="$1"
 host_alias="$2"
 target_alias="$3"
 output="$4"
+version_suffix="$5"
 
 rm -f version.c-tmp "$output" version.tmp
 date=$(sed -n -e 's/^.* BFD_VERSION_DATE \(.*\)$/\1/p' "$srcdir/../bfd/version.h")
 sed -e "s/DATE/$date/" < "$srcdir/version.in" > version.tmp
+echo -n "$version_suffix" >> version.tmp
 {
     echo '#include "gdbsupport/version.h"'
     echo 'const char version[] = "'"$(sed q version.tmp)"'";'

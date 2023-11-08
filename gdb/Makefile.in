@@ -112,6 +112,9 @@ srcdir = @srcdir@
 VPATH = @srcdir@
 top_srcdir = @top_srcdir@
 
+# An optional string to append to the version number.
+gdb_version_suffix = @gdb_version_suffix@
+
 include $(srcdir)/silent-rules.mk
 
 # Note that these are overridden by GNU make-specific code below if
@@ -2386,7 +2389,7 @@ version.c: stamp-version; @true
 # create-version.sh.
 stamp-version: Makefile version.in $(srcdir)/../bfd/version.h $(srcdir)/../gdbsupport/create-version.sh
 	$(ECHO_GEN) $(SHELL) $(srcdir)/../gdbsupport/create-version.sh $(srcdir) \
-	    $(host_alias) $(target_alias) version-t.t
+	    $(host_alias) $(target_alias) version-t.t $(gdb_version_suffix)
 	@$(SHELL) $(srcdir)/../move-if-change version-t.t version.c
 	@echo stamp > stamp-version
 
