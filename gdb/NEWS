@@ -56,6 +56,10 @@
   ** Added gdb.record.clear.  Clears the trace data of the current recording.
      This forces re-decoding of the trace for successive commands.
 
+  ** When assigning a sequence to gdb.Inferior.arguments, only quote
+     and whitespace characters will be escaped.  Everything else will
+     be left unmodified.
+
 * Debugger Adapter Protocol changes
 
   ** The "scopes" request will now return a scope holding global

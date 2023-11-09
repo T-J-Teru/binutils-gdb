@@ -480,11 +480,37 @@ gdb_test "show args" \
     [string_to_regexp "Argument list to give program being debugged when it is started is \"a b c\"."] \
     "show args from string"
 
-gdb_test_no_output "python gdb.selected_inferior().arguments = \['a', 'b c'\]" \
-    "set arguments from list"
-gdb_test "show args" \
-    [string_to_regexp "Argument list to give program being debugged when it is started is \"a b\\ c\"."] \
-    "show args from list"
+# Test setting inferior arguments from a Python list.  INPUT is a
+# single string that contains the Python list, this is inserted into
+# the argument setting command, and should include the surrouning
+# square brackets.
+#
+# The OUTPUT is the string that describes the arguments as GDB will
+# have stored them within the inferior, as seen in the 'show args'
+# command output.  OUTPUT should include the surrounding quotes.
+# OUTPUT will be passed through string_to_regexp, so should be a plain
+# string, not a regexp.
+proc test_setting_arguments_from_list { input output } {
+    with_test_prefix "input: ${input}" {
+	gdb_test_no_output "python gdb.selected_inferior().arguments = ${input}" \
+	    "set arguments from list"
+	gdb_test "show args" \
+	    [string_to_regexp \
+		 "Argument list to give program being debugged when it is started is ${output}."] \
+	    "show args from list"
+    }
+}
+
+# Test setting inferior arguments from a list.  Try to hit all the
+# potentially problematic cases.  Notice that shell characters are not
+# automatically quoted, if a user wants a shell character quoted then
+# they must do that themselves.
+test_setting_arguments_from_list "\['a', 'b c'\]" "\"a b\\ c\""
+test_setting_arguments_from_list "\[' ', '\\t', '\\n']" "\"\\  \\\t '\r\n'\""
+test_setting_arguments_from_list "\['', '']" "\"'' ''\""
+test_setting_arguments_from_list "\['\"']" "\"\\\"\""
+test_setting_arguments_from_list "\[\"'\"]" "\"\\\'\""
+test_setting_arguments_from_list "\[\"\$VAR\", \";\"]" "\"\$VAR ;\""
 
 gdb_test_no_output "python gdb.selected_inferior().clear_env()" \
     "clear environment"
