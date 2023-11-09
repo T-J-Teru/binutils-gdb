@@ -279,6 +279,10 @@ qExecAndArgs
      inferior changes.  The event has an 'inferior' attribute which is
      the gdb.Inferior in which the core file has changed.
 
+  ** When assigning a sequence to gdb.Inferior.arguments, only quote
+     and whitespace characters will be escaped.  Everything else will
+     be left unmodified.
+
 * Guile API
 
   ** Procedures 'memory-port-read-buffer-size',

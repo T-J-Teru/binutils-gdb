@@ -899,7 +899,7 @@ infpy_set_args (PyObject *self, PyObject *value, void *closure)
 	  args.push_back (std::move (str));
 	}
       gdb::array_view<gdb::unique_xmalloc_ptr<char> const> args_view (args);
-      inf->inferior->set_args (args_view, true);
+      inf->inferior->set_args (args_view, false);
     }
   else
     {
