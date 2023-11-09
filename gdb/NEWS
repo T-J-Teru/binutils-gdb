@@ -395,6 +395,10 @@ vFile:stat
   ** Added gdb.Architecture.void_type. Returns a gdb.Type representing "void"
      type for that architecture.
 
+  ** When assigning a sequence to gdb.Inferior.arguments, only quote
+     and whitespace characters will be escaped.  Everything else will
+     be left unmodified.
+
 * Debugger Adapter Protocol changes
 
   ** The "scopes" request will now return a scope holding global

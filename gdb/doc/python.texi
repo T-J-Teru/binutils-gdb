@@ -3622,8 +3622,11 @@ there are no arguments, the value is @code{None}.
 
 Either a string or a sequence of strings can be assigned to this
 attribute.  When a string is assigned, it is assumed to have any
-necessary quoting for the shell; when a sequence is assigned, the
-quoting is applied by @value{GDBN}.
+necessary quoting for the shell; when a sequence is assigned, quoting
+is applied by @value{GDBN} so that the individual strings can be
+concatenated into a single string, with a single space between each
+argument.  This means that shell quote characters and whitespace
+characters will be escaped.
 @end defvar
 
 A @code{gdb.Inferior} object has the following methods:
