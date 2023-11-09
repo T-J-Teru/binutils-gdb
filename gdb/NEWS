@@ -82,6 +82,10 @@ show remote thread-options-packet
   ** New function gdb.interrupt(), that interrupts GDB as if the user
      typed control-c.
 
+  ** When assigning a sequence to gdb.Inferior.arguments, only quote
+     and whitespace characters will be escaped.  Everything else will
+     be left unmodified.
+
 * Debugger Adapter Protocol changes
 
   ** GDB now emits the "process" event.
