@@ -132,3 +132,17 @@ escape_shell_characters (const char *arg)
 
   return escape_characters (arg, special);
 }
+
+/* See common-inferior.h.  */
+
+std::string
+escape_quotes_and_white_space (const char * arg)
+{
+#ifdef __MINGW32__
+  static const char special[] = "\" \t\n";
+#else
+  static const char special[] = "\"' \t\n";
+#endif
+
+  return escape_characters (arg, special);
+}

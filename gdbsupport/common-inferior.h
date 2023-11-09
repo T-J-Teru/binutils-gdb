@@ -60,6 +60,11 @@ using escape_args_func = std::string (*) (const char *arg);
 /* Return a version of ARG that has special shell characters escaped.  */
 extern std::string escape_shell_characters (const char *arg);
 
+/* Return a version of ARG that has quote characters and white space
+   characters escaped.  No other special shell characters will have been
+   escaped though.  */
+extern std::string escape_quotes_and_white_space (const char *arg);
+
 /* Pass each element of ARGS through ESCAPE_FUNC and combine the results
    into a single string, separating each element with a single space
    character.  */
