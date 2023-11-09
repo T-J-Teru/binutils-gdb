@@ -43,23 +43,23 @@ construct_inferior_arguments (gdb::array_view<char * const> argv,
   return result;
 }
 
-/* See common-inferior.h.  */
+/* Escape characters in ARG and return an updated string.  The string
+   SPECIAL contains the set of characters that must be escaped.  SPECIAL
+   must not be nullptr, and it is assumed that SPECIAL contains the newline
+   '\n' character.  It is assumed that ARG is not nullptr, but ARG can
+   be the empty string.  */
 
-std::string
-escape_shell_characters (const char *arg)
+static std::string
+escape_characters (const char *arg, const char *special)
 {
+  gdb_assert (special != nullptr);
+  gdb_assert (arg != nullptr);
+
   std::string result;
 
 #ifdef __MINGW32__
-  /* This holds all the characters considered special to the
-     Windows shells.  */
-  static const char special[] = "\"!&*|[]{}<>?`~^=;, \t\n";
   static const char quote = '"';
 #else
-  /* This holds all the characters considered special to the
-     typical Unix shells.  We include `^' because the SunOS
-     /bin/sh treats it as a synonym for `|'.  */
-  static const char special[] = "\"!#$&*()\\|[]{}<>?'`~^; \t\n";
   static const char quote = '\'';
 #endif
 
@@ -69,12 +69,16 @@ escape_shell_characters (const char *arg)
       result += quote;
       result += quote;
     }
+  /* The special character handling code here assumes that if SPECIAL is
+     not nullptr, then SPECIAL will contain '\n'.  This is true for all our
+     current usages, but if this ever changes in the future the following
+     might need reworking.  */
   else
     {
 #ifdef __MINGW32__
       bool quoted = false;
 
-      if (strpbrk (arg, special))
+      if (strpbrk (argv[i], special))
 	{
 	  quoted = true;
 	  result += quote;
@@ -95,7 +99,7 @@ escape_shell_characters (const char *arg)
 #ifdef __MINGW32__
 	      if (*cp == quote)
 #else
-	      if (strchr (special, *cp) != NULL)
+	      if (strchr (special, *cp) != nullptr)
 #endif
 		result += '\\';
 	      result += *cp;
@@ -108,4 +112,23 @@ escape_shell_characters (const char *arg)
     }
 
   return result;
+}
+
+/* See common-inferior.h.  */
+
+std::string
+escape_shell_characters (const char *arg)
+{
+#ifdef __MINGW32__
+  /* This holds all the characters considered special to the
+     Windows shells.  */
+  static const char special[] = "\"!&*|[]{}<>?`~^=;, \t\n";
+#else
+  /* This holds all the characters considered special to the
+     typical Unix shells.  We include `^' because the SunOS
+     /bin/sh treats it as a synonym for `|'.  */
+  static const char special[] = "\"!#$&*()\\|[]{}<>?'`~^; \t\n";
+#endif
+
+  return escape_characters (arg, special);
 }
