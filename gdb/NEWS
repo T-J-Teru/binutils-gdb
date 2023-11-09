@@ -140,6 +140,10 @@ info threads [-gid] [-stopped] [-running] [ID]...
      when output is going to standard output, and False when output is
      going to a string.
 
+  ** When assigning a sequence to gdb.Inferior.arguments, only quote
+     and whitespace characters will be escaped.  Everything else will
+     be left unmodified.
+
 * Guile API
 
   ** New type <gdb:color> for dealing with colors.
