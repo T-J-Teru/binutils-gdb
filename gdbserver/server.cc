@@ -50,6 +50,7 @@
 #include "gdbsupport/gdb_select.h"
 #include "gdbsupport/scoped_restore.h"
 #include "gdbsupport/search.h"
+#include "gdbsupport/remote-args.h"
 
 /* PBUFSIZ must also be at least as big as IPA_CMD_BUF_SIZE, because
    the client state data is passed directly to some agent
@@ -3465,7 +3466,7 @@ handle_v_run (char *own_buf)
   else
     program_path.set (new_program_name.get ());
 
-  program_args = construct_inferior_arguments (new_argv);
+  program_args = gdb::remote_args::join (new_argv);
   free_vector_argv (new_argv);
 
   try
