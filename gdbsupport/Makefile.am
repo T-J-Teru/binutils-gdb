@@ -72,6 +72,7 @@ libgdbsupport_a_SOURCES = \
     pathstuff.cc \
     print-utils.cc \
     ptid.cc \
+    remote-args.cc \
     rsp-low.cc \
     run-time-clock.cc \
     safe-strerror.cc \
