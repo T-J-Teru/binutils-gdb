@@ -108,6 +108,10 @@ show remote thread-options-packet
      object, these will be stored in the object's new
      InferiorThread.__dict__ attribute.
 
+  ** When assigning a sequence to gdb.Inferior.arguments, only quote
+     and whitespace characters will be escaped.  Everything else will
+     be left unmodified.
+
 * Debugger Adapter Protocol changes
 
   ** GDB now emits the "process" event.
