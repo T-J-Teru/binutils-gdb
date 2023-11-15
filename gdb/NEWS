@@ -27,6 +27,16 @@ single-inf-arg in qSupported
   reply with the single-inf-arg feature to indicate that it is able to
   accept arguments as a single string.
 
+* Changed commands
+
+set args
+run
+start
+starti
+  These commands now all allow for entering inferior arguments that
+  contain a newline character.  The newline must be contained within a
+  single or double quoted argument.
+
 *** Changes in GDB 17
 
 * Debugging Linux programs that use x86-64 or x86-64 with 32-bit pointer

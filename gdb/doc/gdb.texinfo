@@ -2970,6 +2970,26 @@ with no arguments.  Once you have run your program with arguments,
 using @code{set args} before the next @code{run} is the only way to run
 it again without arguments.
 
+It is possible to set arguments containing a newline character.  This
+can be done by enclosing an argument within a single or double quote.
+For example, start by entering:
+
+@smallexample
+(@value{GDBP}) set args "ab
+@end smallexample
+
+@noindent
+and then enter the newline, @value{GDBN} gives a secondary prompt
+@code{>} and allows you to continue entering the arguments:
+
+@smallexample
+(@value{GDBP}) set args "ab
+>cd"
+(@value{GDBP}) show args
+Argument list to give program being debugged when it is started is ""ab
+cd"".
+@end smallexample
+
 @kindex show args
 @item show args
 Show the arguments to give your program when it is started.
