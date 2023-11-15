@@ -55,6 +55,16 @@ set remote thread-options-packet
 show remote thread-options-packet
   Set/show the use of the thread options packet.
 
+* Changed commands
+
+set args
+run
+start
+starti
+  These commands now all allow for entering inferior arguments that
+  contain a newline character.  The newline must be contained within a
+  single or double quoted argument.
+
 * New features in the GDB remote stub, GDBserver
 
   ** The --remote-debug and --event-loop-debug command line options
