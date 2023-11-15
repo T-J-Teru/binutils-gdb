@@ -518,6 +518,14 @@ maintenance show dwarf unwinders
 show configuration
   Now includes the version of GNU Readline library that GDB is using.
 
+set args
+run
+start
+starti
+  These commands now all allow for entering inferior arguments that
+  contain a newline character.  The newline must be contained within a
+  single or double quoted argument.
+
 * New remote packets
 
 vFile:stat
