@@ -1,0 +1,88 @@
+GDB Security Process
+====================
+
+What is a GDB security bug?
+===========================
+
+  A security bug is one that threatens the security of a system or
+  network, or might compromise the security of data stored on it.  The
+  primary use case of GNU GDB is to diagnose issues in programs.
+  These programs may be local, i.e. on the system on which GDB runs or
+  remote, on a different system.
+
+  In the context of local debugging, any bugs in GDB that result in
+  crossing of a privilege boundary are considered security bugs.  Some
+  examples of crossing a privilege boundary include; being able to
+  execute code as an arbitrarily different user, or accessing resources
+  (e.g. files, sockets, etc) for which the original user would not
+  normally have access.
+
+  In the context of remote debugging, there are two components of
+  relevance; GDB running on the local machine, and a remote target
+  running as a potentially different user, with different permissions,
+  on a remote machine.
+
+  The GNU GDB project provides one remote target, gdbserver.  As with
+  GDB, any bugs in gdbserver that result in crossing of a privilege
+  boundary are considered security bugs.
+
+  Other projects also implement remote targets to which GDB can
+  connect.  Any bugs in these remote targets are out of scope for the
+  GNU GDB project, and should be reported to the relevant project.
+
+  The connection between GDB and a remote target is not protected by
+  either authentication, or encryption.  Connecting to a remote target
+  allows for arbitrary code execution on the remote system with the
+  same privileges as the remote user, and any resource that the remote
+  user can access can be read by GDB, and downloaded to the local
+  machine on which GDB is running.  As such users need to take
+  independent measures to secure the connection between GDB and the
+  remote target.
+
+  While GDB is intended to be robust against untrusted binaries, it is
+  not responsible for arbitrary code execution on a system.  As a
+  result, any bugs exposed by untrusted binaries will be accepted and
+  treated with appropriate urgency, but will not be considered
+  security issues.  This applies to local as well as remote debugging;
+  any bugs in gdbserver, exposed by untrusted binaries will be
+  accepted and treated with appropriate urgency, but will not be
+  considered security issues.
+
+  GDB assumes that the remote target is trusted.  While GDB is
+  intended to be robust against incorrectly behaving remote targets, a
+  malicious remote target could trigger bugs within GDB.  Any bugs
+  exposed by connecting to an untrusted remote target will be accepted
+  and treated with appropriate urgency, but will not be considered
+  security issues unless the bug triggers a privilege boundary
+  crossing.
+
+Reporting private security bugs
+===============================
+
+  NOTE: All bugs reported in the GDB Bugzilla are public.
+
+  In order to report a private security bug that is not immediately
+  public, please contact one of the downstream distributions with
+  security teams.  The following teams have volunteered to handle
+  such bugs:
+
+     Red Hat: secalert@redhat.com
+     SUSE:    security@suse.de
+
+  Please report the bug to just one of these teams.  It will be shared
+  with other teams as necessary.
+  The team contacted will take care of details such as vulnerability
+  rating and CVE assignment (http://cve.mitre.org/about/).  It is likely
+  that the team will ask to file a public bug because the issue is
+  sufficiently minor and does not warrant an embargo.  An embargo is not
+  a requirement for being credited with the discovery of a security
+  vulnerability.
+
+Reporting public security bugs
+==============================
+
+  It is expected that critical security bugs will be rare, and that most
+  security bugs can be reported in GDB Bugzilla system, thus making
+  them public immediately.  The system can be found here:
+
+     https://sourceware.org/bugzilla/
