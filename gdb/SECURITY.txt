@@ -13,9 +13,10 @@ What is a GDB security bug?
   In the context of local debugging, any bugs in GDB that result in
   crossing of a privilege boundary are considered security bugs.  Some
   examples of crossing a privilege boundary include; being able to
-  execute code as an arbitrarily different user, or accessing resources
-  (e.g. files, sockets, etc) for which the original user would not
-  normally have access.
+  execute code as an arbitrarily different user, or accessing
+  resources (e.g. files, sockets, etc) for which the original user
+  would not normally have access.  Additionally, any bug that causes
+  arbitrary code to be executed 
 
   In the context of remote debugging, there are two components of
   relevance; GDB running on the local machine, and a remote target
@@ -48,6 +49,14 @@ What is a GDB security bug?
   accepted and treated with appropriate urgency, but will not be
   considered security issues.
 
+  Loading a binary into GDB should not result in any part of the
+  loadable program being executed without a starting command being
+  given to GDB (e.g. run, start, or starti).
+
+  Loading a binary into gdbserver immediately creates a process
+  running the given binary, which is stopped at the first instruction
+  until GDB is attached.
+
   GDB assumes that the remote target is trusted.  While GDB is
   intended to be robust against incorrectly behaving remote targets, a
   malicious remote target could trigger bugs within GDB.  Any bugs
@@ -55,6 +64,11 @@ What is a GDB security bug?
   and treated with appropriate urgency, but will not be considered
   security issues unless the bug triggers a privilege boundary
   crossing.
+
+  Care should be taken when creating tools that wrap around GDB in
+  order to perform crash analysis, or binary analysis.  Such tools
+  should only be run on trusted binaries, or should be run within a
+  sandboxed environment in order to avoid the risks outlined above.
 
 Reporting private security bugs
 ===============================
