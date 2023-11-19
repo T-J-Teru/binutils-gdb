@@ -19,10 +19,51 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "gdbsupport/common-inferior.h"
+#include "gdbsupport/function-view.h"
 
 /* See common-inferior.h.  */
 
 bool startup_with_shell = true;
+
+/* Helper function for the two construct_inferior_arguments overloads
+   below.  Accept a gdb::array_view over objects of type T.  Convert each T
+   to a std::string by calling CB, and join all the resulting strings
+   together with a single space between each.  */
+
+template<typename T>
+static std::string
+construct_inferior_arguments_1 (gdb::array_view<T const> argv,
+				gdb::function_view<std::string (const T &)> cb)
+{
+  std::string result;
+
+  for (const T &a : argv)
+    {
+      if (!result.empty ())
+	result += " ";
+
+      result += cb (a);
+    }
+
+  return result;
+}
+
+/* See common-inferior.h.  */
+
+std::string
+construct_inferior_arguments
+  (gdb::array_view<gdb::unique_xmalloc_ptr<char> const> argv,
+   escape_args_func escape_func)
+{
+  /* Convert ARG to a std::string by applying ESCAPE_FUNC.  */
+  auto escape_cb = [&] (const gdb::unique_xmalloc_ptr<char> &arg)
+  {
+    return escape_func (arg.get ());
+  };
+
+  return construct_inferior_arguments_1<gdb::unique_xmalloc_ptr<char>>
+    (argv, escape_cb);
+}
 
 /* See common-inferior.h.  */
 
@@ -30,17 +71,13 @@ std::string
 construct_inferior_arguments (gdb::array_view<char * const> argv,
 			      escape_args_func escape_func)
 {
-  std::string result;
+  /* Convert ARG to a std::string by applying ESCAPE_FUNC.  */
+  auto escape_cb = [&] (const char * const &arg)
+  {
+    return escape_func (arg);
+  };
 
-  for (const char *a : argv)
-    {
-      if (!result.empty ())
-	result += " ";
-
-      result += escape_func (a);
-    }
-
-  return result;
+  return construct_inferior_arguments_1<char *> (argv, escape_cb);
 }
 
 /* Escape characters in ARG and return an updated string.  The string

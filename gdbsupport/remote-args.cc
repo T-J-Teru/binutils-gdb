@@ -37,7 +37,7 @@ gdb::remote_args::split (std::string args)
 /* See remote-args.h.  */
 
 std::string
-gdb::remote_args::join (std::vector<char *> &args)
+gdb::remote_args::join (std::vector<gdb::unique_xmalloc_ptr<char>> &args)
 {
   return construct_inferior_arguments (args, escape_shell_characters);
 }

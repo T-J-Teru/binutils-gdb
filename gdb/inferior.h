@@ -523,8 +523,12 @@ public:
   };
 
   /* Set the argument string from some strings.  */
-  void set_args (gdb::array_view<char * const> args,
-		 escape_args_func escape_func);
+  template<typename T>
+  void set_args (gdb::array_view<T const> args,
+		 escape_args_func escape_func)
+  {
+    this->set_args (construct_inferior_arguments (args, escape_func));
+  }
 
   /* Get the argument string to use when running this inferior.
 

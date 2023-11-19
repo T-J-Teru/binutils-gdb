@@ -59,32 +59,6 @@ arg_test_desc desc[] = {
   { "1 '\n' 3", { "1", "\n", "3" }, "1 '\n' 3" },
 };
 
-/* Convert a std::vector<std::string> into std::vector<char *>.  This
-   requires copying all of the string content.  This class takes care of
-   freeing the memory once we are done with it.  */
-
-struct args_as_c_strings
-{
-  args_as_c_strings (std::vector<std::string> args)
-  {
-    for (const auto & a : args)
-      m_data.push_back (xstrdup (a.c_str ()));
-  }
-
-  ~args_as_c_strings ()
-  {
-    free_vector_argv (m_data);
-  }
-
-  std::vector<char *> &get ()
-  {
-    return m_data;
-  }
-
-private:
-  std::vector<char *> m_data;
-};
-
 /* Run the remote argument passing self tests.  */
 
 static void
@@ -132,9 +106,10 @@ self_test ()
 	}
 
       /* Now join the arguments.  */
-      args_as_c_strings split_args_c_str (split_args);
-      std::string joined_args
-	= gdb::remote_args::join (split_args_c_str.get ());
+      std::vector<gdb::unique_xmalloc_ptr<char>> temp_args;
+      for (const auto & a : split_args)
+	temp_args.push_back (make_unique_xstrdup (a.c_str ()));
+      std::string joined_args = gdb::remote_args::join (temp_args);
 
       if (run_verbose ())
 	debug_printf ("Joined (%s), expected (%s)\n",

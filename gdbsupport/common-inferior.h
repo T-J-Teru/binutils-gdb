@@ -70,6 +70,13 @@ extern std::string escape_quotes_and_white_space (const char *arg);
    character.  */
 
 extern std::string
+construct_inferior_arguments
+  (gdb::array_view<gdb::unique_xmalloc_ptr<char> const> args,
+   escape_args_func escape_func);
+
+/* An overload of the above that takes an array of raw pointers.  */
+
+extern std::string
 construct_inferior_arguments (gdb::array_view<char * const> args,
 			      escape_args_func escape_func);
 

@@ -3413,7 +3413,7 @@ handle_v_run (char *own_buf)
 {
   client_state &cs = get_client_state ();
   char *p, *next_p;
-  std::vector<char *> new_argv;
+  std::vector<gdb::unique_xmalloc_ptr<char>> new_argv;
   gdb::unique_xmalloc_ptr<char> new_program_name;
   int i;
 
@@ -3433,7 +3433,7 @@ handle_v_run (char *own_buf)
       else if (p == next_p)
 	{
 	  /* Empty argument.  */
-	  new_argv.push_back (xstrdup (""));
+	  new_argv.push_back (make_unique_xstrdup (""));
 	}
       else
 	{
@@ -3444,14 +3444,13 @@ handle_v_run (char *own_buf)
 	  if (arg == nullptr)
 	    {
 	      write_enn (own_buf);
-	      free_vector_argv (new_argv);
 	      return;
 	    }
 
 	  if (i == 0)
 	    new_program_name = std::move (arg);
 	  else
-	    new_argv.push_back (arg.release ());
+	    new_argv.push_back (std::move (arg));
 	}
       if (*next_p == '\0')
 	break;
@@ -3464,7 +3463,6 @@ handle_v_run (char *own_buf)
       if (program_path.get () == nullptr)
 	{
 	  write_enn (own_buf);
-	  free_vector_argv (new_argv);
 	  return;
 	}
     }
@@ -3479,14 +3477,12 @@ handle_v_run (char *own_buf)
 	  return;
 	}
       else if (new_argv.size () == 1)
-	program_args = std::string (new_argv[0]);
+	program_args = std::string (new_argv[0].get ());
       else
 	program_args.clear ();
     }
   else
     program_args = gdb::remote_args::join (new_argv);
-
-  free_vector_argv (new_argv);
 
   try
     {
@@ -4385,16 +4381,12 @@ captured_main (int argc, char *argv[])
 
   if (pid == 0 && *next_arg != NULL)
     {
-      int i, n;
-
-      n = argc - (next_arg - argv);
       program_path.set (next_arg[0]);
-      std::vector<char *> temp_arg_vector;
-      for (i = 1; i < n; i++)
-	temp_arg_vector.push_back (next_arg[i]);
       escape_args_func escape_func = (escape_args ? escape_shell_characters
 				      : escape_quotes_and_white_space);
-      program_args = construct_inferior_arguments (temp_arg_vector,
+      int arg_count = argc - (next_arg - argv) - 1;
+      gdb::array_view<char *> arg_view (&next_arg[1], arg_count);
+      program_args = construct_inferior_arguments (arg_view,
 						   escape_func);
 
       /* Wait till we are at first instruction in program.  */
