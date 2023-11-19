@@ -58,7 +58,14 @@ extern bool startup_with_shell;
    escaped.  When ESCAPE_SHELL_CHAR is false only the characters that GDB
    sees as special (quotes and whitespace) are escaped.  */
 extern std::string
-construct_inferior_arguments (gdb::array_view<char * const> argv,
+construct_inferior_arguments
+  (gdb::array_view<gdb::unique_xmalloc_ptr<char> const> args,
+   bool escape_shell_char);
+
+/* An overload of the above that takes an array of raw pointers.  */
+
+extern std::string
+construct_inferior_arguments (gdb::array_view<char * const> args,
 			      bool escape_shell_char);
 
 #endif /* COMMON_COMMON_INFERIOR_H */
