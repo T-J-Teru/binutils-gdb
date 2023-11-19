@@ -20,6 +20,8 @@
 #ifndef GDBSUPPORT_REMOTE_ARGS_H
 #define GDBSUPPORT_REMOTE_ARGS_H
 
+#include "gdbsupport/common-inferior.h"
+
 /* The functions declared here are used when passing inferior arguments
    from GDB to gdbserver.
 
@@ -51,7 +53,25 @@ extern std::vector<std::string> split (const std::string &args);
    passed through ::join we will get back the string 'a\ b' (without the
    single quotes), that is, we choose to escape the white space, rather
    than wrap the argument in quotes.  */
-extern std::string join (const std::vector<char *> &args);
+inline std::string
+join (const std::vector<gdb::unique_xmalloc_ptr<char>> &args)
+{
+  return construct_inferior_arguments (args, true);
+}
+
+/* As above, but with alternative argument type.  */
+inline std::string
+join (const std::vector<char *> &args)
+{
+  return construct_inferior_arguments (args, true);
+}
+
+/* As above, but with alternative argument type.  */
+inline std::string
+join (const std::vector<std::string> &args)
+{
+  return construct_inferior_arguments (args, true);
+}
 
 } /* namespace remote_args */
 
