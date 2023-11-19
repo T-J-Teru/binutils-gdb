@@ -925,11 +925,8 @@ infpy_set_args (PyObject *self, PyObject *value, void *closure)
 	    return -1;
 	  args.push_back (std::move (str));
 	}
-      std::vector<char *> argvec;
-      for (const auto &arg : args)
-	argvec.push_back (arg.get ());
-      gdb::array_view<char * const> view (argvec.data (), argvec.size ());
-      inf->inferior->set_args (view, false);
+      gdb::array_view<gdb::unique_xmalloc_ptr<char> const> arg_view (args);
+      inf->inferior->set_args (arg_view, false);
     }
   else
     {
