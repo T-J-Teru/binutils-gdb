@@ -51,6 +51,9 @@ extern std::vector<std::string> split (const std::string &args);
    passed through ::join we will get back the string 'a\ b' (without the
    single quotes), that is, we choose to escape the white space, rather
    than wrap the argument in quotes.  */
+extern std::string join (const std::vector<gdb::unique_xmalloc_ptr<char>> &args);
+
+/* As above, but with alternative argument type.  */
 extern std::string join (const std::vector<char *> &args);
 
 } /* namespace remote_args */
