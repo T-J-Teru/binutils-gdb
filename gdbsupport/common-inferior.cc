@@ -130,11 +130,41 @@ escape_gdb_characters (const char * arg)
   return escape_characters (arg, special);
 }
 
-/* See common-inferior.h.  */
+/* Template function that converts a T to a 'const char *'.  */
 
-std::string
-construct_inferior_arguments (gdb::array_view<char * const> argv,
-			      bool escape_shell_char)
+template<typename T> const char * to_char_ptr (T &arg);
+
+/* A no-op implementation that takes a 'const char *'.  */
+
+template<>
+const char *
+to_char_ptr (char * const &arg)
+{
+  return arg;
+}
+
+/* An implementation that gets a 'const char *' from a
+   gdb::unique_xmalloc_ptr<char> object.  */
+
+template<>
+const char *
+to_char_ptr (const gdb::unique_xmalloc_ptr<char> &arg)
+{
+  return arg.get ();
+}
+
+/* Helper function for the two construct_inferior_arguments overloads
+   below.  Accept a gdb::array_view over objects of type T.  Combine each T
+   into a std::string by calling an appropriate escape function, with a
+   white space character added between each T.  When ESCAPE_SHELL_CHAR is
+   true then any special shell characters in elemets of ARGV will be
+   escaped.  When ESCAPE_SHELL_CHAR is false only the characters that GDB
+   sees as special (quotes and whitespace) are escaped.  */
+
+template<typename T>
+static std::string
+construct_inferior_arguments_1
+  (gdb::array_view<T const> argv, bool escape_shell_char)
 {
   /* Select the desired escape function.  */
   const auto escape_func = (escape_shell_char
@@ -143,13 +173,32 @@ construct_inferior_arguments (gdb::array_view<char * const> argv,
 
   std::string result;
 
-  for (const char *a : argv)
+  for (const T &a : argv)
     {
       if (!result.empty ())
 	result += " ";
 
-      result += escape_func (a);
+      result += escape_func (to_char_ptr (a));
     }
 
   return result;
+}
+
+/* See common-inferior.h.  */
+
+std::string
+construct_inferior_arguments
+  (gdb::array_view<gdb::unique_xmalloc_ptr<char> const> argv,
+   bool escape_shell_char)
+{
+  return construct_inferior_arguments_1 (argv, escape_shell_char);
+}
+
+/* See common-inferior.h.  */
+
+std::string
+construct_inferior_arguments (gdb::array_view<char * const> argv,
+			      bool escape_shell_char)
+{
+  return construct_inferior_arguments_1 (argv, escape_shell_char);
 }
