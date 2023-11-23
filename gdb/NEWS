@@ -120,6 +120,13 @@ vFile:stat
   vFile:fstat but takes a filename rather than an open file
   descriptor.
 
+single-inf-arg in qSupported
+  The new single-inf-arg feature within the qSupported packet allows
+  GDB to inform the stub that it would like to send the inferior
+  arguments as a single string within the vRun packet.  The stub can
+  reply with the single-inf-arg feature to indicate that it is able to
+  accept arguments as a single string.
+
 *** Changes in GDB 15
 
 * The MPX commands "show/set mpx bound" have been deprecated, as Intel
