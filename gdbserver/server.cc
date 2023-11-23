@@ -2725,6 +2725,8 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
 		  if (target_supports_memory_tagging ())
 		    cs.memory_tagging_feature = true;
 		}
+	      else if (feature == "single-inf-arg+")
+		cs.single_inferior_argument = true;
 	      else
 		{
 		  /* Move the unknown features all together.  */
@@ -2853,6 +2855,9 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
 
       if (target_supports_memory_tagging ())
 	strcat (own_buf, ";memory-tagging+");
+
+      if (cs.single_inferior_argument)
+	strcat (own_buf, ";single-inf-arg+");
 
       /* Reinitialize components as needed for the new connection.  */
       hostio_handle_new_gdb_connection ();
@@ -3438,7 +3443,21 @@ handle_v_run (char *own_buf)
   else
     program_path.set (new_program_name.get ());
 
-  program_args = gdb::remote_args::join (new_argv);
+  if (cs.single_inferior_argument)
+    {
+      if (new_argv.size () > 1)
+	{
+	  write_enn (own_buf);
+	  return;
+	}
+      else if (new_argv.size () == 1)
+	program_args = std::string (new_argv[0]);
+      else
+	program_args.clear ();
+    }
+  else
+    program_args = gdb::remote_args::join (new_argv);
+
   free_vector_argv (new_argv);
 
   target_create_inferior (program_path.get (), program_args);

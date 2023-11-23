@@ -192,6 +192,11 @@ struct client_state
   /* If true, memory tagging features are supported.  */
   bool memory_tagging_feature = false;
 
+  /* If true then we've agreed that the debugger will send all inferior
+     arguments as a single string.  When false the debugger will attempt
+     to split the inferior arguments before sending them.  */
+  bool single_inferior_argument = false;
+
 };
 
 client_state &get_client_state ();
