@@ -43059,6 +43059,12 @@ command line.  The file and arguments are hex-encoded strings.  If
 (e.g.@: the last program run).  The program is created in the stopped
 state.
 
+If @value{GDBN} sent the @samp{single-inf-arg+} feature in the
+@samp{qSupported} packet, and the stub replied with
+@samp{single-inf-arg+}, then there will only be a single
+@var{argument} string, which includes all inferior arguments,
+separated with whitespace.
+
 @c FIXME:  What about non-stop mode?
 
 This packet is only available in extended mode (@pxref{extended mode}).
@@ -44489,6 +44495,13 @@ including @samp{exec-events+} in its @samp{qSupported} reply.
 @item vContSupported
 This feature indicates whether @value{GDBN} wants to know the
 supported actions in the reply to @samp{vCont?} packet.
+
+@item single-inf-arg
+This feature indicates that @value{GDBN} would like to send the
+inferior arguments as a single string within the @samp{vRun} packet.
+@value{GDBN} will not send the arguments as a single string unless the
+stub also reports that is supports this behaviour by including
+@samp{single-inf-arg+} in its @samp{qSupported} reply.
 @end table
 
 Stubs should ignore any unknown values for
@@ -44772,6 +44785,11 @@ These are the currently defined stub features and their properties:
 @tab @samp{-}
 @tab No
 
+@item @samp{single-inf-arg}
+@tab No
+@tab @samp{-}
+@tab No
+
 @end multitable
 
 These are the currently defined stub features, in more detail:
@@ -45003,6 +45021,11 @@ For AArch64 GNU/Linux systems, this feature also requires access to the
 @file{/proc/@var{pid}/smaps} file so memory mapping page flags can be inspected.
 This is done via the @samp{vFile} requests.
 
+@item single-inf-arg
+The remote stub would like to receive the inferior arguments as a
+single string within the @samp{vRun} packet.  The stub should only
+send this feature if @value{GDBN} sent @samp{single-inf-arg+} in the
+@samp{qSupported} packet.
 @end table
 
 @item qSymbol::
