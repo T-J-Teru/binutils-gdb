@@ -3136,6 +3136,18 @@ amd64_in_indirect_branch_thunk (struct gdbarch *gdbarch, CORE_ADDR pc)
 				       AMD64_RIP_REGNUM);
 }
 
+static std::vector<CORE_ADDR>
+amd64_software_single_step (struct regcache *regcache)
+{
+  return {};
+}
+
+static bool
+amd64_displaced_step_hw_singlestep (gdbarch *)
+{
+  return true;
+}
+
 void
 amd64_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch,
 		const target_desc *default_tdesc)
@@ -3301,6 +3313,9 @@ amd64_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch,
 					amd64_in_indirect_branch_thunk);
 
   register_amd64_ravenscar_ops (gdbarch);
+
+  set_gdbarch_software_single_step (gdbarch, amd64_software_single_step);
+  set_gdbarch_displaced_step_hw_singlestep (gdbarch, amd64_displaced_step_hw_singlestep);
 }
 
 /* Initialize ARCH for x86-64, no osabi.  */

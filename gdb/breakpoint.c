@@ -14008,6 +14008,21 @@ insert_single_step_breakpoint (struct gdbarch *gdbarch,
   update_global_location_list (UGLL_INSERT);
 }
 
+bool
+software_single_step_p (struct gdbarch *gdbarch)
+{
+  if (!gdbarch_software_single_step_p (gdbarch))
+    return false;
+
+  regcache *regcache = get_thread_regcache (inferior_thread ());
+  std::vector<CORE_ADDR> next_pcs;
+
+  next_pcs = gdbarch_software_single_step (gdbarch, regcache);
+
+  return !next_pcs.empty ();
+}
+
+
 /* Insert single step breakpoints according to the current state.  */
 
 int

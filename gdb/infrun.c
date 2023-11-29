@@ -2377,7 +2377,7 @@ maybe_software_singlestep (struct gdbarch *gdbarch)
   bool hw_step = true;
 
   if (execution_direction == EXEC_FORWARD
-      && gdbarch_software_single_step_p (gdbarch))
+      && software_single_step_p (gdbarch))
     hw_step = !insert_single_step_breakpoints (gdbarch);
 
   return hw_step;

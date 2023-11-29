@@ -1882,6 +1882,8 @@ extern void insert_single_step_breakpoint (struct gdbarch *,
 					   const address_space *,
 					   CORE_ADDR);
 
+extern bool software_single_step_p (struct gdbarch *gdbarch);
+
 /* Insert all software single step breakpoints for the current frame.
    Return true if any software single step breakpoints are inserted,
    otherwise, return false.  */
