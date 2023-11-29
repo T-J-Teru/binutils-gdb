@@ -14008,6 +14008,9 @@ insert_single_step_breakpoint (struct gdbarch *gdbarch,
   update_global_location_list (UGLL_INSERT);
 }
 
+extern bool prefer_software_single_stepping;
+bool prefer_software_single_stepping;
+
 bool
 software_single_step_p (struct gdbarch *gdbarch)
 {
@@ -15260,6 +15263,16 @@ When on, breakpoint location specific debugging is enabled."),
 			   NULL,
 			   show_debug_breakpoint,
 			   &setdebuglist, &showdebuglist);
+
+  add_setshow_boolean_cmd ("prefer-software-single-stepping", class_maintenance,
+			   &prefer_software_single_stepping, _("\
+Set whether software single-stepping is preferred."), _("\
+Show whether software single-stepping is preferred."), _("\
+When on, if both are available, software single-stepping is preferred over hardware single-stepping."),
+			   NULL,
+			   NULL,
+			   &maintenance_set_cmdlist,
+			   &maintenance_show_cmdlist);
 
   add_setshow_enum_cmd ("condition-evaluation", class_breakpoint,
 			condition_evaluation_enums,
