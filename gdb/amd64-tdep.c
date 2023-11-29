@@ -1149,7 +1149,7 @@ static const unsigned char twobyte_has_modrm[256] = {
   /*	   0 1 2 3 4 5 6 7 8 9 a b c d e f	  */
 };
 
-static int amd64_syscall_p (const struct amd64_insn *insn, int *lengthp);
+static int amd64_syscall_with_length_p (const struct amd64_insn *insn, int *lengthp);
 
 static int
 rex_prefix_p (gdb_byte pfx)
@@ -1469,7 +1469,7 @@ amd64_displaced_step_copy_insn (struct gdbarch *gdbarch,
   {
     int syscall_length;
 
-    if (amd64_syscall_p (details, &syscall_length))
+    if (amd64_syscall_with_length_p (details, &syscall_length))
       buf[details->opcode_offset + syscall_length] = NOP_OPCODE;
   }
 
@@ -1578,11 +1578,28 @@ amd64_call_p (const struct amd64_insn *details)
   return 0;
 }
 
+static int
+amd64_cond_jmp_p (const struct amd64_insn *details)
+{
+  const gdb_byte *insn = &details->raw_insn[details->opcode_offset];
+
+  if (insn[0] >= 0x70 && insn[0] <= 0x7f)
+    return 1;
+
+  if (insn[0] == 0xe3)
+    return 1;
+
+  if (insn[0] == 0x0f && insn[1] >= 0x80 && insn[1] <= 0x8f)
+    return 1;
+
+  return 0;
+}
+
 /* Return non-zero if INSN is a system call, and set *LENGTHP to its
    length in bytes.  Otherwise, return zero.  */
 
 static int
-amd64_syscall_p (const struct amd64_insn *details, int *lengthp)
+amd64_syscall_with_length_p (const struct amd64_insn *details, int *lengthp)
 {
   const gdb_byte *insn = &details->raw_insn[details->opcode_offset];
 
@@ -1593,6 +1610,15 @@ amd64_syscall_p (const struct amd64_insn *details, int *lengthp)
     }
 
   return 0;
+}
+
+/* As amd64_syscall_with_length_p, but without the lengthp argument.  */
+
+static int
+amd64_syscall_p (const struct amd64_insn *details)
+{
+  int dummy;
+  return amd64_syscall_with_length_p (details, &dummy);
 }
 
 /* Classify the instruction at ADDR using PRED.
@@ -1636,6 +1662,18 @@ static int
 amd64_insn_is_jump (struct gdbarch *gdbarch, CORE_ADDR addr)
 {
   return amd64_classify_insn_at (gdbarch, addr, amd64_jmp_p);
+}
+
+static int
+amd64_insn_is_cond_jump (struct gdbarch *gdbarch, CORE_ADDR addr)
+{
+  return amd64_classify_insn_at (gdbarch, addr, amd64_cond_jmp_p);
+}
+
+static int
+amd64_insn_is_syscall (struct gdbarch *gdbarch, CORE_ADDR addr)
+{
+  return amd64_classify_insn_at (gdbarch, addr, amd64_syscall_p);
 }
 
 /* Fix up the state of registers and memory after having single-stepped
@@ -1703,7 +1741,7 @@ amd64_displaced_step_fixup (struct gdbarch *gdbarch,
 	 the instruction has put control where it belongs, and leave
 	 it unrelocated.  Goodness help us if there are PC-relative
 	 system calls.	*/
-      if (amd64_syscall_p (insn_details, &insn_len)
+      if (amd64_syscall_with_length_p (insn_details, &insn_len)
 	  /* GDB can get control back after the insn after the syscall.
 	     Presumably this is a kernel bug.  Fixup ensures it's a nop, we
 	     add one to the length for it.  */
@@ -3136,10 +3174,30 @@ amd64_in_indirect_branch_thunk (struct gdbarch *gdbarch, CORE_ADDR pc)
 				       AMD64_RIP_REGNUM);
 }
 
+extern bool prefer_software_single_stepping;
+
 static std::vector<CORE_ADDR>
 amd64_software_single_step (struct regcache *regcache)
 {
-  return {};
+  if (!prefer_software_single_stepping)
+    return {};
+
+  struct gdbarch *gdbarch = regcache->arch ();
+  CORE_ADDR pc = regcache_read_pc (regcache);
+
+  if (amd64_insn_is_call (gdbarch, pc))
+    return {};
+  else if (amd64_insn_is_ret (gdbarch, pc))
+    return {};
+  else if (amd64_insn_is_jump (gdbarch, pc))
+    return {};
+  else if (amd64_insn_is_cond_jump (gdbarch, pc))
+    return {};
+  else if (amd64_insn_is_syscall (gdbarch, pc))
+    return {};
+
+  size_t len = gdb_insn_length (gdbarch, pc);
+  return { pc + len };
 }
 
 static bool
