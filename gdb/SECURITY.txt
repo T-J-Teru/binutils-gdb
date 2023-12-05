@@ -4,19 +4,40 @@ GDB Security Process
 What is a GDB security bug?
 ===========================
 
-  A security bug is one that threatens the security of a system or
-  network, or might compromise the security of data stored on it.  The
-  primary use case of GNU GDB is to diagnose issues in programs.
+  The primary use case of GNU GDB is to diagnose issues in programs.
   These programs may be local, i.e. on the system on which GDB runs or
   remote, on a different system.
+
+  A security bug is one that threatens the security of a system or
+  network, or might compromise the security of data stored on it.  Any
+  bug that facilitates the crossing of a privilege boundary can be
+  considered a security bug.  Additionally, any bug that results in
+  the unexpected execution of arbitrary code can be considered a
+  security bug.
 
   In the context of local debugging, any bugs in GDB that result in
   crossing of a privilege boundary are considered security bugs.  Some
   examples of crossing a privilege boundary include; being able to
   execute code as an arbitrarily different user, or accessing
   resources (e.g. files, sockets, etc) for which the original user
-  would not normally have access.  Additionally, any bug that causes
-  arbitrary code to be executed 
+  would not normally have access.  However, for the bug to be a GDB
+  security issue, the privilege boundary crossing needs to be only
+  possible, or significantly easier, when using GDB.  For example,
+  using GDB to run an inferior that triggers a security bug in the OS
+  kernel, or the wider OS environment is not a GDB bug, but should be
+  reported to the relevant OS component.
+
+  When GDB opens an executable for debugging, GDB will automatically
+  process the symbols and debug information contained within the file.
+  Some debug formats include domain specific languages which GDB must
+  evaluate in order to correctly track program state.  Simply opening
+  an executable within GDB for inspection, but not starting the
+  executabe should not result in any untrusted code being executed
+  that can effect changes outside of the GDB process.  Any bug that
+  can trigger GDB to execute untrusted code without user interaction
+  (either a direct command entered at a GDB prompt, a command entered
+  from the command line, or a command entered into one of GDB's
+  configuration files) would be a security bug.
 
   In the context of remote debugging, there are two components of
   relevance; GDB running on the local machine, and a remote target
@@ -36,9 +57,20 @@ What is a GDB security bug?
   allows for arbitrary code execution on the remote system with the
   same privileges as the remote user, and any resource that the remote
   user can access can be read by GDB, and downloaded to the local
-  machine on which GDB is running.  As such users need to take
+  machine on which GDB is running.  As such, users need to take
   independent measures to secure the connection between GDB and the
   remote target.
+
+  If gdbserver is passed an executable when it is invoked, then
+  gdbserver will automatically start the executable and then pause the
+  executable at the first instruction waiting for GDB to connect.  Any
+  bug that allows the debuggee executable to continue executing beyond
+  the first instruction without an outside agent connecting to
+  gdbserver would be considered a security bug.  Given the unsecure
+  nature of the connection between GDB and gdbserver care should be
+  taken if starting gdbserver with an untrusted binary to ensure that
+  only a trusted GDB is allowed to connect and control the gdbserver
+  process.
 
   While GDB is intended to be robust against untrusted binaries, it is
   not responsible for arbitrary code execution on a system.  As a
