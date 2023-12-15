@@ -75,9 +75,8 @@ proc run_test { args on_re off_re testname { problematic_on false } \
     }
 }
 
-proc run_test_same { args re testname { problematic_on false } \
-			 { problematic_off false } } {
-    run_test $args $re $re $testname $problematic_on $problematic_off
+proc run_test_same { args re testname } {
+    run_test $args $re $re $testname
 }
 
 # The regexp to match a single '\' character.
@@ -116,13 +115,11 @@ save_vars { env(TEST) } {
 
 run_test_same "\"\\a\"" \
     "\"${bs}${bs}a\"" \
-    "retain backslash in double quote arg" \
-    false $is_remote_p
+    "retain backslash in double quote arg"
 
 run_test_same "'\\a'" \
     "\"${bs}${bs}a\"" \
-    "retain backslash in single quote arg" \
-    false $is_remote_p
+    "retain backslash in single quote arg"
 
 run_test_same "\"\\\$\"" \
     "\"\\\$\"" \
@@ -130,8 +127,7 @@ run_test_same "\"\\\$\"" \
 
 run_test_same "'\\\$'" \
     "\"${bs}${bs}\\\$\"" \
-    "'\$' is not escaped in single quote arg" \
-    false $is_remote_p
+    "'\$' is not escaped in single quote arg"
 
 run_test_same "\"\\`\"" \
     "\"\\`\"" \
@@ -139,25 +135,20 @@ run_test_same "\"\\`\"" \
 
 run_test_same "'\\`'" \
     "\"${bs}${bs}`\"" \
-    "'`' is not escaped in single quote arg" \
-    false $is_remote_p
+    "'`' is not escaped in single quote arg"
 
 run_test_same "\"\\\"\"" \
     "\"${bs}\"\"" \
-    "'\"' can be escaped in double quote arg" \
-    false $is_remote_p
+    "'\"' can be escaped in double quote arg"
 
 run_test_same "'\\\"'" \
     "\"${bs}${bs}${bs}\"\"" \
-    "'\"' is not escaped in single quote arg" \
-    false $is_remote_p
+    "'\"' is not escaped in single quote arg"
 
 run_test_same "\"\\\\\"" \
     "\"${bs}${bs}\"" \
-    "'\\' can be escaped in double quote arg" \
-    false $is_remote_p
+    "'\\' can be escaped in double quote arg"
 
 run_test_same "'\\\\'" \
     "\"${bs}${bs}${bs}${bs}\"" \
-    "'\\' is not escaped in single quote arg" \
-    false $is_remote_p
+    "'\\' is not escaped in single quote arg"
