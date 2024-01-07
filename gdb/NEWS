@@ -55,6 +55,10 @@ set remote thread-options-packet
 show remote thread-options-packet
   Set/show the use of the thread options packet.
 
+maintenance test-remote-args ARGS
+  Test splitting and joining of inferior arguments ARGS as they would
+  be split and joined when being passed to a remote target.
+
 * Changed commands
 
 set args
