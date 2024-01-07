@@ -377,6 +377,10 @@ disable missing-objfile-handler LOCUS HANDLER
   or can be a regular expression which is matched against the filename
   of the primary executable in each program space.
 
+maintenance test-remote-args ARGS
+  Test splitting and joining of inferior arguments ARGS as they would
+  be split and joined when being passed to a remote target.
+
 * Changed commands
 
 remove-symbol-file
