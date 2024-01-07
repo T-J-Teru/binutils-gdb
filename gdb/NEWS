@@ -85,6 +85,10 @@ maintenance info blocks [ADDRESS]
   are listed starting at the inner global block out to the most inner
   block.
 
+maintenance test-remote-args ARGS
+  Test splitting and joining of inferior arguments ARGS as they would
+  be split and joined when being passed to a remote target.
+
 * Changed commands
 
 remove-symbol-file
