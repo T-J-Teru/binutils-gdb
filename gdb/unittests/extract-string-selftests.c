@@ -23,20 +23,30 @@
 namespace selftests {
 namespace extract_string {
 
+static extract_string_ctrl shell_extract_string_ctrl
+  (nullptr, "", "\"$`\\", "\n", "", "\n");
+
 struct test_def
 {
   test_def (const char *input,
 	    const char *output,
-	    size_t offset)
+	    size_t offset,
+	    extract_string_ctrl *ctrl = nullptr)
     : m_input (input),
       m_output (output),
-      m_offset (offset)
+      m_offset (offset),
+      m_ctrl (ctrl)
   { /* Nothing.  */ }
 
   void run () const
   {
     const char *tmp = m_input;
-    std::string test_out = extract_string_maybe_quoted (&tmp);
+    std::string test_out;
+
+    if (m_ctrl == nullptr)
+      test_out = extract_string_maybe_quoted (&tmp);
+    else
+      test_out = extract_string_maybe_quoted (&tmp, *m_ctrl);
 
     if (run_verbose ())
       {
@@ -55,6 +65,7 @@ private:
   const char *m_input;
   const char *m_output;
   size_t m_offset;
+  extract_string_ctrl *m_ctrl;
 };
 
 test_def tests[] = {
@@ -64,6 +75,9 @@ test_def tests[] = {
   { "ab\\ cd ef", "ab cd", 6 },
   { "\"abc\\\"def\" ghi", "abc\"def", 10 },
   { "\"'abc' 'def'\" ghi", "'abc' 'def'", 13 },
+  { "'ab\\ cd' ef", "ab\\ cd", 8, &shell_extract_string_ctrl },
+  { "ab\\\ncd ef", "abcd", 6, &shell_extract_string_ctrl },
+  { "\"ab\\\ncd\" ef", "abcd", 8, &shell_extract_string_ctrl },
 };
 
 static void

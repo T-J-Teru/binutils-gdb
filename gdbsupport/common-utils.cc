@@ -164,58 +164,67 @@ savestring (const char *ptr, size_t len)
   return p;
 }
 
+/* See common-utils.h.  */
+
+extract_string_ctrl default_extract_string_ctrl (nullptr, nullptr, nullptr);
+
 /* See documentation in common-utils.h.  */
 
 std::string
-extract_string_maybe_quoted (const char **arg)
+extract_string_maybe_quoted (const char **arg,
+			     const extract_string_ctrl &ctrl)
 {
-  bool squote = false;
-  bool dquote = false;
-  bool bsquote = false;
+  char quote = '\0';
   std::string result;
   const char *p = *arg;
 
   /* Find the start of the argument.  */
   p = skip_spaces (p);
 
-  /* Parse p similarly to gdb_argv buildargv function.  */
+  /* Parse p similarly to the libiberty buildargv function, but respect
+     the escaping rules of CTRL.  */
   while (*p != '\0')
     {
-      if (ISSPACE (*p) && !squote && !dquote && !bsquote)
+      if (ISSPACE (*p) && quote == '\0')
 	break;
       else
 	{
-	  if (bsquote)
+	  if (*p == '\\')
 	    {
-	      bsquote = false;
-	      result += *p;
-	    }
-	  else if (*p == '\\')
-	    bsquote = true;
-	  else if (squote)
-	    {
-	      if (*p == '\'')
-		squote = false;
+	      /* The character after the backslash.  */
+	      char c = *(p + 1);
+
+	      if (ctrl.discard_escaped_char (c, quote))
+		{
+		  /* We are discarding the escape character (backslash) and
+		     the character after the escape.  This allows us to
+		     emulate POSIX newline handling where an escaped
+		     newline is discarded.  */
+		  ++p;
+		}
+	      else if (ctrl.is_escaped (c, quote))
+		{
+		  /* The character C is escaped.  We discard the escape
+		     character (backslash), but do include C.  */
+		  ++p;
+		  result += c;
+		}
 	      else
-		result += *p;
+		{
+		  /* We are going to treat the backslash as a literal
+		     character with no special association to the following
+		     character.  */
+		  result += *p;
+		}
 	    }
-	  else if (dquote)
-	    {
-	      if (*p == '"')
-		dquote = false;
-	      else
-		result += *p;
-	    }
+	  else if (*p == quote)
+	    quote = '\0';
+	  else if (quote == '\0' && (*p == '\'' || *p == '"'))
+	    quote = *p;
 	  else
-	    {
-	      if (*p == '\'')
-		squote = true;
-	      else if (*p == '"')
-		dquote = true;
-	      else
-		result += *p;
-	    }
-	  p++;
+	    result += *p;
+
+	  ++p;
 	}
     }
 

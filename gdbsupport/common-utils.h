@@ -74,6 +74,135 @@ std::string &string_vappendf (std::string &dest, const char* fmt, va_list args)
 
 char *savestring (const char *ptr, size_t len);
 
+/* A control data structure, instances of this class are passed to the
+   extract_string_maybe_quoted function in order to modify its behaviour.
+
+   This class controls which characters can and can't be quoted within
+   different context (no quotes, single quotes, or double quotes).  */
+
+struct extract_string_ctrl
+{
+  /* Constructor.  The CAN_ESCAPE_* arguments are the set of characters
+     which can be escaped within each context.  If any character within
+     this set appears within the given context with a backslash before it,
+     then the backslash will be removed and the character retained in the
+     output.  If any of these arguments are nullptr then every character
+     can be escaped within that context.  If you want no character escaping
+     within a particular context then pass the empty string.
+
+     The DISCARD_* arguments are the set of characters which should be
+     discarded when escaped within a given context.  If any of these
+     characters appear within the given context with a backslash before
+     them, then both the backslash and the character will be removed from
+     the final output.  If any of these arguments are nullptr then no
+     characters will be discarded when escaped within that context.
+
+     During string extraction, if a backslash is encountered in the input,
+     and the next character is not in the relevant CAN_ESCAPE_* variable,
+     nor is in the relevant DISCARD_* variable, then the backslash will be
+     retained in the output.  */
+
+  explicit extract_string_ctrl (const char *can_escape_unquoted,
+				const char *can_escape_single,
+				const char *can_escape_double,
+				const char *discard_unquoted = nullptr,
+				const char *discard_single = nullptr,
+				const char *discard_double = nullptr)
+    : m_can_escape_unquoted (can_escape_unquoted),
+      m_can_escape_single (can_escape_single),
+      m_can_escape_double (can_escape_double),
+      m_discard_unquoted (discard_unquoted),
+      m_discard_single (discard_single),
+      m_discard_double (discard_double)
+  {
+    /* Nothing.  */
+  }
+
+  /* Return true if, when character C appears escaped within an input
+     string, both the backslash escape character, and the character C
+     should be discarded from the input stream.  */
+
+  bool discard_escaped_char (const char c, const char quote) const
+  {
+    const char *char_set = nullptr;
+    switch (quote)
+      {
+      case '\0':
+	char_set = m_discard_unquoted;
+	break;
+      case '\'':
+	char_set = m_discard_single;
+	break;
+      case '"':
+	char_set = m_discard_double;
+	break;
+      default:
+	gdb_assert_not_reached ("unexpected quote character '%c'", quote);
+      }
+
+    /* Discard nothing.  */
+    if (char_set == nullptr)
+      return false;
+
+    /* If C is in CHAR_SET then discard.  */
+    return strchr (char_set, c) != nullptr;
+  }
+
+  /* Return true if, when character C appears escaped within an input
+     string, we should discard the previous escape character and just
+     include character C.  Otherwise return false.  */
+
+  bool is_escaped (const char c, const char quote) const
+  {
+    const char *char_set = nullptr;
+    switch (quote)
+      {
+      case '\0':
+	char_set = m_can_escape_unquoted;
+	break;
+      case '\'':
+	char_set = m_can_escape_single;
+	break;
+      case '"':
+	char_set = m_can_escape_double;
+	break;
+      default:
+	gdb_assert_not_reached ("unexpected quote character '%c'", quote);
+      }
+
+    /* When no character set is defined we always return true, this means
+       that every character can be escaped.  */
+    if (char_set == nullptr)
+      return true;
+
+    /* Otherwise, return true if C is in CHAR_SET.  */
+    return strchr (char_set, c) != nullptr;
+  }
+
+private:
+  /* The set of characters that can be escaped within a particular
+     context.  See the constructor for more information.  */
+  const char *m_can_escape_unquoted;
+  const char *m_can_escape_single;
+  const char *m_can_escape_double;
+
+  /* The set of characters that can be discarded within a particular
+     context.  See the constructor for more information.  */
+  const char *m_discard_unquoted;
+  const char *m_discard_single;
+  const char *m_discard_double;
+};
+
+/* The default control configuration for extract_string_maybe_quoted.
+   This is the way it is for backwards compatibility reasons, though it is
+   unclear if this is actually a good thing or not.  Every character in
+   every context can be escaped.  This really makes very little sense as
+   in most locations in GDB no characters, other than quotes and white
+   space, actually have any special meaning, so really very little
+   escaping should be supported.  */
+
+extern extract_string_ctrl default_extract_string_ctrl;
+
 /* Extract the next word from ARG.  The next word is defined as either,
    everything up to the next space, or, if the next word starts with either
    a single or double quote, then everything up to the closing quote.  The
@@ -82,7 +211,9 @@ char *savestring (const char *ptr, size_t len);
    word, or, for quoted words, the first character after the closing
    quote.  */
 
-std::string extract_string_maybe_quoted (const char **arg);
+std::string extract_string_maybe_quoted
+  (const char **arg,
+   const extract_string_ctrl &ctrl = default_extract_string_ctrl);
 
 /* The strerror() function can return NULL for errno values that are
    out of range.  Provide a "safe" version that always returns a
