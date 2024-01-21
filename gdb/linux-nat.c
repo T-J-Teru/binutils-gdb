@@ -3445,9 +3445,14 @@ linux_nat_wait_1 (ptid_t ptid, struct target_waitstatus *ourstatus,
 	  linux_nat_debug_printf ("exit (quit flag)");
 
 	  /* If we got a SIGCHLD, need to end up here again. */
-	  async_file_mark ();
 
-	  ourstatus->kind = TARGET_WAITKIND_IGNORE;
+	  /* APB -- this is not ideal, need to figure out a better way of
+	     doing this.  */
+	  linux_nat_target::async_file_mark_if_open ();
+	  // async_file_mark ();
+	  abort ();
+
+	  ourstatus->set_ignore ();
 
 	  restore_child_signals_mask (&prev_mask);
 	  return minus_one_ptid;
