@@ -21,9 +21,9 @@
 #include "server.h"
 #include <sys/mman.h>
 #include "tracepoint.h"
-#include "linux-x86-tdesc.h"
 #include "gdbsupport/x86-xstate.h"
 #include "arch/i386-linux-tdesc.h"
+#include "arch/x86-linux-tdesc-features.h"
 
 /* GDB register numbers.  */
 
@@ -276,6 +276,6 @@ void
 initialize_low_tracepoint (void)
 {
   initialize_fast_tracepoint_trampoline_buffer ();
-  for (auto i = 0; i < x86_linux_i386_ipa_tdesc_count (); i++)
+  for (auto i = 0; i < x86_linux_i386_tdesc_count (); i++)
     i386_linux_read_description (x86_linux_tdesc_idx_to_xcr0 (i));
 }

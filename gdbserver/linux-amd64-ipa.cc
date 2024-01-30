@@ -21,9 +21,9 @@
 #include "server.h"
 #include <sys/mman.h>
 #include "tracepoint.h"
-#include "linux-x86-tdesc.h"
 #include "gdbsupport/x86-xstate.h"
 #include "arch/amd64-linux-tdesc.h"
+#include "arch/x86-linux-tdesc-features.h"
 
 /* Defined in auto-generated file amd64-linux.c.  */
 void init_registers_amd64_linux (void);
@@ -251,10 +251,10 @@ void
 initialize_low_tracepoint (void)
 {
 #if defined __ILP32__
-  for (auto i = 0; i < x86_linux_x32_ipa_tdesc_count (); i++)
+  for (auto i = 0; i < x86_linux_x32_tdesc_count (); i++)
     amd64_linux_read_description (x86_linux_tdesc_idx_to_xcr0 (i), true);
 #else
-  for (auto i = 0; i < x86_linux_amd64_ipa_tdesc_count (); i++)
+  for (auto i = 0; i < x86_linux_amd64_tdesc_count (); i++)
     amd64_linux_read_description (x86_linux_tdesc_idx_to_xcr0 (i), false);
 #endif
 }
