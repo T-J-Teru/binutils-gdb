@@ -33,6 +33,7 @@
 #endif
 
 #include "arch/i386-linux-tdesc.h"
+#include "arch/x86-linux-tdesc-features.h"
 
 #include "gdb_proc_service.h"
 /* Don't include elf/common.h if linux/elf.h got included by
@@ -48,7 +49,6 @@
 #include "nat/linux-nat.h"
 #include "nat/x86-linux.h"
 #include "nat/x86-linux-dregs.h"
-#include "linux-x86-tdesc.h"
 #include "nat/x86-linux-tdesc.h"
 
 #ifdef __x86_64__
