@@ -50320,6 +50320,27 @@ is set to @code{ask} for interactive sessions.
 Display whether @code{debuginfod enabled} is set to @code{on}, @code{off} or
 @code{ask}.
 
+@kindex set debuginfod cancel
+@anchor{set debuginfod cancel}
+@item set debuginfod cancel
+@itemx set debuginfod cancel one
+@cindex debuginfod @kbd{Ctrl-C} behaviour
+Pressing @kbd{Ctrl-C} twice during downloading will cancel the current
+download.
+
+@item set debuginfod cancel all
+Pressing @kbd{Ctrl-C} twice during downloading will cancel this and all
+further downloads.
+
+@item set debuginfod cancel ask
+Pressing @kbd{Ctrl-C} twice during downloading will cancel the current
+download and prompt whether to cancel all further downloads.  By default,
+@code{debuginfod cancel} is set to @code{ask} for interactive sessions.
+
+@kindex show debuginfod cancel
+@item show debuginfod cancel
+Display the current setting of @code{debuginfod cancel}.
+
 @kindex set debuginfod urls
 @cindex configure debuginfod URLs
 @item set debuginfod urls

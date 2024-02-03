@@ -37,6 +37,8 @@ static cmd_list_element *maint_show_debuginfod_cmdlist;
 static const char debuginfod_on[] = "on";
 static const char debuginfod_off[] = "off";
 static const char debuginfod_ask[] = "ask";
+static const char debuginfod_one[] = "one";
+static const char debuginfod_all[] = "all";
 
 static const char *debuginfod_enabled_enum[] =
 {
@@ -45,6 +47,20 @@ static const char *debuginfod_enabled_enum[] =
   debuginfod_ask,
   nullptr
 };
+
+/* Valid values for set debuginfod cancel command.  */
+
+static const char *debuginfod_cancel_enum[] =
+{
+  debuginfod_one,
+  debuginfod_all,
+  debuginfod_ask,
+  nullptr
+};
+
+/* Value of debuginfod cancellation mode.  */
+
+static const char *debuginfod_cancel = debuginfod_ask;
 
 static const char *debuginfod_enabled =
 #if defined(HAVE_LIBDEBUGINFOD)
@@ -108,9 +124,11 @@ debuginfod_section_query (const unsigned char *build_id,
 struct user_data
 {
   user_data (const char *desc, const char *fname)
-    : desc (desc), fname (fname)
+    : pass_quit_flag (false), inf_had_term (false), desc (desc), fname (fname)
   { }
 
+  bool pass_quit_flag;
+  bool inf_had_term;
   const char * const desc;
   const char * const fname;
   ui_out::progress_update progress;
@@ -155,10 +173,83 @@ progressfn (debuginfod_client *c, long cur, long total)
   if (check_quit_flag ())
     {
       ui_file *outstream = get_unbuffered (gdb_stdout);
-      gdb_printf (outstream, _("Cancelling download of %s %s...\n"),
-		  data->desc, styled_fname.c_str ());
-      return 1;
-    }
+
+      /* If a single Ctrl-C occurs during downloading, let it propagate to the
+	 target.  If more than one Ctrl-C occurs, ask whether to cancel the
+	 current download or interrupt the target.  If the download is
+	 cancelled, the setting of debuginfod_cancel will determine whether
+	 the current download is cancelled or debuginfod is disabled.  */
+      if (!data->pass_quit_flag)
+	data->pass_quit_flag = true;
+      else
+	{
+	  int resp = 1;
+	  bool extra_nl = false;
+
+	  if (data->inf_had_term)
+	    {
+	      /* If Ctrl-C occurs during the following prompts, catch the
+		 exception to prevent unsafe early returns to gdb's main
+		 event loop.  During these prompts, Ctrl-C is equivalent to
+		 answering 'y'.  */
+	      try
+		{
+		  resp = yquery (_("Cancel the current download?\nIf no, "
+				   "then Ctrl-C will be sent to the target "
+				   "process. "));
+		}
+	      catch (const gdb_exception &)
+		{
+		  /* If the query doesn't complete, then we need an additional
+		     newline to get "Cancelling download of..." printed on a
+		     separate line.  */
+		  extra_nl = true;
+		}
+	    }
+	  if (resp)
+	    {
+	      if (extra_nl)
+		{
+		  gdb_printf (outstream, "\n");
+		  extra_nl = false;
+		}
+
+	      gdb_printf (outstream, _("Cancelling download of %s %s...\n"),
+				       data->desc, styled_fname.c_str ());
+	      if (debuginfod_cancel == debuginfod_ask)
+		{
+		  try
+		    {
+		      resp = nquery
+			(_("Cancel further downloading for this session? "));
+		    }
+		  catch (const gdb_exception &)
+		    {
+		      resp = 1;
+		      extra_nl = true;
+		    }
+
+		  if (resp)
+		    debuginfod_cancel = debuginfod_all;
+		  else
+		    debuginfod_cancel = debuginfod_one;
+		}
+	      if (debuginfod_cancel == debuginfod_all)
+		{
+		  if (extra_nl)
+		    gdb_printf (outstream, "\n");
+
+		  gdb_printf (outstream,
+			      _("Debuginfod has been disabled.\nTo re-enable "
+				"use the 'set debuginfod enabled' command.\n"));
+		  debuginfod_enabled = debuginfod_off;
+		}
+
+	    data->pass_quit_flag = false;
+	    return 1;
+	  }
+      }
+  }
 
   if (debuginfod_verbose == 0)
     return 0;
@@ -323,6 +414,10 @@ debuginfod_source_query (const unsigned char *build_id,
     user_data data ("source file", srcpath);
 
     debuginfod_set_user_data (c, &data);
+
+   if (!target_terminal::is_ours ())
+     data.inf_had_term = true;
+
     if (target_supports_terminal_ours ())
       {
 	term_state.emplace ();
@@ -334,6 +429,11 @@ debuginfod_source_query (const unsigned char *build_id,
 					    build_id_len,
 					    srcpath,
 					    &dname));
+    if (data.pass_quit_flag)
+      set_quit_flag ();
+    if (data.inf_had_term && term_state.has_value ())
+      target_terminal::inferior ();
+
     debuginfod_set_user_data (c, nullptr);
   }
 
@@ -369,6 +469,10 @@ debuginfod_debuginfo_query (const unsigned char *build_id,
     user_data data ("separate debug info for", filename);
 
     debuginfod_set_user_data (c, &data);
+
+    if (!target_terminal::is_ours ())
+      data.inf_had_term = true;
+
     if (target_supports_terminal_ours ())
       {
 	term_state.emplace ();
@@ -377,6 +481,12 @@ debuginfod_debuginfo_query (const unsigned char *build_id,
 
     fd = scoped_fd (debuginfod_find_debuginfo (c, build_id, build_id_len,
 					       &dname));
+
+    if (data.pass_quit_flag)
+      set_quit_flag ();
+    if (data.inf_had_term && term_state.has_value ())
+      target_terminal::inferior ();
+
     debuginfod_set_user_data (c, nullptr);
   }
 
@@ -412,6 +522,10 @@ debuginfod_exec_query (const unsigned char *build_id,
     user_data data ("executable for", filename);
 
     debuginfod_set_user_data (c, &data);
+
+    if (!target_terminal::is_ours ())
+      data.inf_had_term = true;
+
     if (target_supports_terminal_ours ())
       {
 	term_state.emplace ();
@@ -420,6 +534,11 @@ debuginfod_exec_query (const unsigned char *build_id,
 
     fd = scoped_fd (debuginfod_find_executable (c, build_id, build_id_len,
 						&dname));
+    if (data.pass_quit_flag)
+      set_quit_flag ();
+    if (data.inf_had_term && term_state.has_value ())
+      target_terminal::inferior ();
+
     debuginfod_set_user_data (c, nullptr);
   }
 
@@ -460,6 +579,10 @@ debuginfod_section_query (const unsigned char *build_id,
   {
     user_data data (desc.c_str (), filename);
     debuginfod_set_user_data (c, &data);
+
+    if (!target_terminal::is_ours ())
+      data.inf_had_term = true;
+
     if (target_supports_terminal_ours ())
       {
 	term_state.emplace ();
@@ -468,6 +591,12 @@ debuginfod_section_query (const unsigned char *build_id,
 
     fd = scoped_fd (debuginfod_find_section (c, build_id, build_id_len,
 					     section_name, &dname));
+
+    if (data.pass_quit_flag)
+      set_quit_flag ();
+    if (data.inf_had_term && term_state.has_value ())
+      target_terminal::inferior ();
+
     debuginfod_set_user_data (c, nullptr);
   }
 
@@ -514,6 +643,33 @@ show_debuginfod_enabled (ui_file *file, int from_tty, cmd_list_element *cmd,
   gdb_printf (file,
 	      _("Debuginfod functionality is currently set to "
 		"\"%s\".\n"), debuginfod_enabled);
+}
+
+/* Set callback for "set debuginfod cancel".  */
+
+static void
+set_debuginfod_cancel (const char *value)
+{
+  debuginfod_cancel = value;
+}
+
+/* Get callback for "set debuginfod cancel".  */
+
+static const char *
+get_debuginfod_cancel ()
+{
+  return debuginfod_cancel;
+}
+
+/* Show callback for "set debuginfod cancel".  */
+
+static void
+show_debuginfod_cancel (ui_file *file, int from_tty, cmd_list_element *cmd,
+			const char *value)
+{
+  gdb_printf (file,
+	      _("Debuginfod cancellation mode is currently set to "
+		"\"%s\".\n"), debuginfod_cancel);
 }
 
 /* Set callback for "set debuginfod urls".  */
@@ -617,6 +773,23 @@ When set to \"ask\", prompt whether to enable or disable debuginfod." ),
 			set_debuginfod_enabled,
 			get_debuginfod_enabled,
 			show_debuginfod_enabled,
+			&set_debuginfod_prefix_list,
+			&show_debuginfod_prefix_list);
+
+  add_setshow_enum_cmd ("cancel", class_run, debuginfod_cancel_enum,
+			_("Set Ctrl-C behaviour for debuginfod."),
+			_("Show Ctrl-C behaviour for debuginfod."),
+			_("\
+When set to \'one\', pressing Ctrl-C twice cancels a single \
+download.\nWhen set to \'all\', pressing Ctrl-C twice cancels all further downloads.\n\
+When set to \'ask\', pressing Ctrl-C twice asks what to do.\nA single Ctrl-C during \
+downloading is passed to the target process being debugged.\nA second Ctrl-C \
+during downloading may raise a prompt asking whether to cancel the download or \
+send Ctrl-C to the target.\nIf the download is cancelled, then no Ctrl-C is \
+sent to the target."),
+			set_debuginfod_cancel,
+			get_debuginfod_cancel,
+			show_debuginfod_cancel,
 			&set_debuginfod_prefix_list,
 			&show_debuginfod_prefix_list);
 
