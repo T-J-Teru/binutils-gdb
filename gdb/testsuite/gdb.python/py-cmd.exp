@@ -142,6 +142,10 @@ gdb_test "python print (gdb.string_to_argv ('1\\ 2 3'))" \
   {\['1 2', '3'\]} \
     "string_to_argv ('1\\ 2 3')"
 
+gdb_test "python print (gdb.string_to_argv (''))" \
+  {\[\]} \
+    "string_to_argv ('')"
+
 # Test user-defined python commands.
 gdb_test_multiline "input simple user-defined command" \
   "python" "" \
