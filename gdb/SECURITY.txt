@@ -102,9 +102,10 @@ What Is A Security Bug?
   security bug in gdbserver.
 
   Any bug in GDB or gdbserver that can trigger arbitrary code
-  execution without the program being debugged having been executed,
-  for example, by simply loading the program into GDB or gdbserver, is
-  considered a security bug.
+  execution without the program being debugged having been executed by
+  a user command, would be considered a security bug.  For example, if
+  simply loading a program into GDB could trigger arbitrary code
+  execution, then this would be a security issue.
 
   The additional tools gcore and gdb-add-index are scripts that wrap
   around GDB.  Any issue in these tools that meet the above
@@ -132,12 +133,12 @@ Security Considerations
   say GDB is being used to debug untrusted code.  In this case the
   user should take all the precautions when running GDB that they
   would normally take when running an untrusted program outside of
-  GDB, e.g. running within a sandboxed environment.
+  GDB, e.g. running within a secure, sandboxed environment.
 
-  When using GDB or to examine an untrusted program (with gdbserver,
-  the program can be started, but paused at the first instruction and
-  never run), there should be no security risk, however, there are two
-  things to consider:
+  When using GDB to examine an untrusted program (with gdbserver, the
+  program can be started, but paused at the first instruction and
+  never run further), there should be no security risk, however, there
+  are two things to consider:
 
   1. The risk of inadvertently executing the untrusted program.  It
      would be easy for a user to accidentally issue one of the many
@@ -146,16 +147,17 @@ Security Considerations
      the start of the main function might not be safe, a program can
      embed a malicious payload before the main function is reached.
 
-  2. It is possible that a malicious executable could trigger a bug in
-     GDB to perform a malicious action.  Such a bug would be a
-     security bug, but it would be best practice to guard against such
-     a bug if possible.
+  2. Though every effort is made to ensure GDB is free from bugs, it
+     cannot be guaranteed that GDB is bug free.  It might be possible
+     that even examining an untrusted program could trigger a bug in
+     GDB which, in turn could trigger an unwanted effect on the system
+     running GDB.
 
   Given these risks, the advice of the GDB project is, when using GDB
-  with an untrusted binary, to do so in a sandboxed environment.
+  with an untrusted binary, to do so in a secure, sandboxed environment.
 
   When using GDB and gdbserver to perform remote debug, the connection
-  between the two components in by design insecure.  It is up to the
+  between the two components is by design insecure.  It is up to the
   user to protect this connection, for example, only starting
   gdbserver within a secure network.
 
@@ -175,9 +177,9 @@ Reporting Security Bugs
 -----------------------
 
   In order to report a private security bug that is not immediately
-  public, please contact one of the downstream distributions with
-  security teams.  The following teams have volunteered to handle
-  such bugs:
+  made public, please contact one of the downstream distributions with
+  security teams.  The following teams have volunteered to handle such
+  bugs:
 
      Red Hat: secalert@redhat.com
      SUSE:    security@suse.de
@@ -186,8 +188,7 @@ Reporting Security Bugs
   with other teams as necessary.
 
   The team contacted will take care of details such as vulnerability
-  rating and CVE assignment (http://cve.mitre.org/about/).  It is likely
-  that the team will ask to file a public bug because the issue is
-  sufficiently minor and does not warrant an embargo.  An embargo is not
-  a requirement for being credited with the discovery of a security
-  vulnerability.
+  rating and CVE assignment (http://cve.mitre.org/about/).  It is
+  likely that the team will ask to file a public bug because the issue
+  is sufficiently minor and does not warrant keeping details of the
+  bug private.
