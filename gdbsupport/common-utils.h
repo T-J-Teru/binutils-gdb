@@ -203,6 +203,17 @@ private:
 
 extern extract_string_ctrl default_extract_string_ctrl;
 
+/* This control object for use with extract_string_maybe_quoted replicates
+   shell like behaviour.  Every character can be escaped in an unquoted
+   context, nothing can be escaped within single quotes, and a limited set
+   of characters (see POSIX shell spec) can be escaped within a double
+   quoted context.
+
+   An escaped newline will be removed in an unquoted and double quoted
+   context.  */
+
+extern extract_string_ctrl shell_extract_string_ctrl;
+
 /* Extract the next word from ARG.  The next word is defined as either,
    everything up to the next space, or, if the next word starts with either
    a single or double quote, then everything up to the closing quote.  The

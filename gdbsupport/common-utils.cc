@@ -168,6 +168,11 @@ savestring (const char *ptr, size_t len)
 
 extract_string_ctrl default_extract_string_ctrl (nullptr, nullptr, nullptr);
 
+/* See common-utils.h.  */
+
+extract_string_ctrl shell_extract_string_ctrl (nullptr, "", "\"$`\\",
+					       "\n", "", "\n");
+
 /* See documentation in common-utils.h.  */
 
 std::string

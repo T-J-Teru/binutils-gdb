@@ -83,6 +83,9 @@ private:
 /* The array of all tests.  */
 
 test_def tests[] = {
+  { "", { } },
+  { "  ", { } },
+  { "''", { "" } },
   { "abc def", {"abc", "def"} },
   { "one two 3", {"one", "two", "3"} },
   { "one two\\ three", {"one", "two three"} },

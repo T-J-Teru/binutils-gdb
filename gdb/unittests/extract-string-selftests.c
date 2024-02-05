@@ -23,9 +23,6 @@
 namespace selftests {
 namespace extract_string {
 
-static extract_string_ctrl shell_extract_string_ctrl
-  (nullptr, "", "\"$`\\", "\n", "", "\n");
-
 struct test_def
 {
   test_def (const char *input,

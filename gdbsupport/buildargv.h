@@ -1,4 +1,4 @@
-/* RAII wrapper for buildargv
+/* RAII wrapper to split an argument string into individual arguments.
 
    Copyright (C) 2021-2024 Free Software Foundation, Inc.
 
@@ -21,9 +21,12 @@
 #define GDBSUPPORT_BUILDARGV_H
 
 #include "libiberty.h"
+#include "gdbsupport/common-utils.h"
+#include <string>
 
-/* A wrapper for an array of char* that was allocated in the way that
-   'buildargv' does, and should be freed with 'freeargv'.  */
+/* A class for splitting a single char* string into an array of char*
+   arguments, each argument is extracted from the original string.  The
+   resulting array will be freed by this classes destructor.  */
 
 class gdb_argv
 {
@@ -32,15 +35,15 @@ public:
   /* A constructor that initializes to NULL.  */
 
   gdb_argv ()
-    : m_argv (NULL)
+    : m_argv (nullptr)
   {
   }
 
-  /* A constructor that calls buildargv on STR.  STR may be NULL, in
-     which case this object is initialized with a NULL array.  */
+  /* A constructor that splits STR into an array of arguments.  STR may be
+     NULL, in which case this object is initialized with a NULL array.  */
 
   explicit gdb_argv (const char *str)
-    : m_argv (NULL)
+    : m_argv (nullptr)
   {
     reset (str);
   }
@@ -74,18 +77,34 @@ public:
     freeargv (m_argv);
   }
 
-  /* Call buildargv on STR, storing the result in this object.  Any
-     previous state is freed.  STR may be NULL, in which case this
-     object is reset with a NULL array.  If buildargv fails due to
-     out-of-memory, call malloc_failure.  Therefore, the value is
-     guaranteed to be non-NULL, unless the parameter itself is
-     NULL.  */
+  /* Read arguments from STR by calling extract_string_maybe_quoted.
+     Leading and trailing white space in STR will be ignored.  Any previous
+     argument state is freed.  STR may be nullptr, in which case this
+     object is reset with a nullptr array.  */
 
   void reset (const char *str)
   {
-    char **argv = buildargv (str);
     freeargv (m_argv);
-    m_argv = argv;
+    m_argv = nullptr;
+
+    if (str == nullptr)
+      return;
+
+    std::vector<char *> tmp_argv;
+
+    str = skip_spaces (str);
+    while (*str != '\0')
+      {
+	std::string arg
+	  = extract_string_maybe_quoted (&str, shell_extract_string_ctrl);
+	tmp_argv.emplace_back (xstrdup (arg.c_str ()));
+	str = skip_spaces (str);
+      }
+    tmp_argv.emplace_back (nullptr);
+
+    size_t sz = sizeof (decltype (tmp_argv)::value_type) * tmp_argv.size ();
+    m_argv = (char **) xmalloc (sz);
+    memcpy (m_argv, tmp_argv.data (), sz);
   }
 
   /* Return the underlying array.  */
@@ -197,7 +216,6 @@ public:
 private:
 
   /* The wrapped array.  */
-
   char **m_argv;
 };
 
