@@ -311,25 +311,24 @@ gdb_completer_file_name_dequote (char *filename, int quote_char)
   return strdup (tmp.c_str ());
 }
 
-/* Apply character escaping to the file name in TEXT.  QUOTE_PTR points to
-   the quote character surrounding TEXT, or points to the null-character if
-   there are no quotes around TEXT.  MATCH_TYPE will be one of the readline
-   constants SINGLE_MATCH or MULTI_MATCH depending on if there is one or
-   many completions.  */
+/* Apply character escaping to the filename in TEXT and return a newly
+   allocated buffer containing the possibly updated filename.
+
+   QUOTE_CHAR is the quote character surrounding TEXT, or the
+   null-character if there are no quotes around TEXT.  */
 
 static char *
-gdb_completer_file_name_quote (char *text, int match_type ATTRIBUTE_UNUSED,
-			       char *quote_ptr)
+gdb_completer_file_name_quote_1 (const char *text, char quote_char)
 {
   std::string str;
 
-  if (*quote_ptr == '\'')
+  if (quote_char == '\'')
     {
       /* There is no backslash escaping permitted within a single quoted
 	 string, so in this case we can just return the input sting.  */
       str = text;
     }
-  else if (*quote_ptr == '"')
+  else if (quote_char == '"')
     {
       /* Add escaping for a double quoted filename.  */
       for (const char *input = text;
@@ -343,7 +342,7 @@ gdb_completer_file_name_quote (char *text, int match_type ATTRIBUTE_UNUSED,
     }
   else
     {
-      gdb_assert (*quote_ptr == '\0');
+      gdb_assert (quote_char == '\0');
 
       /* Add escaping for an unquoted filename.  */
       for (const char *input = text;
@@ -360,6 +359,19 @@ gdb_completer_file_name_quote (char *text, int match_type ATTRIBUTE_UNUSED,
   return strdup (str.c_str ());
 }
 
+/* Apply character escaping to the filename in TEXT.  QUOTE_PTR points to
+   the quote character surrounding TEXT, or points to the null-character if
+   there are no quotes around TEXT.  MATCH_TYPE will be one of the readline
+   constants SINGLE_MATCH or MULTI_MATCH depending on if there is one or
+   many completions.  */
+
+static char *
+gdb_completer_file_name_quote (char *text, int match_type ATTRIBUTE_UNUSED,
+			       char *quote_ptr)
+{
+  return gdb_completer_file_name_quote_1 (text, *quote_ptr);
+}
+
 /* The function is used to update the completion word MATCH before
    displaying it to the user in the 'complete' command output, this
    particular function is only used when MATCH has been supplied by the
@@ -373,12 +385,20 @@ gdb_completer_file_name_quote (char *text, int match_type ATTRIBUTE_UNUSED,
    Return the updated completion word as a string.  */
 
 static std::string
-filename_match_formatter (const char *match, char quote_char)
+filename_match_formatter_1 (const char *match, char quote_char,
+			    bool add_escapes)
 {
-  std::string expanded = gdb_tilde_expand (match);
-  const bool isdir = std::filesystem::is_directory (expanded);
-  std::string result (match);
-  if (isdir)
+  std::string result;
+  if (add_escapes)
+    {
+      gdb::unique_xmalloc_ptr<char> quoted_match
+	(gdb_completer_file_name_quote_1 (match, quote_char));
+      result = quoted_match.get ();
+    }
+  else
+    result = match;
+
+  if (std::filesystem::is_directory (gdb_tilde_expand (match)))
     result += "/";
   else
     result += quote_char;
@@ -386,13 +406,29 @@ filename_match_formatter (const char *match, char quote_char)
   return result;
 }
 
+static std::string
+filename_unquoted_match_formatter (const char *match, char quote_char)
+{
+  return filename_match_formatter_1 (match, quote_char, false);
+}
+
+static std::string
+filename_maybe_quoted_match_formatter (const char *match, char quote_char)
+{
+  return filename_match_formatter_1 (match, quote_char, true);
+}
+
 /* See completer.h.  */
 
-void
-filename_completer_generate_completions (completion_tracker &tracker,
-					   const char *word)
+static void
+filename_completer_generate_completions_1 (completion_tracker &tracker,
+					   const char *word,
+					   bool quote_matches)
 {
-  tracker.set_match_format_func (filename_match_formatter);
+  if (quote_matches)
+    tracker.set_match_format_func (filename_maybe_quoted_match_formatter);
+  else
+    tracker.set_match_format_func (filename_unquoted_match_formatter);
 
   int subsequent_name = 0;
   while (1)
@@ -417,6 +453,15 @@ filename_completer_generate_completions (completion_tracker &tracker,
     }
 }
 
+/* See completer.h.  */
+
+void
+filename_completer_generate_completions (completion_tracker &tracker,
+					 const char *word)
+{
+  filename_completer_generate_completions_1 (tracker, word, false);
+}
+
 /* Complete on filenames.  */
 
 void
@@ -426,7 +471,7 @@ filename_maybe_quoted_completer (struct cmd_list_element *ignore,
 {
   rl_char_is_quoted_p = gdb_completer_file_name_char_is_quoted;
   rl_completer_quote_characters = gdb_completer_file_name_quote_characters;
-  filename_completer_generate_completions (tracker, word);
+  filename_completer_generate_completions_1 (tracker, word, true);
 }
 
 /* The corresponding completer_handle_brkchars implementation.  */
