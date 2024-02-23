@@ -34,6 +34,8 @@ load_lib completion-support.exp
 #       file 1		[ FILE ]
 #       file 2		[ FILE ]
 #   cc1/		[ DIRECTORY ]
+#     xx yy		[ DIRECTORY ]
+#     xx zz		[ DIRECTORY ]
 #   cc2			[ FILE ]
 proc setup_directory_tree {} {
     set root [standard_output_file "root"]
@@ -43,6 +45,9 @@ proc setup_directory_tree {} {
     remote_exec host "mkdir -p ${root}/bb1"
     remote_exec host "mkdir -p ${root}/bb2"
     remote_exec host "mkdir -p ${root}/cc1"
+    remote_exec host "mkdir -p \"${root}/cc1/xx yy\""
+    remote_exec host "mkdir -p \"${root}/cc1/xx zz\""
+
     remote_exec host "touch ${root}/cc2"
     remote_exec host "touch \"${root}/aaa/aa bb\""
     remote_exec host "touch \"${root}/aaa/aa cc\""
@@ -54,6 +59,11 @@ proc setup_directory_tree {} {
 
     remote_exec host "touch \"${root}/bb1/aa\\\"bb\""
     remote_exec host "touch \"${root}/bb1/aa'bb\""
+
+    foreach name {f1 f2 f3} {
+	remote_exec host "touch \"${root}/cc1/xx yy/${name}\""
+	remote_exec host "touch \"${root}/cc1/xx zz/${name}\""
+    }
 
     return $root
 }
@@ -82,10 +92,22 @@ proc test_gdb_complete_filename_multiple {
 	    $add_completed_line $completion_list $max_completions $testname
     }
 
-    if { $start_quote_char eq "" && $end_quote_char ne "" } {
+    if { $start_quote_char eq "" } {
 	set updated_completion_list {}
 
 	foreach entry $completion_list {
+	    # If ENTRY is quoted with double quotes, then any double
+	    # quotes within the entry need to be escaped.
+	    if { $end_quote_char eq "\"" } {
+		regsub -all "\"" $entry "\\\"" entry
+	    }
+
+	    if { $end_quote_char eq "" } {
+		regsub -all " " $entry "\\ " entry
+		regsub -all "\"" $entry "\\\"" entry
+		regsub -all "'" $entry "\\'" entry
+	    }
+
 	    if {[string range $entry end end] ne "/"} {
 		set entry $entry$end_quote_char
 	    }
@@ -110,8 +132,7 @@ proc test_gdb_complete_filename_multiple {
 proc run_quoting_and_escaping_tests { root } {
     # Test all the commands which allow quoting of filenames, and
     # which require whitespace to be escaped in unquoted filenames.
-    foreach_with_prefix cmd { file exec-file symbol-file add-symbol-file \
-				  remove-symbol-file } {
+    foreach_with_prefix cmd { file exec-file symbol-file add-symbol-file remove-symbol-file } {
 	gdb_start
 
 	# Completing 'thread apply all ...' commands uses a custom word
@@ -147,47 +168,61 @@ proc run_quoting_and_escaping_tests { root } {
 		} "" "${qc}" false \
 		"expand mixed directory and file names"
 
-	    # GDB does not currently escape word break characters
-	    # (e.g. white space) correctly in unquoted filenames.
 	    if { $qc ne "" } {
 		set sp " "
-
-		test_gdb_complete_filename_multiple "file ${qc}${root}/aaa/" \
-		    "a" "a${sp}" {
-			"aa bb"
-			"aa cc"
-		    } "" "${qc}" false \
-		    "expand filenames containing spaces"
-
-		test_gdb_complete_filename_multiple "file ${qc}${root}/bb1/" \
-		    "a" "a" {
-			"aa\"bb"
-			"aa'bb"
-		    } "" "${qc}" false \
-		    "expand filenames containing quotes"
 	    } else {
 		set sp "\\ "
+	    }
 
-		test_gdb_complete_tab_multiple "file ${qc}${root}/aaa/a" \
-		    "a${sp}" {
-			"aa bb"
-			"aa cc"
-		    } false \
-		    "expand filenames containing spaces"
+	    if { $qc eq "'" } {
+		set dq "\""
+		set dq_re "\""
+	    } else {
+		set dq "\\\""
+		set dq_re "\\\\\""
+	    }
 
-		test_gdb_complete_tab_multiple "file ${qc}${root}/bb1/a" \
-		    "a" {
-			"aa\"bb"
-			"aa'bb"
-		    } false \
-		    "expand filenames containing quotes"
+	    test_gdb_complete_filename_multiple "file ${qc}${root}/cc1/" \
+		"x" "x${sp}" {
+		    "xx yy/"
+		    "xx zz/"
+		} "" "${qc}" false \
+		"expand multiple directory names containing spaces"
 
-		test_gdb_complete_tab_unique "file ${qc}${root}/bb1/aa\\\"" \
-		    "file ${qc}${root}/bb1/aa\\\\\"bb${qc}" " " \
-		    "expand unique filename containing double quotes"
+	    test_gdb_complete_filename_multiple "file ${qc}${root}/aaa/" \
+		"a" "a${sp}" {
+		    "aa bb"
+		    "aa cc"
+		} "" "${qc}" false \
+		"expand filenames containing spaces"
 
-		test_gdb_complete_tab_unique "file ${qc}${root}/bb1/aa\\'" \
-		    "file ${qc}${root}/bb1/aa\\\\'bb${qc}" " " \
+	    test_gdb_complete_filename_multiple "file ${qc}${root}/bb1/" \
+		"a" "a" {
+		    "aa\"bb"
+		    "aa'bb"
+		} "" "${qc}" false \
+		"expand filenames containing quotes"
+
+	    test_gdb_complete_tab_unique "file ${qc}${root}/bb1/aa${dq}" \
+		"file ${qc}${root}/bb1/aa${dq_re}bb${qc}" " " \
+		"expand unique filename containing double quotes"
+
+	    # It is not possible to include a single quote character
+	    # within a single quoted string.  However, GDB does not do
+	    # anything smart if a user tries to do this.  Avoid testing
+	    # this case.  Maybe in the future we'll figure a way to avoid
+	    # this situation.
+	    if { $qc ne "'" } {
+		if { $qc eq "" } {
+		    set sq "\\'"
+		    set sq_re "\\\\'"
+		} else {
+		    set sq "'"
+		    set sq_re "'"
+		}
+
+		test_gdb_complete_tab_unique "file ${qc}${root}/bb1/aa${sq}" \
+		    "file ${qc}${root}/bb1/aa${sq_re}bb${qc}" " " \
 		    "expand unique filename containing single quote"
 	    }
 	}
