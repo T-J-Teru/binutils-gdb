@@ -147,6 +147,7 @@ GUILE_COMPILED_FILES = \
 
 GUILD = @GUILD@
 GUILD_TARGET_FLAG = @GUILD_TARGET_FLAG@
+GUILE = @GUILE@
 
 # Flags passed to 'guild compile'.
 # Note: We can't use -Wunbound-variable because all the variables

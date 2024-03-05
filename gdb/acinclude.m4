@@ -284,7 +284,29 @@ AC_DEFUN([GDB_GUILE_PROGRAM_NAMES], [
   fi
 
   GUILD="$ac_cv_guild_program_name"
+
+  AC_CACHE_CHECK([for the absolute file name of the 'guile' command],
+    [ac_cv_guile_program_name],
+    [ac_cv_guile_program_name="`$1 --variable guile $2`"
+
+     # In Guile up to 2.0.11 included, guile-2.0.pc would not define
+     # the 'guile' and 'bindir' variables.  In that case, try to guess
+     # what the program name is, at the risk of getting it wrong if
+     # Guile was configured with '--program-suffix' or similar.
+     if test "x$ac_cv_guile_program_name" = "x"; then
+       guile_exec_prefix="`$1 --variable exec_prefix $2`"
+       ac_cv_guile_program_name="$guile_exec_prefix/bin/guile"
+     fi
+  ])
+
+  if ! "$ac_cv_guile_program_name" --version >&AS_MESSAGE_LOG_FD 2>&AS_MESSAGE_LOG_FD; then
+    AC_MSG_ERROR(['$ac_cv_guile_program_name' appears to be unusable])
+  fi
+
+  GUILE="$ac_cv_guile_program_name"
+
   AC_SUBST([GUILD])
+  AC_SUBST([GUILE])
 ])
 
 dnl GDB_GUILD_TARGET_FLAG

@@ -1104,6 +1104,7 @@ dnl        pkg-config --exists $version
 dnl        pkg-config --cflags $version
 dnl        pkg-config --libs $version
 dnl        pkg-config --variable guild $version
+dnl        pkg-config --variable guile $version
 dnl        The script will be called with $version having each value in
 dnl        $try_guile_versions until --exists indicates success.
 

@@ -721,6 +721,7 @@ HAVE_GUILE_TRUE
 GUILE_LIBS
 GUILE_CPPFLAGS
 GUILD_TARGET_FLAG
+GUILE
 GUILD
 pkg_config_prog_path
 HAVE_PYTHON_FALSE
@@ -11499,7 +11500,7 @@ else
   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
   lt_status=$lt_dlunknown
   cat > conftest.$ac_ext <<_LT_EOF
-#line 11502 "configure"
+#line 11503 "configure"
 #include "confdefs.h"
 
 #if HAVE_DLFCN_H
@@ -11605,7 +11606,7 @@ else
   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
   lt_status=$lt_dlunknown
   cat > conftest.$ac_ext <<_LT_EOF
-#line 11608 "configure"
+#line 11609 "configure"
 #include "confdefs.h"
 
 #if HAVE_DLFCN_H
@@ -28780,6 +28781,34 @@ $as_echo "$ac_cv_guild_program_name" >&6; }
 
   GUILD="$ac_cv_guild_program_name"
 
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for the absolute file name of the 'guile' command" >&5
+$as_echo_n "checking for the absolute file name of the 'guile' command... " >&6; }
+if ${ac_cv_guile_program_name+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_cv_guile_program_name="`"${with_guile}" --variable guile "${guile_version}"`"
+
+     # In Guile up to 2.0.11 included, guile-2.0.pc would not define
+     # the 'guile' and 'bindir' variables.  In that case, try to guess
+     # what the program name is, at the risk of getting it wrong if
+     # Guile was configured with '--program-suffix' or similar.
+     if test "x$ac_cv_guile_program_name" = "x"; then
+       guile_exec_prefix="`"${with_guile}" --variable exec_prefix "${guile_version}"`"
+       ac_cv_guile_program_name="$guile_exec_prefix/bin/guile"
+     fi
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_guile_program_name" >&5
+$as_echo "$ac_cv_guile_program_name" >&6; }
+
+  if ! "$ac_cv_guile_program_name" --version >&5 2>&5; then
+    as_fn_error $? "'$ac_cv_guile_program_name' appears to be unusable" "$LINENO" 5
+  fi
+
+  GUILE="$ac_cv_guile_program_name"
+
+
+
 
     ;;
   *)
@@ -28809,6 +28838,34 @@ $as_echo "$ac_cv_guild_program_name" >&6; }
   fi
 
   GUILD="$ac_cv_guild_program_name"
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for the absolute file name of the 'guile' command" >&5
+$as_echo_n "checking for the absolute file name of the 'guile' command... " >&6; }
+if ${ac_cv_guile_program_name+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_cv_guile_program_name="`"${pkg_config_prog_path}" --variable guile "${guile_version}"`"
+
+     # In Guile up to 2.0.11 included, guile-2.0.pc would not define
+     # the 'guile' and 'bindir' variables.  In that case, try to guess
+     # what the program name is, at the risk of getting it wrong if
+     # Guile was configured with '--program-suffix' or similar.
+     if test "x$ac_cv_guile_program_name" = "x"; then
+       guile_exec_prefix="`"${pkg_config_prog_path}" --variable exec_prefix "${guile_version}"`"
+       ac_cv_guile_program_name="$guile_exec_prefix/bin/guile"
+     fi
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_guile_program_name" >&5
+$as_echo "$ac_cv_guile_program_name" >&6; }
+
+  if ! "$ac_cv_guile_program_name" --version >&5 2>&5; then
+    as_fn_error $? "'$ac_cv_guile_program_name' appears to be unusable" "$LINENO" 5
+  fi
+
+  GUILE="$ac_cv_guile_program_name"
+
+
 
 
     ;;
