@@ -26,6 +26,7 @@
 #include "gdb_curses.h"
 #include "observable.h"
 #include "gdbsupport/gdb-checked-static-cast.h"
+#include "gdbsupport/gdb-checked-dynamic-cast.h"
 
 /* A deleter that calls delwin.  */
 struct curses_deleter
@@ -296,9 +297,9 @@ extern struct tui_win_info *tui_win_list[MAX_MAJOR_WINDOWS];
 #define TUI_DATA_WIN \
   (gdb::checked_static_cast<tui_data_window *> (tui_win_list[DATA_WIN]))
 #define TUI_CMD_WIN \
-  (dynamic_cast<tui_cmd_window *> (tui_win_list[CMD_WIN]))
+  (gdb::checked_dynamic_cast<tui_cmd_window *> (tui_win_list[CMD_WIN]))
 #define TUI_STATUS_WIN \
-  (dynamic_cast<tui_status_window *> (tui_win_list[STATUS_WIN]))
+  (gdb::checked_dynamic_cast<tui_status_window *> (tui_win_list[STATUS_WIN]))
 
 /* All the windows that are currently instantiated, in layout
    order.  */
