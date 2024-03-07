@@ -238,7 +238,8 @@ if ![info exists INTERNAL_GDBFLAGS] {
 		   "-nx" \
 		   "-q" \
 		   {-iex "set height 0"} \
-		   {-iex "set width 0"}]]
+		   {-iex "set width 0"} \
+		   {-iex "set rpm-suggestion enabled off"}]]
 
     # If DEBUGINFOD_URLS is set, gdb will try to download sources and
     # debug info for f.i. system libraries.  Prevent this.
@@ -2490,6 +2491,18 @@ proc default_gdb_start { } {
 	}
 	timeout {
 	    warning "Couldn't set the width to 0."
+	}
+    }
+
+    # Turn off the missing debug info messages as the testsuite does
+    # not expect them.
+    send_gdb "set rpm-suggestion enabled off\n"
+    gdb_expect 10 {
+	-re "$gdb_prompt $" {
+	    verbose "Disabled the missing debug info messages." 2
+	}
+	timeout {
+	    warning "Could not disable the missing debug info messages."
 	}
     }
 
