@@ -19,6 +19,13 @@ from enum import Enum
 import gdb
 from gdb.missing_debug import MissingDebugHandler
 
+# This is a RHEL/Fedora work around: There's already a
+# missing-debug-info handler registered for these versions of GDB.
+# Discard the handler now so that the tests will pass (the tests
+# assume no handler is currently registered).
+gdb.missing_debug_handlers = []
+
+
 # A global log that is filled in by instances of the LOG_HANDLER class
 # when they are called.
 handler_call_log = []
@@ -117,5 +124,8 @@ def register(name, locus=None):
 # these as needed from the TCL script.
 rhandler = exception_handler()
 handler_obj = handler()
+
+# Discard the rpm-suggestion handler.
+gdb.missing_file_handlers = []
 
 print("Success")
