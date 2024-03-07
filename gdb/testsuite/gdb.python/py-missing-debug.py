@@ -18,6 +18,13 @@ from gdb.missing_debug import MissingDebugHandler
 from enum import Enum
 import os
 
+# This is a RHEL/Fedora work around: There's already a
+# missing-debug-info handler registered for these versions of GDB.
+# Discard the handler now so that the tests will pass (the tests
+# assume no handler is currently registered).
+gdb.missing_debug_handlers = []
+
+
 # A global log that is filled in by instances of the LOG_HANDLER class
 # when they are called.
 handler_call_log = []
