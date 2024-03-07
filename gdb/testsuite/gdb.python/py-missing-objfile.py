@@ -164,4 +164,7 @@ def register(name, locus=None):
 rhandler = exception_handler()
 handler_obj = handler()
 
+# Discard the rpm-suggestion handler.
+gdb.missing_file_handlers = []
+
 print("Success")
