@@ -31,7 +31,11 @@
 
 #ifdef __x86_64__
 #include "nat/amd64-linux-siginfo.h"
+#include "arch/amd64-linux-tdesc.h"
 #endif
+
+#include "arch/i386-linux-tdesc.h"
+
 
 #include "gdb_proc_service.h"
 /* Don't include elf/common.h if linux/elf.h got included by
@@ -47,7 +51,10 @@
 #include "nat/linux-nat.h"
 #include "nat/x86-linux.h"
 #include "nat/x86-linux-dregs.h"
+#include "arch/x86-linux-tdesc.h"
 #include "nat/x86-linux-tdesc.h"
+
+
 
 #ifdef __x86_64__
 static target_desc_up tdesc_amd64_linux_no_xml;
