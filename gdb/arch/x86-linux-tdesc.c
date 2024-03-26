@@ -1,4 +1,4 @@
-/* IPA/Target description related code for GNU/Linux x86 (i386 and x86-64).
+/* Target description related code for GNU/Linux x86 (i386 and x86-64).
 
    Copyright (C) 2024 Free Software Foundation, Inc.
 
@@ -18,45 +18,32 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "gdbsupport/common-defs.h"
-#include "linux-x86-tdesc.h"
+#include "arch/x86-linux-tdesc.h"
 #include "arch/x86-linux-tdesc-features.h"
 
-/* See linux-x86-tdesc.h.  */
+/* See arch/x86-linux-tdesc.h.  */
 
 int
-x86_linux_amd64_ipa_tdesc_count ()
+x86_linux_xcr0_to_tdesc_idx (uint64_t xcr0)
 {
-  return x86_linux_amd64_tdesc_count ();
-}
+  /* The following table shows which features are checked for when creating
+     the target descriptions (see nat/x86-linux-tdesc.c), the feature order
+     represents the bit order within the generated index number.
 
-/* See linux-x86-tdesc.h.  */
+     i386  | x87 sse mpx avx avx512 pkru
+     amd64 |         mpx avx avx512 pkru
+     i32   |             avx avx512 pkru
 
-int
-x86_linux_x32_ipa_tdesc_count ()
-{
-  return x86_linux_x32_tdesc_count ();
-}
+     The features are ordered so that for each mode (i386, amd64, i32) the
+     generated index will form a continuous range.  */
 
-/* See linux-x86-tdesc.h.  */
-
-int
-x86_linux_i386_ipa_tdesc_count ()
-{
-  return x86_linux_i386_tdesc_count ();
-}
-
-/* See linux-x86-tdesc.h.  */
-
-uint64_t
-x86_linux_tdesc_idx_to_xcr0 (int idx)
-{
-  uint64_t xcr0 = 0;
+  int idx = 0;
 
   for (int i = 0; i < ARRAY_SIZE (x86_linux_all_tdesc_features); ++i)
     {
-      if ((idx & (1 << i)) != 0)
-	xcr0 |= x86_linux_all_tdesc_features[i].feature;
+      if ((xcr0 & x86_linux_all_tdesc_features[i].feature) != 0)
+	idx |= (1 << i);
     }
 
-  return xcr0;
+  return idx;
 }

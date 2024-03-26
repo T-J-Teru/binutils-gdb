@@ -1,4 +1,4 @@
-/* IPA/Target description related code for GNU/Linux x86 (i386 and x86-64).
+/* Target description related code for GNU/Linux i386.
 
    Copyright (C) 2024 Free Software Foundation, Inc.
 
@@ -18,45 +18,33 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "gdbsupport/common-defs.h"
-#include "linux-x86-tdesc.h"
+#include "arch/x86-linux-tdesc.h"
+#include "arch/i386-linux-tdesc.h"
+#include "arch/i386.h"
 #include "arch/x86-linux-tdesc-features.h"
 
-/* See linux-x86-tdesc.h.  */
+/* A cache of all possible i386 target descriptions.  */
 
-int
-x86_linux_amd64_ipa_tdesc_count ()
+static struct target_desc *i386_tdescs[x86_linux_i386_tdesc_count ()] = { };
+
+/* See arch/i386-linux-tdesc.h.  */
+
+const struct target_desc *
+i386_linux_read_description (uint64_t xcr0)
 {
-  return x86_linux_amd64_tdesc_count ();
-}
+  xcr0 &= x86_linux_i386_tdesc_feature_mask ();
+  int idx = x86_linux_xcr0_to_tdesc_idx (xcr0);
 
-/* See linux-x86-tdesc.h.  */
+  gdb_assert (idx >= 0 && idx < x86_linux_i386_tdesc_count ());
 
-int
-x86_linux_x32_ipa_tdesc_count ()
-{
-  return x86_linux_x32_tdesc_count ();
-}
+  target_desc **tdesc = &i386_tdescs[idx];
 
-/* See linux-x86-tdesc.h.  */
-
-int
-x86_linux_i386_ipa_tdesc_count ()
-{
-  return x86_linux_i386_tdesc_count ();
-}
-
-/* See linux-x86-tdesc.h.  */
-
-uint64_t
-x86_linux_tdesc_idx_to_xcr0 (int idx)
-{
-  uint64_t xcr0 = 0;
-
-  for (int i = 0; i < ARRAY_SIZE (x86_linux_all_tdesc_features); ++i)
+  if (*tdesc == nullptr)
     {
-      if ((idx & (1 << i)) != 0)
-	xcr0 |= x86_linux_all_tdesc_features[i].feature;
+      *tdesc = i386_create_target_description (xcr0, true, false);
+
+      x86_linux_post_init_tdesc (*tdesc, false);
     }
 
-  return xcr0;
+  return *tdesc;
 }

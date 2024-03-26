@@ -17,46 +17,24 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "gdbsupport/common-defs.h"
-#include "linux-x86-tdesc.h"
-#include "arch/x86-linux-tdesc-features.h"
+#ifndef GDBSERVER_LINUX_X86_TDESC_H
+#define GDBSERVER_LINUX_X86_TDESC_H
 
-/* See linux-x86-tdesc.h.  */
+#include <cstdint>
 
-int
-x86_linux_amd64_ipa_tdesc_count ()
-{
-  return x86_linux_amd64_tdesc_count ();
-}
+/* Convert an index number (as returned from x86_linux_xcr0_to_tdesc_idx)
+   into an xcr0 value which can then be used to create a target
+   description.  */
 
-/* See linux-x86-tdesc.h.  */
+extern uint64_t x86_linux_tdesc_idx_to_xcr0 (int idx);
 
-int
-x86_linux_x32_ipa_tdesc_count ()
-{
-  return x86_linux_x32_tdesc_count ();
-}
+/* Within the in-process-agent we need to pre-initialise all of the target
+   descriptions, to do this we need to know how many target descriptions
+   there are for each different target type.  These functions return the
+   target description count for the relevant target.  */
 
-/* See linux-x86-tdesc.h.  */
+extern int x86_linux_amd64_ipa_tdesc_count ();
+extern int x86_linux_x32_ipa_tdesc_count ();
+extern int x86_linux_i386_ipa_tdesc_count ();
 
-int
-x86_linux_i386_ipa_tdesc_count ()
-{
-  return x86_linux_i386_tdesc_count ();
-}
-
-/* See linux-x86-tdesc.h.  */
-
-uint64_t
-x86_linux_tdesc_idx_to_xcr0 (int idx)
-{
-  uint64_t xcr0 = 0;
-
-  for (int i = 0; i < ARRAY_SIZE (x86_linux_all_tdesc_features); ++i)
-    {
-      if ((idx & (1 << i)) != 0)
-	xcr0 |= x86_linux_all_tdesc_features[i].feature;
-    }
-
-  return xcr0;
-}
+#endif /* GDBSERVER_LINUX_X86_TDESC_H */

@@ -23,6 +23,8 @@
 #include "tracepoint.h"
 #include "gdbsupport/x86-xstate.h"
 #include "nat/x86-linux-tdesc.h"
+#include "linux-x86-tdesc.h"
+#include "arch/i386-linux-tdesc.h"
 
 /* GDB register numbers.  */
 

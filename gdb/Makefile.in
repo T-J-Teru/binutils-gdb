@@ -726,6 +726,7 @@ ALL_64_TARGET_OBS = \
 	arch/aarch64-insn.o \
 	arch/aarch64-mte-linux.o \
 	arch/aarch64-scalable-linux.o \
+	arch/amd64-linux-tdesc.o \
 	arch/amd64.o \
 	arch/riscv.o \
 	bpf-tdep.o \
@@ -766,9 +767,11 @@ ALL_TARGET_OBS = \
 	arch/arm.o \
 	arch/arm-get-next-pcs.o \
 	arch/arm-linux.o \
+	arch/i386-linux-tdesc.o \
 	arch/i386.o \
 	arch/loongarch.o \
 	arch/ppc-linux-common.o \
+	arch/x86-linux-tdesc.o \
 	arm-bsd-tdep.o \
 	arm-fbsd-tdep.o \
 	arm-linux-tdep.o \
@@ -1528,13 +1531,18 @@ HFILES_NO_SRCDIR = \
 	arch/aarch64-insn.h \
 	arch/aarch64-mte-linux.h \
 	arch/aarch64-scalable-linux.h \
+	arch/amd64-linux-tdesc.h \
 	arch/arc.h \
 	arch/arm.h \
+	arch/i386-linux-tdesc.h \
 	arch/i386.h \
 	arch/loongarch.h \
 	arch/ppc-linux-common.h \
 	arch/ppc-linux-tdesc.h \
 	arch/riscv.h \
+	arch/x86-linux-common.h \
+	arch/x86-linux-tdesc-features.h \
+	arch/x86-linux-tdesc.h \
 	cli/cli-cmds.h \
 	cli/cli-decode.h \
 	cli/cli-script.h \

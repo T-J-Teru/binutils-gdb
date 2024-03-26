@@ -23,6 +23,9 @@
 #include "tracepoint.h"
 #include "gdbsupport/x86-xstate.h"
 #include "nat/x86-linux-tdesc.h"
+#include "linux-x86-tdesc.h"
+#include "arch/amd64-linux-tdesc.h"
+#include "arch/x86-linux-tdesc.h"
 
 /* Defined in auto-generated file amd64-linux.c.  */
 void init_registers_amd64_linux (void);
