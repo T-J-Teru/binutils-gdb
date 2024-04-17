@@ -1621,8 +1621,7 @@ gdb_save_index_cmd_completer (struct cmd_list_element *ignore,
       (tracker, &text, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_OPERAND, grp))
     return;
 
-  word = advance_to_filename_complete_word_point (tracker, text);
-  filename_completer (ignore, tracker, text, word);
+  filename_completer_handle_brkchars (ignore, tracker, text, word);
 }
 
 /* Implementation of the `save gdb-index' command.

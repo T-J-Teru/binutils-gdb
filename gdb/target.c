@@ -841,7 +841,7 @@ open_target (const char *args, int from_tty, struct cmd_list_element *command)
 
 /* See target.h.  */
 
-void
+struct cmd_list_element *
 add_target (const target_info &t, target_open_ftype *func,
 	    completer_ftype *completer)
 {
@@ -865,6 +865,8 @@ information on the arguments for a particular protocol, type\n\
   c->func = open_target;
   if (completer != NULL)
     set_cmd_completer (c, completer);
+
+  return c;
 }
 
 /* See target.h.  */

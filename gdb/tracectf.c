@@ -1721,6 +1721,7 @@ void
 _initialize_ctf ()
 {
 #if HAVE_LIBBABELTRACE
-  add_target (ctf_target_info, ctf_target_open, filename_completer);
+  struct cmd_list_element *c = add_target (ctf_target_info, ctf_target_open);
+  set_cmd_completer_handle_brkchars (c, filename_completer_handle_brkchars);
 #endif
 }

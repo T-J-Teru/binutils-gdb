@@ -866,7 +866,8 @@ add_setshow_filename_cmd (const char *name, enum command_class theclass,
 					 nullptr, nullptr, set_func,
 					 show_func, set_list, show_list);
 
-  set_cmd_completer (commands.set, filename_completer);
+  set_cmd_completer_handle_brkchars (commands.set,
+				     filename_completer_handle_brkchars);
 
   return commands;
 }
@@ -890,7 +891,8 @@ add_setshow_filename_cmd (const char *name, command_class theclass,
 						 nullptr, show_func, set_list,
 						 show_list);
 
-  set_cmd_completer (cmds.set, filename_completer);
+  set_cmd_completer_handle_brkchars (cmds.set,
+				     filename_completer_handle_brkchars);
 
   return cmds;
 }
@@ -1015,7 +1017,8 @@ add_setshow_optional_filename_cmd (const char *name, enum command_class theclass
 					 nullptr, nullptr, set_func, show_func,
 					 set_list, show_list);
 
-  set_cmd_completer (commands.set, filename_completer);
+  set_cmd_completer_handle_brkchars (commands.set,
+				     filename_completer_handle_brkchars);
 
   return commands;
 }
@@ -1039,7 +1042,8 @@ add_setshow_optional_filename_cmd (const char *name, command_class theclass,
 				       set_func, get_func, nullptr, show_func,
 				       set_list,show_list);
 
-  set_cmd_completer (cmds.set, filename_completer);
+  set_cmd_completer_handle_brkchars (cmds.set,
+				     filename_completer_handle_brkchars);
 
   return cmds;
 }

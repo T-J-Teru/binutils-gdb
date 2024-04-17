@@ -1520,7 +1520,9 @@ void _initialize_corelow ();
 void
 _initialize_corelow ()
 {
-  add_target (core_target_info, core_target_open, filename_completer);
+  struct cmd_list_element *c
+    = add_target (core_target_info, core_target_open);
+  set_cmd_completer_handle_brkchars (c, filename_completer_handle_brkchars);
   add_cmd ("core-file-backed-mappings", class_maintenance,
 	   maintenance_print_core_file_backed_mappings,
 	   _("Print core file's file-backed mappings."),
