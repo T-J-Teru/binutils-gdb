@@ -1119,5 +1119,7 @@ void _initialize_tracefile_tfile ();
 void
 _initialize_tracefile_tfile ()
 {
-  add_target (tfile_target_info, tfile_target_open, filename_completer);
+  struct cmd_list_element *c =
+    add_target (tfile_target_info, tfile_target_open);
+  set_cmd_completer_handle_brkchars (c, filename_completer_handle_brkchars);
 }

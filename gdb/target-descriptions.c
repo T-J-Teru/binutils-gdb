@@ -1757,13 +1757,16 @@ maint_print_c_tdesc_cmd_completer (struct cmd_list_element *ignore,
 				   completion_tracker &tracker,
 				   const char *text, const char *word)
 {
+  /* Only called in brkchars phase.  */
+  gdb_assert (word == nullptr);
+  tracker.set_use_custom_word_point (true);
+
   auto grp = make_maint_print_c_tdesc_options_def_group (nullptr);
   if (gdb::option::complete_options
       (tracker, &text, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_ERROR, grp))
     return;
 
-  word = advance_to_filename_complete_word_point (tracker, text);
-  filename_completer (ignore, tracker, text, word);
+  filename_completer_generate_completions (tracker, text);
 }
 
 /* Implement the maintenance print xml-tdesc command.  */
@@ -1947,7 +1950,7 @@ that feature within an already existing target_desc object."), grp);
   cmd = add_cmd ("xml-tdesc", class_maintenance, maint_print_xml_tdesc_cmd, _("\
 Print the current target description as an XML file."),
 		 &maintenanceprintlist);
-  set_cmd_completer (cmd, filename_completer);
+  set_cmd_completer_handle_brkchars (cmd, filename_completer_handle_brkchars);
 
   cmd = add_cmd ("xml-descriptions", class_maintenance,
 		 maintenance_check_xml_descriptions, _("\
@@ -1956,5 +1959,5 @@ Check the target descriptions created in GDB equal the descriptions\n\
 created from XML files in the directory.\n\
 The parameter is the directory name."),
 		 &maintenancechecklist);
-  set_cmd_completer (cmd, filename_completer);
+  set_cmd_completer_handle_brkchars (cmd, filename_completer_handle_brkchars);
 }

@@ -2370,11 +2370,12 @@ typedef void target_open_ftype (const char *args, int from_tty);
 
 /* Add the target described by INFO to the list of possible targets
    and add a new command 'target $(INFO->shortname)'.  Set COMPLETER
-   as the command's completer if not NULL.  */
+   as the command's completer if not NULL.  Return the new target
+   command.  */
 
-extern void add_target (const target_info &info,
-			target_open_ftype *func,
-			completer_ftype *completer = NULL);
+extern struct cmd_list_element *add_target
+	(const target_info &info, target_open_ftype *func,
+	 completer_ftype *completer = NULL);
 
 /* Adds a command ALIAS for the target described by INFO and marks it
    deprecated.  This is useful for maintaining backwards compatibility

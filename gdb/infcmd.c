@@ -3113,7 +3113,8 @@ Follow this command with any number of args, to be passed to the program."),
 				       get_args_value,
 				       show_args_command,
 				       &setlist, &showlist);
-  set_cmd_completer (args_set_show.set, filename_completer);
+  set_cmd_completer_handle_brkchars (args_set_show.set,
+				     filename_completer_handle_brkchars);
 
   auto cwd_set_show
     = add_setshow_string_noescape_cmd ("cwd", class_run, _("\
@@ -3129,7 +3130,8 @@ working directory."),
 				       set_cwd_value, get_inferior_cwd,
 				       show_cwd_command,
 				       &setlist, &showlist);
-  set_cmd_completer (cwd_set_show.set, filename_completer);
+  set_cmd_completer_handle_brkchars (cwd_set_show.set,
+				     filename_completer_handle_brkchars);
 
   c = add_cmd ("environment", no_class, environment_info, _("\
 The environment to give the program, or one variable's value.\n\
@@ -3163,7 +3165,7 @@ This path is equivalent to the $PATH shell variable.  It is a list of\n\
 directories, separated by colons.  These directories are searched to find\n\
 fully linked executable files and separately compiled object files as \
 needed."));
-  set_cmd_completer (c, filename_completer);
+  set_cmd_completer_handle_brkchars (c, filename_completer_handle_brkchars);
 
   c = add_cmd ("paths", no_class, path_info, _("\
 Current search path for finding object files.\n\
@@ -3313,18 +3315,19 @@ Specifying -a and an ignore count simultaneously is an error."));
     = add_com ("run", class_run, run_command, _("\
 Start debugged program.\n"
 RUN_ARGS_HELP));
-  set_cmd_completer (run_cmd, filename_completer);
+  set_cmd_completer_handle_brkchars (run_cmd,
+				     filename_completer_handle_brkchars);
   add_com_alias ("r", run_cmd, class_run, 1);
 
   c = add_com ("start", class_run, start_command, _("\
 Start the debugged program stopping at the beginning of the main procedure.\n"
 RUN_ARGS_HELP));
-  set_cmd_completer (c, filename_completer);
+  set_cmd_completer_handle_brkchars (c, filename_completer_handle_brkchars);
 
   c = add_com ("starti", class_run, starti_command, _("\
 Start the debugged program stopping at the first instruction.\n"
 RUN_ARGS_HELP));
-  set_cmd_completer (c, filename_completer);
+  set_cmd_completer_handle_brkchars (c, filename_completer_handle_brkchars);
 
   add_com ("interrupt", class_run, interrupt_command,
 	   _("Interrupt the execution of the debugged program.\n\
