@@ -3870,7 +3870,7 @@ Usage: symbol-file [-readnow | -readnever] [-o OFF] FILE\n\
 OFF is an optional offset which is added to each section address.\n\
 The `file' command can also load symbol tables, as well as setting the file\n\
 to execute.\n" READNOW_READNEVER_HELP), &cmdlist);
-  set_cmd_completer (c, filename_completer);
+  set_cmd_completer (c, filename_maybe_quoted_completer);
 
   c = add_cmd ("add-symbol-file", class_files, add_symbol_file_command, _("\
 Load symbols from FILE, assuming FILE has been dynamically loaded.\n\
@@ -3884,7 +3884,7 @@ OFF is an optional offset which is added to the default load addresses\n\
 of all sections for which no other address was specified.\n"
 READNOW_READNEVER_HELP),
 	       &cmdlist);
-  set_cmd_completer (c, filename_completer);
+  set_cmd_completer (c, filename_maybe_quoted_completer);
 
   c = add_cmd ("remove-symbol-file", class_files,
 	       remove_symbol_file_command, _("\
@@ -3894,6 +3894,7 @@ Usage: remove-symbol-file FILENAME\n\
 The file to remove can be identified by its filename or by an address\n\
 that lies within the boundaries of this symbol file in memory."),
 	       &cmdlist);
+  set_cmd_completer (c, filename_maybe_quoted_completer);
 
   c = add_cmd ("load", class_files, load_command, _("\
 Dynamically load FILE into the running program.\n\
@@ -3902,7 +3903,7 @@ Usage: load [FILE] [OFFSET]\n\
 An optional load OFFSET may also be given as a literal address.\n\
 When OFFSET is provided, FILE must also be provided.  FILE can be provided\n\
 on its own."), &cmdlist);
-  set_cmd_completer (c, filename_completer);
+  set_cmd_completer_handle_brkchars (c, filename_completer_handle_brkchars);
 
   cmd_list_element *overlay_cmd
     = add_basic_prefix_cmd ("overlay", class_support,

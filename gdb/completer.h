@@ -563,12 +563,6 @@ extern completion_result
 const char *advance_to_expression_complete_word_point
   (completion_tracker &tracker, const char *text);
 
-/* Assuming TEXT is an filename, find the completion word point for
-   TEXT, emulating the algorithm readline uses to find the word
-   point.  */
-extern const char *advance_to_filename_complete_word_point
-  (completion_tracker &tracker, const char *text);
-
 extern void noop_completer (struct cmd_list_element *,
 			    completion_tracker &tracker,
 			    const char *, const char *);
@@ -576,6 +570,49 @@ extern void noop_completer (struct cmd_list_element *,
 extern void filename_completer (struct cmd_list_element *,
 				completion_tracker &tracker,
 				const char *, const char *);
+
+/* Filename completer that can be registered for the brkchars phase of
+   completion.  This should be used by commands that don't allow the
+   filename to be quoted, and whitespace does not need to be escaped.
+
+   NOTE: If you are considering using this function as your commands
+   completer, then consider updating your function to use gdb_argv or
+   extract_string_maybe_quoted to allow for possibly quoted filenames
+   instead.  You would then use filename_maybe_quoted_completer for
+   filename completion.  The benefit of this is that in the future it is
+   possible to add additional arguments to your new command.  */
+
+extern void filename_completer_handle_brkchars
+	(struct cmd_list_element *ignore, completion_tracker &tracker,
+	 const char *text, const char *word);
+
+/* Filename completer for commands where the filename argument can be
+   quoted, and whitespace within an unquoted filename should be escaped
+   with a backslash.  */
+
+extern void filename_maybe_quoted_completer (struct cmd_list_element *,
+					     completion_tracker &tracker,
+					     const char *, const char *);
+
+/* Generate filename completions of WORD, storing the completions into
+   TRACKER.  This function should be used when filename completions are
+   being generated from the brkchars phase of completion, WORD should
+   already point to the first character of the filename to be completed.
+
+   This function is used by filename_completer_handle_brkchars, but you'll
+   need to call this function manually if a command has a custom completer
+   (e.g. to complete command arguments), but which then becomes a filename
+   completer.
+
+   NOTE: If you are considering using this function as your commands
+   completer, then consider updating your function to use gdb_argv or
+   extract_string_maybe_quoted to allow for possibly quoted filenames
+   instead.  You would then use filename_maybe_quoted_completer for
+   filename completion.  The benefit of this is that in the future it is
+   possible to add additional arguments to your new command.  */
+
+extern void filename_completer_generate_completions
+	(completion_tracker &tracker, const char *word);
 
 extern void expression_completer (struct cmd_list_element *,
 				  completion_tracker &tracker,

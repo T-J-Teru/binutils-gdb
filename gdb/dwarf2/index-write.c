@@ -1615,13 +1615,16 @@ gdb_save_index_cmd_completer (struct cmd_list_element *ignore,
 			      completion_tracker &tracker,
 			      const char *text, const char *word)
 {
+  /* Only called in brkchars phase.  */
+  gdb_assert (word == nullptr);
+  tracker.set_use_custom_word_point (true);
+
   auto grp = make_gdb_save_index_options_def_group (nullptr);
   if (gdb::option::complete_options
       (tracker, &text, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_OPERAND, grp))
     return;
 
-  word = advance_to_filename_complete_word_point (tracker, text);
-  filename_completer (ignore, tracker, text, word);
+  filename_completer_generate_completions (tracker, text);
 }
 
 /* Implementation of the `save gdb-index' command.
