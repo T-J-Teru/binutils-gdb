@@ -1752,6 +1752,7 @@ show you the alternatives available, if there is more than one possibility).
 * Command Syntax::              How to give commands to @value{GDBN}
 * Command Settings::            How to change default behavior of commands
 * Completion::                  Command completion
+* Filename Arguments::		Filenames As Command Arguments
 * Command Options::             Command options
 * Help::                        How to ask @value{GDBN} for help
 @end menu
@@ -2122,6 +2123,63 @@ struct ui_file
    void *to_data;
 @}
 @end smallexample
+
+@node Filename Arguments
+@section Filenames As Command Arguments
+
+When passing filenames (or directory names) as arguments to a command
+then @value{GDBN} has two approaches to how these names should be
+formatted.
+
+If the filename does not include any whitespace, double quotes, or
+single quotes, then in either case the name can be just passed to the
+command, e.g.@:
+
+@smallexample
+(@value{GDBP}) file /path/to/some/file
+@end smallexample
+
+If the filename does include whitespace, double quotes, or single
+quotes, then how to pass the name will depend on whether the command
+supports quoting and escaping of filenames or not.
+
+Most @value{GDBN} commands don't support quoting and escaping of
+filenames.  These commands accept only a single argument, and the
+entire input line (after the command name) is treated as a single
+filename, even if the filename contains whitespace.  In the following
+example the user is adding @file{/path/that contains/two spaces/} to
+the auto-load safe-path (@pxref{add-auto-load-safe-path}):
+
+@smallexample
+(@value{GDBP}) add-auto-load-safe-path /path/that contains/two spaces/
+@end smallexample
+
+A small number of commands support quoting and escaping of their
+filename argument.  Commands that support this style are marked as
+such in the manual, any command not marked as accepting quoting and
+escaping of its filename argument, does not accept this argument
+style.
+
+Commands that support quoting and escaping will treat and whitespace
+as a word break.  If the whitespace is part of the filename then it
+needs to be escaped using a backlash.  For example, to load the file
+@file{/path/with spaces/to/a file} with the @code{file} command
+(@pxref{Files, ,Commands to Specify Files}):
+
+@smallexample
+(@value{GDBP}) file /path/with\ spaces/to/a\ file
+@end smallexample
+
+As an alternative to escaping whitespace then filenames can be quoted
+using double or single quotes, e.g.@:
+
+@smallexample
+(@value{GDBP}) file "/path/with spaces/to/a file"
+@end smallexample
+
+Within double or single quotes whitespace do not need to be escaped,
+but any double or single quotes which are not the closing quote do
+need to be escaped with a backslash.
 
 @node Command Options
 @section Command options
@@ -21615,6 +21673,9 @@ directories to search, just as the shell does when looking for a program
 to run.  You can change the value of this variable, for both @value{GDBN}
 and your program, using the @code{path} command.
 
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
+
 @cindex unlinked object files
 @cindex patching object files
 You can load unlinked object @file{.o} files into @value{GDBN} using
@@ -21636,6 +21697,9 @@ Specify that the program to be run (but not the symbol table) is found
 in @var{filename}.  @value{GDBN} searches the environment variable @env{PATH}
 if necessary to locate your program.  Omitting @var{filename} means to
 discard information on the executable file.
+
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
 
 @kindex symbol-file
 @item symbol-file @r{[} @var{filename} @r{[} -o @var{offset} @r{]]}
@@ -21659,6 +21723,9 @@ which are part of the old symbol table data being discarded inside
 
 @code{symbol-file} does not repeat if you press @key{RET} again after
 executing it once.
+
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
 
 When @value{GDBN} is configured for a particular environment, it
 understands debugging information in whatever format is the standard
@@ -21754,6 +21821,9 @@ originally read with the @code{symbol-file} command.  You can use the
 @code{add-symbol-file} command any number of times; the new symbol data
 thus read is kept in addition to the old.
 
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
+
 Changes can be reverted using the command @code{remove-symbol-file}.
 
 @cindex relocatable object files, reading symbols from
@@ -21812,6 +21882,9 @@ Remove symbol table from file "/home/user/gdb/mylib.so"? (y or n) y
 
 
 @code{remove-symbol-file} does not repeat if you press @key{RET} after using it.
+
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
 
 @kindex add-symbol-file-from-memory
 @cindex @code{syscall DSO}
