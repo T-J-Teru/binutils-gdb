@@ -1263,6 +1263,7 @@ SFILES = \
 	cp-name-parser.y \
 	d-exp.y \
 	dtrace-probe.c \
+	elf-corelow.c \
 	elf-none-tdep.c \
 	elfread.c \
 	f-exp.y \

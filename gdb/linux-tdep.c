@@ -44,6 +44,7 @@
 #include "solib-svr4.h"
 #include "memtag.h"
 #include "cli/cli-style.h"
+#include "elf-corelow.h"
 
 #include <ctype.h>
 #include <unordered_map>
@@ -2785,6 +2786,8 @@ linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch,
   set_gdbarch_infcall_mmap (gdbarch, linux_infcall_mmap);
   set_gdbarch_infcall_munmap (gdbarch, linux_infcall_munmap);
   set_gdbarch_get_siginfo_type (gdbarch, linux_get_siginfo_type);
+  set_gdbarch_core_parse_exec_context (gdbarch,
+				       elf_corefile_parse_exec_context);
 }
 
 void _initialize_linux_tdep ();

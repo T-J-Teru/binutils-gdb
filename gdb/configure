@@ -31523,7 +31523,7 @@ $as_echo "$gdb_cv_var_elf" >&6; }
   LIBS=$OLD_LIBS
 if test "$gdb_cv_var_elf" = yes; then
   CONFIG_OBS="$CONFIG_OBS elfread.o stap-probe.o dtrace-probe.o \
-		gcore-elf.o elf-none-tdep.o"
+		gcore-elf.o elf-none-tdep.o elf-corelow.o"
 
 $as_echo "#define HAVE_ELF 1" >>confdefs.h
 
