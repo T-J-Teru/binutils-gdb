@@ -22,6 +22,22 @@
 
 #include "nat/linux-nat.h"
 
+/* Does the current host support the GETFPXREGS request?  The system header
+   file may or may not define it, but even if it is defined, the kernel
+   will return EIO if it's running on a pre-SSE processor.
+
+   A value of -1 indicates that we don't know yet, we've not yet tried the
+   ptrace call; a value of 0 indicates we've previously tried the ptrace
+   call and it failed, indicating this request is not supported; and a
+   value of 1 indicates that we've previously tried the ptrace call and it
+   has been successful.
+
+   My instinct is to attach this to some architecture- or target-specific
+   data structure, but really, a particular GDB process can only run on top
+   of one kernel at a time.  So it's okay - for this to be a global
+   variable.  */
+extern int have_ptrace_getfpxregs;
+
 /* Set whether our local mirror of LWP's debug registers has been
    changed since the values were last written to the thread.  Nonzero
    indicates that a change has been made, zero indicates no change.  */

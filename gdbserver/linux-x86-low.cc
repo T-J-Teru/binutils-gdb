@@ -852,17 +852,6 @@ static int use_xml;
   the process/thread is in.  */
 #define I386_LINUX_XSAVE_XCR0_OFFSET 464
 
-/* Does the current host support the GETFPXREGS request?  The header
-   file may or may not define it, and even if it is defined, the
-   kernel will return EIO if it's running on a pre-SSE processor.  */
-int have_ptrace_getfpxregs =
-#ifdef HAVE_PTRACE_GETFPXREGS
-  -1
-#else
-  0
-#endif
-;
-
 /* Get Linux/x86 target description from running target.  */
 
 static const struct target_desc *

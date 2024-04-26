@@ -22,6 +22,15 @@
 #include "nat/gdb_ptrace.h"
 #include <sys/user.h>
 
+/* See nat/x86-linux.h.  */
+int have_ptrace_getfpxregs =
+#ifdef HAVE_PTRACE_GETFPXREGS
+  -1
+#else
+  0
+#endif
+;
+
 /* Per-thread arch-specific data we want to keep.  */
 
 struct arch_lwp_info

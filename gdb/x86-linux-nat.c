@@ -26,9 +26,6 @@
 #include <sys/uio.h>
 
 #include "x86-nat.h"
-#ifndef __x86_64__
-#include "i386-linux-nat.h"
-#endif
 #include "x86-linux-nat.h"
 #include "i386-linux-tdep.h"
 #ifdef __x86_64__

@@ -1396,7 +1396,6 @@ HFILES_NO_SRCDIR = \
 	hppa-tdep.h \
 	i386-bsd-nat.h \
 	i386-darwin-tdep.h \
-	i386-linux-nat.h \
 	i386-linux-tdep.h \
 	i386-tdep.h \
 	i387-tdep.h \
