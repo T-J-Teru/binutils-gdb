@@ -26,9 +26,6 @@
 #include <sys/uio.h>
 
 #include "x86-nat.h"
-#ifndef __x86_64__
-#include "i386-linux-nat.h"
-#endif
 #include "x86-linux-nat.h"
 #include "i386-linux-tdep.h"
 #ifdef __x86_64__
@@ -147,13 +144,13 @@ x86_linux_nat_target::read_description ()
       error (_("Can't debug 64-bit process with 32-bit GDB"));
   }
 #elif HAVE_PTRACE_GETFPXREGS
-  if (have_ptrace_getfpxregs == -1)
+  if (have_ptrace_getfpxregs == TRIBOOL_UNKNOWN)
     {
       elf_fpxregset_t fpxregs;
 
       if (ptrace (PTRACE_GETFPXREGS, tid, 0, (int) &fpxregs) < 0)
 	{
-	  have_ptrace_getfpxregs = 0;
+	  have_ptrace_getfpxregs = TRIBOOL_FALSE;
 	  have_ptrace_getregset = TRIBOOL_FALSE;
 	  return i386_linux_read_description (X86_XSTATE_X87_MASK);
 	}

@@ -20,6 +20,15 @@
 #include "x86-linux.h"
 #include "x86-linux-dregs.h"
 
+/* See nat/x86-linux.h.  */
+tribool have_ptrace_getfpxregs =
+#ifdef HAVE_PTRACE_GETFPXREGS
+  TRIBOOL_UNKNOWN
+#else
+  TRIBOOL_FALSE
+#endif
+;
+
 /* Per-thread arch-specific data we want to keep.  */
 
 struct arch_lwp_info

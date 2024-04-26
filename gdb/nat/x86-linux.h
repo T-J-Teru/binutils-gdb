@@ -22,6 +22,20 @@
 
 #include "nat/linux-nat.h"
 
+/* Does the current host support the GETFPXREGS request?  The system header
+   file may or may not define it, but even if it is defined, the kernel
+   will return EIO if it's running on a pre-SSE processor.
+
+   Initially this will be TRIBOOL_UNKNOWN and should be changed to
+   TRIBOOL_FALSE if the ptrace call is attempted and fails or changed to
+   TRIBOOL_TRUE if the ptrace call is attempted and succeeds.
+
+   My instinct is to attach this to some architecture- or target-specific
+   data structure, but really, a particular GDB process can only run on top
+   of one kernel at a time.  So it's okay - for this to be a global
+   variable.  */
+extern tribool have_ptrace_getfpxregs;
+
 /* Set whether our local mirror of LWP's debug registers has been
    changed since the values were last written to the thread.  Nonzero
    indicates that a change has been made, zero indicates no change.  */
