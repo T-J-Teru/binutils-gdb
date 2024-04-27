@@ -329,8 +329,11 @@ extern CORE_ADDR symbol_overlayed_address (CORE_ADDR, struct obj_section *);
 extern void symbol_file_add_main (const char *args,
 				  symfile_add_flags add_flags);
 
-/* Clear GDB symbol tables.  */
-extern void symbol_file_clear (int from_tty);
+/* Clear GDB symbol tables.  When QUERY_USER is true the user will be
+   asked about unloading the current symbol file (if there is one).  When
+   ANNOUNCE is true a message will be printed indicating there is no
+   longer a symbol file loaded.  */
+extern void symbol_file_clear (bool query_user, bool announce);
 
 /* Default overlay update function.  */
 extern void simple_overlay_update (struct obj_section *);
