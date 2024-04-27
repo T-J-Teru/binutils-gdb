@@ -1197,11 +1197,11 @@ symbol_file_add_main_1 (const char *args, symfile_add_flags add_flags,
 }
 
 void
-symbol_file_clear (int from_tty)
+symbol_file_clear (bool query_user, bool announce)
 {
   if ((have_full_symbols (current_program_space)
        || have_partial_symbols (current_program_space))
-      && from_tty
+      && query_user
       && (current_program_space->symfile_object_file
 	  ? !query (_("Discard symbol table from `%s'? "),
 		    objfile_name (current_program_space->symfile_object_file))
@@ -1217,7 +1217,7 @@ symbol_file_clear (int from_tty)
   clear_symtab_users (0);
 
   gdb_assert (current_program_space->symfile_object_file == NULL);
-  if (from_tty)
+  if (announce)
     gdb_printf (_("No symbol file now.\n"));
 }
 
@@ -1559,7 +1559,7 @@ symbol_file_command (const char *args, int from_tty)
 
   if (args == NULL)
     {
-      symbol_file_clear (from_tty);
+      symbol_file_clear (from_tty, from_tty);
     }
   else
     {
