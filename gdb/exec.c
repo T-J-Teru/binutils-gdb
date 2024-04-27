@@ -50,6 +50,10 @@
 #include "cli/cli-style.h"
 #include "gdbsupport/buildargv.h"
 
+/* Forward declarations.  */
+static void file_command (const char *arg, int from_tty);
+static void exec_file_command (const char *args, int from_tty);
+
 void (*deprecated_file_changed_hook) (const char *);
 
 static const target_info exec_target_info = {
@@ -205,6 +209,103 @@ try_open_exec_file (const char *exec_file_host, struct inferior *inf,
 	{
 	  if (prev_err != err)
 	    warning ("%s", err.what ());
+	}
+    }
+}
+
+/* See gdbcore.h.  */
+
+void
+validate_exec_and_core_files (validate_exec_and_core_file_mode mode,
+			      int from_tty)
+{
+  /* If user asked to ignore the mismatch, do nothing.  */
+  if (exec_file_mismatch_mode == exec_file_mismatch_off)
+    return;
+
+  if (current_program_space->exec_bfd () && current_program_space->core_bfd ())
+    {
+      /* The bfd library function core_file_matches_executable_p should
+	 also include a build-id check, but we do the check ourselves here
+	 too.  A build-id mismatch is one of the most likely reasons for
+	 non compatibility, and by checking this separately we can give a
+	 better message to the user.  */
+      const bfd_build_id *exec_file_build_id
+	= build_id_bfd_get (current_program_space->exec_bfd ());
+      const bfd_build_id *core_file_build_id
+	= build_id_bfd_get (current_program_space->core_bfd ());
+      std::optional<bool> build_id_mismatch;
+
+      if (exec_file_build_id != nullptr && core_file_build_id != nullptr)
+	build_id_mismatch.emplace
+	  (exec_file_build_id->size != core_file_build_id->size
+	   || memcmp (exec_file_build_id->data, core_file_build_id->data,
+		      exec_file_build_id->size) != 0);
+
+      /* TODO: This used to call get_exec_file() but that function was
+	 removed in commit 7831bc9185340d2, so I need to figure out what to
+	 do instead.  I suspect the answer is to pass the information
+	 needed in from the caller.  */
+      /* Figure out the filenames in case we need to give a warning.  */
+      const char *exec_filename
+	/* = get_exec_file (0);*/
+	= "unknown exec file name";
+
+      if (exec_filename == nullptr)
+	exec_filename
+	  = bfd_get_filename (current_program_space->exec_bfd ());
+      const char *core_filename
+	= bfd_get_filename (current_program_space->core_bfd ());
+
+      if (build_id_mismatch.has_value () && build_id_mismatch.value ())
+	warning
+	  (_("Build ID mismatch between current exec-file %ps "
+	     "and currently loaded core-file  %ps, "
+	     "exec-file-mismatch handling is currently \"%s\""),
+	   styled_string (file_name_style.style (), exec_filename),
+	   styled_string (file_name_style.style (), core_filename),
+	   exec_file_mismatch_names[exec_file_mismatch_mode]);
+      else if (!core_file_matches_executable_p
+	       (current_program_space->core_bfd (),
+		current_program_space->exec_bfd ()))
+	warning
+	  (_("Mismatch between current exec-file %ps "
+	     "and currently loaded core-file  %ps, "
+	     "exec-file-mismatch handling is currently \"%s\""),
+	   styled_string (file_name_style.style (), exec_filename),
+	   styled_string (file_name_style.style (), core_filename),
+	   exec_file_mismatch_names[exec_file_mismatch_mode]);
+      else if (!build_id_mismatch.has_value ()
+	       && bfd_get_mtime (current_program_space->exec_bfd ())
+	       > bfd_get_mtime (current_program_space->core_bfd ()))
+	warning
+	  (_("Current exec-file %ps is newer than the "
+	     "currently loaded core-file  %ps, "
+	     "exec-file-mismatch handling is currently \"%s\""),
+	   styled_string (file_name_style.style (), exec_filename),
+	   styled_string (file_name_style.style (), core_filename),
+	   exec_file_mismatch_names[exec_file_mismatch_mode]);
+      else
+	return;
+
+
+      /* If all the user wants is a warning about mismatches, then we're
+	 done.  */
+      if (exec_file_mismatch_mode == exec_file_mismatch_warn)
+	return;
+
+      if (mode == LOADED_EXEC_FILE)
+	{
+	  if (!from_tty || yquery (_("Unload mismatched core file? ")))
+	    core_file_command (nullptr, 1);
+	}
+      else
+	{
+	  if (!from_tty || yquery (_("Unload mismatched executable file? ")))
+	    {
+	      exec_file_command (nullptr, 1);
+	      symbol_file_clear (false, true);
+	    }
 	}
     }
 }
@@ -485,7 +586,10 @@ exec_file_attach (const char *filename, int from_tty)
       current_program_space->ebfd_mtime
 	= bfd_get_mtime (current_program_space->exec_bfd ());
 
-      validate_files ();
+      /* If there is a core file loaded then this checks that the new exec
+	 file matches the core file.  This might cause the core file to be
+	 unloaded if it doesn't match the new exec file.  */
+      validate_exec_and_core_files (LOADED_EXEC_FILE, from_tty);
 
       set_gdbarch_from_file (current_program_space->exec_bfd ());
 

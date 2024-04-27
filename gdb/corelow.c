@@ -974,7 +974,10 @@ core_target_open (const char *arg, int from_tty)
   /* Own the target until it is successfully pushed.  */
   target_ops_up target_holder (target);
 
-  validate_files ();
+  /* If there is an exec file loaded then this checks that the new core
+     file matches the exec file.  This might cause the exec file to be
+     unloaded if it doesn't match the new core file.  */
+  validate_exec_and_core_files (LOADED_CORE_FILE, from_tty);
 
   current_inferior ()->push_target (std::move (target_holder));
 

@@ -140,7 +140,28 @@ extern void exec_file_attach (const char *filename, int from_tty);
 
 extern void exec_file_locate_attach (int pid, int defer_bp_reset, int from_tty);
 
-extern void validate_files (void);
+/*  Enum flag used when calling validate_exec_and_core_files.  The mode
+    indicates whether the exec file or the core file was just updated.  */
+
+enum validate_exec_and_core_file_mode
+{
+  /* The exec file has been updated.  */
+  LOADED_EXEC_FILE,
+
+  /* The core file has been updated.  */
+  LOADED_CORE_FILE
+};
+
+/* Check if the current exec file and the current core file match.  If
+   they don't then based on the current exec_file_mismatch_mode setting we
+   might unload one of the two files.
+
+   The MODE tells the function which of the files has just been updated,
+   if one of the files is going to be unloaded then the other file will be
+   the one that is unloaded.  */
+
+extern void validate_exec_and_core_files
+	(validate_exec_and_core_file_mode mode, int from_tty);
 
 /* Give the user a message if the current exec file does not match the exec
    file determined from the target.  In case of mismatch, ask the user

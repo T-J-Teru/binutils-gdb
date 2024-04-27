@@ -60,22 +60,6 @@ reopen_exec_file (void)
     exec_file_attach (bfd_get_filename (exec_bfd), 0);
 }
 
-/* If we have both a core file and an exec file,
-   print a warning if they don't go together.  */
-
-void
-validate_files (void)
-{
-  if (current_program_space->exec_bfd () && current_program_space->core_bfd ())
-    {
-      if (!core_file_matches_executable_p (current_program_space->core_bfd (),
-					   current_program_space->exec_bfd ()))
-	warning (_("core file may not match specified executable file."));
-      else if (bfd_get_mtime (current_program_space->exec_bfd ())
-	       > bfd_get_mtime (current_program_space->core_bfd ()))
-	warning (_("exec file is newer than core file."));
-    }
-}
 
 /* See arch-utils.h.  */
 
