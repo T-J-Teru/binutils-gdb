@@ -1199,13 +1199,22 @@ sharedlibrary_command (const char *args, int from_tty)
   solib_add (args, from_tty, 1);
 }
 
+/* The entry point for the "nosharedlibrary" command.  */
+
+static void
+no_shared_libraries_command (const char *ignored ATTRIBUTE_UNUSED,
+			     int from_tty ATTRIBUTE_UNUSED)
+{
+  no_shared_libraries ();
+}
+
 /* Implements the command "nosharedlibrary", which discards symbols
    that have been auto-loaded from shared libraries.  Symbols from
    shared libraries that were added by explicit request of the user
    are not discarded.  Also called from remote.c.  */
 
 void
-no_shared_libraries (const char *ignored, int from_tty)
+no_shared_libraries ()
 {
   /* The order of the two routines below is important: clear_solib notifies
      the solib_unloaded observers, and some of these observers might need
@@ -1698,7 +1707,7 @@ _initialize_solib ()
     = add_info ("sharedlibrary", info_sharedlibrary_command,
 		_ ("Status of loaded shared object libraries."));
   add_info_alias ("dll", info_sharedlibrary_cmd, 1);
-  add_com ("nosharedlibrary", class_files, no_shared_libraries,
+  add_com ("nosharedlibrary", class_files, no_shared_libraries_command,
 	   _ ("Unload all shared object library symbols."));
 
   add_setshow_boolean_cmd ("auto-solib-add", class_support, &auto_solib_add,
