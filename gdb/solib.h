@@ -29,6 +29,7 @@ struct program_space;
 #include "gdb_bfd.h"
 #include "symfile-add-flags.h"
 #include "gdbsupport/function-view.h"
+#include "memrange.h"
 
 /* Value of the 'set debug solib' configuration variable.  */
 
@@ -135,12 +136,5 @@ extern void update_solib_breakpoints (void);
 /* Handle an solib event by calling solib_add.  */
 
 extern void handle_solib_event (void);
-
-/* Associate SONAME with BUILD_ID in ABFD's registry so that it can be
-   retrieved with get_cbfd_soname_build_id.  */
-
-extern void set_cbfd_soname_build_id (gdb_bfd_ref_ptr abfd,
-				      const char *soname,
-				      const bfd_build_id *build_id);
 
 #endif /* SOLIB_H */
