@@ -65,7 +65,7 @@ elf_core_file_matches_executable_p (bfd *core_bfd, bfd *exec_bfd)
 
       execname = execname ? execname + 1 : bfd_get_filename (exec_bfd);
 
-      if (strcmp (execname, corename) != 0)
+      if (strncmp (execname, corename, strlen (corename)) != 0)
 	return false;
     }
 
