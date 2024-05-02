@@ -2988,10 +2988,29 @@ linux_core_parse_exec_context_1 (struct gdbarch *gdbarch, bfd *cbfd)
   if (exec_name == nullptr)
     return {};
 
+  /* When the core-file was loaded GDB processed the file backed
+     mappings.  One of these will have been for the executable.  Now the
+     AT_EXECFN string might not be an absolute path, but the path to the
+     file backed mapping will be absolute.  So use the AT_ENTRY address to
+     look for a mapped file that is going to be the executable, we might
+     be able to use this file to auto-load the executable that matches the
+     core file.  */
+  gdb::unique_xmalloc_ptr<char> exec_filename;
+  CORE_ADDR exec_entry_addr;
+  if (target_auxv_search (contents, current_inferior ()->top_target (),
+			  gdbarch, AT_ENTRY, &exec_entry_addr) == 1)
+    {
+      std::optional<core_target_mapped_file_info> info
+	= core_target_find_mapped_file (nullptr, exec_entry_addr);
+      if (info.has_value () && !info->filename ().empty ())
+	exec_filename = make_unique_xstrdup (info->filename ().c_str ());
+    }
+
   /* After we know we've loaded everything then we copy the data into the
      context object, writing the exec_name last.  In this way the exec_name
      serves as a flag, if this is set then the other fields are also set.  */
   return core_file_exec_context (std::move (exec_name),
+				 std::move (exec_filename),
 				 std::move (arguments),
 				 std::move (environment));
 }
