@@ -828,18 +828,100 @@ rename_vmcore_idle_reg_sections (bfd *abfd, inferior *inf)
 	     replacement_lwpid_str.c_str ());
 }
 
+/* Use CTX to try and find (and open) the executable file for the core
+   file CBFD.  BUILD_ID is the build-id for CBFD which was already
+   extracted by our caller.
+
+   Will return nullptr if the executable couldn't be found.  */
+
+static gdb_bfd_ref_ptr
+locate_exec_from_corefile_exec_context (bfd *cbfd,
+					const bfd_build_id *build_id,
+					const core_file_exec_context &ctx)
+{
+  /* CTX must be valid, and a valid context has an execfn() string.  */
+  gdb_assert (ctx.valid ());
+  gdb_assert (ctx.execfn () != nullptr);
+
+  const char *exec_name = ctx.execfn ();
+
+  /* Storage, used if we need to rewrite EXEC_NAME.  */
+  gdb::unique_xmalloc_ptr<char> exec_name_storage;
+
+  /* Function that checks if the build-id in ABFD matches BUILD_ID.  */
+  const auto is_matching_build_id = [&] (bfd *abfd)
+  {
+    const bfd_build_id *other_build_id = build_id_bfd_get (abfd);
+
+    return (other_build_id != nullptr
+	    && build_id_equal (other_build_id, build_id));
+  };
+
+  /* If the executable name within the core file is not absolute then
+     assume it is relative to the location of the core file.  This is not
+     guaranteed to work, but we still rely on a build-id match in order to
+     accept any executable we find; we don't accept something just because
+     it happens to be in the right location.  */
+  if (!IS_ABSOLUTE_PATH (exec_name))
+    {
+      std::string p = (ldirname (bfd_get_filename (cbfd))
+		       + '/'
+		       + exec_name);
+      exec_name_storage = gdb_realpath (p.c_str ());
+      exec_name = exec_name_storage.get ();
+    }
+
+  /* Try to open a file.  If this succeeds then we still need to
+     perform a build-id check.  */
+  gdb_bfd_ref_ptr execbfd = gdb_bfd_open (exec_name, gnutarget);
+
+  /* We managed to open a file, but if it's build-id doesn't match BUILD_ID
+     then we just cannot trust it's the right file.  */
+  if (execbfd != nullptr && !is_matching_build_id (execbfd.get ()))
+    execbfd = nullptr;
+
+  /* If the above didn't provide EXECBFD then try the exec_filename from
+     the context.  This will have been pulled from the NT_FILES section of
+     the core file, and will an absolute filename.  We don't use this first
+     because, if the execfn() returns a symlink then the exec_filename()
+     will be the actual, underlying file.  Better to use the symlink name
+     if we can, that is what the user actually ran.  */
+  if (execbfd == nullptr && ctx.exec_filename () != nullptr)
+    {
+      gdb_assert (IS_ABSOLUTE_PATH (ctx.exec_filename ()));
+
+      /* Try to open a file.  If this succeeds then we still need to
+	 perform a build-id check.  */
+      execbfd = gdb_bfd_open (ctx.exec_filename (), gnutarget);
+
+      /* We managed to open a file, but if it's build-id doesn't match
+	 BUILD_ID then we just cannot trust it's the right file.  */
+      if (execbfd != nullptr && !is_matching_build_id (execbfd.get ()))
+	execbfd = nullptr;
+    }
+
+  return execbfd;
+}
+
 /* Locate (and load) an executable file (and symbols) given the core file
    BFD ABFD.  */
 
 static void
-locate_exec_from_corefile_build_id (bfd *abfd, int from_tty)
+locate_exec_from_corefile_build_id (bfd *abfd,
+				    const core_file_exec_context &ctx,
+				    int from_tty)
 {
   const bfd_build_id *build_id = build_id_bfd_get (abfd);
   if (build_id == nullptr)
     return;
 
-  gdb_bfd_ref_ptr execbfd
-    = find_objfile_by_build_id (build_id, abfd->filename);
+  gdb_bfd_ref_ptr execbfd;
+
+  if (ctx.valid ())
+    execbfd = locate_exec_from_corefile_exec_context (abfd, build_id, ctx);
+
+  if (execbfd == nullptr)
+    execbfd = find_objfile_by_build_id (build_id, abfd->filename);
 
   if (execbfd != nullptr)
     {
@@ -908,13 +990,6 @@ core_target_open (const char *arg, int from_tty)
 
   validate_files ();
 
-  /* If we have no exec file, try to set the architecture from the
-     core file.  We don't do this unconditionally since an exec file
-     typically contains more information that helps us determine the
-     architecture than a core file.  */
-  if (!current_program_space->exec_bfd ())
-    set_gdbarch_from_file (current_program_space->core_bfd ());
-
   current_inferior ()->push_target (std::move (target_holder));
 
   switch_to_no_thread ();
@@ -969,9 +1044,31 @@ core_target_open (const char *arg, int from_tty)
       switch_to_thread (thread);
     }
 
+  /* In order to parse the exec context from the core file the current
+     inferior needs to have a suitable gdbarch set.  If an exec file is
+     loaded then the gdbarch will have been set based on the exec file, but
+     if not, ensure we have a suitable gdbarch in place now.  */
+  if (current_program_space->exec_bfd () == nullptr)
+      current_inferior ()->set_arch (target->core_gdbarch ());
+
+  /* See if the gdbarch can find the executable name and argument list from
+     the core file.  */
+  core_file_exec_context ctx
+    = gdbarch_core_parse_exec_context (target->core_gdbarch (),
+				       current_program_space->core_bfd ());
+
+  /* If we don't have an executable loaded then see if we can locate one
+     based on the core file.  */
   if (current_program_space->exec_bfd () == nullptr)
     locate_exec_from_corefile_build_id (current_program_space->core_bfd (),
-					from_tty);
+					ctx, from_tty);
+
+  /* If we have no exec file, try to set the architecture from the
+     core file.  We don't do this unconditionally since an exec file
+     typically contains more information that helps us determine the
+     architecture than a core file.  */
+  if (current_program_space->exec_bfd () == nullptr)
+    set_gdbarch_from_file (current_program_space->core_bfd ());
 
   post_create_inferior (from_tty);
 
@@ -989,11 +1086,6 @@ core_target_open (const char *arg, int from_tty)
       exception_print (gdb_stderr, except);
     }
 
-  /* See if the gdbarch can find the executable name and argument list from
-     the core file.  */
-  core_file_exec_context ctx
-    = gdbarch_core_parse_exec_context (target->core_gdbarch (),
-				       current_program_space->core_bfd ());
   if (ctx.valid ())
     {
       std::string args;
