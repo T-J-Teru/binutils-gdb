@@ -88,9 +88,11 @@ struct core_file_exec_context
      found but not ARGV then use the no-argument constructor to create an
      empty context object.  */
   core_file_exec_context (gdb::unique_xmalloc_ptr<char> exec_name,
+			  gdb::unique_xmalloc_ptr<char> exec_filename,
 			  std::vector<gdb::unique_xmalloc_ptr<char>> argv,
 			  std::vector<gdb::unique_xmalloc_ptr<char>> envp)
     : m_exec_name (std::move (exec_name)),
+      m_exec_filename (std::move (exec_filename)),
       m_arguments (std::move (argv)),
       m_environment (std::move (envp))
   {
@@ -102,6 +104,9 @@ struct core_file_exec_context
   const gdb::unique_xmalloc_ptr<char> & execfn () const
   { return m_exec_name; }
 
+  const gdb::unique_xmalloc_ptr<char> & exec_filename () const
+  { return m_exec_filename; }
+
   const std::vector<gdb::unique_xmalloc_ptr<char>> &args () const
   { return m_arguments; }
 
@@ -110,6 +115,13 @@ private:
   /* The executable filename as reported in the core file.  Can be nullptr
      if no executable name is found.  */
   gdb::unique_xmalloc_ptr<char> m_exec_name;
+
+  /* Full filename to the executable that was actually executed.  The name
+     within EXEC_FILENAME might not match what the user typed, e.g. if the
+     user typed ./symlinked_name which is a symlink to /tmp/real_name then
+     this is going to contain '/tmp/realname' while EXEC_NAME above will
+     contain './symlinkedname'.  */
+  gdb::unique_xmalloc_ptr<char> m_exec_filename;
 
   /* List of arguments.  Doesn't include argv[0] which is the executable
      name, for this look at m_exec_name field.  */
