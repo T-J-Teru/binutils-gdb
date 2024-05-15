@@ -5204,6 +5204,8 @@ proc quote_for_host { args } {
 #   - shlib_load: Link with appropriate libraries to allow the test to
 #     dynamically load libraries at runtime.  For example, on Linux, this adds
 #     -ldl so that the test can use dlopen.
+#   - soname=name: Set the DT_SONAME attribute to name, or if name is
+#     empty don't set the DT_NAME attribute.
 #   - nowarnings:  Inhibit all compiler warnings.
 #   - pie: Force creation of PIE executables.
 #   - nopie: Prevent creation of PIE executables.
@@ -5829,17 +5831,34 @@ proc gdb_compile_shlib_1 {sources dest options} {
 	    }
 	    lappend link_options "ldflags=-Wl,--out-implib,${name}.a"
 	} else {
-	    # Set the soname of the library.  This causes the linker on ELF
-	    # systems to create the DT_NEEDED entry in the executable referring
-	    # to the soname of the library, and not its absolute path.  This
-	    # (using the absolute path) would be problem when testing on a
-	    # remote target.
-	    #
-	    # In conjunction with setting the soname, we add the special
-	    # rpath=$ORIGIN value when building the executable, so that it's
-	    # able to find the library in its own directory.
-	    set destbase [file tail $dest]
-	    lappend link_options "ldflags=-Wl,-soname,$destbase"
+	    set soname_opt_idx [lsearch -regexp $options "^soname=.*"]
+	    if { $soname_opt_idx == -1 } {
+		# Set the soname of the library.  This causes the linker on
+		# ELF systems to create the DT_NEEDED entry in the executable
+		# referring to the soname of the library, and not its absolute
+		# path.  This (using the absolute path) would be problem when
+		# testing on a remote target.
+		#
+		# In conjunction with setting the soname, we add the special
+		# rpath=$ORIGIN value when building the executable, so that
+		# it's able to find the library in its own directory.
+		set destbase [file tail $dest]
+	    } else {
+		set opt [lindex $options $soname_opt_idx]
+		regexp {^soname=(.*)} $opt dummy_var destbase
+		if { $destbase eq "" } {
+		    # See the comment above for why DT_SONAME is needed when
+		    # remote testing.
+		    if { [is_remote target] || [is_remote host] } {
+			perror "gdb_compile_shlib_1: DT_SONAME required for\
+					remote shared libraries"
+		    }
+		}
+	    }
+
+	    if {$destbase ne "" } {
+		lappend link_options "ldflags=-Wl,-soname,$destbase"
+	    }
 	}
     }
     if {[gdb_compile "${objects}" "${dest}" executable $link_options] != ""} {
