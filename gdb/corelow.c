@@ -167,6 +167,11 @@ private: /* per-core data */
 						    ULONGEST len,
 						    ULONGEST *xfered_len);
 
+  /* Remove from m_core_section_table any entries that are covered by an
+     unavailable mapping.  This will prevent xfer_partial from returning
+     zero for unavailable mappings.  */
+  void filter_unavailable_mappings_from_section_table ();
+
   /* FIXME: kettenis/20031023: Eventually this field should
      disappear.  */
   struct gdbarch *m_core_gdbarch = NULL;
@@ -199,6 +204,59 @@ core_target::core_target ()
   m_core_section_table = build_section_table (current_program_space->core_bfd ());
 
   build_file_mappings ();
+
+  if (!m_core_unavailable_mappings.empty ())
+    filter_unavailable_mappings_from_section_table ();
+}
+
+/* See comment in class declaration.  */
+
+void
+core_target::filter_unavailable_mappings_from_section_table ()
+{
+  auto filter_cb = [&] (const target_section &tsect) -> bool
+  {
+    /* If TSECT has contents then this means that there is content to be
+       read within the core file bfd itself.  If TSECT does not have
+       content then we are relying on reading the content from some other
+       file that was mapped into the inferior at the time the core file was
+       created, but if GDB couldn't find that file then we are not able to
+       read the content and TSECT should be discarded.  */
+    if ((tsect.the_bfd_section->flags & SEC_HAS_CONTENTS) != 0)
+      return false;
+
+    /* Find the first entry in m_core_unavailable_mappings whose start
+       address is not less than or equal to the start of this target
+       section.  The previous unavailable mapping might cover TSECT.  */
+    auto it = std::lower_bound (m_core_unavailable_mappings.begin (),
+				m_core_unavailable_mappings.end (),
+				tsect.addr,
+				[] (const mem_range &mr,
+				    const CORE_ADDR &addr)
+				{
+				  return mr.start <= addr;
+				});
+
+    /* If there is a previous unavailable mapping, then that mapping's
+       start address is less than, or equal to the start of TSECT.  The
+       unavailable mapping might cover TSECT.  If it does then we will
+       delete TSECT.  */
+    if (it != m_core_unavailable_mappings.begin ())
+      {
+	--it;
+
+	if (it->start <= tsect.addr
+	    && (it->start + it->length) >= tsect.endaddr)
+	  return true;
+      }
+
+    return false;
+  };
+
+  auto end = std::remove_if (m_core_section_table.begin (),
+			     m_core_section_table.end (),
+			     filter_cb);
+  m_core_section_table.erase (end, m_core_section_table.end ());
 }
 
 /* Construct the table for file-backed mappings if they exist.
