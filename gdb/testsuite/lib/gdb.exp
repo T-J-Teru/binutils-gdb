@@ -9726,10 +9726,18 @@ proc info_args_with_defaults { name } {
     return $args
 }
 
+# Use as either:
+#
+#   with_override NAME OVERRIDE BODY
+#   with_override NAME OVERRIDE SAVE_NAME BODY
+#
 # Override proc NAME to proc OVERRIDE for the duration of the execution of
-# BODY.
+# a BODY.
+#
+# If the SAVE_NAME form is used then NAME will be available as
+# SAVE_NAME for the duration of BODY.
 
-proc with_override { name override body } {
+proc with_override { name override args } {
     # Implementation note: It's possible to implement the override using
     # rename, like this:
     #   rename $name save_$name
@@ -9742,11 +9750,43 @@ proc with_override { name override body } {
     # - the override is no longer available under its original name during
     #   the override
     # So, we use this more elaborate but cleaner mechanism.
+    #
+    # When the SAVE_NAME argument is provided to with_override then we
+    # do use rename, but we first backup any existing proc called
+    # SAVE_NAME, delete the existing SAVE_NAME, and only then do the
+    # rename.
+
+    if { [llength $args] == 1 } {
+	set save_name ""
+	set body [lindex $args 0]
+    } elseif { [llength $args] == 2 } {
+	set save_name [lindex $args 0]
+	set body [lindex $args 1]
+    } else {
+	perror "invalid argument count to with_override: [llength $args]"
+	return
+    }
+
+    # If the user wants to save the original proc, but the name they'd
+    # like to save into already exists then capture details of the
+    # thing we're about to overwrite.
+    if { $save_name != "" && [info procs $save_name] != "" } {
+	set save_name_args [info_args_with_defaults $save_name]
+	set save_name_body [info body $save_name]
+	rename $save_name ""
+	set save_name_existed true
+    } else {
+	set save_name_existed false
+    }
 
     # Save the old proc, if it exists.
     if { [info procs $name] != "" } {
-	set old_args [info_args_with_defaults $name]
-	set old_body [info body $name]
+	if { $save_name != "" } {
+	    rename $name $save_name
+	} else {
+	    set old_args [info_args_with_defaults $name]
+	    set old_body [info body $name]
+	}
 	set existed true
     } else {
 	set existed false
@@ -9762,9 +9802,19 @@ proc with_override { name override body } {
 
     # Restore old proc if it existed on entry, else delete it.
     if { $existed } {
-	eval proc $name {$old_args} {$old_body}
+	if { $save_name != "" } {
+	    rename $name ""
+	    rename $save_name $name
+	} else {
+	    eval proc $name {$old_args} {$old_body}
+	}
     } else {
 	rename $name ""
+    }
+
+    # Restore the proc we saved over, if necessary.
+    if { $save_name_existed } {
+	eval proc $save_name {$save_name_args} {$save_name_body}
     }
 
     # Return as appropriate.

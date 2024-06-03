@@ -26,10 +26,18 @@ proc foo2 {} {
     return 2
 }
 
+# Ensure that 'old_foo' doesn't exist.
+if { [info procs old_foo] != "" } {
+    rename old_foo ""
+}
+
 with_test_prefix no-args {
 
     with_test_prefix before {
 	gdb_assert { [foo] == 0 }
+	gdb_assert { [foo1] == 1 }
+	gdb_assert { [foo2] == 2 }
+	gdb_assert { [info procs old_foo] == "" } "old_foo does not exist"
     }
 
     with_override foo foo1 {
@@ -44,8 +52,30 @@ with_test_prefix no-args {
 	}
     }
 
+    with_override foo foo1 old_foo {
+	with_test_prefix old_foo {
+	    with_test_prefix before {
+		gdb_assert { [old_foo] == 0 }
+		gdb_assert { [foo] == 1 }
+	    }
+
+	    with_override foo foo2 old_foo {
+		gdb_assert { [old_foo] == 1 }
+		gdb_assert { [foo] == 2 }
+	    }
+
+	    with_test_prefix after {
+		gdb_assert { [old_foo] == 0 }
+		gdb_assert { [foo] == 1 }
+	    }
+	}
+    }
+
     with_test_prefix after {
 	gdb_assert { [foo] == 0 }
+	gdb_assert { [foo1] == 1 }
+	gdb_assert { [foo2] == 2 }
+	gdb_assert { [info procs old_foo] == "" } "old_foo does not exist"
     }
 }
 
@@ -63,6 +93,7 @@ with_test_prefix default-arg {
 	gdb_assert { [foo] == 1 }
 	gdb_assert { [foo 0] == 1 }
 	gdb_assert { [foo 1] == 2 }
+	gdb_assert { [info procs old_foo] == "" } "old_foo does not exist"
     }
 
     with_override foo foo_plus_1 {
@@ -73,9 +104,22 @@ with_test_prefix default-arg {
 	}
     }
 
+    with_override foo foo_plus_1 old_foo {
+	with_test_prefix old_foo {
+	    gdb_assert { [foo] == 2 }
+	    gdb_assert { [foo 0] == 2 }
+	    gdb_assert { [foo 1] == 3 }
+
+	    gdb_assert { [old_foo] == 1 }
+	    gdb_assert { [old_foo 0] == 1 }
+	    gdb_assert { [old_foo 1] == 2 }
+	}
+    }
+
     with_test_prefix after {
 	gdb_assert { [foo] == 1 }
 	gdb_assert { [foo 0] == 1 }
 	gdb_assert { [foo 1] == 2 }
+	gdb_assert { [info procs old_foo] == "" } "old_foo does not exist"
     }
 }
