@@ -1434,8 +1434,10 @@ find_separate_debug_file (const char *dir,
   const char *target_prefix_str = target_prefix ? TARGET_SYSROOT_PREFIX : "";
   std::vector<gdb::unique_xmalloc_ptr<char>> debugdir_vec
     = dirnames_to_char_ptr_vec (debug_file_directory.c_str ());
-  gdb::unique_xmalloc_ptr<char> canon_sysroot
-    = gdb_realpath (gdb_sysroot.c_str ());
+  const char *sysroot_str = gdb_sysroot.c_str ();
+  if (is_target_filename (sysroot_str) && target_filesystem_is_local ())
+    sysroot_str += strlen (TARGET_SYSROOT_PREFIX);
+  gdb::unique_xmalloc_ptr<char> canon_sysroot = gdb_realpath (sysroot_str);
 
  /* MS-Windows/MS-DOS don't allow colons in file names; we must
     convert the drive letter into a one-letter directory, so that the
@@ -1497,6 +1499,7 @@ find_separate_debug_file (const char *dir,
 		{
 		  root = gdb_sysroot.substr (strlen (TARGET_SYSROOT_PREFIX));
 		  gdb_assert (!root.empty ());
+		  target_prefix_str = TARGET_SYSROOT_PREFIX;
 		}
 	      else
 		root = gdb_sysroot;
