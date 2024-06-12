@@ -1344,6 +1344,48 @@ show_debug_file_directory (struct ui_file *file, int from_tty,
 #define DEBUG_SUBDIRECTORY ".debug"
 #endif
 
+/* This is like path_join, but does not have the requirement that every
+   filename after the first be a relative filename.  All PATHS are joined
+   together and a directory separator is added if needed between joined
+   elements.
+
+   This allows us to do things like, e.g. append the absolute filename of a
+   file onto the debug file directory name.  */
+
+template<typename ...Args>
+static std::string
+combine_paths (Args... paths)
+{
+  /* It doesn't make sense to join less than two filenames.  */
+  static_assert (sizeof... (Args) >= 2);
+
+  std::array<const char *, sizeof... (Args)> path_array
+    { paths... };
+
+  std::string ret;
+
+  for (int i = 0; i < path_array.size (); ++i)
+    {
+      const char *path = path_array[i];
+
+      if (!ret.empty ())
+	{
+	  /* If RET doesn't end in a separator then add one now.  */
+	  if (!IS_DIR_SEPARATOR (ret.back ()))
+	    ret += '/';
+
+	  /* Now that RET ends in a separator ignore any at the start of
+	     PATH.  */
+	  while (IS_DIR_SEPARATOR (path[0]))
+	    ++path;
+	}
+
+      ret.append (path);
+    }
+
+  return ret;
+}
+
 /* Find a separate debuginfo file for OBJFILE, using DIR as the directory
    where the original file resides (may not be the same as
    dirname(objfile->name) due to symlinks), and DEBUGLINK as the file we are
@@ -1370,17 +1412,13 @@ find_separate_debug_file (const char *dir,
      objfile_name (objfile));
 
   /* First try in the same directory as the original file.  */
-  std::string debugfile = dir;
-  debugfile += debuglink;
+  std::string debugfile = combine_paths (dir, debuglink);
 
   if (separate_debug_file_exists (debugfile, crc32, objfile, warnings))
     return debugfile;
 
   /* Then try in the subdirectory named DEBUG_SUBDIRECTORY.  */
-  debugfile = dir;
-  debugfile += DEBUG_SUBDIRECTORY;
-  debugfile += "/";
-  debugfile += debuglink;
+  debugfile = combine_paths (dir, DEBUG_SUBDIRECTORY, debuglink);
 
   if (separate_debug_file_exists (debugfile, crc32, objfile, warnings))
     return debugfile;
@@ -1393,6 +1431,7 @@ find_separate_debug_file (const char *dir,
   bool target_prefix = is_target_filename (dir);
   const char *dir_notarget
     = target_prefix ? dir + strlen (TARGET_SYSROOT_PREFIX) : dir;
+  const char *target_prefix_str = target_prefix ? TARGET_SYSROOT_PREFIX : "";
   std::vector<gdb::unique_xmalloc_ptr<char>> debugdir_vec
     = dirnames_to_char_ptr_vec (debug_file_directory.c_str ());
   gdb::unique_xmalloc_ptr<char> canon_sysroot
@@ -1421,12 +1460,8 @@ find_separate_debug_file (const char *dir,
 
   for (const gdb::unique_xmalloc_ptr<char> &debugdir : debugdir_vec)
     {
-      debugfile = target_prefix ? TARGET_SYSROOT_PREFIX : "";
-      debugfile += debugdir;
-      debugfile += "/";
-      debugfile += drive;
-      debugfile += dir_notarget;
-      debugfile += debuglink;
+      debugfile = combine_paths (target_prefix_str, debugdir.get (),
+				 drive.c_str (), dir_notarget, debuglink);
 
       if (separate_debug_file_exists (debugfile, crc32, objfile, warnings))
 	return debugfile;
@@ -1443,12 +1478,8 @@ find_separate_debug_file (const char *dir,
 	{
 	  /* If the file is in the sysroot, try using its base path in
 	     the global debugfile directory.  */
-	  debugfile = target_prefix ? TARGET_SYSROOT_PREFIX : "";
-	  debugfile += debugdir;
-	  debugfile += "/";
-	  debugfile += base_path;
-	  debugfile += "/";
-	  debugfile += debuglink;
+	  debugfile = combine_paths (target_prefix_str, debugdir.get (),
+				     base_path, debuglink);
 
 	  if (separate_debug_file_exists (debugfile, crc32, objfile, warnings))
 	    return debugfile;
@@ -1461,21 +1492,18 @@ find_separate_debug_file (const char *dir,
 	     same result as above.  */
 	  if (gdb_sysroot != TARGET_SYSROOT_PREFIX)
 	    {
-	      debugfile = target_prefix ? TARGET_SYSROOT_PREFIX : "";
+	      std::string root;
 	      if (is_target_filename (gdb_sysroot))
 		{
-		  std::string root
-		    = gdb_sysroot.substr (strlen (TARGET_SYSROOT_PREFIX));
+		  root = gdb_sysroot.substr (strlen (TARGET_SYSROOT_PREFIX));
 		  gdb_assert (!root.empty ());
-		  debugfile += root;
 		}
 	      else
-		debugfile += gdb_sysroot;
-	      debugfile += debugdir;
-	      debugfile += "/";
-	      debugfile += base_path;
-	      debugfile += "/";
-	      debugfile += debuglink;
+		root = gdb_sysroot;
+
+	      debugfile = combine_paths (target_prefix_str, root.c_str (),
+					 debugdir.get (), base_path,
+					 debuglink);
 
 	      if (separate_debug_file_exists (debugfile, crc32, objfile,
 					      warnings))
