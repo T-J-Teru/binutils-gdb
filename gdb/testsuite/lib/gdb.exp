@@ -8223,7 +8223,7 @@ proc gdb_gnu_strip_debug { dest args } {
 
     # Get rid of the debug info, and store result in stripped_file
     # something like gdb/testsuite/gdb.base/blah.stripped.
-    set result [catch "exec $strip_to_file_program --strip-debug ${dest} -o ${stripped_file}" output]
+    set result [catch "exec $objcopy_program --strip-debug ${dest} ${stripped_file}" output]
     verbose "result is $result"
     verbose "output is $output"
     if {$result == 1} {
@@ -8237,7 +8237,7 @@ proc gdb_gnu_strip_debug { dest args } {
 
     # Get rid of everything but the debug info, and store result in debug_file
     # This will be in the .debug subdirectory, see above.
-    set result [catch "exec $strip_to_file_program --only-keep-debug ${dest} -o ${debug_file}" output]
+    set result [catch "exec $objcopy_program --only-keep-debug ${dest} ${debug_file}" output]
     verbose "result is $result"
     verbose "output is $output"
     if {$result == 1} {
