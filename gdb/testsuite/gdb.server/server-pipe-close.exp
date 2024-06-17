@@ -1,0 +1,56 @@
+# This testcase is part of GDB, the GNU debugger.
+
+# Copyright 2024 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that when if gdbserver is communicating over a pipe (i.e. is
+# started with '-' instead of a port number), then when gdbserver's
+# stdin is closed gdbserver will exit rather than spinning waiting for
+# stdin to be reopened (spoiler alert: it's not going to reopen).
+#
+# In order to check this property of gdbserver we have a small C test
+# program which forks a child and redirects the childs in/out/err back
+# to the parent process via pipes.  The parent then closes the pipes
+# that communicate with the child and waits for gdbserver to exit.
+
+load_lib gdbserver-support.exp
+
+require allow_gdbserver_tests
+
+set gdbserver [find_gdbserver]
+if { $gdbserver == "" } {
+    unsupported "could not find gdbserver"
+    return
+}
+
+# Build the test program.
+standard_testfile
+if {[build_executable "failed to prepare" $testfile $srcfile]} {
+    return -1
+}
+
+# Place the test program onto the target.
+set binfile [gdb_remote_download target $binfile]
+
+# Run the test program.  The test program will then start gdbserver
+# using any arguments passed to the test program itself.  All being
+# well the test program will immediately cause gdbserver to exit.
+set res [remote_exec target "$binfile $gdbserver - $binfile"]
+
+# Check that everything went as expected.
+gdb_assert { [lindex $res 0] == 0 } \
+    "test program exited with code 0"
+gdb_assert { [lindex $res 1] eq "" } \
+    "no unexpected output from test program"
