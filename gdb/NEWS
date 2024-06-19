@@ -13,6 +13,18 @@
   This may cause breakage when using an incompatible libc, like uclibc or
   newlib, or an older glibc.
 
+* Changed commands
+
+target core
+target exec
+target tfile
+target ctf
+  The filename argument to these commands now requires quoting or
+  escaping in order to include either white space or quote characters.
+  Every white space, single quote, or double quote character should be
+  escaped with a backslash, or the entire filename should be
+  surrounded by single or double quotes.
+
 *** Changes in GDB 15
 
 * The MPX commands "show/set mpx bound" have been deprecated, as Intel
