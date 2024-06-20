@@ -23,6 +23,13 @@ remove-symbol-file -a ADDRESS
   multiple terms, e.g. 'function + 0x1000' (without quotes),
   previously only a single term could be given.
 
+compile file
+maint print c-tdesc
+save gdb-index
+  These commands now require their filename argument to be quoted if
+  it contains with white space or quote characters.  If the argument
+  contains no special characters then quoting is not required.
+
 *** Changes in GDB 15
 
 * The MPX commands "show/set mpx bound" have been deprecated, as Intel
