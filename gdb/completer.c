@@ -55,6 +55,9 @@ static void set_rl_completer_word_break_characters (const char *break_chars);
 
 static bool gdb_path_isdir (const char *filename);
 
+static const char *advance_to_deprecated_filename_complete_word_point
+	(completion_tracker &tracker, const char *text);
+
 /* See completer.h.  */
 
 class completion_tracker::completion_hash_entry
@@ -396,7 +399,15 @@ static char *
 gdb_completer_file_name_quote (char *text, int match_type ATTRIBUTE_UNUSED,
 			       char *quote_ptr)
 {
-  return gdb_completer_file_name_quote_1 (text, *quote_ptr);
+  char qc;
+
+  completion_tracker &tracker = *current_completion.tracker;
+  if (tracker.use_custom_word_point () && 0)
+    qc = tracker.quote_char ();
+  else
+    qc = *quote_ptr;
+
+  return gdb_completer_file_name_quote_1 (text, qc);
 }
 
 /* The function is used to update the completion word MATCH before
@@ -530,6 +541,8 @@ filename_maybe_quoted_completer (struct cmd_list_element *ignore,
 {
   filename_maybe_quoted_completer_handle_brkchars (ignore, tracker,
 						   text, word);
+  tracker.backup_quote_state (rl_completion_found_quote,
+			      rl_completer_quote_characters);
   filename_completer_generate_completions (tracker, word, true);
 }
 
@@ -543,10 +556,10 @@ deprecated_filename_completer_handle_brkchars
   gdb_assert (word == nullptr);
 
   set_rl_completer_word_break_characters (gdb_completer_path_break_characters);
-  rl_completer_quote_characters = "";
+  rl_completer_quote_characters = nullptr;
 
   tracker.set_use_custom_word_point (true);
-  word = advance_to_filename_complete_word_point (tracker, text);
+  word = advance_to_deprecated_filename_complete_word_point (tracker, text);
   deprecated_filename_completer (ignore, tracker, text, word);
 }
 
@@ -727,7 +740,9 @@ static const char *
 advance_to_completion_word (completion_tracker &tracker,
 			    const char *word_break_characters,
 			    const char *quote_characters,
-			    const char *text)
+			    bool *found_any_quoting,
+			    const char *text,
+			    int *qc)
 {
   gdb_rl_completion_word_info info;
 
@@ -737,7 +752,8 @@ advance_to_completion_word (completion_tracker &tracker,
 
   int delimiter;
   const char *start
-    = gdb_rl_find_completion_word (&info, nullptr, &delimiter, nullptr, text);
+    = gdb_rl_find_completion_word (&info, qc, &delimiter,
+				   found_any_quoting, text);
 
   tracker.advance_custom_word_point_by (start - text);
 
@@ -758,7 +774,8 @@ advance_to_expression_complete_word_point (completion_tracker &tracker,
 {
   const char *brk_chars = current_language->word_break_characters ();
   const char *quote_chars = gdb_completer_expression_quote_characters;
-  return advance_to_completion_word (tracker, brk_chars, quote_chars, text);
+  return advance_to_completion_word (tracker, brk_chars, quote_chars,
+				     nullptr, text, nullptr);
 }
 
 /* See completer.h.  */
@@ -767,9 +784,35 @@ const char *
 advance_to_filename_complete_word_point (completion_tracker &tracker,
                                         const char *text)
 {
+  const char *brk_chars = gdb_completer_file_name_break_characters;
+  const char *quote_chars = gdb_completer_file_name_quote_characters;
+  rl_char_is_quoted_p = gdb_completer_file_name_char_is_quoted;
+  bool found_any_quoting = false;
+  int qc;
+  const char *result
+    = advance_to_completion_word (tracker, brk_chars, quote_chars,
+				  &found_any_quoting, text, &qc);
+  rl_completion_found_quote = found_any_quoting;
+  if (qc != '\0')
+    {
+      tracker.set_quote_char (qc);
+      tracker.advance_custom_word_point_by (-1);
+      tracker.set_retain_quote_characters (true);
+    }
+  return result;
+}
+
+/* See completer.h.  */
+
+static const char *
+advance_to_deprecated_filename_complete_word_point (completion_tracker &tracker,
+						    const char *text)
+{
   const char *brk_chars = gdb_completer_path_break_characters;
-  const char *quote_chars = "";
-  return advance_to_completion_word (tracker, brk_chars, quote_chars, text);
+  const char *quote_chars = nullptr;
+  bool found_any_quoting;
+  return advance_to_completion_word (tracker, brk_chars, quote_chars,
+				     &found_any_quoting, text, nullptr);
 }
 
 /* See completer.h.  */
@@ -2034,6 +2077,9 @@ complete (const char *line, char const **word, int *quote_char)
 					       line, quote_char,
 					       &found_any_quoting);
 
+      if (*quote_char != '\0' && **word == (char) (*quote_char))
+	(*word)++;
+
       /* Completers that provide a custom word point in the
 	 handle_brkchars phase also compute their completions then.
 	 Completers that leave the completion word handling to readline
@@ -2272,9 +2318,13 @@ gdb_completion_word_break_characters_throw ()
 
       gdb_assert (rl_point >= 0 && rl_point < strlen (rl_line_buffer));
 
+      tracker.backup_quote_state (rl_completion_found_quote != 0,
+				  rl_completer_quote_characters);
+
       gdb_custom_word_point_brkchars[0] = rl_line_buffer[rl_point];
       rl_completer_word_break_characters = gdb_custom_word_point_brkchars;
-      rl_completer_quote_characters = NULL;
+      if (!tracker.retain_quote_characters ())
+	rl_completer_quote_characters = NULL;
 
       /* Clear this too, so that if we're completing a quoted string,
 	 readline doesn't consider the quote character a delimiter.
@@ -2518,7 +2568,7 @@ completion_tracker::build_completion_result (const char *text,
     {
       bool completion_suppress_append;
 
-      if (from_readline ())
+      if (from_readline () && !rl_filename_completion_desired)
 	{
 	  /* We don't rely on readline appending the quote char as
 	     delimiter as then readline wouldn't append the ' ' after the
@@ -2743,6 +2793,8 @@ gdb_rl_attempted_completion_function_throw (const char *text, int start, int end
     = tracker.build_completion_result (text, start, end);
 
   rl_completion_suppress_append = result.completion_suppress_append;
+  rl_completion_found_quote = tracker.found_quote ();
+  rl_completer_quote_characters = tracker.quote_characters ();
   return result.release_match_list ();
 }
 

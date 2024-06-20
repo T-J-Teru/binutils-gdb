@@ -427,6 +427,25 @@ public:
   void set_suppress_append_ws (bool suppress)
   { m_suppress_append_ws = suppress; }
 
+  /* ... */
+  void backup_quote_state (bool fq, const char *qchar)
+  {
+    m_completion_found_quote = fq;
+    m_completion_quote_characters = qchar;
+  }
+
+  bool found_quote () const
+  { return m_completion_found_quote; }
+
+  const char *quote_characters () const
+  { return m_completion_quote_characters; }
+
+  void set_retain_quote_characters (bool val)
+  { m_retain_quote_characters = val; }
+
+  bool retain_quote_characters () const
+  { return m_retain_quote_characters; }
+
   /* Return true if we only have one completion, and it matches
      exactly the completion word.  I.e., completing results in what we
      already have.  */
@@ -566,6 +585,15 @@ private:
      interactively. The 'complete' command is a way to generate completions
      not to be displayed by readline.  */
   bool m_from_readline;
+
+  /* ... */
+  bool m_completion_found_quote = false;
+
+  /* ... */
+  const char *m_completion_quote_characters = nullptr;
+
+  /* ... */
+  bool m_retain_quote_characters = false;
 
   /* The function used to format the completion word before it is printed
      in the 'complete' command output.  */
