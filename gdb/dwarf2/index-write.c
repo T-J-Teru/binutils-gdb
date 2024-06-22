@@ -1622,7 +1622,7 @@ gdb_save_index_cmd_completer (struct cmd_list_element *ignore,
     return;
 
   word = advance_to_filename_complete_word_point (tracker, text);
-  filename_completer (ignore, tracker, text, word);
+  deprecated_filename_completer (ignore, tracker, text, word);
 }
 
 /* Implementation of the `save gdb-index' command.

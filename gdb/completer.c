@@ -285,7 +285,7 @@ filename_maybe_quoted_completer (struct cmd_list_element *ignore,
 /* See completer.h.  */
 
 static void
-filename_completer_handle_brkchars
+deprecated_filename_completer_handle_brkchars
 	(struct cmd_list_element *ignore, completion_tracker &tracker,
 	 const char *text, const char *word)
 {
@@ -296,13 +296,13 @@ filename_completer_handle_brkchars
 
   tracker.set_use_custom_word_point (true);
   word = advance_to_filename_complete_word_point (tracker, text);
-  filename_completer (ignore, tracker, text, word);
+  deprecated_filename_completer (ignore, tracker, text, word);
 }
 
 /* See completer.h.  */
 
 void
-filename_completer
+deprecated_filename_completer
 	(struct cmd_list_element *ignore, completion_tracker &tracker,
 	 const char *text, const char *word)
 {
@@ -655,8 +655,8 @@ complete_files_symbols (completion_tracker &tracker,
 					 symbol_start, word);
       /* If text includes characters which cannot appear in a file
 	 name, they cannot be asking for completion on files.  */
-      if (strcspn (text,
-		   gdb_completer_file_name_break_characters) == text_len)
+      if (strcspn (text, gdb_completer_file_name_break_characters)
+	  == text_len)
 	fn_list = make_source_files_completion_list (text, text);
     }
 
@@ -706,8 +706,7 @@ complete_source_filenames (const char *text)
 
   /* If text includes characters which cannot appear in a file name,
      the user cannot be asking for completion on files.  */
-  if (strcspn (text,
-	       gdb_completer_file_name_break_characters)
+  if (strcspn (text, gdb_completer_file_name_break_characters)
       == text_len)
     return make_source_files_completion_list (text, text);
 
@@ -1925,8 +1924,8 @@ default_completer_handle_brkchars (struct cmd_list_element *ignore,
 completer_handle_brkchars_ftype *
 completer_handle_brkchars_func_for_completer (completer_ftype *fn)
 {
-  if (fn == filename_completer)
-    return filename_completer_handle_brkchars;
+  if (fn == deprecated_filename_completer)
+    return deprecated_filename_completer_handle_brkchars;
 
   if (fn == filename_maybe_quoted_completer)
     return filename_maybe_quoted_completer_handle_brkchars;

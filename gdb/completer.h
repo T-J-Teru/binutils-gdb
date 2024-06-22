@@ -579,16 +579,24 @@ extern void noop_completer (struct cmd_list_element *,
    completion.  This should be used by commands that don't allow the
    filename to be quoted, and whitespace does not need to be escaped.
 
-   NOTE: If you are considering using this function as your commands
-   completer, then consider updating your function to use gdb_argv or
-   extract_string_maybe_quoted to allow for possibly quoted filenames
-   instead.  You would then use filename_maybe_quoted_completer for
-   filename completion.  The benefit of this is that in the future it is
-   possible to add additional arguments to your new command.  */
+   This filename completer is only used for older commands that don't allow
+   quoted filenames as arguments.  Instead filenames are everything on the
+   command line after the command name and any options.  White space or
+   quotes within the filename don't need escaping as all command line text
+   is taken literally.
 
-extern void filename_completer (struct cmd_list_element *,
-				completion_tracker &tracker,
-				const char *, const char *);
+   However, GDB automatically removes trailing white space from commands
+   entered by the user, so it is not possible to reference a file with
+   trailing white space in its name.
+
+   This completion is considered deprecated.  If you are reaching for this
+   completer then you should update your command to accept quoted
+   filenames, e.g. use gdb_argv or extract_string_maybe_quoted, and use
+   filename_maybe_quoted_completer for completion instead.  */
+
+extern void deprecated_filename_completer
+	(struct cmd_list_element *, completion_tracker &tracker,
+	 const char *, const char *);
 
 /* Filename completer for commands where the filename argument can be
    quoted, and whitespace within an unquoted filename should be escaped
