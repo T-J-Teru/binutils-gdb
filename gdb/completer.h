@@ -573,9 +573,30 @@ extern void noop_completer (struct cmd_list_element *,
 			    completion_tracker &tracker,
 			    const char *, const char *);
 
+/* TODO: Update this comment.
+
+   Filename completer that can be registered for the brkchars phase of
+   completion.  This should be used by commands that don't allow the
+   filename to be quoted, and whitespace does not need to be escaped.
+
+   NOTE: If you are considering using this function as your commands
+   completer, then consider updating your function to use gdb_argv or
+   extract_string_maybe_quoted to allow for possibly quoted filenames
+   instead.  You would then use filename_maybe_quoted_completer for
+   filename completion.  The benefit of this is that in the future it is
+   possible to add additional arguments to your new command.  */
+
 extern void filename_completer (struct cmd_list_element *,
 				completion_tracker &tracker,
 				const char *, const char *);
+
+/* Filename completer for commands where the filename argument can be
+   quoted, and whitespace within an unquoted filename should be escaped
+   with a backslash.  */
+
+extern void filename_maybe_quoted_completer (struct cmd_list_element *,
+					     completion_tracker &tracker,
+					     const char *, const char *);
 
 extern void expression_completer (struct cmd_list_element *,
 				  completion_tracker &tracker,
