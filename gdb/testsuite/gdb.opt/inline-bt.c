@@ -13,6 +13,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+#include "attributes.h"
+
 /* This is only ever run if it is compiled with a new-enough GCC, but
    we don't want the compilation to fail if compiled by some other
    compiler.  */
@@ -39,6 +41,22 @@ inline ATTR int func2(void)
   return x * func1 (1);
 }
 
+inline ATTR int
+return_one (void)
+{
+  return 1;
+}
+
+volatile int global = 0;
+
+__attribute__((noinline)) ATTRIBUTE_NOCLONE void
+not_inline_func (int count)
+{
+  global += count;
+  global += count;	/* b/p in not_inline_func */
+  global += count;
+}
+
 int main (void)
 {
   int val;
@@ -52,6 +70,8 @@ int main (void)
 
   val = func2 ();
   result = val;
+
+  not_inline_func (return_one ());	/* bt line in main */
 
   return 0;
 }
