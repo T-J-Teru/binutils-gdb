@@ -1,6 +1,36 @@
 		What has changed in GDB?
 	     (Organized release by release)
 
+*** Change since GDB 15
+
+* Python API
+
+  ** New module gdb.missing_objfile that facilitates dealing with
+     missing objfiles when opening a core-file.
+
+  ** New function gdb.missing_objfile.register_handler that can
+     register an instance of a sub-class of
+     gdb.missing_debug.MissingObjfileHandler as a handler for missing
+     objfiles.
+
+  ** New class gdb.missing_objfile.MissingObjfileHandler which can be
+     sub-classed to create handlers for missing objfiles.
+
+* New commands
+
+info missing-objfile-handlers
+  List all the registered missing-objfile handlers.
+
+enable missing-objfile-handler LOCUS HANDLER
+disable missing-objfile-handler LOCUS HANDLER
+  Enable or disable a missing-objfile handler with a name matching the
+  regular expression HANDLER, in LOCUS.
+
+  LOCUS can be 'global' to operate on global missing-objfile handler,
+  'progspace' to operate on handlers within the current program space,
+  or can be a regular expression which is matched against the filename
+  of the primary executable in each program space.
+
 *** Changes in GDB 15
 
 * The MPX commands "show/set mpx bound" have been deprecated, as Intel
@@ -211,6 +241,11 @@ qIsAddressTagged
   as memory tagged.  Since not all targets have a notion of what the smaps
   file is about, this new packet provides a more generic way to perform such
   a check.
+
+vFile:stat
+  Return information about files on the remote system.  Like
+  vFile:fstat but takes a filename rather than an open file
+  descriptor.
 
 *** Changes in GDB 14
 

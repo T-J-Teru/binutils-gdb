@@ -21786,6 +21786,7 @@ contained in @var{filename} by using the @samp{-readnever} option.
 @c (eg rooted in val of env var GDBSYMS) could exist for mappable symbol
 @c files.
 
+@anchor{core-file command}
 @kindex core-file
 @item core-file @r{[}@var{filename}@r{]}
 @itemx core
@@ -24532,6 +24533,10 @@ future connections is shown.  The available settings are:
 
 @item @code{hostio-fstat-packet}
 @tab @code{vFile:fstat}
+@tab Host I/O
+
+@item @code{hostio-stat-packet}
+@tab @code{vFile:stat}
 @tab Host I/O
 
 @item @code{hostio-setfs-packet}
@@ -46284,6 +46289,13 @@ error occurred.
 
 @item vFile:fstat: @var{fd}
 Get information about the open file corresponding to @var{fd}.
+On success the information is returned as a binary attachment
+and the return value is the size of this attachment in bytes.
+If an error occurs the return value is -1.  The format of the
+returned binary attachment is as described in @ref{struct stat}.
+
+@item vFile:stat: @var{filename}
+Get information about the file @var{filename} on the target.
 On success the information is returned as a binary attachment
 and the return value is the size of this attachment in bytes.
 If an error occurs the return value is -1.  The format of the
