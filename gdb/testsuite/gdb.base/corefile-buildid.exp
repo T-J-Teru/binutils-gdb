@@ -26,7 +26,7 @@ standard_testfile
 proc build_corefile_buildid_exec {} {
     global testfile srcfile binfile execdir
 
-    if {[build_executable $testfile.exp $testfile $srcfile debug] == -1} {
+    if {[build_executable $testfile.exp $testfile $srcfile] == -1} {
 	untested "failed to compile"
 	return false
     }
@@ -48,10 +48,11 @@ proc build_corefile_buildid_shared {} {
     set builddir [standard_output_file $sharedir]
 
     # Compile DSO.
-    set srcdso [file join $srcdir $subdir $testfile-shlib-shr.c]
-    set objdso [standard_output_file $testfile-shlib-shr.so]
-    if {[gdb_compile_shlib $srcdso $objdso {debug}] != ""} {
-	untested "failed to compile dso"
+    set dso_basename ${testfile}-shlib-shr
+    set objdso [standard_output_file $dso_basename.so]
+    if {[build_executable "build [file tail $objdso]" $objdso \
+	     "$dso_basename.c" {debug shlib}] == -1} {
+	untested "failed to compile $dso_basename.so"
 	return false
     }
 
@@ -61,19 +62,20 @@ proc build_corefile_buildid_shared {} {
     set objlib [standard_output_file $libname]
     set dlopen_lib [shlib_target_file \
 			[file join $builddir [file tail $objdso]]]
-    set opts [list debug shlib_load \
+    set opts [list debug shlib shlib_load \
 		  additional_flags=-DSHLIB_NAME=\"$dlopen_lib\"]
-    if {[gdb_compile_shlib $srclib $objlib $opts] != ""} {
-	untested "failed to compile shared library"
+    if {[build_executable "build $libname" $libname $srclib $opts] == -1} {
+	untested "failed to compile $dso_basename.so"
 	return false
     }
 
+
     # Compile main program.
-    set srcexec [file join $srcdir $subdir $srcfile]
     set binfile [standard_output_file $testfile-shared]
     set opts [list debug shlib=$objlib additional_flags=-DTEST_SHARED]
-    if {[gdb_compile $srcexec $binfile executable $opts] != ""} {
-	untested "failed to compile shared executable"
+    if {[build_executable "build [file tail $binfile]" $binfile \
+	     $srcfile $opts] == -1} {
+	untested "failed to compile $dso_basename.so"
 	return false
     }
 
