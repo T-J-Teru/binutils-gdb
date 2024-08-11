@@ -10130,6 +10130,21 @@ gdb_caching_proc linker_supports_image_base_flag {} {
     return [gdb_simple_compile $me $src executable $flags]
 }
 
+# Return 1 if linker supports --rosegment, otherwise 0.
+gdb_caching_proc linker_supports_rosegment_flag {} {
+    set me "linker_supports_rosegment_flag"
+    set flags ldflags="-Wl,--rosegment"
+    set src { int main() { return 0; } }
+    return [gdb_simple_compile $me $src executable $flags]
+}
+
+# Return 1 if linker supports '-z separate-code', otherwise 0.
+gdb_caching_proc linker_supports_z_separate_code_flag {} {
+    set me "linker_supports_z_separate-code"
+    set flags ldflags="-Wl,-z,separate-code"
+    set src { int main() { return 0; } }
+    return [gdb_simple_compile $me $src executable $flags]
+}
 
 # Return 1 if compiler supports scalar_storage_order attribute, otherwise
 # return 0.

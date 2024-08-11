@@ -21,18 +21,25 @@
 
 standard_testfile
 
-# Build a non-shared executable.
+# Build a non-shared executable.  SUBDIR is the name of a directory within
+# the standard output directory into which the executable should be moved
+# after being built.  EXTRA_OPTS are added to the build options for building
+# the executable.
 
-proc build_corefile_buildid_exec {} {
-    global testfile srcfile binfile execdir
+proc build_corefile_buildid_exec { execdir extra_opts } {
+    global testfile srcfile
 
-    if {[build_executable $testfile.exp $testfile $srcfile] == -1} {
+    set opts { debug }
+    append opts $extra_opts
+
+    if {[build_executable $testfile.exp $testfile $srcfile $opts] == -1} {
 	untested "failed to compile"
 	return false
     }
 
     # Move executable to non-default path.
     set builddir [standard_output_file $execdir]
+    set binfile [standard_output_file $testfile]
     remote_exec build "rm -rf $builddir"
     remote_exec build "mkdir $builddir"
     remote_exec build "mv $binfile [file join $builddir [file tail $binfile]]"
@@ -40,12 +47,15 @@ proc build_corefile_buildid_exec {} {
     return true
 }
 
-# Build a shared executable.
+# Build a shared executable.  EXECDIR is the name of a directory within the
+# standard output directory into which the executable should be moved after
+# being built.  EXTRA_OPTS are added to the build options for building the
+# executable.
 
-proc build_corefile_buildid_shared {} {
-    global srcdir subdir testfile binfile srcfile sharedir
+proc build_corefile_buildid_shared { execdir extra_opts } {
+    global testfile srcfile
 
-    set builddir [standard_output_file $sharedir]
+    set builddir [standard_output_file $execdir]
 
     # Compile DSO.
     set dso_basename ${testfile}-shlib-shr
@@ -57,7 +67,7 @@ proc build_corefile_buildid_shared {} {
     }
 
     # Compile shared library.
-    set srclib [file join $srcdir $subdir $testfile-shlib.c]
+    set srclib $testfile-shlib.c
     set libname lib$testfile.so
     set objlib [standard_output_file $libname]
     set dlopen_lib [shlib_target_file \
@@ -68,7 +78,6 @@ proc build_corefile_buildid_shared {} {
 	untested "failed to compile $dso_basename.so"
 	return false
     }
-
 
     # Compile main program.
     set binfile [standard_output_file $testfile-shared]
@@ -147,19 +156,31 @@ proc check_exec_file {file} {
 }
 
 # Test whether gdb can find an exec file from a core file's build-id.
-# The executable (and separate debuginfo if SEPDEBUG is true) is
-# copied to the .build-id directory.
 #
-# SUFFIX is appended to the .builid-id parent directory name to
+# The executable (and separate debuginfo if SEPDEBUG is true) is copied to
+# the .build-id directory.
+#
+# COREFILE is the filename of the core file.
+#
+# BUILDID is the build-id we expect GDB to use to look for the executable,
+# and also the debug information if SEPDEBUG is true.
+#
+# SUFFIX is a string appended to the .builid-id parent directory name to
 # keep all tests separate.
-# SYMLINK specifies whether build-id files should be copied or symlinked.
-# SHARED is a boolean indicating whether we are testing the shared
-# library core dump test case.
+#
+# SEPDEBUG is a boolean, true if the debug has been split from the
+# executable and should be moved or symlinked too.
+#
+# SYMLINK is a boolean and specifies whether build-id files should be copied
+# or symlinked.
+#
+# BUILDDIR is the directory in which to look for BINFILE and (when SEPDEBUG
+# is true) the related separate debug file.
+#
+# BINFILE is the filename within BUILDDIR of the executable.
 
-proc locate_exec_from_core_build_id {corefile buildid suffix \
-					 sepdebug symlink shared} {
-    global testfile binfile srcfile
-
+proc locate_exec_from_core_build_id {corefile buildid suffix sepdebug \
+					 symlink builddir binfile} {
     clean_restart
 
     # Set up the build-id directory and symlink the binary there.
@@ -178,13 +199,7 @@ proc locate_exec_from_core_build_id {corefile buildid suffix \
     if {$sepdebug} {
 	lappend files_list "$binfile.debug" "$buildid.debug"
     }
-    if {$shared} {
-	global sharedir
-	set builddir [standard_output_file $sharedir]
-    } else {
-	global execdir
-	set builddir [standard_output_file $execdir]
-    }
+
     foreach {target name} $files_list {
 	set t [file join $builddir [file tail $target]]
 	if {$symlink} {
@@ -208,30 +223,32 @@ proc locate_exec_from_core_build_id {corefile buildid suffix \
 }
 
 # Run a build-id tests on a core file.
-# Supported options: "-shared" and "-sepdebug" for running tests
-# of shared and/or stripped/.debug executables.
+#
+# Supported options: "-shared" and "-sepdebug" for running tests of shared
+# and/or stripped/.debug executables.  "-mode MODE" where MODE can be any
+# string; used for creating unique locations for the debug information.
+# "-execdir NAME" is the name of the directory, within the standard output
+# directory where the binaries, and possibly the stripped debug, can be
+# found. "-binfile NAME" is the name of the executable within EXECDIR.  This
+# is also used as the foundation for the name of the separate debug file.
 
 proc do_corefile_buildid_tests {args} {
-    global binfile testfile srcfile execdir sharedir hex
+    global testfile srcfile hex
 
     # Parse options.
-    parse_args [list {sepdebug} {shared}]
+    parse_args [list {sepdebug} {shared} {mode ""} {execdir ""} {binfile ""}]
 
     # PROGRAM to run to generate core file.  This could be different
     # than the program that was originally built, e.g., for a stripped
     # executable.
-    if {$shared} {
-	set builddir [standard_output_file $sharedir]
-    } else {
-	set builddir [standard_output_file $execdir]
-    }
-    set program_to_run [file join $builddir [file tail $binfile]]
+    set execdir [standard_output_file $execdir]
+    set program_to_run [file join $execdir [file tail $binfile]]
 
     # A list of suffixes to use to describe the test and the .build-id
     # directory for the test.  The suffix will be used, joined with spaces,
     # to prefix all tests for the given run.  It will be used, joined with
     # dashes, to create a unique build-id directory.
-    set suffix {}
+    set suffix [list $mode]
     if {$shared} {
 	lappend suffix "shared"
     } else {
@@ -280,29 +297,49 @@ proc do_corefile_buildid_tests {args} {
 	verbose -log "build-id is $buildid"
 
 	locate_exec_from_core_build_id $corefile $buildid \
-	    [join $suffix -] $sepdebug false $shared
+	    [join $suffix -] $sepdebug false $execdir $binfile
 
 	with_test_prefix "symlink" {
 	    locate_exec_from_core_build_id $corefile $buildid \
-		[join $suffix -] $sepdebug true $shared
+		[join $suffix -] $sepdebug true $execdir $binfile
 	}
     }
 }
-
-# Directories where executables will be moved before testing.
-set execdir "build-exec"
-set sharedir "build-shared"
 
 #
 # Do tests
 #
 
-build_corefile_buildid_exec
-do_corefile_buildid_tests
-do_corefile_buildid_tests -sepdebug
+foreach_with_prefix mode {standard rosegment} {
+    set extra_opts {}
+    if { $mode eq "standard" } {
+	# In "standard" mode we make the assumption that if the flag to
+	# activate a feature is available, the inverse flag to disable the
+	# feature will also be available.
+	if { [linker_supports_z_separate_code_flag] } {
+	    lappend extra_opts "ldflags=-Wl,-z,noseparate-code"
+	}
+	if { [linker_supports_rosegment_flag] } {
+	    lappend extra_opts "ldflags=-Wl,--no-rosegment"
+	}
+    } elseif { $mode eq "rosegment" } {
+	if { [linker_supports_z_separate_code_flag] } {
+	    lappend extra_opts "ldflags=-Wl,-z,separate-code"
+	}
+	if { [linker_supports_rosegment_flag] } {
+	    lappend extra_opts "ldflags=-Wl,--rosegment"
+	}
+    }
 
-if {[allow_shlib_tests]} {
-    build_corefile_buildid_shared
-    do_corefile_buildid_tests -shared
-    do_corefile_buildid_tests -shared -sepdebug
+    set execdir "build-$mode-exec"
+    build_corefile_buildid_exec $execdir $extra_opts
+    do_corefile_buildid_tests -execdir $execdir -mode $mode -binfile $testfile
+    do_corefile_buildid_tests -execdir $execdir -mode $mode -binfile $testfile -sepdebug
+
+    if {[allow_shlib_tests]} {
+	set execdir "build-$mode-shared"
+	build_corefile_buildid_shared $execdir $extra_opts
+	do_corefile_buildid_tests -execdir $execdir -mode $mode -shared -binfile "${testfile}-shared"
+	do_corefile_buildid_tests -execdir $execdir -mode $mode -shared -binfile "${testfile}-shared" -sepdebug
+    }
 }
