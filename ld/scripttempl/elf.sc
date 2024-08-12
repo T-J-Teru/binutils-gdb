@@ -425,7 +425,6 @@ emit_early_ro()
 {
   cat <<EOF
   ${INITIAL_READONLY_SECTIONS}
-  .note.gnu.build-id ${RELOCATING-0}: { *(.note.gnu.build-id) }
 EOF
 }
 
@@ -436,6 +435,11 @@ cat <<EOF
   ${CREATE_SHLIB-${CREATE_PIE-${RELOCATING+PROVIDE (__executable_start = ${TEXT_START_ADDR}); . = ${TEXT_BASE_ADDRESS};}}}
   ${CREATE_SHLIB+${RELOCATING+. = ${SHLIB_TEXT_START_ADDR}${SIZEOF_HEADERS_CODE};}}
   ${CREATE_PIE+${RELOCATING+PROVIDE (__executable_start = ${SHLIB_TEXT_START_ADDR}); . = ${SHLIB_TEXT_START_ADDR}${SIZEOF_HEADERS_CODE};}}
+
+  /* Place build-id as close to the ELF headers as possible.  This
+     maximises the chance the build-id will be present in core files,
+     which GDB can use to improve the debug experience.  */
+  .note.gnu.build-id ${RELOCATING-0}: { *(.note.gnu.build-id) }
 EOF
 }
 
@@ -800,9 +804,12 @@ EOF
   if test -z "${ALL_TEXT_BEFORE_RO}"; then
     test -n "${SEPARATE_CODE}" || emit_early_ro
     test -n "${NON_ALLOC_DYN}${SEPARATE_CODE}" || emit_dyn
+
+    if test -z "${SEPARATE_CODE}" -o -z "${NON_ALLOC_DYN}${SEPARATE_CODE}"; then
+      align_text
+    fi
   fi
-  
-  align_text  
+
   emit_text
 
   align_rodata
