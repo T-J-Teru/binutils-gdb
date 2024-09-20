@@ -6506,6 +6506,7 @@ process_die (struct die_info *die, struct dwarf2_cu *cu)
       /* Fall through.  */
     case DW_TAG_entry_point:
     case DW_TAG_inlined_subroutine:
+      // fprintf (stderr, "ABP: DW_TAG_inlined_subroutine or DW_TAG_entry_point at offset %s\n", sect_offset_str (die->sect_off));
       read_func_scope (die, cu);
       break;
     case DW_TAG_lexical_block:
@@ -10156,6 +10157,8 @@ read_func_scope (struct die_info *die, struct dwarf2_cu *cu)
   block = cu->get_builder ()->finish_block (cstk.name, cstk.old_blocks,
 				     cstk.static_link, lowpc, highpc);
 
+  //fprintf (stderr, "APB: Creating block %p, %s to %s\n", block, core_addr_to_string_nz (lowpc), core_addr_to_string_nz (highpc));
+
   /* For C++, set the block's scope.  */
   if ((cu->lang () == language_cplus
        || cu->lang () == language_fortran
@@ -10845,7 +10848,11 @@ dwarf2_rnglists_process (unsigned offset, struct dwarf2_cu *cu,
 
       /* Empty range entries have no effect.  */
       if (range_beginning == range_end)
-	continue;
+	{
+	  fprintf (stderr, "APB: Fixing empty range in rnglists\n");
+	  range_end = (unrelocated_addr) ((CORE_ADDR) range_end + 1);
+	  //continue;
+	}
 
       /* Only DW_RLE_offset_pair needs the base address added.  */
       if (rlet == DW_RLE_offset_pair)
@@ -10967,7 +10974,11 @@ dwarf2_ranges_process (unsigned offset, struct dwarf2_cu *cu, dwarf_tag tag,
 
       /* Empty range entries have no effect.  */
       if (range_beginning == range_end)
-	continue;
+	{
+	  fprintf (stderr, "APB: Fixing empty range in rnglists\n");
+	  range_end = (unrelocated_addr) ((CORE_ADDR) range_end + 1);
+	  //continue;
+	}
 
       range_beginning = (unrelocated_addr) ((CORE_ADDR) range_beginning
 					    + (CORE_ADDR) *base);
@@ -11192,7 +11203,15 @@ dwarf2_get_pc_bounds (struct die_info *die, unrelocated_addr *lowpc,
 
   /* partial_die_info::read has also the strict LOW < HIGH requirement.  */
   if (high <= low)
-    return PC_BOUNDS_INVALID;
+    {
+      if (high < low
+	  || ret != PC_BOUNDS_HIGH_LOW
+	  || die->tag != DW_TAG_inlined_subroutine
+	  || !producer_is_gcc (cu->producer, nullptr, nullptr))
+	return PC_BOUNDS_INVALID;
+      else
+	high = unrelocated_addr (CORE_ADDR (low) + 1);
+    }
 
   /* When using the GNU linker, .gnu.linkonce. sections are used to
      eliminate duplicate copies of functions and vtables and such.
@@ -11438,7 +11457,15 @@ dwarf2_record_block_ranges (struct die_info *die, struct block *block,
 
 	  CORE_ADDR low = per_objfile->relocate (unrel_low);
 	  CORE_ADDR high = per_objfile->relocate (unrel_high);
-	  cu->get_builder ()->record_block_range (block, low, high - 1);
+
+	  //fprintf (stderr, "APB: dwarf2_record_block_ranges, block = %p, low = %s, high = %s\n", block, core_addr_to_string_nz (low), core_addr_to_string_nz (high - 1));
+
+	  if (high != low
+	      || die->tag != DW_TAG_inlined_subroutine
+	      || !producer_is_gcc (cu->producer, nullptr, nullptr))
+	    high -= 1;
+
+	  cu->get_builder ()->record_block_range (block, low, high);
 	}
     }
 
