@@ -1,0 +1,192 @@
+# Copyright 2024 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that GDB will retain shlib_disabled breakpoints.  Breakpoints
+# that are shlib_disabled will show up as <PENDING> in the 'info
+# breakpoints' output.  These breakpoints should be retained, and
+# then, reactivated if the same shared library is reloaded later on.
+
+require allow_python_tests
+require allow_shlib_tests
+
+standard_testfile .c -lib1.c -lib2.c
+
+set pyfile [gdb_remote_download host ${srcdir}/${subdir}/${testfile}.py]
+
+set libfile1 $binfile-lib1.so
+set libfile2 $binfile-lib2.so
+
+if {[build_executable "build first shared library" $libfile1 $srcfile2 \
+	 {debug shlib}] == -1} {
+    return
+}
+
+if {[build_executable "build second shared library" $libfile2 $srcfile3 \
+	 {debug shlib}] == -1} {
+    return
+}
+
+set libfile1_target [gdb_download_shlib $libfile1]
+set libfile2_target [gdb_download_shlib $libfile2]
+
+if { [prepare_for_testing "failed to prepare" $testfile $srcfile \
+	  [list debug \
+	       additional_flags=-DSHLIB_1_NAME=\"$libfile1_target\" \
+	       additional_flags=-DSHLIB_2_NAME=\"$libfile2_target\" \
+	       shlib_load]] } {
+    return -1
+}
+
+if {![runto_main]} {
+    return
+}
+
+gdb_breakpoint [gdb_get_line_number "Breakpoint 1"]
+gdb_breakpoint [gdb_get_line_number "Breakpoint 2"]
+gdb_breakpoint [gdb_get_line_number "Breakpoint 3"]
+gdb_breakpoint [gdb_get_line_number "Breakpoint 4"]
+gdb_breakpoint [gdb_get_line_number "Breakpoint 5"]
+gdb_breakpoint [gdb_get_line_number "Breakpoint 6"]
+gdb_breakpoint [gdb_get_line_number "Breakpoint 7"]
+
+gdb_breakpoint "foo"
+set bpnum [get_integer_valueof "\$bpnum" "INVALID" \
+	       "get b/p number for breakpoint on foo"]
+
+gdb_test "source $pyfile" "^OK" \
+    "load python script"
+
+# Check the 'info breakpoints' output of breakpoint BPNUM.  The string
+# STATUS indicates what the expected output should be.  Possible
+# values are:
+#
+# 'single' - breakpoint should have a single location in the main
+#            source file.
+#
+# 'two, both active' - breakpoint should have two locations, one in
+#                      the main source file, and one in the first
+#                      shared library.
+#
+# 'two, one pending' - breakpoint should have two locations, one in
+#                      the main source file, and one pending location.
+proc check_foo_breakpoint { bpnum status } {
+    if { $status eq "single" } {
+	gdb_test "info breakpoints $bpnum" \
+	    "\r\n$bpnum\\s+breakpoint\\s+keep\\s+y\\s+$::hex\\s+in foo at \[^\r\n\]+/[string_to_regexp $::srcfile]:$::decimal" \
+	    "info breakpoint on 'foo' b/p"
+    } elseif { $status eq "two, both active" } {
+	gdb_test "info breakpoints $bpnum" \
+	    [multi_line \
+		 "" \
+		 "$bpnum\\s+breakpoint\\s+keep\\s+y\\s+<MULTIPLE>\\s*" \
+		 "$bpnum\\.1\\s+y\\s+$::hex\\s+in foo at \[^\r\n\]+/[string_to_regexp $::srcfile]:$::decimal" \
+		 "$bpnum\\.2\\s+y\\s+$::hex\\s+in foo at \[^\r\n\]+/[string_to_regexp $::srcfile2]:$::decimal"] \
+	    "info breakpoint on 'foo' b/p"
+    } elseif { $status eq "two, one pending" } {
+	gdb_test "info breakpoints $bpnum" \
+	    [multi_line \
+		 "" \
+		 "$bpnum\\s+breakpoint\\s+keep\\s+y\\s+<MULTIPLE>\\s*" \
+		 "$bpnum\\.1\\s+y\\s+$::hex\\s+in foo at \[^\r\n\]+/[string_to_regexp $::srcfile]:$::decimal" \
+		 "$bpnum\\.2\\s+y\\s+<PENDING>\\s+foo"] \
+	    "info breakpoint on 'foo' b/p"
+    } else {
+	error "unknown status: $status"
+    }
+}
+
+# Check if breakpoint BPNUM was modified or not (depending on
+# EXPECT_MODIFIED).  Resets the list of modified breakpoints to empty
+# (see Python code) ready for the next test.
+proc check_modified_bp { bpnum expect_modified } {
+    if { $expect_modified } {
+	set out "Was modified"
+    } else {
+	set out "Was not modified"
+    }
+    gdb_test "python check_if_modified($bpnum)" "^$out"
+}
+
+gdb_continue_to_breakpoint "continue to b/p location 1" \
+    ".*Breakpoint 1.*"
+
+with_test_prefix "at b/p 1" {
+    # At this point there should be a single location for 'foo' b/p.
+    check_foo_breakpoint $bpnum "single"
+}
+
+gdb_continue_to_breakpoint "continue to b/p location 2" \
+    ".*Breakpoint 2.*"
+
+with_test_prefix "at b/p 2" {
+    # The inferior has loaded a shared library that includes a new
+    # location for the 'foo' breakpoint.  There should now be two
+    # locations.
+    check_modified_bp $bpnum true
+    check_foo_breakpoint $bpnum "two, both active"
+}
+
+gdb_continue_to_breakpoint "continue to b/p location 3" \
+    ".*Breakpoint 3.*"
+
+with_test_prefix "at b/p 3" {
+    # The inferior has unloaded the shared library containing the
+    # second 'foo' breakpoint location.  The location should have been
+    # retained, but marked as pending.
+    check_modified_bp $bpnum true
+    check_foo_breakpoint $bpnum "two, one pending"
+}
+
+gdb_continue_to_breakpoint "continue to b/p location 4" \
+    ".*Breakpoint 4.*"
+
+with_test_prefix "at b/p 4" {
+    # The inferior has loaded a second shared library.  This one
+    # doesn't include a location for the 'foo' breakpoint, but we
+    # expect the pending location to be retained.
+    check_modified_bp $bpnum false
+    check_foo_breakpoint $bpnum "two, one pending"
+}
+
+gdb_continue_to_breakpoint "continue to b/p location 5" \
+    ".*Breakpoint 5.*"
+
+with_test_prefix "at b/p 5" {
+    # The inferior has unloaded the second shared library.  The
+    # pending location for 'foo' should still be around.
+    check_modified_bp $bpnum false
+    check_foo_breakpoint $bpnum "two, one pending"
+}
+
+gdb_continue_to_breakpoint "continue to b/p location 6" \
+    ".*Breakpoint 6.*"
+
+with_test_prefix "at b/p 6" {
+    # The inferior has reloaded the first shared library.  The pending
+    # location should once again be active (i.e. not pending).
+    check_modified_bp $bpnum true
+    check_foo_breakpoint $bpnum "two, both active"
+}
+
+gdb_continue_to_breakpoint "continue to b/p location 7" \
+    ".*Breakpoint 7.*"
+
+with_test_prefix "at b/p 7" {
+    # The inferior has unloaded the shared library containing the
+    # second 'foo' breakpoint location (again).  The location should
+    # have been retained, and once again, be marked as pending.
+    check_modified_bp $bpnum true
+    check_foo_breakpoint $bpnum "two, one pending"
+}

@@ -12941,6 +12941,31 @@ breakpoint::steal_locations (program_space *pspace)
   return ret;
 }
 
+/* Create a copy of a shlib_disabled location LOC.  This is used by
+   update_breakpoint_locations when a shlib_disabled location needs to be
+   added back onto a breakpoint, but we need to keep a copy in the
+   existing_locations list.  Enough information is copied from LOC into
+   the newly created location so that locations_are_equal will recognise
+   them as being identical.  */
+
+static bp_location *
+clone_shlib_disabled_loc (const bp_location &loc)
+{
+  gdb_assert (loc.shlib_disabled);
+
+  bp_location *clone = loc.owner->allocate_location ();
+
+  clone->address = loc.address;
+  clone->enabled = loc.enabled;
+  clone->disabled_by_cond = loc.disabled_by_cond;
+  clone->symbol = loc.symbol;
+  clone->msymbol = loc.msymbol;
+  clone->shlib_disabled = loc.shlib_disabled;
+
+  return clone;
+}
+
+
 /* Create new breakpoint locations for B (a hardware or software
    breakpoint) based on SALS and SALS_END.  If SALS_END.NELTS is not
    zero, then B is a ranged breakpoint.  Only recreates locations for
@@ -13009,6 +13034,9 @@ update_breakpoint_locations (code_breakpoint *b,
 
 	  new_loc->length = end - sals[0].pc + 1;
 	}
+
+      /* New locations are never shlib_disabled.  */
+      gdb_assert (!new_loc->shlib_disabled);
     }
 
   /* If possible, carry over 'disable' status from existing
@@ -13059,6 +13087,68 @@ update_breakpoint_locations (code_breakpoint *b,
 	  }
       }
   }
+
+  /* For every shlib_disabled location in EXISTING_LOCATIONS, if there
+     isn't a non-shlib_disabled location in the breakpoint's location list,
+     then copy the shlib_disabled location back onto the breakpoint.  This
+     allows us to retain shlib_disabled locations for shared libraries that
+     have been unloaded.  */
+  for (auto it = existing_locations.begin (); it != existing_locations.end (); )
+    {
+      bool removed = false;
+
+      if (it->shlib_disabled)
+	{
+	  /* This is a shlib_disabled location, check to see if a
+	     non-shlib_disabled location has been created for this
+	     breakpoint.  If it has then the previously shlib_disabled
+	     location is considered re-activated.  */
+	  bool found_match = false;
+	  for (bp_location &l : b->locations ())
+	    {
+	      /* Breakpoint addresses are stored in ascending address
+		 order.  If L is after IT then no locations after L are
+		 going have a matching address.  */
+	      if (l.address > it->address)
+		break;
+
+	      if (breakpoint_locations_match (&(*it), &l, true))
+		{
+		  found_match = true;
+		  break;
+		}
+	    }
+
+	  /* If no match was found, then this shlib_disabled location
+	     should be preserved, i.e. added back to the breakpoint.  */
+	  if (!found_match)
+	    {
+	      /* Create a new location we can add to EXISTING_LOCATIONS,
+		 this is needed so locations_are_equal has something to
+		 compare with.  */
+	      bp_location *dummy = clone_shlib_disabled_loc (*it);
+
+	      /* Add the new dummy location before IT, this is just before
+		 the location we are about to remove.  */
+	      existing_locations.insert (it, *dummy);
+
+	      /* Now remove IT.  This updates IT to point to the next
+		 element, so we set REMOVED, this prevents the later
+		 increment of the iterator.  */
+	      bp_location &loc = *it;
+	      it = existing_locations.erase (it);
+	      removed = true;
+
+	      /* Add this shlib_disabled location back to the breakpoint.  */
+	      ((breakpoint *) b)->add_location (loc);
+	    }
+	}
+
+      /* If we didn't remove this location from the EXISTING_LOCATIONS list
+	 then the iterator will not have moved on, move it on now.  */
+      if (!removed)
+	++it;
+    }
 
   if (!locations_are_equal (existing_locations, b->locations ()))
     notify_breakpoint_modified (b);
