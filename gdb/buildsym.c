@@ -391,6 +391,8 @@ buildsym_compunit::finish_block (struct symbol *symbol,
 				old_blocks, static_link, start, end, 0, 0);
 }
 
+std::vector<symbol *> apb_symbol_list;
+
 /* Record that the range of addresses from START to END_INCLUSIVE
    (inclusive, like it says) belongs to BLOCK.  BLOCK's start and end
    addresses must be set already.  You must apply this function to all
@@ -412,6 +414,24 @@ buildsym_compunit::record_block_range (struct block *block,
   if (start != block->start ()
       || end_inclusive + 1 != block->end ())
     m_pending_addrmap_interesting = true;
+
+  fprintf (stderr, "APB: buildsym_compunit::record_block_range, start = %s, end = %s\n",
+	   core_addr_to_string_nz (start), core_addr_to_string_nz (end_inclusive));
+  
+  if (block->inlined_p ())
+    {
+      fprintf (stderr, "APB:     Is inlined\n");
+      symbol *sym = block->function ();
+      if (sym != nullptr)
+	{
+	  fprintf (stderr, "APB:     line = %d\n",
+		   sym->line ());
+	  m_inline_end_vector[end_inclusive] = sym->line ();
+	  apb_symbol_list.push_back (sym);
+	}
+      else
+	fprintf (stderr, "APB:     has no function symbol\n");
+    }
 
   m_pending_addrmap.set_empty (start, end_inclusive, block);
 }
@@ -841,42 +861,15 @@ buildsym_compunit::end_compunit_symtab_get_static_block (CORE_ADDR end_addr,
     }
 }
 
-/* Subroutine of end_compunit_symtab_from_static_block to simplify it.
-   Handle the "have blockvector" case.
-   See end_compunit_symtab_from_static_block for a description of the
-   arguments.  */
-
-struct compunit_symtab *
-buildsym_compunit::end_compunit_symtab_with_blockvector
-  (struct block *static_block, int expandable)
+void
+buildsym_compunit::do_stuff ()
 {
   struct compunit_symtab *cu = m_compunit_symtab;
-  struct blockvector *blockvector;
   struct subfile *subfile;
-  CORE_ADDR end_addr;
 
-  gdb_assert (static_block != NULL);
-  gdb_assert (m_subfiles != NULL);
+  fprintf (stderr, "APB: Finishing the line tables, assigning to symtabs\n");
 
-  end_addr = static_block->end ();
-
-  /* Create the GLOBAL_BLOCK and build the blockvector.  */
-  finish_block_internal (NULL, get_global_symbols (), NULL, NULL,
-			 m_last_source_start_addr, end_addr,
-			 1, expandable);
-  blockvector = make_blockvector ();
-
-  /* Read the line table if it has to be read separately.
-     This is only used by xcoffread.c.  */
-  if (m_objfile->sf->sym_read_linetable != NULL)
-    m_objfile->sf->sym_read_linetable (m_objfile);
-
-  /* Handle the case where the debug info specifies a different path
-     for the main source file.  It can cause us to lose track of its
-     line number information.  */
-  watch_main_source_file_lossage ();
-
-  /* Now create the symtab objects proper, if not already done,
+   /* Now create the symtab objects proper, if not already done,
      one for each subfile.  */
 
   for (subfile = m_subfiles;
@@ -931,6 +924,43 @@ buildsym_compunit::end_compunit_symtab_with_blockvector
 	 the symbols.  */
       symtab->set_language (subfile->language);
     }
+}
+
+/* Subroutine of end_compunit_symtab_from_static_block to simplify it.
+   Handle the "have blockvector" case.
+   See end_compunit_symtab_from_static_block for a description of the
+   arguments.  */
+
+struct compunit_symtab *
+buildsym_compunit::end_compunit_symtab_with_blockvector
+  (struct block *static_block, int expandable)
+{
+  struct compunit_symtab *cu = m_compunit_symtab;
+  struct blockvector *blockvector;
+  CORE_ADDR end_addr;
+
+  gdb_assert (static_block != NULL);
+  gdb_assert (m_subfiles != NULL);
+
+  end_addr = static_block->end ();
+
+  /* Create the GLOBAL_BLOCK and build the blockvector.  */
+  finish_block_internal (NULL, get_global_symbols (), NULL, NULL,
+			 m_last_source_start_addr, end_addr,
+			 1, expandable);
+  blockvector = make_blockvector ();
+
+  /* Read the line table if it has to be read separately.
+     This is only used by xcoffread.c.  */
+  if (m_objfile->sf->sym_read_linetable != NULL)
+    m_objfile->sf->sym_read_linetable (m_objfile);
+
+  /* Handle the case where the debug info specifies a different path
+     for the main source file.  It can cause us to lose track of its
+     line number information.  */
+  watch_main_source_file_lossage ();
+
+  //do_stuff ();
 
   /* Make sure the filetab of main_subfile is the primary filetab of the CU.  */
   cu->set_primary_filetab (m_main_subfile->symtab);

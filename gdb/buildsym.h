@@ -137,6 +137,11 @@ enum linetable_entry_flag : unsigned
 };
 DEF_ENUM_FLAGS_TYPE (enum linetable_entry_flag, linetable_entry_flags);
 
+struct range_end_and_line
+{
+  CORE_ADDR end;
+  unsigned int line;
+};
 
 /* Buildsym's counterpart to struct compunit_symtab.  */
 
@@ -338,6 +343,11 @@ struct buildsym_compunit
 
   void augment_type_symtab ();
 
+  void finish_line_tables ()
+  {
+    do_stuff ();
+  }
+
 private:
 
   void record_pending_block (struct block *block, struct pending_block *opblock);
@@ -355,6 +365,8 @@ private:
 
   struct compunit_symtab *end_compunit_symtab_with_blockvector
     (struct block *static_block, int expandable);
+
+  void do_stuff ();
 
   /* The objfile we're reading debug info from.  */
   struct objfile *m_objfile;
@@ -446,6 +458,9 @@ private:
 
   /* Pending symbols that are local to the lexical context.  */
   struct pending *m_local_symbols = nullptr;
+
+  /* Pending inline end range addresses.  */
+  std::unordered_map<CORE_ADDR, unsigned int> m_inline_end_vector;
 };
 
 

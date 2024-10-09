@@ -10848,11 +10848,7 @@ dwarf2_rnglists_process (unsigned offset, struct dwarf2_cu *cu,
 
       /* Empty range entries have no effect.  */
       if (range_beginning == range_end)
-	{
-	  fprintf (stderr, "APB: Fixing empty range in rnglists\n");
-	  range_end = (unrelocated_addr) ((CORE_ADDR) range_end + 1);
-	  //continue;
-	}
+	range_end = (unrelocated_addr) ((CORE_ADDR) range_end + 1);
 
       /* Only DW_RLE_offset_pair needs the base address added.  */
       if (rlet == DW_RLE_offset_pair)
@@ -10974,11 +10970,7 @@ dwarf2_ranges_process (unsigned offset, struct dwarf2_cu *cu, dwarf_tag tag,
 
       /* Empty range entries have no effect.  */
       if (range_beginning == range_end)
-	{
-	  fprintf (stderr, "APB: Fixing empty range in rnglists\n");
-	  range_end = (unrelocated_addr) ((CORE_ADDR) range_end + 1);
-	  //continue;
-	}
+	range_end = (unrelocated_addr) ((CORE_ADDR) range_end + 1);
 
       range_beginning = (unrelocated_addr) ((CORE_ADDR) range_beginning
 					    + (CORE_ADDR) *base);
@@ -11430,6 +11422,79 @@ dwarf2_record_block_entry_pc (struct die_info *die, struct block *block,
     }
 }
 
+/* ... */
+
+static bool
+fixup_block_range (struct block *block, struct dwarf2_cu *cu,
+		   unrelocated_addr unrel_high)
+{
+  if (!block->inlined_p ())
+    return false;
+
+  /* Line number for this inline function.  */
+  symbol *sym = block->function ();
+  unsigned lineno = sym->line ();
+
+  buildsym_compunit *b = cu->get_builder ();
+  subfile *sf = b->get_current_subfile ();
+
+  unrelocated_addr pc {};
+  bool second_pass = false;
+  for (struct symtab *st : sf->symtab->compunit ()->filetabs ())
+    {
+      if (st->linetable () != nullptr)
+	{
+	  const struct linetable *lt = st->linetable ();
+	  for (int i = 0; i < lt->nitems; ++i)
+	    {
+	      if (lt->item[i].unrelocated_pc () == unrel_high
+		  && lt->item[i].line == lineno)
+		{
+		  dwarf2_per_objfile *per_objfile = cu->per_objfile;
+		  CORE_ADDR high = per_objfile->relocate (unrel_high);
+
+		  fprintf (stderr, "APB: Fixing inline block range that ends at %s\n",
+			   core_addr_to_string_nz (high));
+
+		  return true;
+		}
+	      else if (lt->item[i].unrelocated_pc () == unrel_high
+		       && (i + 1) < lt->nitems
+		       && lt->item[i + 1].line == 0)
+		{
+		  second_pass = true;
+		  pc = lt->item[i + 1].unrelocated_pc ();
+		}
+	    }
+	}
+    }
+
+  if (second_pass)
+    for (struct symtab *st : sf->symtab->compunit ()->filetabs ())
+      {
+	if (st->linetable () != nullptr)
+	  {
+	    const struct linetable *lt = st->linetable ();
+	    for (int i = 0; i < lt->nitems; ++i)
+	      {
+		if (lt->item[i].unrelocated_pc () == pc
+		    && lt->item[i].line == lineno)
+		  {
+		    dwarf2_per_objfile *per_objfile = cu->per_objfile;
+		    CORE_ADDR high = per_objfile->relocate (unrel_high);
+
+		    fprintf (stderr, "APB: Fixing inline block range that ends at %s\n",
+			     core_addr_to_string_nz (high));
+
+		    return true;
+		  }
+	      }
+	  }
+      }
+
+  return false;
+}
+
 /* Record the address ranges for BLOCK, offset by BASEADDR, as given
    in DIE.  Also set the entry PC for BLOCK.  */
 
@@ -11457,6 +11522,9 @@ dwarf2_record_block_ranges (struct die_info *die, struct block *block,
 
 	  CORE_ADDR low = per_objfile->relocate (unrel_low);
 	  CORE_ADDR high = per_objfile->relocate (unrel_high);
+
+	  if (fixup_block_range (block, cu, unrel_high))
+	    ++high;
 
 	  //fprintf (stderr, "APB: dwarf2_record_block_ranges, block = %p, low = %s, high = %s\n", block, core_addr_to_string_nz (low), core_addr_to_string_nz (high - 1));
 
@@ -11487,6 +11555,16 @@ dwarf2_record_block_ranges (struct die_info *die, struct block *block,
 	{
 	  CORE_ADDR abs_start = per_objfile->relocate (start);
 	  CORE_ADDR abs_end = per_objfile->relocate (end);
+
+	  if (fixup_block_range (block, cu, end))
+	    ++abs_end;
+
+	  if (abs_start == abs_end)
+	    {
+	      fprintf (stderr, "APB: zero length range detected\n");
+	      abs_end += 1;
+	    }
+
 	  cu->get_builder ()->record_block_range (block, abs_start,
 						  abs_end - 1);
 	  blockvec.emplace_back (abs_start, abs_end);
@@ -18913,6 +18991,9 @@ static void
 dwarf_decode_lines (struct line_header *lh, struct dwarf2_cu *cu,
 		    unrelocated_addr lowpc, int decode_mapping)
 {
+  fprintf (stderr, "APB: dwarf_decode_lines for subfile %p\n",
+	   cu->get_builder()->get_current_subfile ());
+
   if (decode_mapping)
     dwarf_decode_lines_1 (lh, cu, lowpc);
 
@@ -18933,6 +19014,9 @@ dwarf_decode_lines (struct line_header *lh, struct dwarf2_cu *cu,
 
       fe.symtab = sf->symtab;
     }
+
+  if (decode_mapping)
+    builder->finish_line_tables ();
 }
 
 /* Start a subfile for DWARF.  FILENAME is the name of the file and
