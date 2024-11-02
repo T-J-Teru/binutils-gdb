@@ -39,5 +39,5 @@ gdb::remote_args::split (std::string args)
 std::string
 gdb::remote_args::join (std::vector<char *> &args)
 {
-  return construct_inferior_arguments (args);
+  return construct_inferior_arguments (args, true);
 }

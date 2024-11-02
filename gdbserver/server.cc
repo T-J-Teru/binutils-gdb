@@ -4360,7 +4360,7 @@ captured_main (int argc, char *argv[])
       std::vector<char *> temp_arg_vector;
       for (i = 1; i < n; i++)
 	temp_arg_vector.push_back (next_arg[i]);
-      program_args = construct_inferior_arguments (temp_arg_vector);
+      program_args = construct_inferior_arguments (temp_arg_vector, true);
 
       /* Wait till we are at first instruction in program.  */
       target_create_inferior (program_path.get (), program_args);
