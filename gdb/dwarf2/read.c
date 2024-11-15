@@ -17946,6 +17946,37 @@ dwarf_lang_to_enum_language (unsigned int lang)
   return language;
 }
 
+/* Attributes which vary from instance to instance should not be read from
+   an abstract instance tree.  This is described in section 3.3.8.1 of the
+   DWARF-5 specification.
+
+   This function returns true if an attribute of type ATTR_TYPE can be read
+   from an abstract instance, otherwise, return false.  */
+
+static bool
+dwarf2_can_read_attr_from_abstract_instance (unsigned int attr_type)
+{
+  /* The current list of attributes is taken from the DWARF-5
+     specification, though the specification is clear that the list they
+     give is not exhaustive.  There are probably other attributes we could
+     add to this list.  */
+  switch (attr_type)
+    {
+    case DW_AT_low_pc:
+    case DW_AT_high_pc:
+    case DW_AT_ranges:
+    case DW_AT_entry_pc:
+    case DW_AT_location:
+    case DW_AT_return_addr:
+    case DW_AT_scope_start:
+    case DW_AT_segment:
+      return false
+
+    default:
+      return true;
+    }
+}
+
 /* Return the NAME attribute of DIE in *CU, or return NULL if not there.  Also
    return in *CU the cu in which the attribute was actually found.  */
 
@@ -17961,7 +17992,8 @@ dwarf2_attr (struct die_info *die, unsigned int name, struct dwarf2_cu **cu)
 	{
 	  if (die->attrs[i].name == name)
 	    return &die->attrs[i];
-	  if (die->attrs[i].name == DW_AT_specification
+	  if ((die->attrs[i].name == DW_AT_specification
+	       && dwarf2_can_read_attr_from_abstract_instance (name))
 	      || die->attrs[i].name == DW_AT_abstract_origin)
 	    spec = &die->attrs[i];
 	}
