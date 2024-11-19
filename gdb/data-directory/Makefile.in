@@ -86,6 +86,7 @@ PYTHON_FILE_LIST = \
 	gdb/unwinder.py \
 	gdb/xmethod.py \
 	gdb/command/__init__.py \
+	gdb/command/deprecated-settings.py \
 	gdb/command/explore.py \
 	gdb/command/frame_filters.py \
 	gdb/command/missing_files.py \
