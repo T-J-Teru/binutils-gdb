@@ -1111,6 +1111,45 @@ proc_with_prefix test-filename {variant} {
     }
 }
 
+# Run 'help maint test-options VARIANT' to check the formatting of the
+# generated help text.
+proc_with_prefix test-help {variant} {
+    gdb_test "help maintenance test-options $variant" \
+	[multi_line \
+    "Command used for testing options processing\\." \
+    "Usage: maint test-options $variant \[^\r\n\]+" \
+    "" \
+    "Options:" \
+    "  -flag" \
+    "    A flag option\\." \
+    "" \
+    "  -xx1" \
+    "    A flag option\\." \
+    "" \
+    "  -xx2" \
+    "    A flag option\\." \
+    "" \
+    "  -bool \\\[on\\|off\\\]" \
+    "    A boolean option\\." \
+    "" \
+    "  -enum xxx\\|yyy\\|zzz" \
+    "    An enum option\\." \
+    "" \
+    "  -uinteger-unlimited NUMBER\\|unlimited" \
+    "    A uinteger option\\." \
+    "    A help doc that spawns" \
+    "    multiple lines\\." \
+    "" \
+    "  -pinteger-unlimited NUMBER\\|unlimited" \
+    "    A pinteger-unlimited option\\." \
+    "" \
+    "  -string STRING" \
+    "    A string option\\." \
+    "" \
+    "  -filename FILENAME" \
+    "    A filename option\\..*"]
+}
+
 # Run the options framework tests first.
 foreach_with_prefix cmd {
     "require-delimiter"
@@ -1126,6 +1165,7 @@ foreach_with_prefix cmd {
     test-enum $cmd
     test-string $cmd
     test-filename $cmd
+    test-help $cmd
 }
 
 # Run the print integration tests, both as "standalone", and under
