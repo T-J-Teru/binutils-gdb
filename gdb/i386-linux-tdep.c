@@ -53,13 +53,15 @@
 #include "arch/i386.h"
 #include "target-descriptions.h"
 
+#include <asm/ldt.h>
+
 /* Return non-zero, when the register is in the corresponding register
    group.  Put the LINUX_ORIG_EAX register in the system group.  */
 static int
 i386_linux_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
 				const struct reggroup *group)
 {
-  if (regnum == I386_LINUX_ORIG_EAX_REGNUM)
+  if (regnum == I386_LINUX_ORIG_EAX_REGNUM || i386_is_tls_regnum_p (regnum))
     return (group == system_reggroup
 	    || group == save_reggroup
 	    || group == restore_reggroup);
@@ -1162,6 +1164,65 @@ i386_linux_collect_xstateregset (const struct regset *regset,
   i387_collect_xsave (regcache, regnum, xstateregs, 1);
 }
 
+/* Supply the 3 tls related registers from BUFFER (length LEN) into
+   REGCACHE.  The REGSET and REGNUM are ignored, all three registers are
+   always supplied from BUFFER.  */
+
+static void
+i386_linux_supply_tls_regset (const struct regset *regset,
+			      struct regcache *regcache, int regnum,
+			      const void *buffer, size_t len)
+{
+  struct gdbarch *gdbarch = regcache->arch ();
+  i386_gdbarch_tdep *tdep = gdbarch_tdep<i386_gdbarch_tdep> (gdbarch);
+
+  if (!tdep->i386_linux_tls)
+    return;
+
+  gdb_assert (len == sizeof (struct user_desc) * 3);
+
+  for (int i = 0; i < 3; ++i)
+    {
+      int tls_regno = I386_LINUX_TLS_GDT_0 + i;
+
+      gdb_assert (regcache->register_size (tls_regno)
+		  == sizeof (struct user_desc));
+
+      regcache->raw_supply (tls_regno, buffer);
+      buffer = static_cast<const struct user_desc *> (buffer) + 1;
+    }
+}
+
+/* Collect the 3 tls related registers from REGCACHE, placing the results
+   in to BUFFER (length LEN).  The REGSET and REGNUM are ignored, all three
+   registers are always collected from REGCACHE.  */
+
+static void
+i386_linux_collect_tls_regset (const struct regset *regset,
+			       const struct regcache *regcache,
+			       int regnum, void *buffer, size_t len)
+{
+  struct gdbarch *gdbarch = regcache->arch ();
+  i386_gdbarch_tdep *tdep = gdbarch_tdep<i386_gdbarch_tdep> (gdbarch);
+
+  if (!tdep->i386_linux_tls)
+    return;
+
+  gdb_assert (len == sizeof (struct user_desc) * 3);
+
+  for (int i = 0; i < 3; ++i)
+    {
+      struct user_desc desc;
+      int tls_regno = I386_LINUX_TLS_GDT_0 + i;
+
+      gdb_assert (regcache->register_size (tls_regno) == sizeof (desc));
+
+      regcache->raw_collect (tls_regno, &desc);
+      memcpy (buffer, &desc, sizeof (desc));
+      buffer = static_cast<struct user_desc *> (buffer) + 1;
+    }
+}
+
 /* Register set definitions.  */
 
 static const struct regset i386_linux_xstateregset =
@@ -1170,6 +1231,65 @@ static const struct regset i386_linux_xstateregset =
     i386_linux_supply_xstateregset,
     i386_linux_collect_xstateregset
   };
+
+static const struct regset i386_linux_tls_regset =
+  {
+    NULL,
+    i386_linux_supply_tls_regset,
+    i386_linux_collect_tls_regset
+  };
+
+/* Helper for i386_linux_iterate_over_regset_sections.  Should we
+   visit the NT_386_TLS note?  If REGCACHE is NULL then we are reading
+   the notes from the corefile, so we always visit the note.  If
+   REGCACHE is not NULL, in this case we are creating a corefile.  In
+   this case, we only visit the note if all the TLS registers are
+   valid, and their base address and limit are not zero, this mirrors
+   the kernel behaviour where the TLS note is elided when the TLS GDT
+   entries have not been set.
+
+   Only call for architectures where i386_gdbarch_tdep::i386_linux_tls
+   is true.  */
+
+static bool
+should_visit_i386_tls_note (const struct regcache *regcache)
+{
+  if (regcache == nullptr)
+    return true;
+
+  /* Check the pre-condition.  */
+  struct gdbarch *gdbarch = regcache->arch ();
+  i386_gdbarch_tdep *tdep = gdbarch_tdep<i386_gdbarch_tdep> (gdbarch);
+  gdb_assert (tdep->i386_linux_tls);
+
+  for (int i = 0; i < 3; ++i)
+    {
+      int tls_regno = I386_LINUX_TLS_GDT_0 + i;
+
+      /* If we failed to read any of the registers then we'll not be
+	 able to emit valid note.  */
+      if (regcache->get_register_status (tls_regno) != REG_VALID)
+	return false;
+
+      /* As i386_gdbarch_tdep::i386_linux_tls is true, the registers
+	 must be the right size.  The flag is only set true when this
+	 condition holds.  */
+      gdb_assert (regcache->register_size (tls_regno)
+		  == sizeof (struct user_desc));
+
+      /* Read the TLS GDT entry.  If it is in use then we want to
+	 write the NT_386_TLS note.  */
+      struct user_desc ud;
+      regcache->raw_collect (tls_regno, &ud);
+      if (ud.base_addr != 0 && ud.limit != 0)
+	return true;
+    }
+
+  /* Made it through the loop without finding any in-use TLS related
+     GDT entries.  No point creating the NT_386_TLS note, the kernel
+     doesn't.  */
+  return false;
+}
 
 /* Iterate over core file register note sections.  */
 
@@ -1192,6 +1312,9 @@ i386_linux_iterate_over_regset_sections (struct gdbarch *gdbarch,
 	cb_data);
   else
     cb (".reg2", 108, 108, &i386_fpregset, NULL, cb_data);
+
+  if (tdep->i386_linux_tls && should_visit_i386_tls_note (regcache))
+    cb (".reg-i386-tls", 48, 48, &i386_linux_tls_regset, nullptr, cb_data);
 }
 
 /* Linux kernel shows PC value after the 'int $0x80' instruction even if
@@ -1270,6 +1393,37 @@ i386_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 				     "orig_eax");
   if (!valid_p)
     return;
+
+  /* Helper function.   Look for TLS_REG_NAME in I386_FEATURE (with the
+     associated LOCAL_TDESC_DATA), and if the register is found assign it
+     TLS_REGNO.  Return true if the register is found, and it is the size
+     of 'struct user_desc' (see man 2 get_thread_area), otherwise, return
+     false.  */
+  static const auto valid_tls_reg
+    = [] (const struct tdesc_feature *i386_feature,
+	  struct tdesc_arch_data *local_tdesc_data,
+	  const char *tls_reg_name, int tls_regno) -> bool
+  {
+    static constexpr int required_reg_size
+      = sizeof (struct user_desc) * HOST_CHAR_BIT;
+    return (tdesc_numbered_register (i386_feature, local_tdesc_data,
+				     tls_regno, tls_reg_name)
+	    && (tdesc_register_bitsize (i386_feature, tls_reg_name)
+		== required_reg_size));
+  };
+
+  /* Check all the expected tls related registers are found, and are the
+     correct size.  If they are then mark the tls feature as being active
+     in TDEP.  Otherwise, leave the feature as deactivated.  */
+  valid_p = (valid_tls_reg (feature, tdesc_data, "i386_tls_gdt_0",
+			    I386_LINUX_TLS_GDT_0)
+	     && valid_tls_reg (feature, tdesc_data, "i386_tls_gdt_1",
+			       I386_LINUX_TLS_GDT_1)
+	     && valid_tls_reg (feature, tdesc_data, "i386_tls_gdt_2",
+			       I386_LINUX_TLS_GDT_2));
+
+  if (valid_p)
+    tdep->i386_linux_tls = true;
 
   /* Add the %orig_eax register used for syscall restarting.  */
   set_gdbarch_write_pc (gdbarch, i386_linux_write_pc);

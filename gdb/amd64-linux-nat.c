@@ -37,6 +37,9 @@
 #include "x86-linux-nat.h"
 #include "nat/linux-ptrace.h"
 #include "nat/amd64-linux-siginfo.h"
+#include "nat/i386-linux.h"
+
+#include <asm/ldt.h>
 
 /* This definition comes from prctl.h.  Kernels older than 2.5.64
    do not have it.  */
@@ -86,7 +89,8 @@ static int amd64_linux_gregset32_reg_offset[] =
   -1, -1, -1, -1, -1, -1, -1, -1, /* k0 ... k7 (AVX512)  */
   -1, -1, -1, -1, -1, -1, -1, -1, /* zmm0 ... zmm7 (AVX512)  */
   -1,				  /* PKEYS register PKRU  */
-  ORIG_RAX * 8			  /* "orig_eax"  */
+  ORIG_RAX * 8,			  /* "orig_eax"  */
+  -1, -1, -1,			  /* TLS GDT regs: i386_tls_gdt_0...2.  */
 };
 
 
@@ -231,7 +235,8 @@ amd64_linux_nat_target::fetch_registers (struct regcache *regcache, int regnum)
 	return;
     }
 
-  if (regnum == -1 || !amd64_native_gregset_supplies_p (gdbarch, regnum))
+  if (regnum == -1 || (!amd64_native_gregset_supplies_p (gdbarch, regnum)
+		       && !i386_is_tls_regnum_p (regnum)))
     {
       elf_fpregset_t fpregs;
 
@@ -261,6 +266,9 @@ amd64_linux_nat_target::fetch_registers (struct regcache *regcache, int regnum)
 	  amd64_supply_fxsave (regcache, -1, &fpregs);
 	}
     }
+
+  if (tdep->i386_linux_tls && (regnum == -1 || i386_is_tls_regnum_p (regnum)))
+    i386_fetch_tls_regs (regcache, tid, regnum);
 }
 
 /* Store register REGNUM back into the child process.  If REGNUM is
@@ -295,7 +303,8 @@ amd64_linux_nat_target::store_registers (struct regcache *regcache, int regnum)
 	return;
     }
 
-  if (regnum == -1 || !amd64_native_gregset_supplies_p (gdbarch, regnum))
+  if (regnum == -1 || (!amd64_native_gregset_supplies_p (gdbarch, regnum)
+		       && !i386_is_tls_regnum_p (regnum)))
     {
       elf_fpregset_t fpregs;
 
@@ -327,6 +336,9 @@ amd64_linux_nat_target::store_registers (struct regcache *regcache, int regnum)
 	    perror_with_name (_("Couldn't write floating point status"));
 	}
     }
+
+  if (tdep->i386_linux_tls && (regnum == -1 || i386_is_tls_regnum_p (regnum)))
+    i386_store_tls_regs (regcache, tid, regnum);
 }
 
 
