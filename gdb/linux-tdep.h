@@ -117,4 +117,8 @@ extern CORE_ADDR linux_get_hwcap2 ();
 extern struct link_map_offsets *linux_ilp32_fetch_link_map_offsets ();
 extern struct link_map_offsets *linux_lp64_fetch_link_map_offsets ();
 
+/* ... */
+extern gdb::unique_xmalloc_ptr<char>
+linux_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size);
+
 #endif /* GDB_LINUX_TDEP_H */

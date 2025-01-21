@@ -79,6 +79,11 @@ protected:
   /* Override the GNU/Linux inferior startup hook.  */
   void post_startup_inferior (ptid_t) override;
 
+  /* ... */
+  enum target_xfer_status xfer_tls_desc (gdb_byte *readbuf, const gdb_byte *writebuf,
+					 ULONGEST offset, ULONGEST len, ULONGEST *xfered_len,
+					 uint32_t gdt_base_idx);
+
 private:
   x86_xsave_layout m_xsave_layout;
 };
