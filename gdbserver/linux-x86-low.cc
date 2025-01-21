@@ -53,6 +53,8 @@
 #include "nat/x86-linux-dregs.h"
 #include "nat/x86-linux-tdesc.h"
 
+#include <asm/ldt.h>
+
 #ifdef __x86_64__
 static target_desc_up tdesc_amd64_linux_no_xml;
 #endif
@@ -131,6 +133,10 @@ public:
   struct emit_ops *emit_ops () override;
 
   int get_ipa_tdesc_idx () override;
+
+  /* Override these to provide access to i386 TLS state.  */
+  void fetch_registers (regcache *regcache, int regno) override;
+  void store_registers (regcache *regcache, int regno) override;
 
 protected:
 
@@ -557,6 +563,99 @@ static struct regset_info x86_regsets[] =
 #endif /* HAVE_PTRACE_GETREGS */
   NULL_REGSET
 };
+
+/* Fetch TLS area data from the kernel and copy it into REGCACHE.  REGNO
+   indicates which TLS area register is wanted, or -1 for all of them.
+   This function returns true if the data was fetched and stored to
+   REGCACHE successfully, otherwise, it returns false.  */
+
+static bool
+fetch_tls_area_register (regcache *regcache, int regno)
+{
+  int tid = current_thread->id.lwp ();
+
+  /* Fetch all the TLS area data from the kernel.  */
+  struct user_desc tls_ud[3];
+  if (!i386_ptrace_get_tls_data (tid, tls_ud))
+    return false;
+
+  /* Now copy the values from TLS_UD back into the register cache.  */
+  int tls_regno[3] = {
+    find_regno (regcache->tdesc, "i386_tls_gdt_0"),
+    find_regno (regcache->tdesc, "i386_tls_gdt_1"),
+    find_regno (regcache->tdesc, "i386_tls_gdt_2")
+  };
+
+  for (int i = 0; i < std::size (tls_regno); ++i)
+    supply_register (regcache, tls_regno[i], &tls_ud[i]);
+
+  return true;
+}
+
+/* See class declaration above.  */
+
+void
+x86_target::fetch_registers (regcache *regcache, int regno)
+{
+  linux_process_target::fetch_registers (regcache, regno);
+
+#ifdef __x86_64__
+  if (!is_64bit_tdesc (current_thread))
+#endif
+    {
+      fetch_tls_area_register (regcache, regno);
+    }
+}
+
+/* Copy TLS area data from REGCACHE back to the kernel.  REGNO indicates
+   which TLS area register should be copied, or -1 for all of them.  This
+   function returns true if the data was stored successfully, otherwise,
+   it returns false.  */
+
+static bool
+store_tls_area_registers (regcache *regcache, int regno)
+{
+  int tid = current_thread->id.lwp ();
+
+  /* Read current TLS area data from the kernel into TLS_UD.  We then
+     overwrite this with values from REGCACHE, and finally, copy the
+     updated values back to the kernel.  */
+  struct user_desc tls_ud[3];
+  if (!i386_ptrace_get_tls_data (tid, tls_ud))
+    return false;
+
+  int tls_regno[] = {
+    find_regno (regcache->tdesc, "i386_tls_gdt_0"),
+    find_regno (regcache->tdesc, "i386_tls_gdt_1"),
+    find_regno (regcache->tdesc, "i386_tls_gdt_2")
+  };
+
+  /* Now copy data from REGCACHE over the top of the values written
+     into TLS_UD.  */
+  for (int i = 0; i < std::size (tls_regno); ++i)
+    collect_register (regcache, tls_regno[i], &tls_ud[i]);
+
+  /* And write the contents of TLS_UD back to the kernel.  */
+  if (!i386_ptrace_set_tls_data (tid, tls_ud))
+    return false;
+
+  return true;
+}
+
+/* See class declaration above.  */
+
+void
+x86_target::store_registers (regcache *regcache, int regno)
+{
+  linux_process_target::store_registers (regcache, regno);
+
+#ifdef __x86_64__
+  if (!is_64bit_tdesc (current_thread))
+#endif
+    {
+      store_tls_area_registers (regcache, regno);
+    }
+}
 
 bool
 x86_target::low_supports_breakpoints ()
