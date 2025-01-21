@@ -210,6 +210,73 @@ x86_linux_get_thread_area (pid_t pid, void *addr, unsigned int *base_addr)
 }
 
 
+/* Copy from BUFFER into REGCACHE, supplying the tls gdt entry registers.
+   Use REGNUM to decide exactly which registers are copied.  */
+
+static void
+i386_supply_tls_regs (struct regcache *regcache, int regnum,
+		       gdb::array_view<struct user_desc> buffer)
+{
+  gdb_assert (buffer.size () == 3);
+
+  for (int i = 0; i < 3; ++i)
+    {
+      if (regnum == -1 || regnum == I386_LINUX_TLS_GDT_0 + i)
+	regcache->raw_supply (I386_LINUX_TLS_GDT_0 + i,
+			      buffer.slice (i, 1).data ());
+    }
+}
+
+/* Copy from REGCACHE into BUFFER, collecting the tls gdt entry
+   registers.  USE REGNUM to decide which registers are copied.  */
+
+static void
+i386_collect_tls_regs (struct regcache *regcache, int regnum,
+			gdb::array_view<struct user_desc> buffer)
+{
+  gdb_assert (buffer.size () == 3);
+
+  for (int i = 0; i < 3; ++i)
+    {
+      if (regnum == -1 || regnum == I386_LINUX_TLS_GDT_0 + i)
+	regcache->raw_collect (I386_LINUX_TLS_GDT_0 + i,
+			       buffer.slice (i, 1).data ());
+    }
+}
+
+/* See x86-linux-nat.h.   */
+
+void
+i386_fetch_tls_regs (struct regcache *regcache, int tid, int regnum)
+{
+  struct user_desc tls_ud[3];
+  if (!i386_ptrace_get_tls_data (tid, tls_ud))
+    perror_with_name (_("Couldn't get TLS area data"));
+
+  i386_supply_tls_regs (regcache, regnum, tls_ud);
+}
+
+/* See x86-linux-nat.h.   */
+
+void
+i386_store_tls_regs (struct regcache *regcache, int tid, int regnum)
+{
+  /* Read current values in to TLS_UD.  */
+  struct user_desc tls_ud[3];
+  if (!i386_ptrace_get_tls_data (tid, tls_ud))
+    perror_with_name (_("Couldn't get TLS area data"));
+
+  /* Write new values from regcache into TLS_UD.  Overwriting the
+     current values.  */
+  i386_collect_tls_regs (regcache, regnum, tls_ud);
+
+  /* Write the new values back to the kernel.  */
+  if (!i386_ptrace_set_tls_data (tid, tls_ud))
+    perror_with_name (_("Couldn't write TLS area data"));
+}
+
+
+
 INIT_GDB_FILE (x86_linux_nat)
 {
   /* Initialize the debug register function vectors.  */

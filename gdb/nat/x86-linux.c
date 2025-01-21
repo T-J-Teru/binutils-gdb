@@ -22,6 +22,12 @@
 #include "nat/gdb_ptrace.h"
 #include <sys/user.h>
 
+#ifndef __x86_64__
+#include "nat/i386-linux.h"
+#else
+#include "nat/amd64-linux.h"
+#endif
+
 /* Per-thread arch-specific data we want to keep.  */
 
 struct arch_lwp_info
@@ -125,4 +131,42 @@ x86_linux_ptrace_get_arch_size (int tid)
 #else
   return x86_linux_arch_size (false, false);
 #endif
+}
+
+/* See nat/x86-linux.h.  */
+
+bool
+i386_ptrace_get_tls_data (int pid, gdb::array_view<struct user_desc> buffer)
+{
+  gdb_assert (buffer.size () == 3);
+
+  for (int i = 0; i < 3; ++i)
+    {
+      void *addr = (void *) (uintptr_t) (i386_initial_tls_gdt + i);
+      void *data = buffer.slice (i, 1).data ();
+
+      if (ptrace (PTRACE_GET_THREAD_AREA, pid, addr, data) < 0)
+	return false;
+    }
+
+  return true;
+}
+
+/* See nat/x86-linux.h.  */
+
+bool
+i386_ptrace_set_tls_data (int pid, gdb::array_view<struct user_desc> buffer)
+{
+  gdb_assert (buffer.size () == 3);
+
+  for (int i = 0; i < 3; ++i)
+    {
+      void *addr = (void *) (uintptr_t) (i386_initial_tls_gdt + i);
+      void *data = buffer.slice (i, 1).data ();
+
+      if (ptrace (PTRACE_SET_THREAD_AREA, pid, addr, data) < 0)
+	return false;
+    }
+
+  return true;
 }
