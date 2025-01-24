@@ -172,14 +172,14 @@ program_space::map_symbol_filenames (symbol_filename_listener fun,
 
 void
 program_space::add_objfile (std::unique_ptr<objfile> &&objfile,
-			    struct objfile *before)
+			    struct objfile *after)
 {
-  if (before == nullptr)
+  if (after == nullptr)
     m_objfiles_list.push_back (std::move (objfile));
   else
     {
-      gdb_assert (before->is_linked ());
-      m_objfiles_list.insert (m_objfiles_list.iterator_to (*before),
+      gdb_assert (after->is_linked ());
+      m_objfiles_list.insert (++m_objfiles_list.iterator_to (*after),
 			      std::move (objfile));
     }
 }

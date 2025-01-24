@@ -409,6 +409,14 @@ objfile::unlink ()
   this->pspace ()->remove_objfile (this);
 }
 
+/* See objfiles.h.  */
+
+qf_safe_range
+objfile::qf_safe ()
+{
+  return qf_safe_range (qf_range (qf.begin (), qf.end ()));
+}
+
 /* Free all separate debug objfile of OBJFILE, but don't free OBJFILE
    itself.  */
 

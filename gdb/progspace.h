@@ -199,18 +199,26 @@ struct program_space
     return objfiles_range (std::move (begin));
   }
 
-  using objfiles_safe_range = basic_safe_range<objfiles_range>;
+  using objfiles_safe_reverse_range
+    = basic_safe_reverse_range<objfiles_range>;
 
   /* An iterable object that can be used to iterate over all objfiles.
      The basic use is in a foreach, like:
 
      for (objfile &objf : pspace->objfiles_safe ()) { ... }
 
-     This variant uses a basic_safe_iterator so that objfiles can be
-     deleted during iteration.  */
-  objfiles_safe_range objfiles_safe ()
+     This variant uses a basic_safe_reverse_iterator so that objfiles
+     can be deleted during iteration.
+
+     The use of a reverse iterator helps ensure that separate debug
+     objfiles are deleted before their parent objfile.  This prevents
+     iterator invalidation due to the deletion of a parent objfile.  */
+
+  objfiles_safe_reverse_range objfiles_safe ()
   {
-    return objfiles_safe_range (this->objfiles ());
+    return objfiles_safe_reverse_range
+      (objfiles_range (objfiles_iterator (m_objfiles_list.begin ()),
+		       objfiles_iterator (m_objfiles_list.end ())));
   }
 
   /* Iterate over all objfiles of the program space in the order that makes the
@@ -235,7 +243,7 @@ struct program_space
      BEFORE.  If BEFORE is nullptr, it will go at the end of the
      list.  */
   void add_objfile (std::unique_ptr<objfile> &&objfile,
-		    struct objfile *before);
+		    struct objfile *after);
 
   /* Remove OBJFILE from the list of objfiles.  */
   void remove_objfile (struct objfile *objfile);
