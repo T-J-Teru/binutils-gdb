@@ -1,0 +1,194 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test on-demand debuginfo downloading when debuginfod can serve a
+# .gdb_index section but the corresponding full debuginfo has had its
+# DWARF sections stripped.
+#
+# This tests the edge case where the .gdb_index download succeeds
+# (so GDB defers the full debuginfo download) but the full debuginfo
+# file doesn't contain any useful debug information.  GDB should
+# handle this gracefully without crashing or asserting.
+#
+# This is probably as close as we can easily get to a debuginfod
+# server that serves a .gdb_index, but then fails to serve the full
+# debug information.
+
+standard_testfile .c -lib.c
+
+load_lib debuginfod-support.exp
+
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+
+set lib_testfile "lib${testfile}.so"
+set lib_srcfile $srcfile2
+set lib_binfile [standard_output_file $lib_testfile]
+
+# Build the shared library and executable.
+if { [build_executable "build $lib_testfile" $lib_binfile $lib_srcfile \
+	  {debug build-id shlib}] } {
+    return
+}
+
+if { [build_executable "build executable" $binfile $srcfile \
+	  [list debug build-id shlib=$lib_binfile]] } {
+    return
+}
+
+# Start GDB for the ensure_gdb_index call.
+clean_restart
+
+# Add .gdb_index to the shared library.
+if { [ensure_gdb_index $lib_binfile "" $lib_testfile] != 1 } {
+    untested "failed to add .gdb_index to $lib_testfile"
+    return
+}
+
+# Strip debuginfo into a separate file.
+if { [gdb_gnu_strip_debug $lib_binfile] != 0 } {
+    fail "strip $lib_testfile debuginfo"
+    return
+}
+
+# Now strip all DWARF debug sections from the separate debug file,
+# leaving only the .gdb_index.  This simulates the case where
+# debuginfod can serve the index but the full debuginfo is not
+# actually available.
+set debuginfo_file [standard_output_file $lib_testfile.debug]
+
+set dwarf_sections {info abbrev line str line_str aranges ranges rnglists \
+			macro loc loclists frame addr str_offsets types }
+
+set objcopy_args {}
+foreach section $dwarf_sections {
+    lappend objcopy_args --remove-section=.debug_${section}
+    lappend objcopy_args --remove-section=.zdebug_${section}
+    lappend objcopy_args --remove-section=.debug_${section}.dwo
+    lappend objcopy_args --remove-section=.zdebug_${section}.dwo
+}
+
+set objcopy_program [gdb_find_objcopy]
+set result [catch {exec $objcopy_program {*}$objcopy_args $debuginfo_file} output]
+if { $result != 0 } {
+    fail "strip DWARF sections from $debuginfo_file: $output"
+    return
+}
+
+# Verify .gdb_index is still present but .debug_info is gone.
+set readelf_program [gdb_find_readelf]
+set result [catch {exec $readelf_program -S $debuginfo_file} output]
+if { $result != 0 } {
+    unresolved "readelf on $debuginfo_file: $output"
+    return
+}
+
+if { [string first ".gdb_index" $output] == -1 } {
+    unresolved ".gdb_index missing from stripped debuginfo"
+    return
+}
+
+# Final sanity check, make sure we cannot find .debug_info (or one of
+# its variants) within DEBUGINFO_FILE.
+foreach section { .debug_info .zdebug_info .debug_info.dwo .zdebug_info.dwo } {
+    if { [string first $section $output] != -1 } {
+	unresolved "$section still present in stripped debuginfo"
+	return
+    }
+}
+
+# Move the debuginfo file into the directory that debuginfod will
+# serve from.
+set debugdir [standard_output_file "debug"]
+file mkdir $debugdir
+file rename -force $debuginfo_file $debugdir
+
+# Test that GDB handles the missing DWARF gracefully.  When
+# EARLY_SHUTDOWN is true terminate debuginfod after downloading the
+# .gdb_index, but before triggering download of the full debug
+# information.
+proc_with_prefix test_no_debuginfo { early_shutdown } {
+    global cache
+
+    # Delete client cache so debuginfo downloads again.
+    file delete -force $cache
+    clean_restart
+
+    gdb_test_no_output "set debuginfod enabled on"
+    gdb_test_no_output "set progress-bars enabled off"
+
+    gdb_load $::binfile
+
+    if { ![runto_main] } {
+	return
+    }
+
+    # At this point the .gdb_index should have been downloaded for the
+    # shared library, and the full debuginfo download should still be
+    # deferred.
+
+    if { $early_shutdown } {
+	# Shutdown debuginfod.  This proc doesn't actually wait for
+	# the shutdown to complete, so give the process a couple of
+	# seconds.  This isn't perfect, but should be good enough to
+	# surface any bugs.
+	#
+	# We don't want to perform a blocking wait as doing so risks
+	# deadlocking the testsuite if debuginfod misbehaves.  And,
+	# having closed the process, we can no longer 'expect' on its
+	# output to watch it shutdown.
+	#
+	# Even if we could be sure that debuginfod has shut down, then
+	# we cannot guarantee that a parallel test run isn't going to
+	# start another debuginfod server in its place.
+	#
+	# At the end of the day, we're just hoping that if this does
+	# trigger a bug someone will think to look into it.
+	stop_debuginfod
+	sleep 2
+    }
+
+    # Try to set a breakpoint on lib_func.  This should trigger the
+    # full debuginfo download.  The downloaded file won't contain
+    # DWARF, so GDB won't get debug info, but it should not crash.
+    gdb_breakpoint "lib_func" message
+
+    # Continue to the breakpoint to verify the inferior still works.
+    # Also, as we are missing debug information for the shared library
+    # containing this breakpoint, the breakpoint will be attributed to
+    # the .so file rather than the original .c source file.
+    gdb_continue_to_breakpoint "run to breakpoint" \
+	"lib_func \\(\\) from \[^\r\n\]+/${::lib_testfile}"
+}
+
+# Create CACHE and DB directories ready for debuginfod to use.
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    foreach_with_prefix early_shutdown { false true } {
+	set url [start_debuginfod $db $debugdir]
+	if { $url == "" } {
+	    unresolved "failed to start debuginfod server"
+	    return
+	}
+
+	setenv DEBUGINFOD_URLS $url
+
+	test_no_debuginfo $early_shutdown
+
+	stop_debuginfod
+    }
+}
+

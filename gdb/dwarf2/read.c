@@ -36,6 +36,7 @@
 #include "dwarf2/cooked-index-worker.h"
 #include "dwarf2/cooked-indexer.h"
 #include "dwarf2/cu.h"
+#include "dwarf2/frame.h"
 #include "dwarf2/index-cache.h"
 #include "dwarf2/leb.h"
 #include "dwarf2/line-header.h"
@@ -98,6 +99,8 @@
 #include "gdbsupport/unordered_set.h"
 #include "extract-store-integer.h"
 #include "cli/cli-style.h"
+#include "inferior.h"
+#include "debuginfod-support.h"
 
 /* See read.h.  */
 unsigned int dwarf_read_debug = 0;
@@ -2113,6 +2116,65 @@ get_gdb_index_contents_from_cache_dwz (objfile *obj, dwz_file *dwz)
   return global_index_cache.lookup_gdb_index (build_id, &dwz->index_cache_res);
 }
 
+/* Query debuginfod for the .gdb_index matching OBJFILE's build-id.  Return the
+   contents if successful.  */
+
+static gdb::array_view<const gdb_byte>
+get_gdb_index_contents_from_debuginfod (objfile *objfile,
+					dwarf2_per_bfd *per_bfd)
+{
+  const bfd_build_id *build_id = build_id_bfd_get (objfile->obfd.get ());
+  if (build_id == nullptr)
+    return {};
+
+  gdb::unique_xmalloc_ptr<char> index_path;
+  scoped_fd fd = debuginfod_section_query (build_id->data, build_id->size,
+					   bfd_get_filename
+					     (objfile->obfd.get ()),
+					   ".gdb_index",
+					   &index_path);
+  if (fd.get () < 0)
+    return {};
+
+  return global_index_cache.lookup_gdb_index
+    (index_path.get (), &per_bfd->index_cache_res);
+}
+
+/* Read the .gdb_index from DWZ, a dwz file, which we're looking at as
+   a consequence of loading OBJ.
+
+   This function is passed to dwarf2_read_gdb_index only in the case
+   where we are performing deferred debug info download, and will only
+   be called if OBJ has an associated dwz file.
+
+   In order to create a dwz_file for an objfile GDB checks two things:
+
+   1. The objfile must have some debug information, and
+
+   2. The objfile must have a link to the dwz file,
+      e.g. .gnu_debugaltlink.
+
+   However, if an objfile satisfies (1) then we shouldn't need to use
+   deferred debug information downloading, and so this function should
+   never be called.
+
+   As such, we don't actually try to fetch the .gdb_index for the dwz
+   file here, we just emit a warning, and return an empty array view.
+   Back in dwarf2_read_gdb_index the empty array view will trigger
+   another warning, and then GDB will proceed without any index for
+   OBJ.
+
+   Right now I cannot imagine how we'd trigger this situation, but if
+   we ever see this then we can updated this code as appropriate.  */
+
+static gdb::array_view<const gdb_byte>
+get_gdb_index_contents_from_debuginfod_dwz (objfile *obj, dwz_file *dwz)
+{
+  warning (_("ignoring unexpected dwz file for %ps"),
+	   styled_string (file_name_style.style (), objfile_name (obj)));
+  return {};
+}
+
 static void start_debug_info_reader (dwarf2_per_objfile *);
 
 /* See dwarf2/public.h.  */
@@ -2122,11 +2184,13 @@ dwarf2_initialize_objfile (struct objfile *objfile,
 			   const struct dwarf2_debug_sections *names,
 			   bool can_copy)
 {
-  if (!dwarf2_has_info (objfile, names, can_copy))
+  if (!dwarf2_has_info (objfile, names, can_copy)
+      && (objfile->flags & OBJF_DOWNLOAD_DEFERRED) == 0)
     return false;
 
   dwarf2_per_objfile *per_objfile = get_dwarf2_per_objfile (objfile);
   dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
+  bool separate_index = false;
 
   dwarf_read_debug_printf ("called");
 
@@ -2153,11 +2217,20 @@ dwarf2_initialize_objfile (struct objfile *objfile,
     dwarf_read_debug_printf ("found gdb index from file");
   /* ... otherwise, try to find the index in the index cache.  */
   else if (dwarf2_read_gdb_index (per_objfile,
-			     get_gdb_index_contents_from_cache,
-			     get_gdb_index_contents_from_cache_dwz))
+				  get_gdb_index_contents_from_cache,
+				  get_gdb_index_contents_from_cache_dwz))
     {
       dwarf_read_debug_printf ("found gdb index from cache");
       global_index_cache.hit ();
+    }
+  /* Try to read just a separately downloaded gdb index.  */
+  else if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0
+	   && dwarf2_read_gdb_index (per_objfile,
+				     get_gdb_index_contents_from_debuginfod,
+				     get_gdb_index_contents_from_debuginfod_dwz))
+    {
+      dwarf_read_debug_printf ("found .gdb_index from debuginfod");
+      separate_index = true;
     }
   else
     {
@@ -2169,13 +2242,115 @@ dwarf2_initialize_objfile (struct objfile *objfile,
     {
       if (dwarf_synchronous)
 	per_bfd->index_table->wait_completely ();
-      objfile->add_qf (per_bfd->index_table->make_quick_functions ());
+
+      if (separate_index)
+	objfile->add_qf (make_deferred_gdb_index_functions ());
+      else
+	objfile->add_qf (per_bfd->index_table->make_quick_functions ());
     }
 
   return true;
 }
 
 /* See read.h.  */
+
+objfile *
+read_full_dwarf_from_debuginfod (struct objfile *objfile,
+				 quick_symbol_functions *qf)
+{
+  gdb_assert ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0);
+
+  /* However this function exits, we no longer want OBJFILE to be
+     marked as having deferred debug information.  Of particular
+     interest is the case where we do load some separate debug
+     information and then add it into the program space.  This can
+     trigger a call to breakpoint_re_set, which, if this object is
+     still marked as having deferred debug information, could result
+     in recursion, where we try to re-download the same debug
+     information.
+
+     Clearing the deferred marker now is fine, nothing called from
+     here relies on this flag.  */
+  objfile->remove_deferred_status (qf);
+
+  const struct bfd_build_id *build_id = build_id_bfd_get (objfile->obfd.get ());
+  if (build_id == nullptr)
+    return nullptr;
+
+  const char *filename = bfd_get_filename (objfile->obfd.get ());
+  gdb::unique_xmalloc_ptr<char> symfile_path;
+  scoped_fd fd;
+
+  fd = debuginfod_debuginfo_query (build_id->data, build_id->size,
+				   filename, &symfile_path);
+  if (fd.get () < 0)
+    return nullptr;
+
+  /* Separate debuginfo successfully retrieved from server.  */
+  gdb_bfd_ref_ptr debug_bfd = symfile_bfd_open (symfile_path.get ());
+  if (debug_bfd == nullptr
+      || !build_id_verify (debug_bfd.get (), build_id->size, build_id->data))
+    {
+      warning (_("File \"%s\" from debuginfod cannot be opened as bfd"),
+	       filename);
+      return nullptr;
+    }
+
+  /* This may trigger a dwz download.  */
+  symbol_file_add_separate (debug_bfd, symfile_path.get (),
+			    current_inferior ()->symfile_flags, objfile);
+  return objfile->separate_debug_objfile;
+}
+
+/* See public.h.  */
+
+bool
+dwarf2_has_separate_index (struct objfile *objfile)
+{
+  /* An objfile already marked as OBJF_DOWNLOAD_DEFERRED will not get
+     here, as GDB will see such an objfile as having debug
+     information.  See dwarf2_initialize_objfile for details.  */
+  gdb_assert ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) == 0);
+
+  /* There is no point deferring the download of the debug information
+     for the main objfile, we (almost) always end up needing the debug
+     information, so downloading the index first is just adding
+     additional work.  */
+  if ((objfile->flags & OBJF_MAINLINE) != 0)
+    return false;
+
+  /* Objfiles marked OBJF_NOT_FILENAME include things like the vDSO
+     objfile, and JIT registered objfiles, for both of which,
+     downloading an index doesn't make much sense.  */
+  if ((objfile->flags & OBJF_NOT_FILENAME) != 0)
+    return false;
+
+  const bfd_build_id *build_id = build_id_bfd_get (objfile->obfd.get ());
+
+  if (build_id == nullptr)
+    return false;
+
+  gdb::unique_xmalloc_ptr<char> index_path;
+  scoped_fd fd = debuginfod_section_query (build_id->data,
+					   build_id->size,
+					   bfd_get_filename
+					     (objfile->obfd.get ()),
+					   ".gdb_index",
+					   &index_path);
+
+  if (fd.get () < 0)
+    return false;
+
+  /* We found a separate .gdb_index file so a separate debuginfo file should
+     exist, but we don't want to download it until necessary.  Associate the
+     index with this objfile and defer the debuginfo download until symtabs
+     referenced by the index need to be expanded.  */
+  objfile->flags |= OBJF_DOWNLOAD_DEFERRED;
+  dwarf2_initialize_objfile (objfile);
+  return true;
+}
+
+
 
 void
 dwarf2_find_base_address (struct die_info *die, struct dwarf2_cu *cu)

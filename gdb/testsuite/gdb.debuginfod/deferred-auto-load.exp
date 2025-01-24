@@ -1,0 +1,223 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that auto-loaded Python scripts from .debug_gdb_scripts
+# sections in separate debug info files works correctly with on-demand
+# debuginfo downloading.
+#
+# The test embeds a .debug_gdb_scripts section into the separate debug
+# file of both the executable, and a shared library.  When the
+# deferred debuginfo is downloaded, GDB should auto-load and execute
+# the embedded script.
+
+standard_testfile .c -lib.c -script.S
+
+load_lib debuginfod-support.exp
+
+require is_elf_target
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+require allow_python_tests
+
+set lib_testfile "lib${testfile}.so"
+set lib_srcfile $srcfile2
+set lib_binfile [standard_output_file $lib_testfile]
+
+# Build the shared library.
+if { [build_executable "build $lib_testfile" $lib_binfile $lib_srcfile \
+	  [list debug build-id shlib \
+	       additional_flags=-I${srcdir}/../../include \
+	       additional_flags=-DSCRIPT_SUFFIX=lib]] != 0 } {
+    return
+}
+
+# Build the main executable.
+if { [build_executable "build executable" $binfile $srcfile \
+	  [list debug build-id shlib=$lib_binfile \
+	       additional_flags=-I${srcdir}/../../include \
+	       additional_flags=-DSCRIPT_SUFFIX=main]] != 0 } {
+    return
+}
+
+# Start GDB, required for ensure_gdb_index call.
+clean_restart
+
+# Add .gdb_index to the shared library.
+if { [ensure_gdb_index $lib_binfile "" $lib_testfile] != 1 } {
+    untested "failed to add .gdb_index to $lib_testfile"
+    return
+}
+
+# Add .gdb_index to the executable.
+if { [ensure_gdb_index $binfile "" $testfile] != 1 } {
+    untested "failed to add .gdb_index to $testfile"
+    return
+}
+
+# Strip debuginfo from shared library into a separate file.
+if { [gdb_gnu_strip_debug $lib_binfile] != 0 } {
+    fail "strip $lib_testfile debuginfo"
+    return
+}
+set lib_debuginfo $lib_binfile.debug
+
+# Strip debuginfo from executable into a separate file.
+if { [gdb_gnu_strip_debug $binfile] != 0 } {
+    fail "strip $testfile debuginfo"
+    return
+}
+set debuginfo $binfile.debug
+
+# Move debuginfo files into the directory that debuginfod will serve.
+set debugdir [standard_output_file "debug"]
+file mkdir $debugdir
+file rename -force $lib_debuginfo $debugdir
+file rename -force $debuginfo $debugdir
+
+# Helper proc to return the filename of the debuginfod cache file
+# containing the full separate debuginfo for FILENAME.  CACHE is the
+# absolute directory name of the debuginfod client cache.  The
+# resulting filename is calculated based on the build-id of FILENAME,
+# we don't check if the file actually exists in the cache.
+proc debuginfod_cache_file { cache filename } {
+    set buildid [get_build_id $filename]
+    return [file join $cache $buildid debuginfo]
+}
+
+# Test that the auto-loaded script from .debug_gdb_scripts in the
+# separate debug files are executed when the deferred debuginfo is
+# downloaded.
+proc_with_prefix test_auto_load_script { cache } {
+    # Delete client cache so debuginfo downloads again.
+    file delete -force $cache
+    clean_restart
+
+    gdb_test_no_output "set debuginfod enabled on"
+    gdb_test_no_output "set progress-bars enabled off"
+
+    # Setup a global Python dictionary which will track scripts as
+    # they are auto-loaded.  The keys of this dictionary are the
+    # objfile filenames from which scipts were loaded, and the values
+    # are the number of times the script was loaded.
+    gdb_test_no_output "python global_auto_load_tracker = {}"
+
+    # Allow auto-loading from any file relating to this test.  This
+    # will allow scripts to be loaded from the executable, the shared
+    # library, and from anything downloaded from debuginfod.  We only
+    # expect to load scripts from the debuginfod client cache, but we
+    # want the other things in the safe path in case anything goes
+    # wrong, then we'll get to see GDB loading things from the wrong
+    # place.
+    #
+    # In real life it might be a bad idea to allow scripts downloaded
+    # from debuginfod to be auto-loaded and run, but for this test it
+    # should be fine as we only use a local debuginfod, and we control
+    # the script content.
+    gdb_test_no_output "set auto-load safe-path [standard_output_file {}]" \
+	"set auto-load safe-path"
+
+    gdb_load $::binfile
+
+    if { ![runto_main] } {
+	return
+    }
+
+    # At this point the .gdb_index should have been downloaded for the
+    # shared library, but its full debuginfo should still be deferred,
+    # so the auto-load script within the library should not have been
+    # loaded yet.
+    #
+    # However, the auto-load script for the main executable should
+    # have been loaded as the main executable's full debuginfo will
+    # have been downloaded by now.
+    gdb_test "info auto-load python-scripts" \
+	"Yes\\s+gdb\\.inlined-script\\.main\\s*" \
+	"check auto-loaded python scripts before download"
+    set cache_file [debuginfod_cache_file $cache $::binfile]
+    gdb_test_no_output "python assert(global_auto_load_tracker\[\"$cache_file\"\] == 1)" \
+	"check executable script was loaded once before library has loaded"
+    gdb_test_no_output "python assert(len(global_auto_load_tracker.keys()) == 1)" \
+	"script from just one source has been loaded"
+
+    set lineno [gdb_get_line_number "lib_func breakpoint" $::srcfile2]
+
+    # Set a breakpoint in the library to trigger the deferred
+    # debuginfo download.
+    set saw_script_loaded false
+    set saw_download false
+    set saw_breakpoint false
+    gdb_test_multiple "break lib_func" "break lib_func" {
+	-re "^break lib_func\r\n" {
+	    exp_continue
+	}
+
+	-re "^deferred-auto-load: script loaded: lib\r\n" {
+	    set saw_script_loaded true
+	    exp_continue
+	}
+	-re "^Downloading \[^\r\n\]*separate debug info\[^\r\n\]*\r\n" {
+	    set saw_download true
+	    exp_continue
+	}
+	-re "^Breakpoint $::decimal at $::hex\[^\r\n\]+\r\n" {
+	    set saw_breakpoint true
+	    exp_continue
+	}
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { $saw_download && $saw_script_loaded && $saw_breakpoint } \
+		$gdb_test_name
+	}
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Verify the auto-loaded script appears in the list.
+    gdb_test "info auto-load python-scripts" \
+	[multi_line \
+	     "Yes\\s+gdb\\.inlined-script\\.lib\\s*" \
+	     "Yes\\s+gdb\\.inlined-script\\.main\\s*"] \
+	"scripts loaded after library debuginfo download"
+
+    # Continue to the breakpoint.
+    gdb_test "continue" "Breakpoint $::decimal, lib_func.*" \
+	"continue to lib_func"
+
+    # We should now have loaded the auto-load script from both the
+    # main executable, and from the shared library.  Check each script
+    # has been loaded exactly once.
+    set lib_cache_file [debuginfod_cache_file $cache $::lib_binfile]
+    gdb_test_no_output "python assert(global_auto_load_tracker\[\"$lib_cache_file\"\] == 1)" \
+	"check library script was loaded once"
+    gdb_test_no_output "python assert(global_auto_load_tracker\[\"$cache_file\"\] == 1)" \
+	"check executable script was loaded once"
+    gdb_test_no_output "python assert(len(global_auto_load_tracker.keys()) == 2)" \
+	"scripts from two sources loaded"
+}
+
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    set url [start_debuginfod $db $debugdir]
+    if { $url == "" } {
+	unresolved "failed to start debuginfod server"
+	return
+    }
+
+    setenv DEBUGINFOD_URLS $url
+    test_auto_load_script $cache
+}
+
+stop_debuginfod

@@ -629,6 +629,24 @@ public:
 					       domain_search_flags domain,
 					       bool *symbol_found_p);
 
+  /* Used to clear OBJF_DOWNLOAD_DEFERRED status when the debug objfile has
+     either been acquired or could not be found.  QF is the
+     quick_symbol_functions entry to remove from the qf list (the
+     deferred index that triggered the download).  */
+  void remove_deferred_status (quick_symbol_functions *qf_to_remove)
+  {
+    flags &= ~OBJF_DOWNLOAD_DEFERRED;
+
+    /* Remove the deferred quick_symbol_functions from the qf list.
+       If available the separate debug objfile's index will be used
+       instead, since that objfile actually contains the symbols and CUs
+       referenced in the index.  */
+    m_qf.remove_if ([&] (const quick_symbol_functions_up &qf_up)
+      {
+	return qf_up.get () == qf_to_remove;
+      });
+  }
+
   /* Return the relocation offset applied to SECTION.  */
   CORE_ADDR section_offset (bfd_section *section) const
   {

@@ -1,0 +1,158 @@
+# Copyright 2023-2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test debuginfod's ability to download .gdb-index section prior to
+# downloading the full debug information file.
+
+standard_testfile .c -lib1.c -lib2.c
+
+load_lib debuginfod-support.exp
+
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+
+# BINFILE calls a function from LIB_SL1.
+set lib1_testfile "libdeferred1.so"
+set lib1_srcfile $srcfile2
+set lib1_binfile [standard_output_file $lib1_testfile]
+
+# LIB1_BINFILE calls functions from LIB2_BINFILE.
+set lib2_testfile "libdeferred2.so"
+set lib2_srcfile $srcfile3
+set lib2_binfile [standard_output_file $lib2_testfile]
+
+# Build LIB1_BINFILE, LIB2_BINFILE, and BINFILE.
+if { [build_executable "build $lib2_testfile" $lib2_binfile $lib2_srcfile \
+	{debug build-id shlib}] != 0 } {
+    return
+}
+
+if { [build_executable "build $lib1_testfile" $lib1_binfile $lib1_srcfile \
+	[list debug build-id shlib_pthreads shlib=$lib2_binfile]] != 0 } {
+    return
+}
+
+if { [build_executable "build executable" $binfile $srcfile \
+	[list debug build-id shlib=$lib1_binfile shlib=$lib2_binfile]] != 0 } {
+    return
+}
+
+# Start GDB now, we need GDB running in order to check the index types
+# within the compiled executable and shared libraries.
+clean_restart
+
+# Make sure libdeferred1 and libdeferred2 contain .gdb_index.
+if { [ensure_gdb_index $lib1_binfile "" "libdeferred1"] != 1 } {
+    untested "failed to add .gdb_index to $lib1_testfile"
+    return
+}
+
+if { [ensure_gdb_index $lib2_binfile "" "libdeferred2"] != 1 } {
+    untested "failed to add .gdb_index to $lib2_testfile"
+    return
+}
+
+# Strip solib debuginfo into separate files.
+if { [gdb_gnu_strip_debug $lib1_binfile ""] != 0} {
+   fail "strip $lib1_testfile debuginfo"
+   return
+}
+
+if { [gdb_gnu_strip_debug $lib2_binfile ""] != 0} {
+   fail "strip $lib2_testfile debuginfo"
+   return
+}
+
+# Move debuginfo files into directory that debuginfod will serve from.
+set debugdir [standard_output_file "debug"]
+set debuginfo_sl1 [standard_output_file $lib1_testfile.debug]
+set debuginfo_sl2 [standard_output_file $lib2_testfile.debug]
+
+file mkdir $debugdir
+file rename -force $debuginfo_sl1 $debugdir
+file rename -force $debuginfo_sl2 $debugdir
+
+# Restart GDB and clear the debuginfod client cache.  Then load BINFILE into
+# GDB and start running it.  Match output with pattern RES and use TESTNAME
+# as the test name.
+proc_with_prefix clean_restart_with_prompt { binfile testname } {
+    global cache
+
+    # Delete client cache so debuginfo downloads again.
+    file delete -force $cache
+    clean_restart
+
+    gdb_test_no_output "set debuginfod enabled on" \
+	"clean_restart enable $testname"
+    gdb_test_no_output "set progress-bars enabled off" \
+	"disable progress bars $testname"
+    gdb_load $binfile
+
+    runto_main
+}
+
+# Tests with no debuginfod server running.
+proc_with_prefix no_url { } {
+    gdb_load $::binfile
+    if {![runto_main]} {
+       return
+    }
+
+    # Check that no section is downloaded and no debuginfo is found.
+    gdb_test "info sharedlibrary" ".*Yes \\(\\*\\).*$::lib1_testfile.*" \
+	     "found no url lib1"
+    gdb_test "info sharedlibrary" ".*Yes \\(\\*\\).*$::lib2_testfile.*" \
+	     "found no url lib2"
+}
+
+# Tests with a debuginfod server running.
+proc_with_prefix local_url { } {
+    global debugdir db
+
+    set url [start_debuginfod $db $debugdir]
+    if { $url == "" } {
+	unresolved "failed to start debuginfod server"
+	return
+    }
+
+    # Point GDB to the server.
+    setenv DEBUGINFOD_URLS $url
+
+    clean_restart_with_prompt $::binfile "index"
+
+    # Download debuginfo when stepping into a function.
+    set res ".*separate debug info for [string_to_regexp $::lib1_binfile].*\"In libdeferred1\\\\n\".*"
+    gdb_test "step" $res "step"
+
+    clean_restart_with_prompt $::binfile "break"
+
+    # Download debuginfo when setting a breakpoint.
+    set res ".*separate debug info for [string_to_regexp $::lib2_binfile].*"
+    gdb_test "br libdeferred2_test" $res "break set"
+
+    # Hit the breakpoint.
+    set res ".*Breakpoint 2, libdeferred2_test.*\"In libdeferred2\\\\n\".*"
+    gdb_test "c" $res "break continue"
+}
+
+# Create CACHE and DB directories ready for debuginfod to use.
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    no_url
+    local_url
+}
+
+stop_debuginfod
