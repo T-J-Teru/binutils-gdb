@@ -35,6 +35,7 @@
 #include "dwarf2/cooked-index-worker.h"
 #include "dwarf2/cooked-indexer.h"
 #include "dwarf2/cu.h"
+#include "dwarf2/frame.h"
 #include "dwarf2/index-cache.h"
 #include "dwarf2/leb.h"
 #include "dwarf2/line-header.h"
@@ -97,6 +98,8 @@
 #include "dwarf2/error.h"
 #include "gdbsupport/unordered_set.h"
 #include "extract-store-integer.h"
+#include "inferior.h"
+#include "debuginfod-support.h"
 
 /* When == 1, print basic high level tracing messages.
    When > 1, be more verbose.
@@ -1990,6 +1993,13 @@ dw2_search_one
   if (cus_to_skip.is_set (per_cu->index))
     return true;
 
+  if (per_objfile != nullptr
+      && (per_objfile->objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    {
+      read_full_dwarf_from_debuginfod (per_objfile->objfile);
+      return false;
+    }
+
   if (lang_matcher != nullptr)
     {
       /* Try to skip CUs with non-matching language.  */
@@ -2157,6 +2167,15 @@ dwarf2_base_index_functions::find_pc_sect_compunit_symtab
   if (data == nullptr)
     return nullptr;
 
+  if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    {
+      /* PC matches a symbol in the index but full debuginfo hasn't
+	 been acquired yet.  Download it and return early in order to
+	 expand symtabs in the debuginfo.  */
+      read_full_dwarf_from_debuginfod (objfile);
+      return nullptr;
+    }
+
   if (warn_if_readin && per_objfile->symtab_set_p (data))
     warning (_("(Internal error: pc %s in read in CU, but not in symtab.)"),
 	     paddress (objfile->arch (), pc));
@@ -2256,6 +2275,9 @@ dwarf2_base_index_functions::has_symbols (struct objfile *objfile)
 bool
 dwarf2_base_index_functions::has_unexpanded_symtabs (struct objfile *objfile)
 {
+  if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    return true;
+
   dwarf2_per_objfile *per_objfile = get_dwarf2_per_objfile (objfile);
 
   for (const auto &per_cu : per_objfile->per_bfd->all_units)
@@ -2325,6 +2347,31 @@ get_gdb_index_contents_from_cache_dwz (objfile *obj, dwz_file *dwz)
   return global_index_cache.lookup_gdb_index (build_id, &dwz->index_cache_res);
 }
 
+/* Query debuginfod for the .gdb_index matching OBJFILE's build-id.  Return the
+   contents if successful.  */
+
+static gdb::array_view<const gdb_byte>
+get_gdb_index_contents_from_debuginfod (objfile *objfile,
+					dwarf2_per_bfd *per_bfd)
+{
+  const bfd_build_id *build_id = build_id_bfd_get (objfile->obfd.get ());
+  if (build_id == nullptr)
+    return {};
+
+  gdb::unique_xmalloc_ptr<char> index_path;
+  scoped_fd fd = debuginfod_section_query (build_id->data, build_id->size,
+					   bfd_get_filename
+					     (objfile->obfd.get ()),
+					   ".gdb_index",
+					   &index_path);
+  if (fd.get () < 0)
+    return {};
+
+  return global_index_cache.lookup_gdb_index
+    (index_path.get (), &per_bfd->index_cache_res);
+}
+
+
 static void start_debug_info_reader (dwarf2_per_objfile *);
 
 /* See dwarf2/public.h.  */
@@ -2334,11 +2381,13 @@ dwarf2_initialize_objfile (struct objfile *objfile,
 			   const struct dwarf2_debug_sections *names,
 			   bool can_copy)
 {
-  if (!dwarf2_has_info (objfile, names, can_copy))
+  if (!dwarf2_has_info (objfile, names, can_copy)
+      && (objfile->flags & OBJF_DOWNLOAD_DEFERRED) == 0)
     return false;
 
   dwarf2_per_objfile *per_objfile = get_dwarf2_per_objfile (objfile);
   dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
+  bool separate_index = false;
 
   dwarf_read_debug_printf ("called");
 
@@ -2371,6 +2420,15 @@ dwarf2_initialize_objfile (struct objfile *objfile,
       dwarf_read_debug_printf ("found gdb index from cache");
       global_index_cache.hit ();
     }
+  /* Try to read just a separately downloaded gdb index.  */
+  else if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0
+	   && dwarf2_read_gdb_index (per_objfile,
+				     get_gdb_index_contents_from_debuginfod,
+				     nullptr))
+    {
+      dwarf_read_debug_printf ("found .gdb_index from debuginfod");
+      separate_index = true;
+    }
   else
     {
       global_index_cache.miss ();
@@ -2382,12 +2440,103 @@ dwarf2_initialize_objfile (struct objfile *objfile,
       if (dwarf_synchronous)
 	per_bfd->index_table->wait_completely ();
       objfile->qf.push_front (per_bfd->index_table->make_quick_functions ());
+
+      if (separate_index)
+	objfile->qf.begin ()->get ()->from_separate_index = true;
     }
 
   return true;
 }
 
 /* See read.h.  */
+
+void
+read_full_dwarf_from_debuginfod (struct objfile *objfile)
+{
+  gdb_assert ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0);
+
+  /* However this function exits, we no longer want OBJFILE to be
+     marked as having deferred debug information.  Of particular
+     interest is the case where we do load some separate debug
+     information and then add it into the program space.  This can
+     trigger a call to breakpoint_re_set, which, if this object is
+     still marked as having deferred debug information, could result
+     in recursion, where we try to re-download the same debug
+     information.
+
+     Clearing the deferred marker now is fine, nothing called from
+     here relies on this flag.  */
+  objfile->remove_deferred_status ();
+
+  const struct bfd_build_id *build_id = build_id_bfd_get (objfile->obfd.get ());
+  if (build_id == nullptr)
+    return;
+
+  const char *filename = bfd_get_filename (objfile->obfd.get ());
+  gdb::unique_xmalloc_ptr<char> symfile_path;
+  scoped_fd fd;
+
+  fd = debuginfod_debuginfo_query (build_id->data, build_id->size,
+				   filename, &symfile_path);
+  if (fd.get () < 0)
+    return;
+
+  /* Separate debuginfo successfully retrieved from server.  */
+  gdb_bfd_ref_ptr debug_bfd = symfile_bfd_open (symfile_path.get ());
+  if (debug_bfd == nullptr
+      || !build_id_verify (debug_bfd.get (), build_id->size, build_id->data))
+    {
+      warning (_("File \"%s\" from debuginfod cannot be opened as bfd"),
+	       filename);
+      return;
+    }
+
+  /* Clear frame data so it can be recalculated using DWARF.  */
+  dwarf2_clear_frame_data (objfile);
+
+  /* This may trigger a dwz download.  */
+  symbol_file_add_separate (debug_bfd, symfile_path.get (),
+			    current_inferior ()->symfile_flags, objfile);
+}
+
+/* See public.h.  */
+
+bool
+dwarf2_has_separate_index (struct objfile *objfile)
+{
+  if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    return true;
+  if ((objfile->flags & OBJF_MAINLINE) != 0)
+    return false;
+  if (!IS_DIR_SEPARATOR (*objfile_filename (objfile)))
+    return false;
+
+  const bfd_build_id *build_id = build_id_bfd_get (objfile->obfd.get ());
+
+  if (build_id == nullptr)
+    return false;
+
+  gdb::unique_xmalloc_ptr<char> index_path;
+  scoped_fd fd = debuginfod_section_query (build_id->data,
+					   build_id->size,
+					   bfd_get_filename
+					     (objfile->obfd.get ()),
+					   ".gdb_index",
+					   &index_path);
+
+  if (fd.get () < 0)
+    return false;
+
+  /* We found a separate .gdb_index file so a separate debuginfo file should
+     exist, but we don't want to download it until necessary.  Associate the
+     index with this objfile and defer the debuginfo download until symtabs
+     referenced by the index need to be expanded.  */
+  objfile->flags |= OBJF_DOWNLOAD_DEFERRED;
+  dwarf2_initialize_objfile (objfile);
+  return true;
+}
+
+
 
 void
 dwarf2_find_base_address (struct die_info *die, struct dwarf2_cu *cu)
@@ -14251,6 +14400,21 @@ cooked_index_functions::search
 	      if (!entry->per_cu->maybe_multi_language ()
 		  && !lang_matcher (entry->per_cu->lang ()))
 		continue;
+	    }
+
+	  /* This is unfortunate, we cannot find the language without
+	     expanding the CU, which hasn't been fetched yet, so as a
+	     consequence, we force downloading the full debug info at this
+	     point.
+
+	     If the index had the language information, we should be able
+	     to defer the download until we are more confident that this
+	     index entry is a match.  */
+	  if (per_objfile != nullptr
+	      && (per_objfile->objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+	    {
+	      read_full_dwarf_from_debuginfod (per_objfile->objfile);
+	      return false;
 	    }
 
 	  /* This is a bit of a hack to support .gdb_index.  Since

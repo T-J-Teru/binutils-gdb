@@ -1440,4 +1440,9 @@ extern struct dwarf2_section_info *get_debug_line_section
 extern bool is_ada_import_or_export (dwarf2_cu *cu, const char *name,
 				     const char *linkagename);
 
+/* If OBJFILE contains information from a separately downloaded .gdb_index,
+   attempt to download the full debuginfo.  */
+
+extern void read_full_dwarf_from_debuginfod (struct objfile *);
+
 #endif /* GDB_DWARF2_READ_H */

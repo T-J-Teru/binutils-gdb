@@ -2819,14 +2819,36 @@ find_compunit_symtab_for_pc_sect (CORE_ADDR pc, struct obj_section *section)
   if (best_cust != NULL)
     return best_cust;
 
+  int warn_if_readin = 1;
+
   /* Not found in symtabs, search the "quick" symtabs (e.g. psymtabs).  */
 
   for (objfile &objf : current_program_space->objfiles ())
     {
+      bool was_deferred = (objf.flags & OBJF_DOWNLOAD_DEFERRED) != 0;
+
       struct compunit_symtab *result
-	= objf.find_pc_sect_compunit_symtab (msymbol, pc, section, 1);
+	= objf.find_pc_sect_compunit_symtab (msymbol, pc, section,
+					     warn_if_readin);
       if (result != NULL)
 	return result;
+
+      /* On-demand debuginfo downloading can create new objfiles during
+	 this loop: when find_pc_sect_compunit_symtab matches a PC in a
+	 deferred objfile's index, it triggers a download of full debuginfo
+	 and creation of a separate debug objfile.  An observer for this
+	 new objfile (e.g., an auto-loaded Python script) might then
+	 trigger symtab expansion.  When the loop continues to the new
+	 objfile, its symtabs may already be expanded, but the first loop
+	 (which searches expanded symtabs) never had a chance to see it
+	 because the objfile didn't exist yet.  Suppress warn_if_readin
+	 for the next iteration to avoid a spurious "readin but not found"
+	 warning.  */
+      if (was_deferred && objf.separate_debug_objfile != nullptr
+	  && (objf.flags & OBJF_DOWNLOAD_DEFERRED) == 0)
+	warn_if_readin = 0;
+      else
+	warn_if_readin = 1;
     }
 
   return NULL;

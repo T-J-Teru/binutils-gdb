@@ -1,0 +1,177 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that on-demand debuginfo downloading handles the case where a
+# new_objfile observer triggers symtab expansion in the newly-downloaded
+# separate debug objfile.
+#
+# The code in GDB that causes the full debug information to be
+# downloaded has two steps.  First we check already expanded symtabs,
+# then if no result is found, we check the unexpanded symtabs, and
+# potentially expand them.
+#
+# Full debug information download only happens during the second
+# phase, when a match is found in the index.  After finding a match in
+# the index GDB will give a warning if the symtab is already expanded.
+#
+# But with deferred debug information download, this is OK, as a new
+# objfile observer, triggered when the full debug information is
+# downloaded, might force symtab expansion, so we suppress the warning
+# in this case.
+#
+# This test replicates this setup and checks that the warning doesn't
+# trigger.
+
+standard_testfile .c -lib.c
+
+load_lib debuginfod-support.exp
+
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+
+set lib_testfile "lib${testfile}.so"
+set lib_srcfile $srcfile2
+set lib_binfile [standard_output_file $lib_testfile]
+set pyscript $srcdir/$subdir/$testfile.py
+
+# Build the shared library.
+if { [build_executable "build $lib_testfile" $lib_testfile $lib_srcfile \
+	  {debug build-id shlib}] != 0 } {
+    return
+}
+
+# Build the main executable.
+if { [build_executable "build executable" $testfile $srcfile \
+	[list debug build-id shlib=$lib_binfile]] != 0 } {
+    return
+}
+
+# Start GDB, required for ensure_gdb_index call.
+clean_restart
+
+# Add .gdb_index to the shared library.
+if { [ensure_gdb_index $lib_binfile "" $lib_testfile] != 1 } {
+    untested "failed to add .gdb_index to $lib_testfile"
+    return
+}
+
+# Strip debuginfo into a separate file.
+if { [gdb_gnu_strip_debug $lib_binfile] != 0 } {
+    fail "strip $lib_testfile debuginfo"
+    return
+}
+
+# Move debuginfo file into directory that debuginfod will serve.
+set debugdir [standard_output_file "debug"]
+set lib_debuginfo [standard_output_file $lib_testfile.debug]
+
+file mkdir $debugdir
+file rename -force $lib_debuginfo $debugdir
+
+# Test that stepping into the library triggers debuginfo download and
+# the observer runs without causing an "Internal error".
+proc_with_prefix test_observer_symtab_expansion { } {
+    global debugdir db
+
+    set url [start_debuginfod $db $debugdir]
+    if { $url == "" } {
+	unresolved "failed to start debuginfod server"
+	return
+    }
+
+    # Point GDB to the server.
+    setenv DEBUGINFOD_URLS $url
+
+    # Start GDB.
+    clean_restart $::testfile
+
+    # Enable debuginfod.
+    gdb_test_no_output "set debuginfod enabled on" \
+	"enable debuginfod"
+    gdb_test_no_output "set progress-bars enabled off"
+
+    # Load the Python script that registers the new_objfile observer.
+    gdb_test "source $::pyscript" \
+	"Python observer: registered new_objfile handler" \
+	"load python script"
+
+    # Run to main.  This will download the .gdb_index for the shared
+    # library, but there should be no need, at this point, to download
+    # the full debug information.
+    if {![runto_main]} {
+	return
+    }
+
+    set lineno [gdb_get_line_number "Library entry point" $::srcfile2]
+    verbose -log "APB: Line $lineno"
+
+    # Step into the library function.  This should trigger the
+    # download of the full debug info.  Downloading the full debug
+    # information adds a new objfile, which triggers the new objfile
+    # observer from our Python script.  The new objfile observer
+    # performs a symbol lookup within the debug information which was
+    # just downloaded.  If this is not handled correctly by GDB then
+    # there is the possibility that an internal error could be
+    # triggered.
+    set saw_observer false
+    set saw_error false
+    set saw_download false
+    set saw_location_line false
+    set found_symbol false
+    gdb_test_multiple "step" "step into library" {
+	-re "^step\r\n" {
+	    exp_continue
+	}
+	-re "^Downloading.*separate debug info for \[^\r\n\]+/$::lib_testfile\\.\\.\\.\r\n" {
+	    set saw_download true
+	    exp_continue
+	}
+	-re "^Python observer: triggering symtab expansion for \[^\r\n\]+\r\n" {
+	    set saw_observer 1
+	    exp_continue
+	}
+	-re "^Python observer: found symbol \[^\r\n\]+\r\n" {
+	    set found_symbol true
+	    exp_continue
+	}
+	-re "^libdeferred_expand_warning_test \\(\\) at \[^\r\n\]+/$::srcfile2:$lineno\r\n" {
+	    set saw_location_line true
+	    # We don't have a specific pattern for the source code
+	    # line which follows this one.  That's not really relevant
+	    # to this test.
+	    exp_continue
+	}
+	-re "^\[^\r\n\]*Internal error\[^\r\n\]*\r\n" {
+	    set saw_error 1
+	    exp_continue
+	}
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { !$saw_error && $saw_observer && $saw_download && $saw_location_line && $found_symbol } \
+		$gdb_test_name
+	}
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+}
+
+# Create CACHE and DB directories ready for debuginfod to use.
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    test_observer_symtab_expansion
+}
+
+stop_debuginfod
