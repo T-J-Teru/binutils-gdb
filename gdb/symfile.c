@@ -880,7 +880,7 @@ syms_from_objfile_1 (struct objfile *objfile,
   scoped_objfile_unlinker objfile_holder (objfile);
 
   objfile_set_sym_fns (objfile, find_sym_fns (objfile->obfd.get ()));
-  objfile->qf.clear ();
+  objfile->clear_qf ();
 
   if (objfile->sf == NULL)
     {
@@ -2602,7 +2602,7 @@ reread_symbols (int from_tty)
 	     based on whether .gdb_index is present, and we need it to
 	     start over.  PR symtab/15885  */
 	  objfile_set_sym_fns (&objfile, find_sym_fns (objfile.obfd.get ()));
-	  objfile.qf.clear ();
+	  objfile.clear_qf ();
 
 	  build_objfile_section_table (&objfile);
 

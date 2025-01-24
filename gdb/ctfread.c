@@ -1324,8 +1324,8 @@ elfctf_build_symtabs (objfile *objfile)
 	   styled_string (file_name_style.style (), bfd_get_filename (abfd)),
 	   ctf_errmsg (err));
 
-  objfile->qf.emplace_front (std::make_unique<expanded_symbols_functions>
-			     (std::move (iter_data.compunit_symtabs)));
+  objfile->add_qf (std::make_unique<expanded_symbols_functions>
+		   (std::move (iter_data.compunit_symtabs)));
 }
 
 #else
