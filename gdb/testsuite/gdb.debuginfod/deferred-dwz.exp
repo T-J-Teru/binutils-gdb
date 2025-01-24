@@ -1,0 +1,247 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test on-demand debuginfo downloading when the separate debug files use the
+# DWZ tool to share common debug info.
+#
+# Two shared libraries are compiled with a common header that provides a
+# shared type and an inline function.  The debug info is stripped into
+# separate files and then 'dwz -m' is used to extract common DWARF into a
+# DWZ file.
+#
+# This test is checking that having a DWZ file in the mix doesn't cause
+# problems for the deferred debug information downloading.
+
+standard_testfile .c -lib1.c -lib2.c
+
+load_lib debuginfod-support.exp
+
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+require {dwz_version_at_least 0.13}
+
+set lib1_testfile "libdeferred-dwz1.so"
+set lib1_srcfile $srcfile2
+set lib1_binfile [standard_output_file $lib1_testfile]
+
+set lib2_testfile "libdeferred-dwz2.so"
+set lib2_srcfile $srcfile3
+set lib2_binfile [standard_output_file $lib2_testfile]
+
+# Build the two shared libraries.
+if { [build_executable "build $lib1_testfile" $lib1_binfile $lib1_srcfile \
+	  {debug build-id shlib}] != 0 } {
+    return
+}
+
+if { [build_executable "build $lib2_testfile" $lib2_binfile $lib2_srcfile \
+	  {debug build-id shlib}] != 0 } {
+    return
+}
+
+# Build the main executable.
+if { [build_executable "build executable" $binfile $srcfile \
+	  [list debug build-id \
+	       shlib=$lib1_binfile shlib=$lib2_binfile]] != 0 } {
+    return
+}
+
+# If we are running with a board that splits the debug information out and
+# adds a .gnu_debuglink, then this test isn't going to work.  We want to be
+# in control of splitting out the debug information.
+if {[section_get $lib1_binfile ".gnu_debuglink"] ne ""} {
+    unsupported "debug information has already been split out"
+    return
+}
+
+# Start GDB, required for ensure_gdb_index calls.
+clean_restart
+
+# Add .gdb_index to both libraries and the executable.
+if { [ensure_gdb_index $lib1_binfile "" $lib1_testfile] != 1 } {
+    untested "failed to add .gdb_index to $lib1_testfile"
+    return
+}
+
+if { [ensure_gdb_index $lib2_binfile "" $lib2_testfile] != 1 } {
+    untested "failed to add .gdb_index to $lib2_testfile"
+    return
+}
+
+if { [ensure_gdb_index $binfile "" $testfile] != 1 } {
+    untested "failed to add .gdb_index to $testfile"
+    return
+}
+
+# Strip debuginfo into separate files.  Use no-debuglink so that debuginfod
+# is the only way to find the debug info.
+if { [gdb_gnu_strip_debug $lib1_binfile no-debuglink] != 0 } {
+    fail "strip $lib1_testfile debuginfo"
+    return
+}
+
+if { [gdb_gnu_strip_debug $lib2_binfile no-debuglink] != 0 } {
+    fail "strip $lib2_testfile debuginfo"
+    return
+}
+
+if { [gdb_gnu_strip_debug $binfile no-debuglink] != 0 } {
+    fail "strip $testfile debuginfo"
+    return
+}
+
+# Move the .debug files into the debug directory.
+set debugdir [standard_output_file "debug"]
+file mkdir $debugdir
+file rename -force $lib1_binfile.debug $debugdir
+file rename -force $lib2_binfile.debug $debugdir
+file rename -force $binfile.debug $debugdir
+
+# Run dwz -m on the separate debug files to extract common DWARF into a
+# shared DWZ file.  Use relative filenames so that the .gnu_debugaltlink in
+# the .debug files contains a relative path; GDB will need debuginfod to
+# find the DWZ file.
+with_cwd $debugdir {
+    set status \
+	[remote_exec build "dwz -m ./common.dwz \
+				   ./$lib1_testfile.debug \
+				   ./$lib2_testfile.debug"]
+    if {[lindex $status 0] != 0} {
+	unsupported "unable to run dwz tool"
+	return
+    }
+}
+
+# Some versions of dwz exit with code 0 but print error output.
+if {[lindex $status 1] ne ""} {
+    unsupported "unexpected output from dwz tool"
+    return
+}
+
+# Verify the DWZ file was created.
+if { ![file exists $debugdir/common.dwz] } {
+    unsupported "dwz did not produce common.dwz"
+    return
+}
+
+# The build-id for the first shared library.  When the full debug
+# information for this library is downloaded, we will also download the DWZ
+# file.  This build-id will appear in the 'Downloading ...' line, and we use
+# this to check the line is seen.
+set lib1_buildid [get_build_id $lib1_binfile]
+
+# Test that on-demand debuginfo downloading works correctly when the
+# separate debug files reference a DWZ common file.
+proc_with_prefix test_deferred_dwz { cache } {
+    # Delete client cache so debuginfo downloads again.
+    file delete -force $cache
+
+    clean_restart
+
+    gdb_test_no_output "set debuginfod enabled on"
+    gdb_test_no_output "set progress-bars enabled off"
+
+    gdb_load $::binfile
+
+    if { ![runto_main] } {
+	return
+    }
+
+    # At this point the .gdb_index should have been downloaded for both
+    # shared libraries, and the full debuginfo downloads should be deferred.
+
+    # Set a breakpoint in lib1.  This should trigger the full debuginfo
+    # download for lib1, which includes downloading the DWZ common file.
+    set saw_lib_debuginfo_download false
+    set saw_dwz_download false
+    set saw_breakpoint false
+    set saw_other_download false
+    gdb_test_multiple "break lib1_func" "" {
+	-re "^Downloading \[^\r\n\]*separate debug info for [string_to_regexp $::lib1_binfile]\\.\\.\\.\r\n" {
+	    set saw_lib_debuginfo_download true
+	    exp_continue
+	}
+	-re "^Downloading \[^\r\n\]*separate debug info for \[^\r\n\]*/$::lib1_buildid/debuginfo\\.\\.\\.\r\n" {
+	    set saw_dwz_download true
+	    exp_continue
+	}
+	-re "^Downloading \[^\r\n\]*\r\n" {
+	    set saw_other_download true
+	    exp_continue
+	}
+	-re "^Breakpoint $::decimal at $::hex: \[^\r\n\]+\r\n" {
+	    set saw_breakpoint true
+	    exp_continue
+	}
+	-re "^$::gdb_prompt " {
+	    gdb_assert { $saw_lib_debuginfo_download && $saw_dwz_download \
+			     && $saw_breakpoint && !$saw_other_download } \
+		$gdb_test_name
+	}
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Continue to the breakpoint.
+    gdb_continue_to_breakpoint "breakpoint in lib1"
+
+    # Set a breakpoint in lib2.  This should trigger the full debuginfo
+    # download for lib2.  The DWZ common file should already be available
+    # from the earlier download.
+    set saw_lib_debuginfo_download false
+    set saw_breakpoint false
+    set saw_other_download false
+    gdb_test_multiple "break lib2_func" "" {
+	-re "^Downloading \[^\r\n\]*separate debug info for [string_to_regexp $::lib2_binfile]\\.\\.\\.\r\n" {
+	    set saw_lib_debuginfo_download true
+	    exp_continue
+	}
+	-re "^Downloading \[^\r\n\]*\r\n" {
+	    set saw_other_download true
+	    exp_continue
+	}
+	-re "^Breakpoint $::decimal at $::hex: \[^\r\n\]+\r\n" {
+	    set saw_breakpoint true
+	    exp_continue
+	}
+	-re "^$::gdb_prompt " {
+	    gdb_assert { $saw_lib_debuginfo_download  && $saw_breakpoint \
+			     && !$saw_other_download } $gdb_test_name
+	}
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Continue to the breakpoint.
+    gdb_continue_to_breakpoint "breakpoint in lib2"
+}
+
+# Create CACHE and DB directories ready for debuginfod to use.
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    set url [start_debuginfod $db $debugdir]
+    if { $url == "" } {
+	unresolved "failed to start debuginfod server"
+	return
+    }
+
+    setenv DEBUGINFOD_URLS $url
+    test_deferred_dwz $cache
+}
+
+stop_debuginfod

@@ -1,0 +1,172 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that pending breakpoints don't cause reentrant debuginfo downloads.
+#
+# When on-demand debuginfo downloading triggers a download,
+# finish_new_objfile is called for the new separate debug objfile.  At this
+# point, the parent objfile still has OBJF_DOWNLOAD_DEFERRED set.  If
+# breakpoint_re_set() were called here, it could try to resolve other
+# pending breakpoints, which might trigger symbol lookups that see
+# OBJF_DOWNLOAD_DEFERRED still set and attempt to download again - causing
+# reentrancy issues.
+#
+# This test sets pending breakpoints on functions in libraries with deferred
+# downloads, then triggers the downloads to verify no crashes or assertions
+# occur.
+
+# This test relies on 'run'.
+require !use_gdb_stub
+
+# Reuse source from deferred-download.exp test.
+standard_testfile deferred-download.c \
+    deferred-download-lib1.c \
+    deferred-download-lib2.c
+
+load_lib debuginfod-support.exp
+
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+
+set lib1_testfile "libdeferred1.so"
+set lib1_srcfile $srcfile2
+set lib1_binfile [standard_output_file $lib1_testfile]
+
+set lib2_testfile "libdeferred2.so"
+set lib2_srcfile $srcfile3
+set lib2_binfile [standard_output_file $lib2_testfile]
+
+# Build LIB2_BINFILE, LIB1_BINFILE, and BINFILE.
+if { [build_executable "build $lib2_testfile" $lib2_binfile $lib2_srcfile \
+	{debug build-id shlib}] } {
+    return
+}
+
+if { [build_executable "build $lib1_testfile" $lib1_binfile $lib1_srcfile \
+	[list debug build-id shlib_pthreads shlib=$lib2_binfile]] } {
+    return
+}
+
+if { [build_executable "build executable" $binfile $srcfile \
+	[list debug build-id shlib=$lib1_binfile shlib=$lib2_binfile]] } {
+    return
+}
+
+# Start GDB for the ensure_gdb_index calls.
+clean_restart
+
+# Add .gdb_index to both libraries.
+if { [ensure_gdb_index $lib1_binfile "" $lib1_testfile] != 1 } {
+    untested "failed to add .gdb_index to $lib1_testfile"
+    return
+}
+
+if { [ensure_gdb_index $lib2_binfile "" $lib2_testfile] != 1 } {
+    untested "failed to add .gdb_index to $lib2_testfile"
+    return
+}
+
+# Strip debuginfo into separate files.
+if { [gdb_gnu_strip_debug $lib1_binfile] != 0 } {
+    fail "strip $lib1_testfile debuginfo"
+    return
+}
+
+if { [gdb_gnu_strip_debug $lib2_binfile] != 0 } {
+    fail "strip $lib2_testfile debuginfo"
+    return
+}
+
+# Move debuginfo files into directory that debuginfod will serve.
+set debugdir [standard_output_file "debug"]
+set lib1_debuginfo [standard_output_file $lib1_testfile.debug]
+set lib2_debuginfo [standard_output_file $lib2_testfile.debug]
+
+file mkdir $debugdir
+file rename -force $lib1_debuginfo $debugdir
+file rename -force $lib2_debuginfo $debugdir
+
+# Test that setting pending breakpoints on functions in deferred libraries,
+# then running to trigger the downloads, doesn't cause reentrancy issues.
+proc_with_prefix test_pending_breakpoints { } {
+    global cache
+
+    # Delete client cache so debuginfo downloads again.
+    file delete -force $cache
+    clean_restart
+
+    gdb_test_no_output "set debuginfod enabled on"
+    gdb_test_no_output "set progress-bars enabled off"
+
+    # Load the executable but don't run yet.
+    gdb_load $::binfile
+
+    # Set pending breakpoints on functions in both libraries.
+    # These will be pending because the libraries aren't loaded yet.
+    gdb_breakpoint "libdeferred1_test" allow-pending
+    gdb_breakpoint "libdeferred2_test" allow-pending
+
+    # Now run.  This will:
+    # 1. Load the shared libraries.
+    # 2. Download .gdb_index for each, full debuginfo download will be
+    #    deferred though.
+    # 3. Resolve pending breakpoints using the indices.
+    # 4. When the first breakpoint is hit, full debuginfo will be
+    #    downloaded.
+    #
+    # If breakpoint_re_set() is incorrectly called during the download,
+    # it might try to re-resolve the other breakpoint, potentially causing
+    # reentrant download attempts.
+    #
+    # We check that we can run to the first breakpoint without crashing.
+    set saw_error false
+    gdb_test_multiple "run" "run to first breakpoint" {
+	-re "Internal error|Error in re-setting breakpoint" {
+	    set saw_error true
+	    exp_continue
+	}
+	-re -wrap "Breakpoint \[0-9\]+, libdeferred1_test \\(\\) at .*" {
+	    gdb_assert { !$saw_error } $gdb_test_name
+	}
+    }
+
+    # Continue to the second breakpoint to verify both libraries work.
+    set saw_error false
+    gdb_test_multiple "continue" "continue to second breakpoint" {
+	-re "Internal error|Error in re-setting breakpoint" {
+	    set saw_error true
+	    exp_continue
+	}
+	-re -wrap "Breakpoint \[0-9\]+, libdeferred2_test \\(\\) at .*" {
+	    gdb_assert { !$saw_error } $gdb_test_name
+	}
+    }
+}
+
+# Create CACHE and DB directories ready for debuginfod to use.
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    set url [start_debuginfod $db $debugdir]
+    if { $url == "" } {
+	unresolved "failed to start debuginfod server"
+	return
+    }
+
+    setenv DEBUGINFOD_URLS $url
+    test_pending_breakpoints
+}
+
+stop_debuginfod

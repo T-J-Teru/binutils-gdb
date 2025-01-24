@@ -42,6 +42,14 @@ struct dwarf2_gdb_index : public cooked_index_functions
      One use is to verify .gdb_index has been loaded by the
      gdb.dwarf2/gdb-index.exp testcase.  */
   void dump (struct objfile *objfile) override;
+
+  /* Calls dwarf2_base_index_functions::expand_all_symtabs and downloads
+     debuginfo if necessary.  */
+  void expand_all_symtabs (struct objfile *objfile) override;
+
+  /* Calls dwarf2_base_index_functions::find_last_source_symtab and downloads
+     debuginfo if necessary.  */
+  struct symtab *find_last_source_symtab (struct objfile *objfile) override;
 };
 
 /* This is a cooked index as ingested from .gdb_index.  */
@@ -71,6 +79,24 @@ public:
   /* Index data format version.  */
   int version;
 };
+
+void
+dwarf2_gdb_index::expand_all_symtabs (struct objfile *objfile)
+{
+  if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    read_full_dwarf_from_debuginfod (objfile);
+
+  dwarf2_base_index_functions::expand_all_symtabs (objfile);
+}
+
+struct symtab *
+dwarf2_gdb_index::find_last_source_symtab (struct objfile *objfile)
+{
+  if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    read_full_dwarf_from_debuginfod (objfile);
+
+  return dwarf2_base_index_functions::find_last_source_symtab (objfile);
+}
 
 /* See above.  */
 
@@ -541,6 +567,11 @@ create_cus_from_gdb_index (dwarf2_per_bfd *per_bfd,
 {
   gdb_assert (per_bfd->all_units.empty ());
   per_bfd->all_units.reserve ((cu_list_elements + dwz_elements) / 2);
+
+  /* An index might be read before the debug_info section is available.
+     Create a placeholder section.  */
+  if (per_bfd->infos.empty ())
+    per_bfd->infos.resize (1);
 
   create_cus_from_gdb_index_list (per_bfd, cu_list, cu_list_elements,
 				  &per_bfd->infos[0], 0, units);
