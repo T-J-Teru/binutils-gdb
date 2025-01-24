@@ -102,6 +102,8 @@ struct cooked_index_entry : public allocate_on_obstack<cooked_index_entry>
       per_cu (per_cu_),
       m_parent_entry (parent_entry_)
   {
+    if (std::string (name_) == "greeting")
+      fprintf (stderr, "APB: Creating cooked_index_entry for 'greeting'\n");
   }
 
   /* Return true if this entry matches SEARCH_FLAGS.  */
