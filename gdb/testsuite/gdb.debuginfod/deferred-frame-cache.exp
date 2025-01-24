@@ -1,0 +1,180 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that frame cache invalidation during debuginfo download is handled.
+#
+# When on-demand debuginfo downloading triggers, a new objfile is added
+# and new_objfile observers are notified.  If an observer calls
+# gdb.invalidate_cached_frames(), the frame cache is cleared.
+#
+# GDB's lookup_selected_frame function handles this by retrying the frame
+# lookup if selected_frame is nullptr after the initial lookup attempt.
+# This retry mechanism ensures GDB doesn't hit an assertion failure in
+# get_selected_frame() when an observer clears the frame cache during
+# debuginfo download.
+#
+# This test creates a program that crashes in a shared library with
+# deferred debuginfo, then uses a Python new_objfile observer to
+# invalidate the frame cache when the debuginfo is downloaded.  This
+# exercises the frame cache invalidation code path and verifies GDB
+# handles it gracefully.
+
+load_lib debuginfod-support.exp
+
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+
+standard_testfile .c -lib.c
+
+set lib_testfile "lib-${testfile}.so"
+set lib_srcfile $srcfile2
+set lib_binfile [standard_output_file $lib_testfile]
+
+# Build the library and executable.
+if { [build_executable "build $lib_testfile" $lib_binfile $lib_srcfile \
+	{debug build-id shlib}] } {
+    return
+}
+
+if { [build_executable "build executable" $binfile $srcfile \
+	[list debug build-id shlib=$lib_binfile]] != 0 } {
+    return
+}
+
+clean_restart
+
+# Add .gdb_index to the library.
+if { [ensure_gdb_index $lib_binfile "" "$lib_testfile"] != 1 } {
+    untested "failed to add .gdb_index to $lib_testfile"
+    return
+}
+
+# Strip debuginfo into a separate file.
+if { [gdb_gnu_strip_debug $lib_binfile ""] != 0 } {
+    fail "strip $lib_testfile debuginfo"
+    return
+}
+
+# Move debuginfo file into directory that debuginfod will serve.
+set debugdir [standard_output_file "debug"]
+set debuginfo_sl [standard_output_file $lib_testfile.debug]
+
+file mkdir $debugdir
+file rename -force $debuginfo_sl $debugdir
+
+# Python script that invalidates the frame cache when the separate debug
+# objfile is loaded.
+set pyscript [gdb_remote_download host ${srcdir}/${subdir}/${testfile}.py]
+
+# Test that frame lookup handles cache invalidation when loading a core file.
+#
+# When loading a core file, GDB needs to establish the current frame
+# immediately.  This triggers debuginfo download during lookup_selected_frame,
+# and if an observer invalidates the frame cache, the retry mechanism is
+# needed to avoid an assertion failure.
+proc_with_prefix test_frame_cache_core { } {
+    global cache
+
+    # Delete client cache so debuginfo downloads again.
+    file delete -force $cache
+
+    # Run the program outside of GDB to generate a core file.
+    set corefile [core_find $::binfile]
+    if {$corefile == ""} {
+	untested "could not generate core file"
+	return
+    }
+
+    # Now start GDB fresh without the executable loaded yet.  We want
+    # the Python script (and its new_objfile observer) in place before
+    # we start loading anything.
+    clean_restart
+
+    gdb_test_no_output "set debuginfod enabled on"
+    gdb_test_no_output "set progress-bars enabled off"
+
+    # Load the Python script BEFORE loading anything else.  This
+    # ensures the observer is registered when the core file triggers
+    # debuginfo download.
+    gdb_test "source $::pyscript" "Python registered new_objfile handler" \
+	"load python script"
+
+    # Load the executable.
+    gdb_load $::binfile
+
+    # Now load the core file.  This will:
+    #   1. GDB needs to establish the current frame from the core.
+    #   2. This triggers lookup_selected_frame.
+    #   3. select_frame calls find_compunit_symtab_for_pc.
+    #   4. This triggers debuginfo download for the library.
+    #   5. The new_objfile handler invalidates the frame cache.
+    #   6. Without the fix, get_selected_frame() hits an assertion
+    set saw_invalidate false
+    set saw_error false
+    set saw_prog_terminated false
+    set saw_crash_frame false
+    set saw_debug_download false
+    gdb_test_multiple "core-file $corefile" "load core file" {
+	-re "^Python new_objfile handler: frame cache invalidated\r\n" {
+	    set saw_invalidate true
+	    exp_continue
+	}
+	-re "^\[^\r\n\]*Internal error\[^\r\n\]*\r\n" {
+	    set saw_error true
+	    exp_continue
+	}
+	-re "^\[^\r\n\]*Assertion\[^\r\n\]*failed\[^\r\n\]*\r\n" {
+	    set saw_error true
+	    exp_continue
+	}
+	-re "^#0\\s+\[^\r\n\]*crash_in_lib \\(\\) at \[^\r\n\]+\r\n" {
+	    set saw_crash_frame true
+	    exp_continue
+	}
+	-re "^Program terminated with signal SIG\[^\r\n\]+\r\n" {
+	    set saw_prog_terminated true
+	    exp_continue
+	}
+	-re "^Downloading \[^\r\n\]*separate debug info for \[^\r\n\]*/$::lib_testfile\\.\\.\\.\r\n" {
+	    set saw_debug_download true
+	    exp_continue
+	}
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { !$saw_error \
+			     && $saw_invalidate \
+			     && $saw_prog_terminated \
+			     && $saw_crash_frame } \
+		$gdb_test_name
+	}
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+}
+
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    set url [start_debuginfod $db $debugdir]
+    if { $url == "" } {
+	unresolved "failed to start debuginfod server"
+	return
+    }
+
+    setenv DEBUGINFOD_URLS $url
+    test_frame_cache_core
+}
+
+stop_debuginfod

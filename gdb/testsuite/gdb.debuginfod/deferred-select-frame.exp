@@ -1,0 +1,240 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that frame operations work correctly when deferred debuginfo
+# download is triggered mid-operation.
+#
+# The call chain is:  main -> library_function -> callback_in_main
+# We stop at a breakpoint in callback_in_main.  Debug info for the
+# library is served via debuginfod in deferred mode.  A Python
+# new_objfile observer calls gdb.invalidate_cached_frames() when the
+# library's separate debug objfile is loaded.
+
+load_lib debuginfod-support.exp
+
+require allow_debuginfod_tests
+require allow_debuginfod_section_downloads
+
+standard_testfile .c -lib1.c -lib2.c
+
+# Build the first shared library.
+set lib1_testfile "lib1-${testfile}.so"
+set lib1_srcfile $srcfile2
+set lib1_binfile [standard_output_file $lib1_testfile]
+if { [build_executable "build $lib1_testfile" $lib1_testfile $lib1_srcfile \
+	  {debug build-id shlib}] } {
+    return
+}
+
+# Build the second shared library.
+set lib2_testfile "lib2-${testfile}.so"
+set lib2_srcfile $srcfile3
+set lib2_binfile [standard_output_file $lib2_testfile]
+if { [build_executable "build $lib2_testfile" $lib2_testfile $lib2_srcfile \
+	  {debug build-id shlib}] } {
+    return
+}
+
+if { [build_executable "build executable" $testfile $srcfile \
+	  [list debug build-id shlib=$lib1_binfile \
+	       shlib=$lib2_binfile]] != 0 } {
+    return
+}
+
+clean_restart
+
+# Add .gdb_index to both libraries.
+if { [ensure_gdb_index $lib1_binfile "" "$lib1_testfile"] != 1 } {
+    untested "failed to add .gdb_index to $lib1_testfile"
+    return
+}
+
+if { [ensure_gdb_index $lib2_binfile "" "$lib2_testfile"] != 1 } {
+    untested "failed to add .gdb_index to $lib2_testfile"
+    return
+}
+
+# Strip debuginfo into a separate file.
+if { [gdb_gnu_strip_debug $lib1_binfile ""] != 0 } {
+    fail "strip $lib1_testfile debuginfo"
+    return
+}
+
+if { [gdb_gnu_strip_debug $lib2_binfile ""] != 0 } {
+    fail "strip $lib2_testfile debuginfo"
+    return
+}
+
+# Move debuginfo file into directory that debuginfod will serve.
+set debugdir [standard_output_file "debug"]
+set lib1_debuginfo [standard_output_file $lib1_testfile.debug]
+set lib2_debuginfo [standard_output_file $lib2_testfile.debug]
+
+file mkdir $debugdir
+file rename -force $lib1_debuginfo $debugdir
+file rename -force $lib2_debuginfo $debugdir
+
+# Python script that invalidates the frame cache when the separate debug
+# objfile is loaded.
+set pyscript [gdb_remote_download host ${srcdir}/${subdir}/${testfile}.py]
+
+# Start GDB, enable debuginfod, load the Python observer, run to the
+# breakpoint in callback_in_main.  Returns true on success.
+proc setup_for_test {} {
+    clean_restart
+
+    gdb_test_no_output "set debuginfod enabled on"
+    gdb_test_no_output "set progress-bars enabled off"
+
+    # Load the Python script BEFORE loading anything else so the
+    # observer is registered when the deferred download triggers.
+    gdb_test "source $::pyscript" "Python registered new_objfile handler" \
+	"load python script"
+
+    gdb_load $::binfile
+
+    if {![runto_main]} {
+	return false
+    }
+
+    gdb_breakpoint "f1"
+    gdb_continue_to_breakpoint "breakpoint in f1"
+
+    return true
+}
+
+# Setup a breakpoint in a function, then use Python to select the
+# previous frame, which will require downloading the deferred debug
+# information.  This download will trigger the new objfile event
+# handler, which will in turn invalidate the frame cache.
+#
+# Check that GDB handles this, and that the correct frame is selected.
+proc test_select_frame { } {
+    if {![setup_for_test]} {
+	return
+    }
+
+    # Navigate to the library frame via Python.  The .older() call
+    # triggers the deferred download; the new_objfile observer calls
+    # gdb.invalidate_cached_frames() but GDB should still manage to
+    # select the expected frame.
+    set invalidate_count 0
+    set saw_selected false
+    gdb_test_multiple \
+	[multi_line_input \
+	     "python" \
+	     "f = gdb.selected_frame().older()" \
+	     "if f is None:" \
+	     "    print('older frame is None after download')" \
+	     "else:" \
+	     "    f.select()" \
+	     "    print('selected frame: ' + gdb.selected_frame().name())" \
+	     "end"] \
+	"select library frame" {
+	-re "^Python new_objfile handler: frame cache invalidated\r\n" {
+	    incr invalidate_count
+	    exp_continue
+	}
+	-re "^selected frame: library2_function\r\n" {
+	    set saw_selected true
+	    exp_continue
+	}
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { $invalidate_count == 1 && $saw_selected } \
+		$gdb_test_name
+	}
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Verify GDB is still functional.
+    gdb_test "info frame" ".*library2_function.*" "info frame after select"
+
+    # Verify we can get a full backtrace.  The '.*' here matches
+    # against the deferred download for lib1 debug information.
+    gdb_test "bt" \
+	[multi_line \
+	     "#0  ($::hex in )?f1 \\(\\) at \[^\r\n\]+" \
+	     "#1  ($::hex in )?library2_function \\(cb=$::hex <f1>\\) at \[^\r\n\]+" \
+	     "#2  ($::hex in )?f3 \\(\\) at \[^\r\n\]+" \
+	     ".*" \
+	     "#3  ($::hex in )?f4 \\(\\) at \[^\r\n\]+" \
+	     "#4  ($::hex in )?library1_function \\(cb=$::hex <f4>\\) at \[^\r\n\]+" \
+	     "#5  ($::hex in )?f5 \\(\\) at \[^\r\n\]+" \
+	     "#6  ($::hex in )?main \\(\\) at \[^\r\n\]+"] \
+    "backtrace after select"
+}
+
+# Test that backtrace handles cache invalidation when unwinding
+# through a library frame with deferred debug info.
+#
+# The backtrace must unwind through library_function (frame #1),
+# which triggers deferred download.  The new_objfile observer
+# invalidates the frame cache during the download.
+proc test_backtrace { } {
+    if {![setup_for_test]} {
+	return
+    }
+
+    set saw_invalidate false
+    set bt_line_count 0
+    gdb_test_multiple "bt" "backtrace through deferred library" {
+	-re "^Python new_objfile handler: frame cache invalidated\r\n" {
+	    set saw_invalidate true
+	    exp_continue
+	}
+
+	-re "^#$::decimal  ($::hex in )?\[^\r\n\]+" {
+	    incr bt_line_count
+	    exp_continue
+	}
+
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { $saw_invalidate } "frame cache was invalidated"
+	    gdb_assert { $bt_line_count == 7 } "saw expected number of bt lines"
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+}
+
+# Setup directory for the debuginfod server to serve from, and create
+# CACHE and DB directories ready for debuginfod to use.
+prepare_for_debuginfod cache db
+
+with_debuginfod_env $cache {
+    save_vars { env(DEBUGINFOD_URLS) } {
+	foreach_with_prefix test { backtrace select_frame } {
+	    ### select_frame backtrace
+	    # Delete client cache so debuginfo downloads again.
+	    file delete -force $cache
+
+	    set url [start_debuginfod $db $debugdir]
+	    if { $url eq "" } {
+		unresolved "failed to start debuginfod server"
+		return
+	    }
+
+	    setenv DEBUGINFOD_URLS $url
+
+	    test_${test}
+
+	    stop_debuginfod
+	}
+    }
+}

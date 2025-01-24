@@ -756,44 +756,42 @@ skip_tailcall_frames (const frame_info_ptr &initial_frame)
    frame.  */
 
 static void
-compute_frame_id (const frame_info_ptr &fi)
+compute_frame_id_1 (const frame_info_ptr &fi)
 {
   FRAME_SCOPED_DEBUG_START_END ("fi=%d", fi->level);
 
   gdb_assert (fi->this_id.p == frame_id_status::NOT_COMPUTED);
 
-  unsigned int entry_generation = get_frame_cache_generation ();
+  scoped_defer_reinit_frame_cache defer_reinit;
 
-  try
-    {
-      /* Mark this frame's id as "being computed.  */
-      fi->this_id.p = frame_id_status::COMPUTING;
+  auto restore_not_computed = make_scope_exit ([&] () {
+      fi->this_id.p = frame_id_status::NOT_COMPUTED;
+  });
 
-      /* Find the unwinder.  */
-      if (fi->unwind == NULL)
-	frame_unwind_find_by_frame (fi, &fi->prologue_cache);
+  /* Mark this frame's id as "being computed.  */
+  fi->this_id.p = frame_id_status::COMPUTING;
 
-      /* Find THIS frame's ID.  */
-      /* Default to outermost if no ID is found.  */
-      fi->this_id.value = outer_frame_id;
-      fi->unwind->this_id (fi, &fi->prologue_cache, &fi->this_id.value);
-      gdb_assert (frame_id_p (fi->this_id.value));
+  /* Find the unwinder.  */
+  if (fi->unwind == NULL)
+    frame_unwind_find_by_frame (fi, &fi->prologue_cache);
 
-      /* Mark this frame's id as "computed".  */
-      fi->this_id.p = frame_id_status::COMPUTED;
+  /* Find THIS frame's ID.  Default to outermost if no ID is
+     found.  */
+  fi->this_id.value = outer_frame_id;
+  fi->unwind->this_id (fi, &fi->prologue_cache, &fi->this_id.value);
+  gdb_assert (frame_id_p (fi->this_id.value));
 
-      frame_debug_printf ("  -> %s", fi->this_id.value.to_string ().c_str ());
-    }
-  catch (const gdb_exception &ex)
-    {
-      /* On error, revert the frame id status to not computed.  If the frame
-	 cache generation changed, the frame object doesn't exist anymore, so
-	 don't touch it.  */
-      if (get_frame_cache_generation () == entry_generation)
-	fi->this_id.p = frame_id_status::NOT_COMPUTED;
+  /* Mark this frame's id as "computed".  */
+  fi->this_id.p = frame_id_status::COMPUTED;
+  restore_not_computed.release ();
 
-      throw;
-    }
+  frame_debug_printf ("  -> %s", fi->this_id.value.to_string ().c_str ());
+}
+
+static void
+compute_frame_id (const frame_info_ptr &fi)
+{
+  with_protected_frame_cache (compute_frame_id_1, fi);
 }
 
 /* Return a frame uniq ID that can be used to, later, re-find the

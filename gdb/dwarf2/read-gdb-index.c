@@ -72,6 +72,186 @@ public:
   int version;
 };
 
+/* A quick_symbol_functions implementation for objfiles with deferred
+   debuginfo downloading.  This class encapsulates the
+   download-and-delegate pattern: each method checks whether the index
+   indicates a match, downloads the full debug info if so, then
+   delegates the query to the newly-created child objfile.
+
+   By concentrating all deferred logic here, the normal (non-deferred)
+   code paths in dwarf2_gdb_index, cooked_index_functions, and
+   dwarf2_base_index_functions remain free of OBJF_DOWNLOAD_DEFERRED
+   checks.  */
+
+struct deferred_index_functions : public dwarf2_gdb_index
+{
+  bool has_symbols (struct objfile *) override
+  { return true; }
+
+  bool has_unexpanded_symtabs (struct objfile *) override
+  { return true; }
+
+  void expand_all_symtabs (struct objfile *objfile) override;
+  struct symtab *find_last_source_symtab (struct objfile *objfile) override;
+
+  struct compunit_symtab *find_pc_sect_compunit_symtab
+    (struct objfile *objfile, bound_minimal_symbol msymbol,
+     CORE_ADDR pc, struct obj_section *section,
+     int warn_if_readin) override;
+
+  iteration_status search
+    (struct objfile *objfile,
+     search_symtabs_file_matcher file_matcher,
+     const lookup_name_info *lookup_name,
+     search_symtabs_symbol_matcher symbol_matcher,
+     compunit_symtab_iteration_callback compunit_callback,
+     block_search_flags search_flags,
+     domain_search_flags domain,
+     search_symtabs_lang_matcher lang_matcher) override;
+
+  void dump (struct objfile *objfile) override;
+
+  /* No-ops — deferred index has no data for these.  */
+  void forget_cached_source_info (struct objfile *) override
+  { }
+
+  void print_stats (struct objfile *, bool) override
+  { }
+
+  void map_symbol_filenames (objfile *, symbol_filename_listener,
+			     bool) override
+  { }
+
+  struct symbol *find_symbol_by_address (struct objfile *,
+					 CORE_ADDR) override
+  { return nullptr; }
+};
+
+/* See read-gdb-index.h.  */
+
+quick_symbol_functions_up
+make_deferred_gdb_index_functions ()
+{
+  return quick_symbol_functions_up (new deferred_index_functions);
+}
+
+void
+deferred_index_functions::expand_all_symtabs (struct objfile *objfile)
+{
+  struct objfile *child = read_full_dwarf_from_debuginfod (objfile, this);
+  if (child != nullptr)
+    child->expand_all_symtabs ();
+}
+
+struct symtab *
+deferred_index_functions::find_last_source_symtab (struct objfile *objfile)
+{
+  struct objfile *child = read_full_dwarf_from_debuginfod (objfile, this);
+  if (child != nullptr)
+    return child->find_last_source_symtab ();
+  return nullptr;
+}
+
+struct compunit_symtab *
+deferred_index_functions::find_pc_sect_compunit_symtab
+  (struct objfile *objfile,
+   bound_minimal_symbol msymbol,
+   CORE_ADDR pc,
+   struct obj_section *section,
+   int warn_if_readin)
+{
+  dwarf2_per_objfile *per_objfile = get_dwarf2_per_objfile (objfile);
+  dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
+
+  if (per_bfd->index_table == nullptr)
+    return nullptr;
+
+  CORE_ADDR baseaddr = objfile->text_section_offset ();
+  dwarf2_per_cu *data
+    = per_bfd->index_table->lookup ((unrelocated_addr) (pc - baseaddr));
+  if (data == nullptr)
+    return nullptr;
+
+  /* PC matches a symbol in the index but full debuginfo hasn't been
+     acquired yet.  Download it and search the separate debug objfile
+     directly.  Pass warn_if_readin=0 because the download triggers a
+     new_objfile observer that may legitimately expand symtabs in the
+     child before we query it.  */
+  struct objfile *child = read_full_dwarf_from_debuginfod (objfile, this);
+  if (child != nullptr)
+    return child->find_pc_sect_compunit_symtab (msymbol, pc, section, 0);
+  return nullptr;
+}
+
+iteration_status
+deferred_index_functions::search
+  (struct objfile *objfile,
+   search_symtabs_file_matcher file_matcher,
+   const lookup_name_info *lookup_name,
+   search_symtabs_symbol_matcher symbol_matcher,
+   compunit_symtab_iteration_callback compunit_callback,
+   block_search_flags search_flags,
+   domain_search_flags domain,
+   search_symtabs_lang_matcher lang_matcher)
+{
+  if (lookup_name == nullptr)
+    {
+      /* No name to filter by — we must download to answer the query.  */
+      struct objfile *child = read_full_dwarf_from_debuginfod (objfile, this);
+      if (child != nullptr)
+	return child->search (file_matcher, nullptr, nullptr,
+			      compunit_callback, search_flags, domain, lang_matcher);
+      return iteration_status::keep_going;
+    }
+
+  /* Check if the name exists in the index before downloading.  */
+  cooked_index *table = wait (objfile, true);
+
+  lookup_name_info lookup_name_without_params
+    = lookup_name->make_ignore_params ();
+  bool completing = lookup_name->completion_mode ();
+
+  /* Unique styles of language splitting.  */
+  static const enum language unique_styles[] =
+  {
+    language_c,
+    language_cplus,
+    language_d,
+    language_ada
+  };
+
+  for (enum language lang : unique_styles)
+    {
+      std::vector<std::string_view> name_vec
+	= lookup_name_without_params.split_name (lang);
+      std::vector<std::string> name_str_vec (name_vec.begin (),
+					     name_vec.end ());
+
+      auto range = table->find (name_str_vec.back (), completing);
+      if (range.begin () != range.end ())
+	{
+	  /* Found a potential match in the index.  Download and
+	     delegate.  */
+	  struct objfile *child = read_full_dwarf_from_debuginfod (objfile, this);
+	  if (child != nullptr)
+	    return child->search (file_matcher, lookup_name,
+				  symbol_matcher, compunit_callback,
+				  search_flags, domain, lang_matcher);
+	  return iteration_status::keep_going;
+	}
+    }
+
+  /* Name not found in the index — no download needed.  */
+  return iteration_status::keep_going;
+}
+
+void
+deferred_index_functions::dump (struct objfile *objfile)
+{
+  dwarf2_gdb_index::dump (objfile);
+  gdb_printf ("  (deferred debuginfod download pending)\n");
+}
+
 /* See above.  */
 
 void
@@ -541,6 +721,11 @@ create_cus_from_gdb_index (dwarf2_per_bfd *per_bfd,
 {
   gdb_assert (per_bfd->all_units.empty ());
   per_bfd->all_units.reserve ((cu_list_elements + dwz_elements) / 2);
+
+  /* An index might be read before the debug_info section is available.
+     Create a placeholder section.  */
+  if (per_bfd->infos.empty ())
+    per_bfd->infos.resize (1);
 
   create_cus_from_gdb_index_list (per_bfd, cu_list, cu_list_elements,
 				  &per_bfd->infos[0], 0, units);

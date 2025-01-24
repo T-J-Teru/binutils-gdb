@@ -26,6 +26,7 @@ struct dwarf2_per_bfd;
 struct dwarf2_per_objfile;
 struct dwz_file;
 struct objfile;
+struct quick_symbol_functions;
 
 /* .gdb_index doesn't distinguish between the various "other" symbols
    -- but the symbol search machinery really wants to.  For example,
@@ -57,5 +58,13 @@ bool dwarf2_read_gdb_index
   (dwarf2_per_objfile *per_objfile,
    get_gdb_index_contents_ftype get_gdb_index_contents,
    get_gdb_index_contents_dwz_ftype get_gdb_index_contents_dwz);
+
+/* Create a quick_symbol_functions for an objfile with deferred
+   debuginfo downloading.  The returned object uses the .gdb_index
+   to gate downloads, only downloading full debug info when the
+   index indicates a match.  */
+
+extern std::unique_ptr<struct quick_symbol_functions>
+  make_deferred_gdb_index_functions ();
 
 #endif /* GDB_DWARF2_READ_GDB_INDEX_H */
