@@ -344,6 +344,12 @@ private:
 
 using separate_debug_range = iterator_range<separate_debug_iterator>;
 
+/* See objfile::qf_safe.  */
+
+using qf_list = std::forward_list<quick_symbol_functions_up>;
+using qf_range = iterator_range<qf_list::iterator>;
+using qf_safe_range = basic_safe_range<qf_range>;
+
 /* Sections in an objfile.  The section offsets are stored in the
    OBJFILE.  */
 
@@ -743,9 +749,22 @@ public:
 
   const struct sym_fns *sf = nullptr;
 
-  /* The "quick" (aka partial) symbol functions for this symbol
-     reader.  */
-  std::forward_list<quick_symbol_functions_up> qf;
+  /* Returns an iterable object that allows for safe deletion during
+     iteration.  See gdbsupport/safe-iterator.h.  */
+  qf_safe_range qf ()
+  {
+    return qf_safe_range (qf_range (m_qf.begin (), m_qf.end ()));
+  }
+
+  void add_qf (quick_symbol_functions_up qf)
+  {
+    m_qf.push_front (std::move (qf));
+  }
+
+  void clear_qf ()
+  {
+    m_qf.clear ();
+  }
 
   /* Per objfile data-pointers required by other GDB modules.  */
 
@@ -861,6 +880,14 @@ public:
      mechanism as ELF should set this flag too.  This flag is used in
      conjunction with the minimal_symbol::maybe_copied method.  */
   bool object_format_has_copy_relocs = false;
+
+private:
+  /* The "quick" (aka partial) symbol functions for this symbol
+     reader.  Many quick_symbol_functions methods may result
+     in the deletion of a quick_symbol_functions from this
+     qf_list.  It is recommended that qf_safe be used to iterate
+     over the qf_list.  */
+  qf_list m_qf;
 };
 
 /* A deleter for objfile.  */

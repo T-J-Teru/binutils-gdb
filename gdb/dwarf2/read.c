@@ -2139,7 +2139,7 @@ dwarf2_initialize_objfile (struct objfile *objfile,
       dwarf_read_debug_printf ("readnow requested");
 
       create_all_units (per_objfile);
-      objfile->qf.emplace_front (new readnow_functions);
+      objfile->add_qf (std::make_unique<readnow_functions> ());
     }
   /* Was a GDB index already read when we processed an objfile sharing
      PER_BFD?  */
@@ -2169,7 +2169,7 @@ dwarf2_initialize_objfile (struct objfile *objfile,
     {
       if (dwarf_synchronous)
 	per_bfd->index_table->wait_completely ();
-      objfile->qf.push_front (per_bfd->index_table->make_quick_functions ());
+      objfile->add_qf (per_bfd->index_table->make_quick_functions ());
     }
 
   return true;

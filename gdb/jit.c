@@ -683,8 +683,8 @@ jit_object_close_impl (struct gdb_symbol_callbacks *cb,
   for (gdb_symtab &symtab : obj->symtabs)
     compunit_symtabs.emplace_back (finalize_symtab (&symtab, objfile));
 
-  objfile->qf.emplace_front (std::make_unique<expanded_symbols_functions>
-			     (std::move (compunit_symtabs)));
+  objfile->add_qf (std::make_unique<expanded_symbols_functions>
+		   (std::move (compunit_symtabs)));
 
   add_objfile_entry (objfile, priv_data->entry_addr,
 		     priv_data->entry.symfile_addr,
