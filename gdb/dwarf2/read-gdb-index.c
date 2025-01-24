@@ -45,6 +45,14 @@ struct dwarf2_gdb_index : public cooked_index_functions
      One use is to verify .gdb_index has been loaded by the
      gdb.dwarf2/gdb-index.exp testcase.  */
   void dump (struct objfile *objfile) override;
+
+  /* Calls dwarf2_base_index_functions::expand_all_symtabs and downloads
+     debuginfo if necessary.  */
+  void expand_all_symtabs (struct objfile *objfile) override;
+
+  /* Calls dwarf2_base_index_functions::find_last_source_symtab and downloads
+     debuginfo if necessary.  */
+  struct symtab *find_last_source_symtab (struct objfile *objfile) override;
 };
 
 /* This is a cooked index as ingested from .gdb_index.  */
@@ -74,6 +82,24 @@ public:
   /* Index data format version.  */
   int version;
 };
+
+void
+dwarf2_gdb_index::expand_all_symtabs (struct objfile *objfile)
+{
+  if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    read_full_dwarf_from_debuginfod (objfile);
+
+  dwarf2_base_index_functions::expand_all_symtabs (objfile);
+}
+
+struct symtab *
+dwarf2_gdb_index::find_last_source_symtab (struct objfile *objfile)
+{
+  if ((objfile->flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+    read_full_dwarf_from_debuginfod (objfile);
+
+  return dwarf2_base_index_functions::find_last_source_symtab (objfile);
+}
 
 /* See above.  */
 
@@ -542,6 +568,11 @@ create_cus_from_gdb_index (dwarf2_per_bfd *per_bfd,
   gdb_assert (per_bfd->all_units.empty ());
   per_bfd->all_units.reserve ((cu_list_elements + dwz_elements) / 2);
 
+  /* An index might be read before the debug_info section is available.
+     Create a placeholder section.  */
+  if (per_bfd->infos.empty ())
+    per_bfd->infos.resize (1);
+
   create_cus_from_gdb_index_list (per_bfd, cu_list, cu_list_elements,
 				  &per_bfd->infos[0], 0, units);
 
@@ -748,28 +779,32 @@ dwarf2_read_gdb_index
 
   /* If there is a .dwz file, read it so we can get its CU list as
      well.  */
-  dwz_file *dwz = per_bfd->get_dwz_file ();
-  if (dwz != NULL)
+  if (get_gdb_index_contents_dwz != NULL)
     {
       mapped_gdb_index dwz_map;
       const gdb_byte *dwz_types_ignore;
       offset_type dwz_types_elements_ignore;
+      dwz_file *dwz = per_bfd->get_dwz_file (per_bfd);
 
-      gdb::array_view<const gdb_byte> dwz_index_content
-	= get_gdb_index_contents_dwz (objfile, dwz);
-
-      if (dwz_index_content.empty ())
-	return false;
-
-      if (!read_gdb_index_from_buffer (dwz->filename (),
-				       1, dwz_index_content, &dwz_map,
-				       &dwz_list, &dwz_list_elements,
-				       &dwz_types_ignore,
-				       &dwz_types_elements_ignore))
+      if (dwz != nullptr)
 	{
-	  warning (_("could not read '.gdb_index' section from %s; skipping"),
-		   dwz->filename ());
-	  return false;
+	  gdb::array_view<const gdb_byte> dwz_index_content
+	    = get_gdb_index_contents_dwz (objfile, dwz);
+
+	  if (dwz_index_content.empty ())
+	    return false;
+
+	  if (!read_gdb_index_from_buffer (bfd_get_filename
+					   (dwz->dwz_bfd.get ()),
+					   1, dwz_index_content, &dwz_map,
+					   &dwz_list, &dwz_list_elements,
+					   &dwz_types_ignore,
+					   &dwz_types_elements_ignore))
+	    {
+	      warning (_("could not read '.gdb_index' section from %s; skipping"),
+		       bfd_get_filename (dwz->dwz_bfd.get ()));
+	      return false;
+	    }
 	}
     }
 

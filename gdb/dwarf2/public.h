@@ -50,6 +50,11 @@ extern void dwarf2_build_frame_info (struct objfile *);
 
 void dwarf2_append_unwinders (struct gdbarch *gdbarch);
 
+/* Query debuginfod for the .gdb_index associated with OBJFILE.
+   Used to defer separate debuginfo downloading until necessary.  */
+
+extern bool dwarf2_has_separate_index (struct objfile *);
+
 #else /* DWARF_FORMAT_AVAILABLE */
 
 static inline bool
@@ -63,6 +68,15 @@ dwarf2_initialize_objfile (struct objfile  *,
 
 static inline void
 dwarf2_build_frame_info (struct objfile *)
+{
+  warning (_("No dwarf support available."));
+}
+
+/* Query debuginfod for the .gdb_index associated with OBJFILE.
+   Used to defer separate debuginfo downloading until necessary.  */
+
+static inline bool
+dwarf2_has_separate_index (struct objfile *)
 {
   warning (_("No dwarf support available."));
 }
