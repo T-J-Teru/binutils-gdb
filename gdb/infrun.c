@@ -78,6 +78,7 @@
 #include "extension.h"
 #include "disasm.h"
 #include "interps.h"
+#include "gdbsupport/scoped_ignore_signal.h"
 
 /* Prototypes for local functions */
 
@@ -4574,6 +4575,31 @@ infrun_quit_handler ()
     }
 }
 
+/* Block SIGTERM and then clear sync_quit_force_run.  When we go out of
+   scope, restore the previous sync_quit_force_run value, and then unblock
+   signals.
+
+   This should maybe live in a support file somewhere, but it needs to see
+   sync_quit_force_run, so likely needs to live in the gdb/ directory.  */
+
+struct scoped_ignore_sigterm
+{
+  scoped_ignore_sigterm ()
+    : m_old_val (sync_quit_force_run)
+  {
+    sync_quit_force_run = false;
+  }
+
+  ~scoped_ignore_sigterm ()
+  {
+    sync_quit_force_run = m_old_val;
+  }
+
+private:
+  scoped_ignore_signal<SIGTERM, false> m_ignore_signal;
+  bool m_old_val;
+};
+
 /* Asynchronous version of wait_for_inferior.  It is called by the
    event loop whenever a change of state is detected on the file
    descriptor corresponding to the target.  It can be called more than
@@ -4608,6 +4634,16 @@ fetch_inferior_event ()
      handled.  */
   scoped_restore restore_quit_handler
     = make_scoped_restore (&quit_handler, infrun_quit_handler);
+
+  /* Similar to how the above custom quit handler ignores the quit flag
+     (thus not interrupting GDB on receipt of Ctrl-C), this arranges to
+     block SIGTERM while we are handling the inferior event.  Any SIGTERM
+     will be deferred until this function is done.  Usually SIGTERM is
+     converted to an exception by the QUIT macro, but doing that while
+     processing an inferior event can leave the inferior in a weird state,
+     e.g. some breakpoints not removed.  Deferring SIGTERM handling until
+     after this function means the event should have been fully handled.  */
+  scoped_ignore_sigterm ignore_sigterm;
 
   /* Make sure a SIGINT does not interrupt an extension language while
      we're handling an event.  That could interrupt a Python unwinder
