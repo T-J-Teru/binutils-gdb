@@ -54,6 +54,7 @@
 #include "cli/cli-style.h"
 #include "gdbsupport/forward-scope-exit.h"
 #include "gdbsupport/buildargv.h"
+#include "source-cache.h"
 
 #include <sys/types.h>
 #include <fcntl.h>
@@ -61,6 +62,9 @@
 #include <ctype.h>
 #include <chrono>
 #include <algorithm>
+
+extern source_cache g_source_cache;
+extern std::vector<breakpoint_source> source;
 
 int (*deprecated_ui_load_progress_hook) (const char *section,
 					 unsigned long num);
@@ -2688,6 +2692,7 @@ reread_symbols (int from_tty)
 	  init_entry_point_info (objfile);
 
 	  new_objfiles.push_back (objfile);
+	  std::string line;
 	}
     }
 

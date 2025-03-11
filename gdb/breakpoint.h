@@ -2105,4 +2105,18 @@ extern void enable_disable_bp_location (bp_location *loc, bool enable);
 
 extern void notify_breakpoint_modified (breakpoint *b);
 
+struct breakpoint_source {
+    std::vector<std::string> source_lines;
+    //number of the source lines stored
+    int captured_lines;
+    int bp_line;
+
+};
+
+struct bp_info {
+    std::vector<breakpoint_source> source;
+    bool executable_reloaded;
+    const char *filename;
+};
+
 #endif /* GDB_BREAKPOINT_H */
