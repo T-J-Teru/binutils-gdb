@@ -20,28 +20,11 @@
 #ifndef GDB_DWARF2_LINE_PROGRAM_H
 #define GDB_DWARF2_LINE_PROGRAM_H
 
-/* Decode the Line Number Program (LNP) for the given line_header
-   structure and CU.  The actual information extracted and the type
-   of structures created from the LNP depends on the value of PST.
+/* Decode the Line Number Program (LNP) for the line_header structure in
+   CU.
 
-   FND holds the CU file name and directory, if known.
-   It is used for relative paths in the line table.
+   LOWPC is the lowest address in CU (or 0 if not known).  */
 
-   NOTE: It is important that psymtabs have the same file name (via
-   strcmp) as the corresponding symtab.  Since the directory is not
-   used in the name of the symtab we don't use it in the name of the
-   psymtabs we create.  E.g. expand_line_sal requires this when
-   finding psymtabs to expand.  A good testcase for this is
-   mb-inline.exp.
-
-   LOWPC is the lowest address in CU (or 0 if not known).
-
-   Boolean DECODE_MAPPING specifies we need to fully decode .debug_line
-   for its PC<->lines mapping information.  Otherwise only the filename
-   table is read in.  */
-
-extern void dwarf_decode_lines (struct line_header *lh,
-				struct dwarf2_cu *cu,
-				unrelocated_addr lowpc, bool decode_mapping);
+extern void dwarf_decode_lines (struct dwarf2_cu *cu, unrelocated_addr lowpc);
 
 #endif /* GDB_DWARF2_LINE_PROGRAM_H */

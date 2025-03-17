@@ -480,12 +480,10 @@ lnp_state_machine::check_line_address (struct dwarf2_cu *cu,
     }
 }
 
-/* Subroutine of dwarf_decode_lines to simplify it.
-   Process the line number information in LH.  */
+/* See dwarf2/line-program.h.  */
 
-static void
-dwarf_decode_lines_1 (struct line_header *lh, struct dwarf2_cu *cu,
-		      unrelocated_addr lowpc)
+void
+dwarf_decode_lines (struct dwarf2_cu *cu, unrelocated_addr lowpc)
 {
   const gdb_byte *line_ptr, *extended_end;
   const gdb_byte *line_end;
@@ -494,6 +492,9 @@ dwarf_decode_lines_1 (struct line_header *lh, struct dwarf2_cu *cu,
   struct objfile *objfile = cu->per_objfile->objfile;
   bfd *abfd = objfile->obfd.get ();
   struct gdbarch *gdbarch = objfile->arch ();
+  struct line_header *lh = cu->line_header;
+
+  gdb_assert (lh != nullptr);
 
   line_ptr = lh->statement_program_start;
   line_end = lh->statement_program_end;
@@ -688,33 +689,5 @@ dwarf_decode_lines_1 (struct line_header *lh, struct dwarf2_cu *cu,
       /* We got a DW_LNE_end_sequence (or we ran off the end of the buffer,
 	 in which case we still finish recording the last line).  */
       state_machine.record_line (true);
-    }
-}
-
-/* See dwarf2/line-program.h.  */
-
-void
-dwarf_decode_lines (struct line_header *lh, struct dwarf2_cu *cu,
-		    unrelocated_addr lowpc, bool decode_mapping)
-{
-  if (decode_mapping)
-    dwarf_decode_lines_1 (lh, cu, lowpc);
-
-  /* Make sure a symtab is created for every file, even files
-     which contain only variables (i.e. no code with associated
-     line numbers).  */
-  buildsym_compunit *builder = cu->get_builder ();
-  struct compunit_symtab *cust = builder->get_compunit_symtab ();
-
-  for (auto &fe : lh->file_names ())
-    {
-      dwarf2_start_subfile (cu, fe, *lh);
-      subfile *sf = builder->get_current_subfile ();
-
-      if (sf->symtab == nullptr)
-	sf->symtab = allocate_symtab (cust, sf->name.c_str (),
-				      sf->name_for_id.c_str ());
-
-      fe.symtab = sf->symtab;
     }
 }
