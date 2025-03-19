@@ -1089,4 +1089,5 @@ const solib_ops frv_so_ops =
   nullptr,
   nullptr,
   default_find_solib_addr,
+  default_find_solib_bounds,
 };

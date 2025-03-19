@@ -180,6 +180,10 @@ struct solib_ops
      name).  */
 
   std::optional<CORE_ADDR> (*find_solib_addr) (solib &so);
+
+  /* Find the upper and lower bounds of SO and ensure that solib::addr_low
+     and solib::addr_high are filled in.  */
+  void (*find_solib_bounds) (solib &so);
 };
 
 /* A unique pointer to a so_list.  */
@@ -203,5 +207,10 @@ extern gdb_bfd_ref_ptr solib_bfd_open (const char *in_pathname);
    This just returns an empty std::optional<CORE_ADDR> indicating GDB is
    unable to find an address within the library SO.  */
 extern std::optional<CORE_ADDR> default_find_solib_addr (solib &so);
+
+/* Default implementation of solib_ops::find_solib_bounds callback.  This
+   just finds the .text section and uses that section to define the bounds
+   of SO.  */
+extern void default_find_solib_bounds (solib &so);
 
 #endif /* GDB_SOLIST_H */

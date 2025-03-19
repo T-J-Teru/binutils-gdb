@@ -561,17 +561,10 @@ solib_map_sections (solib &so)
 	 object's file by the base address to which the object was actually
 	 mapped.  */
       ops->relocate_section_addresses (so, &p);
-
-      /* If the target didn't provide information about the address
-	 range of the shared object, assume we want the location of
-	 the .text section.  */
-      if (so.addr_low == 0 && so.addr_high == 0
-	  && strcmp (p.the_bfd_section->name, ".text") == 0)
-	{
-	  so.addr_low = p.addr;
-	  so.addr_high = p.endaddr;
-	}
     }
+
+  /* Establish the upper and lower bounds of SO.  */
+  ops->find_solib_bounds (so);
 
   /* Add the shared object's sections to the current set of file
      section tables.  Do this immediately after mapping the object so
@@ -1698,6 +1691,28 @@ std::optional<CORE_ADDR>
 default_find_solib_addr (solib &so)
 {
   return {};
+}
+
+/* See solist.h.  */
+
+void
+default_find_solib_bounds (solib &so)
+{
+  if (so.addr_low == 0 && so.addr_high == 0)
+    {
+      for (target_section &p : so.sections)
+	{
+	  /* If the target didn't provide information about the address
+	     range of the shared object, assume we want the location of
+	     the .text section.  */
+	  if (strcmp (p.the_bfd_section->name, ".text") == 0)
+	    {
+	      so.addr_low = p.addr;
+	      so.addr_high = p.endaddr;
+	      break;
+	    }
+	}
+    }
 }
 
 void _initialize_solib ();

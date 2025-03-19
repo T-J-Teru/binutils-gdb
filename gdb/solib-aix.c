@@ -692,6 +692,7 @@ const solib_ops solib_aix_so_ops =
   nullptr,
   nullptr,
   default_find_solib_addr,
+  default_find_solib_bounds,
 };
 
 void _initialize_solib_aix ();

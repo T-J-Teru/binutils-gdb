@@ -414,4 +414,5 @@ const solib_ops solib_target_so_ops =
   nullptr,
   nullptr,
   default_find_solib_addr,
+  default_find_solib_bounds,
 };

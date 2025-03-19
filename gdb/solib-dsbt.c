@@ -918,6 +918,7 @@ const solib_ops dsbt_so_ops =
   nullptr,
   nullptr,
   default_find_solib_addr,
+  default_find_solib_bounds,
 };
 
 void _initialize_dsbt_solib ();

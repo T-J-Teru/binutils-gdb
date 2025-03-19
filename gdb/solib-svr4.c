@@ -47,6 +47,7 @@
 #include "probe.h"
 
 #include <map>
+#include <unordered_set>
 
 static struct link_map_offsets *svr4_fetch_link_map_offsets (void);
 static int svr4_have_link_map_offsets (void);
@@ -3132,20 +3133,44 @@ svr4_relocate_section_addresses (solib &so, target_section *sec)
 
   sec->addr = svr4_truncate_ptr (sec->addr + lm_addr_check (so, abfd));
   sec->endaddr = svr4_truncate_ptr (sec->endaddr + lm_addr_check (so, abfd));
+}
 
-  struct bfd_section *asect = sec->the_bfd_section;
-  gdb_assert (asect != nullptr);
+/* Implementation of solib_ops::find_solib_bounds.  */
 
-  /* Update the address range of SO based on ASECT.  */
-  if ((bfd_section_flags (asect) & SEC_ALLOC) != 0
-      && bfd_get_flavour (abfd) == bfd_target_elf_flavour)
+static void
+svr4_find_solib_bounds (solib &so)
+{
+  std::unordered_set<Elf_Internal_Phdr *> phdr_set;
+
+  /* Read system page size from auxv data.  If this fails then set
+     AT_PAGESZ to 0, we'll then use the page size as defined in the ELF
+     later on.  */
+  ULONGEST at_pagesz;
+  if (target_auxv_search (AT_PAGESZ, &at_pagesz) == 0)
+    at_pagesz = 0;
+
+  bfd *abfd = so.abfd.get ();
+  if (bfd_get_flavour (abfd) != bfd_target_elf_flavour)
     {
-      /* First, SO must cover the contents of ASECT.  */
-      if (so.addr_low == 0 || sec->addr < so.addr_low)
-	so.addr_low = sec->addr;
+      default_find_solib_bounds (so);
+      return;
+    }
 
-      if (so.addr_high == 0 || sec->endaddr > so.addr_high)
-	so.addr_high = sec->endaddr;
+  for (const target_section &sec : so.sections)
+    {
+      struct bfd_section *asect = sec.the_bfd_section;
+      gdb_assert (asect != nullptr);
+
+      /* Ignore non-allocatable sections.  */
+      if ((bfd_section_flags (asect) & SEC_ALLOC) == 0)
+	continue;
+
+      /* Update the bounds of SO, such that it at least covers ASECT.  */
+      if (so.addr_low == 0 || sec.addr < so.addr_low)
+	so.addr_low = sec.addr;
+
+      if (so.addr_high == 0 || sec.endaddr > so.addr_high)
+	so.addr_high = sec.endaddr;
 
       gdb_assert (so.addr_low <= so.addr_high);
 
@@ -3154,51 +3179,59 @@ svr4_relocate_section_addresses (solib &so, target_section *sec)
 	 region for SO.  */
       Elf_Internal_Phdr *phdr = find_loadable_elf_internal_phdr (abfd, asect);
 
-      if (phdr != nullptr)
-	{
-	  /* Figure out the alignment required by this segment.  */
-	  ULONGEST minpagesize = get_elf_backend_data (abfd)->minpagesize;
-	  ULONGEST segment_alignment
-	    = std::max (minpagesize, static_cast<ULONGEST> (phdr->p_align));
-	  ULONGEST at_pagesz;
-	  if (target_auxv_search (AT_PAGESZ, &at_pagesz) > 0)
-	    segment_alignment = std::max (segment_alignment, at_pagesz);
+      /* If we cannot find a segment for this section (weird) then ignore
+	 it.  */
+      if (phdr == nullptr)
+	continue;
 
-	  /* The offset of this section within the segment.  */
-	  ULONGEST section_offset = asect->vma - phdr->p_vaddr;
+      /* If we have already processed this segment, then no need to do it
+	 again, this will just give the same results as last time.  */
+      if (phdr_set.find (phdr) != phdr_set.end ())
+	continue;
 
-	  /* The start address for the segment, without alignment.  */
-	  CORE_ADDR unaligned_start = sec->addr - section_offset;
+      /* Record that we have processed this segment.  */
+      phdr_set.insert (phdr);
 
-	  /* And the start address with downward alignment.  */
-	  CORE_ADDR aligned_start
-	    = align_down (unaligned_start, segment_alignment);
+      /* Figure out the alignment required by this segment.  */
+      ULONGEST minpagesize = get_elf_backend_data (abfd)->minpagesize;
+      ULONGEST segment_alignment
+	= std::max (minpagesize, static_cast<ULONGEST> (phdr->p_align));
+      segment_alignment = std::max (segment_alignment, at_pagesz);
 
-	  /* The end address of the segment depends on its size.  Start
-	     with the size as described in the ELF.  This check of the
-	     memory size and file size is what BFD does, so assume it
-	     knows best and copy this logic.  */
-	  ULONGEST seg_size = std::max (phdr->p_memsz, phdr->p_filesz);
+      /* The offset of this section within the segment.  */
+      ULONGEST section_offset = asect->vma - phdr->p_vaddr;
 
-	  /* But by aligning the start address down we need to also include
-	     that difference in the segment size.  */
-	  seg_size += (unaligned_start - aligned_start);
+      /* The start address for the segment, without alignment.  */
+      CORE_ADDR unaligned_start = sec.addr - section_offset;
 
-	  /* And align the segment size upward.  */
-	  seg_size = align_up (seg_size, segment_alignment);
+      /* And the start address with downward alignment.  */
+      CORE_ADDR aligned_start
+	= align_down (unaligned_start, segment_alignment);
 
-	  /* Finally, we can compute the end address.  */
-	  CORE_ADDR end = aligned_start + seg_size;
+      /* The end address of the segment depends on its size.  Start
+	 with the size as described in the ELF.  This check of the
+	 memory size and file size is what BFD does, so assume it
+	 knows best and copy this logic.  */
+      ULONGEST seg_size = std::max (phdr->p_memsz, phdr->p_filesz);
 
-	  /* And now we can update the extend of SO.  */
-	  if (so.addr_low == 0 || aligned_start < so.addr_low)
-	    so.addr_low = aligned_start;
+      /* But by aligning the start address down we need to also include
+	 that difference in the segment size.  */
+      seg_size += (unaligned_start - aligned_start);
 
-	  if (so.addr_high == 0 || end > so.addr_high)
-	    so.addr_high = end;
+      /* And align the segment size upward.  */
+      seg_size = align_up (seg_size, segment_alignment);
 
-	  gdb_assert (so.addr_low <= so.addr_high);
-	}
+      /* Finally, we can compute the end address.  */
+      CORE_ADDR end = aligned_start + seg_size;
+
+      /* And now we can update the extend of SO.  */
+      if (so.addr_low == 0 || aligned_start < so.addr_low)
+	so.addr_low = aligned_start;
+
+      if (so.addr_high == 0 || end > so.addr_high)
+	so.addr_high = end;
+
+      gdb_assert (so.addr_low <= so.addr_high);
     }
 }
 
@@ -3475,6 +3508,7 @@ const struct solib_ops svr4_so_ops =
   svr4_update_solib_event_breakpoints,
   svr4_handle_solib_event,
   svr4_find_solib_addr,
+  svr4_find_solib_bounds,
 };
 
 void _initialize_svr4_solib ();

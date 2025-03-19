@@ -610,19 +610,30 @@ darwin_relocate_section_addresses (solib &so, target_section *sec)
 
   sec->addr += li->lm_addr;
   sec->endaddr += li->lm_addr;
-
-  /* Best effort to set addr_high/addr_low.  This is used only by
-     'info sharedlibary'.  */
-  if (so.addr_high == 0)
-    {
-      so.addr_low = sec->addr;
-      so.addr_high = sec->endaddr;
-    }
-  if (sec->endaddr > so.addr_high)
-    so.addr_high = sec->endaddr;
-  if (sec->addr < so.addr_low)
-    so.addr_low = sec->addr;
 }
+
+/* Implement solib_ops::find_solib_bounds.  Set the bounds of SO based on
+   the start and end of every target section within SO.  */
+
+static void
+darwin_find_solib_bounds (solib &so)
+{
+  for (const target_section &sec : so.sections)
+    {
+      /* Best effort to set addr_high/addr_low.  This is used only by
+	 'info sharedlibary'.  */
+      if (so.addr_high == 0)
+	{
+	  so.addr_low = sec.addr;
+	  so.addr_high = sec.endaddr;
+	}
+      if (sec.endaddr > so.addr_high)
+	so.addr_high = sec.endaddr;
+      if (sec.addr < so.addr_low)
+	so.addr_low = sec.addr;
+    }
+}
+
 
 static gdb_bfd_ref_ptr
 darwin_bfd_open (const char *pathname)
@@ -669,4 +680,5 @@ const solib_ops darwin_so_ops =
   nullptr,
   nullptr,
   default_find_solib_addr,
+  darwin_find_solib_bounds,
 };
