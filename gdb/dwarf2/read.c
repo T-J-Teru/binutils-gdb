@@ -6153,6 +6153,10 @@ read_file_scope (struct die_info *die, struct dwarf2_cu *cu)
       && cu->line_header != nullptr)
     dwarf_decode_lines (cu, unrel_low);
 
+  /* We no longer need to track the inline block end addresses.  Release
+     memory associated with this.  */
+  cu->inline_block_ends.clear ();
+
   /* Decode macro information, if present.  Dwarf 2 macro information
      refers to information in the line number info statement program
      header, so we can only read it if we've read the header
@@ -9952,6 +9956,10 @@ dwarf2_record_single_block_range (struct dwarf2_cu *cu, struct block *block,
 				  CORE_ADDR low, CORE_ADDR high,
 				  unrelocated_addr unrel_high)
 {
+  /* If this is the end of an inline block, then record its end address.  */
+  if (block->inlined_p () && block->function () != nullptr)
+    cu->inline_block_ends.insert ({unrel_high, block});
+
   cu->get_builder ()->record_block_range (block, low, high);
 }
 
