@@ -16250,6 +16250,79 @@ dwarf_finish_line (struct gdbarch *gdbarch, struct subfile *subfile,
   dwarf_record_line_1 (gdbarch, subfile, 0, address, LEF_IS_STMT, cu);
 }
 
+/* Look for an inline block that finishes at ORIGINAL_ADDRESS.  If a block
+   is found, then search up the block hierarchy looking for a suitable
+   inline block to extend, a suitable block will be called from LINE.  If a
+   block is found then update its end address to EXTENDED_ADDRESS.  */
+
+static void
+dwarf_find_and_extend_inline_block_range (dwarf2_cu *cu,
+					  unrelocated_addr original_address,
+					  unrelocated_addr extended_address,
+					  unsigned int line)
+{
+  /* Is there an inline block that ends at ORIGINAL_ADDRESS?  */
+  auto it = cu->inline_block_ends.find (original_address);
+  if (it == cu->inline_block_ends.end ())
+    return;
+
+  /* Walk back up the block structure until we find the first inline block
+     that occurs after a non-inline block.  This is our candidate for
+     extending.  */
+  struct block *block = nullptr;
+  for (const struct block *b = it->second;
+       b != nullptr;
+       b = b->superblock ())
+    {
+      if (b->function () != nullptr && b->inlined_p ())
+	{
+	  if (b->superblock () != nullptr
+	      && b->superblock ()->function () != nullptr
+	      && !b->superblock ()->inlined_p ())
+	    {
+	      block = const_cast<struct block *> (b);
+	      break;
+	    }
+	}
+    }
+
+  /* If we didn't find a block, of the line table doesn't indicate that the
+     block should be extended, then we're done.  Maybe we should try harder
+     to look for the block that matches LINE, but this would require us to
+     possibly extended more blocks, adding more complexity.  Currently,
+     this works enough for simple cases, we can possibly improve the logic
+     here later on.  */
+  if (block == nullptr || block->function ()->line () != line)
+    return;
+
+  /* Sanity check.  We should have an inline block, which should have a
+     valid super block.  */
+  gdb_assert (block->inlined_p ());
+  gdb_assert (block->superblock () != nullptr);
+
+  CORE_ADDR extended_end = cu->per_objfile->relocate (extended_address);
+
+  /* The proposed new end of BLOCK is outside of the ranges of BLOCK's
+     superblock.  If we tried to extend BLOCK then this would create an
+     invalid block structure; BLOCK would no longer be fully nested within
+     its superblock.  Don't do that.  */
+  if (extended_end > block->superblock ()->end ())
+    return;
+
+  CORE_ADDR original_end = cu->per_objfile->relocate (original_address);
+
+  /* Now find the part of BLOCK that ends at ORIGINAL_END, and extend it
+     out to EXTENDED_END.  */
+  for (blockrange &br : block->ranges ())
+    {
+      if (br.end () == original_end)
+	br.set_end (extended_end);
+    }
+
+  if (block->end () == original_end)
+    block->set_end (extended_end);
+}
+
 void
 lnp_state_machine::record_line (bool end_sequence)
 {
@@ -16267,6 +16340,13 @@ lnp_state_machine::record_line (bool end_sequence)
 		  m_discriminator,
 		  (end_sequence ? "\t(end sequence)" : ""));
     }
+
+  if (m_address != m_last_address
+      && m_stmt_at_address
+      && m_cu->producer_is_gcc ()
+      && (m_flags & LEF_IS_STMT) == 0)
+    dwarf_find_and_extend_inline_block_range (m_cu, m_last_address,
+					      m_address, m_line);
 
   file_entry *fe = current_file ();
 
