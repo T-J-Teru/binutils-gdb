@@ -203,6 +203,7 @@ struct dummy_target : public target_ops
   displaced_step_prepare_status displaced_step_prepare (thread_info *arg0, CORE_ADDR &arg1) override;
   displaced_step_finish_status displaced_step_finish (thread_info *arg0, const target_waitstatus &arg1) override;
   void displaced_step_restore_all_in_ptid (inferior *arg0, ptid_t arg1) override;
+  bool gather_build_ids (std::vector<build_id_and_filename> &arg0, int arg1) override;
 };
 
 struct debug_target : public target_ops
@@ -384,6 +385,7 @@ struct debug_target : public target_ops
   displaced_step_prepare_status displaced_step_prepare (thread_info *arg0, CORE_ADDR &arg1) override;
   displaced_step_finish_status displaced_step_finish (thread_info *arg0, const target_waitstatus &arg1) override;
   void displaced_step_restore_all_in_ptid (inferior *arg0, ptid_t arg1) override;
+  bool gather_build_ids (std::vector<build_id_and_filename> &arg0, int arg1) override;
 };
 
 void
@@ -4518,4 +4520,30 @@ debug_target::displaced_step_restore_all_in_ptid (inferior *arg0, ptid_t arg1)
 	      this->beneath ()->shortname (),
 	      target_debug_print_inferior_p (arg0).c_str (),
 	      target_debug_print_ptid_t (arg1).c_str ());
+}
+
+bool
+target_ops::gather_build_ids (std::vector<build_id_and_filename> &arg0, int arg1)
+{
+  return this->beneath ()->gather_build_ids (arg0, arg1);
+}
+
+bool
+dummy_target::gather_build_ids (std::vector<build_id_and_filename> &arg0, int arg1)
+{
+  return false;
+}
+
+bool
+debug_target::gather_build_ids (std::vector<build_id_and_filename> &arg0, int arg1)
+{
+  target_debug_printf_nofunc ("-> %s->gather_build_ids (...)", this->beneath ()->shortname ());
+  bool result
+    = this->beneath ()->gather_build_ids (arg0, arg1);
+  target_debug_printf_nofunc ("<- %s->gather_build_ids (%s, %s) = %s",
+	      this->beneath ()->shortname (),
+	      target_debug_print_std_vector_build_id_and_filename_r (arg0).c_str (),
+	      target_debug_print_int (arg1).c_str (),
+	      target_debug_print_bool (result).c_str ());
+  return result;
 }
