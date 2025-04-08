@@ -616,6 +616,18 @@ using bp_location_list = intrusive_list<bp_location>;
 using bp_location_iterator = bp_location_list::iterator;
 using bp_location_range = iterator_range<bp_location_iterator>;
 
+extern bool executable_reloaded;
+
+struct breakpoint_source {
+    std::vector<std::string> source_lines;
+    //number of the source lines stored
+    int captured_lines;
+    //the number of the breakpoint line in the source file
+    int bp_line;
+    //on which line the breakpoint is stored
+    int bp_line_stored;
+};
+
 /* Note that the ->silent field is not currently used by any commands
    (though the code is in there if it was to be, and set_raw_breakpoint
    does set it to 0).  I implemented it because I thought it would be
@@ -635,6 +647,8 @@ struct breakpoint : public intrusive_list_node<breakpoint>
 
   /* Allocate a location for this breakpoint.  */
   virtual struct bp_location *allocate_location ();
+
+  struct breakpoint_source bp_source;
 
   /* Return a range of this breakpoint's locations.  */
   bp_location_range locations () const;
@@ -2104,19 +2118,5 @@ extern void enable_disable_bp_location (bp_location *loc, bool enable);
 /* Notify interpreters and observers that breakpoint B was modified.  */
 
 extern void notify_breakpoint_modified (breakpoint *b);
-
-struct breakpoint_source {
-    std::vector<std::string> source_lines;
-    //number of the source lines stored
-    int captured_lines;
-    int bp_line;
-
-};
-
-struct bp_info {
-    std::vector<breakpoint_source> source;
-    bool executable_reloaded;
-    const char *filename;
-};
 
 #endif /* GDB_BREAKPOINT_H */

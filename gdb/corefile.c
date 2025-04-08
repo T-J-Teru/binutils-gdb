@@ -37,7 +37,7 @@
 #include "interps.h"
 #include "arch-utils.h"
 
-extern struct bp_info breakpoint_info;
+extern bool executable_reloaded;
 
 void
 reopen_exec_file (void)
@@ -61,7 +61,7 @@ reopen_exec_file (void)
       && current_program_space->ebfd_mtime != st.st_mtime) {
     exec_file_attach (bfd_get_filename (exec_bfd), 0);
     printf("Executable reloaded\n");
-    breakpoint_info.executable_reloaded = true;
+    executable_reloaded = true;
   }
 }
 
