@@ -89,6 +89,11 @@ info linker-namespaces [[N]]
   Print information about the given linker namespace (identified as N),
   or about all the namespaces if no argument is given.
 
+info build-ids [-all-files]
+  List the build-ids for all files associated with the current
+  inferior.  Default without '-all-files' is to only report files with
+  a build-id.
+
 * Changed commands
 
 info sharedlibrary
@@ -164,6 +169,12 @@ info threads [-gid] [-stopped] [-running] [ID]...
 
   ** New gdb.warning() function that takes a string and prints it as a
      warning, with GDB's standard 'warning' prefix.
+
+  ** gdb.Inferior.build_ids(all_files=False).  This returns a list of
+     (FILENAME, BUILD-ID) tuples.  Each tuple is a file, and its
+     build-id, that is associated with the gdb.Inferior object.  When
+     'all_files' is True, even files without a build-id are included,
+     in which case BUILD-ID is None.
 
 * Guile API
 

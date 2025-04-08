@@ -431,3 +431,134 @@ find_objfile_by_build_id (program_space *pspace,
 
   return abfd;
 }
+
+/* Structure to hold the values for the 'info build-ids' command.  */
+
+struct info_build_ids_options
+{
+  bool all_files = false;
+};
+
+/* Options for the 'info build-ids' command.  */
+
+static const gdb::option::option_def info_build_id_cmd_option_defs[] = {
+  gdb::option::flag_option_def<info_build_ids_options> {
+    "all-files",
+    [] (info_build_ids_options *opt) { return &opt->all_files; },
+    N_("Include all known files from the current inferior in the output.")
+  },
+};
+
+/* Return option group used by 'info build-ids' command.  */
+
+static gdb::option::option_def_group
+make_info_build_ids_options_def_group (info_build_ids_options *opts)
+{
+  return {{info_build_id_cmd_option_defs}, opts};
+}
+
+/* Command completer for 'info build-ids' command.  */
+
+static void
+info_build_ids_command_completer (struct cmd_list_element *ignore,
+				  completion_tracker &tracker,
+				  const char *text, const char * /* word */)
+{
+  const auto group
+    = make_info_build_ids_options_def_group (nullptr);
+  if (gdb::option::complete_options
+      (tracker, &text, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_ERROR, group))
+    return;
+}
+
+/* Implement 'info build-ids'.  Print a line containing the build-id and
+   filename for every file with a build-id in the current inferior.  */
+static void
+info_build_ids_command (const char *args, int from_tty)
+{
+  info_build_ids_options opts;
+  auto grp = make_info_build_ids_options_def_group (&opts);
+  gdb::option::process_options
+    (&args, gdb::option::PROCESS_OPTIONS_UNKNOWN_IS_ERROR, grp);
+  if (args != nullptr && *args != '\0')
+    error (_("Junk at end of command: %s"), args);
+
+  std::vector<build_id_and_filename> list
+    = target_gather_build_ids (from_tty);
+
+  /* Minimum length based on the column heading string.  */
+  std::string::size_type longest_build_id = 8;
+
+  /* Update the column widths based on the content.  */
+  bool seen_actual_build_id = false;
+  for (const auto &it : list)
+    {
+      if (it.build_id () != nullptr)
+	{
+	  seen_actual_build_id = true;
+	  longest_build_id
+	    = std::max (build_id_to_string (it.build_id ()).length (),
+			longest_build_id);
+	}
+    }
+
+  if (opts.all_files && list.empty ())
+    {
+	gdb_printf ("There are no named files in inferior %d.\n",
+		    current_inferior ()->num);
+	return;
+    }
+
+  if (!opts.all_files && !seen_actual_build_id)
+    {
+      gdb_printf ("There are no files with a build-id in inferior %d.\n",
+		  current_inferior ()->num);
+      return;
+    }
+
+  /* Now output the table.  */
+  ui_out_emit_table emitter (current_uiout, 2, -1, "CoreFileBuildIDs");
+  current_uiout->table_header (longest_build_id, ui_left,
+			       "build_id", "Build Id");
+  current_uiout->table_header (-1, ui_left,
+			       "objfile", "File");
+  current_uiout->table_body ();
+
+  for (const auto &it : list)
+    {
+      /* Skip entries without a build-id unless '-all-files' was used.  */
+      if (!opts.all_files && it.build_id () == nullptr)
+	continue;
+
+      ui_out_emit_tuple tuple_emitter (current_uiout, nullptr);
+      if (it.build_id () != nullptr)
+	current_uiout->field_string ("build_id",
+				     build_id_to_string (it.build_id ()));
+      else
+	current_uiout->field_skip ("build_id");
+      gdb_assert (it.filename ().length () != 0);
+      current_uiout->field_string ("objfile", it.filename (),
+				   file_name_style.style ());
+      current_uiout->text ("\n");
+    }
+}
+
+INIT_GDB_FILE (build_id)
+{
+  const auto info_build_id_opts
+    = make_info_build_ids_options_def_group (nullptr);
+  static std::string info_build_id_help
+    = gdb::option::build_help (_("\
+List build-ids of files in the current inferior.\n\
+Usage: info build-ids [-all-files]\n\
+By default, only files with a build-id are listed.  The '-all-files'\n\
+flag includes all files, even those without a build-id, in the output.\n\
+\n\
+Options:\n\
+%OPTIONS%"), info_build_id_opts);
+
+  struct cmd_list_element *cmd
+    = add_info ("build-ids", info_build_ids_command,
+		info_build_id_help.c_str ());
+  set_cmd_completer_handle_brkchars (cmd, info_build_ids_command_completer);
+}

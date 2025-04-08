@@ -19,6 +19,7 @@
 
 #include "process-stratum-target.h"
 #include "inferior.h"
+#include "solib.h"
 #include <algorithm>
 
 process_stratum_target::~process_stratum_target ()
@@ -191,6 +192,34 @@ process_stratum_target::find_thread (ptid_t ptid)
   if (inf == NULL)
     return NULL;
   return inf->find_thread (ptid);
+}
+
+/* See process-stratum-target.h.  */
+
+bool
+process_stratum_target::gather_build_ids
+  (std::vector<build_id_and_filename> &list, int from_tty)
+{
+  /* Add FILENAME and BUILD_ID as a new entry to LIST.  */
+  auto add_entry = [&] (const char *filename, const bfd_build_id *build_id)
+  {
+    if (filename == nullptr || *filename == '\0')
+      return;
+
+    list.emplace_back (build_id, std::string (filename));
+  };
+
+  /* Add an entry for the executable.  */
+  add_entry (current_program_space->exec_filename (),
+	     build_id_bfd_get (current_program_space->exec_bfd ()));
+
+  update_solib_list (from_tty);
+
+  /* Add an entry for each shared library.  */
+  for (const solib &so : current_program_space->solibs ())
+    add_entry (so.name.c_str (), build_id_bfd_get (so.abfd.get ()));
+
+  return true;
 }
 
 /* See process-stratum-target.h.  */

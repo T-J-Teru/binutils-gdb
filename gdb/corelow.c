@@ -85,6 +85,10 @@ struct mem_range_and_build_id
 
 struct mapped_file_info
 {
+  /* A type that maps a string to a build-id.  */
+  using string_to_build_id_map
+    = gdb::unordered_map<std::string, const bfd_build_id *>;
+
   /* See comment on function definition.  */
 
   void add (const char *soname, const char *expected_filename,
@@ -95,6 +99,14 @@ struct mapped_file_info
 
   std::optional <core_target_mapped_file_info>
   lookup (const char *filename, const std::optional<CORE_ADDR> &addr);
+
+  /* Return the map of filename to build-ids extracted from the core
+     file.  */
+
+  const string_to_build_id_map &filename_to_build_id_map () const
+  {
+    return m_filename_to_build_id_map;
+  }
 
 private:
 
@@ -121,10 +133,6 @@ private:
 
     return { build_id, {} };
   }
-
-  /* A type that maps a string to a build-id.  */
-  using string_to_build_id_map
-    = gdb::unordered_map<std::string, const bfd_build_id *>;
 
   /* A type that maps a build-id to a string.  */
   using build_id_to_string_map
@@ -279,6 +287,11 @@ public:
     return m_expected_exec_filename;
   }
 
+  /* Core file version of target_ops::gather_build_ids.  Add filenames and
+     build-ids from the core file to LIST.  */
+  bool gather_build_ids (std::vector<build_id_and_filename> &list,
+			 int from_tty) override;
+
 private: /* per-core data */
 
   /* Get rid of the core inferior.  */
@@ -306,6 +319,12 @@ private: /* per-core data */
      to filename mapping.  */
   mapped_file_info m_mapped_file_info;
 
+  /* Where M_MAPPED_FILE_INFO has information about any mapped file that
+     had a build-id, whether or not the file was found or loaded into GDB,
+     this set contains the names of mapped files that didn't have a
+     build-id.  */
+  gdb::unordered_set<std::string> m_mapped_files_without_build_ids;
+
   /* Build m_core_file_mappings and m_mapped_file_info.  Called from the
      constructor.  */
   void build_file_mappings ();
@@ -319,6 +338,48 @@ private: /* per-core data */
      be set if we find a mapped with a suitable build-id.  */
   std::string m_expected_exec_filename;
 };
+
+/* See class declaration above.  */
+
+bool
+core_target::gather_build_ids (std::vector<build_id_and_filename> &list,
+			       int from_tty)
+{
+  /* We are going to collect results from a number of sources.  Remove
+     duplicates by first placing the results into this map.  The final
+     results will be copied to LIST at the end of this function.  */
+  gdb::unordered_map<std::string, const struct bfd_build_id*> result_map;
+
+  /* All files reported as mapped in the core file, which didn't have a
+     build-id.  Add these to RESULT_MAP with the build-id set to nullptr.
+     It is possible that there are duplicates in here if a file was mapped
+     multiple times, adding into the map resolves that.  */
+  for (const std::string &filename : m_mapped_files_without_build_ids)
+    result_map.insert_or_assign (std::string (filename), nullptr);
+
+  /* If the program space knows the executable (either GDB auto-found it,
+     or the user told GDB), then add that to the map now.  The build-id
+     might be nullptr, but that's OK, if we have a build-id via some other
+     mechanism, then that will override this below.  */
+  const bfd_build_id *exec_build_id
+    = build_id_bfd_get (current_program_space->exec_bfd ());
+  const char *exec_filename = current_program_space->exec_filename ();
+  if (exec_filename != nullptr && *exec_filename != '\0')
+    result_map.insert_or_assign (std::string (exec_filename), exec_build_id);
+
+  /* Look through the files that did have a build-id, and add these to
+     RESULT_MAP.  These entries will override any earlier entries, which
+     is what we want; if we do know the build-id then that should be
+     reported.  */
+  for (const auto &it : m_mapped_file_info.filename_to_build_id_map ())
+    result_map.insert_or_assign (it.first, it.second);
+
+  /* Now copy the information from RESULT_MAP into the output LIST.  */
+  for (const auto &map_entry : result_map)
+    list.emplace_back (map_entry.second, map_entry.first);
+
+  return true;
+}
 
 core_target::core_target ()
 {
@@ -655,6 +716,16 @@ core_target::build_file_mappings ()
 	  m_mapped_file_info.add (soname.get (), filename.c_str (),
 				  actual_filename, std::move (ranges),
 				  file_data.build_id);
+	}
+      else
+	{
+	  std::string filename_to_record
+	    = (abfd == nullptr
+	       ? filename
+	       : std::string (bfd_get_filename (abfd.get ())));
+
+	  m_mapped_files_without_build_ids.emplace
+	    (std::move (filename_to_record));
 	}
     }
 

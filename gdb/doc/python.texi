@@ -3690,6 +3690,30 @@ Unset the environment variable @var{name}.  @var{name} must be a
 string.
 @end defun
 
+@cindex build-ids, listing
+@defun Inferior.build_ids (all_files=False)
+Return a list of tuples.  Each tuple has two elements, the first is a
+filename as a string, and the second is the associated build-id as a
+string, or @code{None} if @value{GDBN} cannot find a build-id for the
+file.
+
+When @var{all_files} is @code{False} (the default), there will be one
+tuple for each file associated with the inferior, for which
+@value{GDBN} was able to find a build-id.  If @value{GDBN} cannot find
+the build-id for a file, then there will be no tuple for that file in
+the returned list.
+
+When @var{all_files} is @code{True}, there will be one tuple for each
+file associated with the inferior, even if @value{GDBN} was unable to
+find the build-id for the file.  Files for which @value{GDBN} cannot
+find the build-id have @code{None} as the second entry in the tuple.
+
+This method provides the same information as the @kbd{info build-ids}
+command (@pxref{info build-ids command}), and the set of files
+considered will vary in the same way based on the type of connection
+the inferior has.
+@end defun
+
 One may add arbitrary attributes to @code{gdb.Inferior} objects in the
 usual Python way.  This is useful if, for example, one needs to do
 some extra record keeping associated with the inferior.

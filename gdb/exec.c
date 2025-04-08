@@ -80,6 +80,11 @@ struct exec_target final : public target_ops
   bool has_memory () override;
   gdb::unique_xmalloc_ptr<char> make_corefile_notes (bfd *, int *) override;
   int find_memory_regions (find_memory_region_ftype func, void *data) override;
+
+  /* Exec file specific version of target_ops::gather_build_ids.  Add the
+     build-id for the executable to LIST.  */
+  bool gather_build_ids (std::vector<build_id_and_filename> &list,
+			 int from_tty) override;
 };
 
 static exec_target exec_ops;
@@ -1075,6 +1080,23 @@ int
 exec_target::find_memory_regions (find_memory_region_ftype func, void *data)
 {
   return objfile_find_memory_regions (this, func, data);
+}
+
+/* See class declaration above.  */
+
+bool
+exec_target::gather_build_ids (std::vector<build_id_and_filename> &list,
+			       int from_tty)
+{
+  const char *filename = current_program_space->exec_filename ();
+
+  const bfd_build_id *build_id
+    = build_id_bfd_get (current_program_space->exec_bfd ());
+
+  if (filename != nullptr)
+    list.emplace_back (build_id, std::string (filename));
+
+  return true;
 }
 
 INIT_GDB_FILE (exec)
