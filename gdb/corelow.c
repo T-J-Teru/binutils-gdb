@@ -85,6 +85,10 @@ struct mem_range_and_build_id
 
 struct mapped_file_info
 {
+  /* A type that maps a string to a build-id.  */
+  using string_to_build_id_map
+    = gdb::unordered_map<std::string, const bfd_build_id *>;
+
   /* See comment on function definition.  */
 
   void add (const char *soname, const char *expected_filename,
@@ -95,6 +99,14 @@ struct mapped_file_info
 
   std::optional <core_target_mapped_file_info>
   lookup (const char *filename, const std::optional<CORE_ADDR> &addr);
+
+  /* Return the map of filename to build-ids extracted from the core
+     file.  */
+
+  const string_to_build_id_map &filename_to_build_id_map () const
+  {
+    return m_filename_to_build_id_map;
+  }
 
 private:
 
@@ -121,10 +133,6 @@ private:
 
     return { build_id, {} };
   }
-
-  /* A type that maps a string to a build-id.  */
-  using string_to_build_id_map
-    = gdb::unordered_map<std::string, const bfd_build_id *>;
 
   /* A type that maps a build-id to a string.  */
   using build_id_to_string_map
@@ -279,6 +287,11 @@ public:
     return m_expected_exec_filename;
   }
 
+  /* Core file version of target_ops::gather_build_ids.  Add filenames and
+     build-ids from the core file to LIST.  */
+  bool gather_build_ids (std::vector<build_id_and_filename> &list,
+			 int from_tty) override;
+
 private: /* per-core data */
 
   /* Get rid of the core inferior.  */
@@ -319,6 +332,52 @@ private: /* per-core data */
      be set if we find a mapped with a suitable build-id.  */
   std::string m_expected_exec_filename;
 };
+
+/* See class declaration above.  */
+
+bool
+core_target::gather_build_ids (std::vector<build_id_and_filename> &list,
+			       int from_tty)
+{
+  /* The core file might have the correct path and build-id information for
+     the executable within the mapped files data.  If this is the case then
+     we would like to avoid including the executable twice in the output.
+
+     On the flip side, if the core file is missing the build-id data, then
+     we'd still like to include the executable, if the user has gone to the
+     trouble of telling GDB about it.
+
+     Find the executable's build-id now, and compare the value with each
+     build-id from the core-file.  If we find a matching build-id from the
+     core file, and if the filename matches the executable's filename,
+     then we avoid adding the executable to LIST.  */
+  const bfd_build_id *exec_build_id
+    = build_id_bfd_get (current_program_space->exec_bfd ());
+  const char *exec_filename = current_program_space->exec_filename ();
+
+  for (const auto &it : m_mapped_file_info.filename_to_build_id_map ())
+    {
+      if (exec_build_id != nullptr
+	  && exec_filename != nullptr
+	  && build_id_equal (exec_build_id, it.second)
+	  && strcmp (exec_filename, it.first.c_str ()) == 0)
+	{
+	  /* The core file already contains an entry with this build-id and
+	     filename.  Clear EXEC_FILENAME and EXEC_BUILD_ID so we don't
+	     add these to LIST later.  */
+	  exec_filename = nullptr;
+	  exec_build_id = nullptr;
+	}
+
+      list.emplace_back (it.second, std::string (it.first));
+    }
+
+  /* Add the executable to LIST if it wasn't in the core file already.  */
+  if (exec_filename != nullptr && exec_build_id != nullptr)
+    list.emplace_back (exec_build_id, std::string (exec_filename));
+
+  return true;
+}
 
 core_target::core_target ()
 {

@@ -83,6 +83,7 @@ typedef const gdb_byte const_gdb_byte;
 #include "command.h"
 #include "disasm-flags.h"
 #include "tracepoint.h"
+#include "build-id.h"
 #include "gdbsupport/fileio.h"
 #include "gdbsupport/x86-xstate.h"
 
@@ -1399,6 +1400,12 @@ struct target_ops
     virtual void displaced_step_restore_all_in_ptid (inferior *parent_inf,
 						     ptid_t child_ptid)
       TARGET_DEFAULT_FUNC (default_displaced_step_restore_all_in_ptid);
+
+    /* Add entries to LIST.  Return true if all build-ids have been
+       recorded, otherwise, return false.  */
+    virtual bool gather_build_ids (std::vector<build_id_and_filename> &list,
+				   int from_tty)
+      TARGET_DEFAULT_RETURN (false);
   };
 
 /* Deleter for std::unique_ptr.  See comments in
@@ -2659,5 +2666,9 @@ extern void target_prepare_to_generate_core (void);
 
 /* See to_done_generating_core.  */
 extern void target_done_generating_core (void);
+
+/* See target::gather_build_ids.  */
+extern std::vector<build_id_and_filename>
+  target_gather_build_ids (int from_tty);
 
 #endif /* GDB_TARGET_H */

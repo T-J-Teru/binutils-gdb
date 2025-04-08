@@ -23,6 +23,33 @@
 #include "gdb_bfd.h"
 #include "gdbsupport/rsp-low.h"
 
+/* Structure that associates a build-id with the filename in which the
+   build-id was found.  */
+
+struct build_id_and_filename
+{
+  /* Constructor.  */
+  build_id_and_filename (const bfd_build_id *build_id, std::string filename)
+    : m_build_id (build_id),
+      m_filename (std::move (filename))
+  { /* Nothing.  */ }
+
+  /* The build-id.  */
+  const bfd_build_id *build_id () const
+  { return m_build_id; }
+
+  /* The filename.  */
+  const std::string &filename () const
+  { return m_filename; }
+
+private:
+  /* A build-id.  */
+  const bfd_build_id *m_build_id;
+
+  /* The filename from which, or for which, M_BUILD_ID is associated.  */
+  std::string m_filename;
+};
+
 /* Locate NT_GNU_BUILD_ID from ABFD and return its content.  */
 
 extern const struct bfd_build_id *build_id_bfd_get (bfd *abfd);

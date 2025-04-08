@@ -22713,6 +22713,25 @@ content for the build ID string.  The same section with an identical
 value is present in the original built binary with symbols, in its
 stripped variant, and in the separate debugging information file.
 
+@table @code
+@anchor{info build-ids command}
+@kindex info build-ids
+@cindex build-ids, listing
+@item info build-ids
+Print the filename, and build-id, for any file associated with the
+current inferior, which has a build-id.  If a file doesn't have a
+build-id, then it will not be included in the output of this command.
+
+The set of files that will be listed by this command varies based on
+the connection type, for native (@pxref{target native command}) and
+remote (@pxref{Remote Debugging}) connections, @value{GDBN} will check
+the current executable, and any loaded shared libraries for build-ids.
+For core file debugging (@pxref{core-file command}), @value{GDBN} will
+check all of the files referenced from the core file for build-ids,
+this will include files that are referenced by the core file, but
+@value{GDBN} was unable to find.
+@end table
+
 The debugging information file itself should be an ordinary
 executable, containing a full set of linker symbols, sections, and
 debugging information.  The sections of the debugging information file
@@ -23436,6 +23455,7 @@ provide these.  For info about any processor-specific simulator details,
 see the appropriate section in @ref{Embedded Processors, ,Embedded
 Processors}.
 
+@anchor{target native command}
 @item target native
 @cindex native target
 Setup for local/native process debugging.  Useful to make the

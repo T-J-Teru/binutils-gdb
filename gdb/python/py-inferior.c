@@ -865,6 +865,59 @@ infpy_unset_env (PyObject *obj, PyObject *args, PyObject *kw)
   Py_RETURN_NONE;
 }
 
+/* Implement gdb.Inferior.build_ids().  */
+
+static PyObject *
+infpy_build_ids (PyObject *obj)
+{
+  inferior_object *self = (inferior_object *) obj;
+
+  INFPY_REQUIRE_VALID (self);
+
+  scoped_restore_current_inferior_for_memory restore_inferior (self->inferior);
+
+  std::vector<build_id_and_filename> build_id_and_filename_list;
+  try
+    {
+      build_id_and_filename_list = target_gather_build_ids (false);
+    }
+  catch (const gdb_exception &except)
+    {
+      return gdbpy_handle_gdb_exception (nullptr, except);
+    }
+
+  gdbpy_ref<> result_list (PyList_New (0));
+  if (result_list == nullptr)
+    return nullptr;
+
+  for (const auto &it : build_id_and_filename_list)
+    {
+      gdbpy_ref<> tuple (PyTuple_New (2));
+      if (tuple == nullptr)
+       return nullptr;
+
+      gdbpy_ref<> filename_str
+	= host_string_to_python_string (it.filename ().c_str ());
+      if (filename_str == nullptr)
+       return nullptr;
+      if (PyTuple_SetItem (tuple.get (), 0, filename_str.release ()) != 0)
+       return nullptr;
+
+      std::string build_id = build_id_to_string (it.build_id ());
+      gdbpy_ref<> build_id_str
+       = host_string_to_python_string (build_id.c_str ());
+      if (build_id_str == nullptr)
+       return nullptr;
+      if (PyTuple_SetItem (tuple.get (), 1, build_id_str.release ()) != 0)
+       return nullptr;
+
+      if (PyList_Append (result_list.get (), tuple.get ()))
+	return nullptr;
+    }
+
+  return result_list.release ();
+}
+
 /* Getter for "arguments".  */
 
 static PyObject *
@@ -1106,6 +1159,10 @@ Set an environment variable of this inferior." },
   { "unset_env", (PyCFunction) infpy_unset_env, METH_VARARGS | METH_KEYWORDS,
     "unset_env (name) -> None\n\
 Unset an environment of this inferior." },
+  { "build_ids", (PyCFunction) infpy_build_ids, METH_NOARGS,
+    "build_ids () -> List\n\
+Return a list of (FILENAME, BUILD_ID) tuples, one entry for each file\n\
+with a build-id in the inferior object." },
   { NULL }
 };
 

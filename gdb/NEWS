@@ -83,6 +83,10 @@ info linker-namespaces [[N]]
   Print information about the given linker namespace (identified as N),
   or about all the namespaces if no argument is given.
 
+info build-ids
+  List the build-ids for all files associated with the current
+  inferior.
+
 * Changed commands
 
 info sharedlibrary
@@ -155,6 +159,10 @@ info threads [-gid] [-stopped] [-running] [ID]...
      invoked without a sub-command name.  This means printing the help
      text for all sub-commands, unless the prefix command is a 'show'
      command, in which case the value of all sub-commands is printed.
+
+  ** gdb.Inferior.build_ids().  This returns a list of (FILENAME,
+     BUILD-ID) tuples.  Each tuple is a file, and its build-id, that
+     is associated with the gdb.Inferior object.
 
 * Guile API
 

@@ -429,3 +429,59 @@ find_objfile_by_build_id (program_space *pspace,
 
   return abfd;
 }
+
+/* Implement 'info build-ids'.  Print a line containing the build-id and
+   filename for every file with a build-id in the current inferior.  */
+static void
+info_build_ids_command (const char *args, int from_tty)
+{
+  std::vector<build_id_and_filename> list
+    = target_gather_build_ids (from_tty);
+
+  if (list.empty ())
+    {
+      gdb_printf ("There are no files with a build-id.\n");
+      return;
+    }
+
+  /* Minimum lengths based on the column heading string.  */
+  std::string::size_type longest_build_id = 8;
+  std::string::size_type longest_filename = 4;
+
+  /* Update the column widths based on the content.  */
+  for (const auto &it : list)
+    {
+      longest_build_id
+	= std::max (build_id_to_string (it.build_id ()).length (),
+		    longest_build_id);
+
+      longest_filename
+	= std::max (longest_filename, it.filename ().length ());
+    }
+
+  /* Now output the table.  */
+  ui_out_emit_table emitter (current_uiout, 2, -1, "CoreFileBuildIDs");
+  current_uiout->table_header (longest_build_id, ui_left,
+			       "build_id", "Build Id");
+  current_uiout->table_header (longest_filename, ui_left,
+			       "objfile", "File");
+  current_uiout->table_body ();
+
+  for (const auto &it : list)
+    {
+      ui_out_emit_tuple tuple_emitter (current_uiout, nullptr);
+      current_uiout->field_string ("build_id",
+				   build_id_to_string (it.build_id ()));
+      current_uiout->field_string ("objfile", it.filename (),
+				   file_name_style.style ());
+      current_uiout->text ("\n");
+    }
+}
+
+void _initialize_build_id ();
+void
+_initialize_build_id ()
+{
+  add_info ("build-ids", info_build_ids_command, _("\
+List build-ids of files in the current inferior."));
+}

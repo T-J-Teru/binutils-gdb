@@ -4409,6 +4409,24 @@ exists_non_stop_target ()
   return false;
 }
 
+/* See target.h.  */
+
+std::vector<build_id_and_filename>
+target_gather_build_ids (int from_tty)
+{
+  std::vector<build_id_and_filename> list;
+
+  for (target_ops *t = current_inferior ()->top_target ();
+       t != NULL;
+       t = t->beneath ())
+    {
+      if (t->gather_build_ids (list, from_tty))
+	break;
+    }
+
+  return list;
+}
+
 /* Controls if targets can report that they always run in non-stop
    mode.  This is just for maintainers to use when debugging gdb.  */
 enum auto_boolean target_non_stop_enabled = AUTO_BOOLEAN_AUTO;

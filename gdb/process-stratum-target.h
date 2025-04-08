@@ -79,6 +79,11 @@ public:
 		    target_waitkind fork_kind, bool follow_child,
 		    bool detach_on_fork) override;
 
+  /* Record filename and build-id for the executable and each shared
+     library of the current process, results are added to LIST.  */
+  bool gather_build_ids (std::vector<build_id_and_filename> &list,
+			 int from_tty) override;
+
   /* True if any thread is, or may be executing.  We need to track
      this separately because until we fully sync the thread list, we
      won't know whether the target is fully stopped, even if we see

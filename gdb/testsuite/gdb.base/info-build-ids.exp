@@ -1,0 +1,428 @@
+# Copyright 2025 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test the 'info build-ids' command.  This covers the native/remote
+# target use case, and also the core file use case.
+#
+# This test also includes testing of the Python API as it fits so
+# easily into this script.
+
+require allow_shlib_tests
+
+# Running the tests on a remote hosts means that the filename regexp
+# don't match, we could fix that but, there are also problems with the
+# core file tests.  The core files are generated on the build machine,
+# but would then need to be copied to the host to be loaded, at that
+# point, none of the paths in the core file are valid any longer.
+# With all these issues, it's easier to just skip remote hosts.
+require {!is_remote host}
+
+standard_testfile .c -shlib.c
+
+set pyfile [gdb_remote_download host ${srcdir}/${subdir}/${testfile}.py]
+
+# The Python script creates a new command 'info py-build-ids' which
+# produces output identical to 'info build-ids', but uses the Python
+# API to collect the data.
+#
+# In the rest of this script, everywhere that we might use 'info
+# build-ids' we loop over BUILD_ID_CMDS and try each of these, the
+# output should be identical.
+set build_id_cmds { build-ids }
+if { [allow_python_tests] } {
+    lappend build_id_cmds py-build-ids
+}
+
+# Run FILENAME and generate a core file.  Ensure that the generated
+# core file has a build-id for FILENAME within it.  If the core file
+# cannot be created, or the core file lacks the build-id, then return
+# the empty string, otherwise, return the filename for the generated
+# core file.
+proc generate_core_file { filename } {
+    set corefile [core_find $filename]
+    if {$corefile == ""} {
+	untested "could not generate core file"
+	return ""
+    }
+
+    # Check the corefile has a build-id for the executable.
+    if { [catch "exec [gdb_find_eu-unstrip] -n --core $corefile" output] == 0 } {
+	set line [lindex [split $output "\n"] 0]
+	set binfile_re (?:[string_to_regexp $filename]|\\\[(?:exe|pie)\\\])
+	if { ![regexp "^${::hex}\\+${::hex} \[a-f0-9\]+@${::hex}.*$binfile_re$" $line] } {
+	    unsupported "no build-id for executable in corefile"
+	    return ""
+	}
+    } else {
+	unsupported "eu-unstrip tool failed"
+	return ""
+    }
+
+    return $corefile
+}
+
+# Build an executable and shared library.  Start GDB and check the
+# 'info build-ids' output as the executable is first loaded, then
+# started, and finally, allowed to terminate.
+proc_with_prefix test_exec_targets {} {
+    # Compile shared library.
+    set libname lib$::testfile.so
+    set objlib [standard_output_file $libname]
+    set opts [list debug shlib buildid]
+    if {[build_executable "build shlib" $objlib $::srcfile2 $opts] == -1} {
+	return
+    }
+
+    # Compile main program.
+    set exec_filename $::binfile
+    set opts [list debug shlib=$objlib buildid]
+    if {[build_executable "build exec" $exec_filename $::srcfile $opts] == -1} {
+	return
+    }
+
+    set build_id_lib [get_build_id $objlib]
+    set build_id_exe [get_build_id $exec_filename]
+
+    if { $build_id_exe eq "" || $build_id_exe eq "" } {
+	unsupported "couldn't find required build-ids"
+	return
+    }
+
+    set objlib [gdb_download_shlib $objlib]
+    set objlib_re [string_to_regexp $objlib]
+    if { [is_remote target] } {
+	set objlib_re "(?:target:)?$objlib_re"
+    }
+
+    clean_restart
+
+    if { [allow_python_tests] } {
+	gdb_test_no_output "source $::pyfile" "load python script"
+    }
+
+    # GDB is started, but the inferior has no file loaded yet, so there
+    # are no build-ids to display.
+    foreach cmd $::build_id_cmds {
+	gdb_test "info $cmd" "^There are no files with a build-id\\." \
+	    "'info $cmd' when no files are loaded"
+    }
+
+    gdb_file_cmd $exec_filename
+
+    # The inferior now has a file loaded, so that is all that should
+    # appear in the build-ids list.
+    foreach cmd $::build_id_cmds {
+	gdb_test "info $cmd" \
+	    [multi_line \
+		 "Build Id\\s+File.*" \
+		 "$build_id_exe\\s+[string_to_regexp $exec_filename]\\s*"] \
+	    "'info $cmd' before starting the inferior"
+    }
+
+    if {![runto_main]} {
+	return
+    }
+
+    # With the inferior started we should now see the build-ids for all
+    # libraries and the executable.  We only check for the build-id of the
+    # executable and the shared library we built above though.
+    foreach cmd $::build_id_cmds {
+	set saw_build_id_lib false
+	set saw_build_id_exe false
+
+	gdb_test_multiple "info $cmd" "'info $cmd' with inferior started" {
+	    -re "^info $cmd\r\n" {
+		exp_continue
+	    }
+
+	    -re "^Build Id\\s+File\\s*\r\n" {
+		exp_continue
+	    }
+
+	    -re "^$build_id_exe\\s+[string_to_regexp $exec_filename]\\s*\r\n" {
+		set saw_build_id_exe true
+		exp_continue
+	    }
+
+	    -re "^$build_id_lib\\s+$objlib_re\\s*\r\n" {
+		set saw_build_id_lib true
+		exp_continue
+	    }
+
+	    -re "^$::gdb_prompt $" {
+		gdb_assert { $saw_build_id_exe && $saw_build_id_lib } \
+		    $gdb_test_name
+	    }
+
+	    -re "^\[^\r\n\]*\r\n" {
+		exp_continue
+	    }
+	}
+    }
+
+    gdb_continue_to_end
+
+    # The 'extended-remote' target doesn't unpush itself when the inferior
+    # exits (which makes sense), but as a consequence, the build-ids list
+    # will include the build-ids for the shared libraries that have not
+    # (yet) been cleared from the inferior's library list.
+    if {[target_info gdb_protocol] != "extended-remote"} {
+	# The inferior now has a file loaded, so that is all that should
+	# appear in the build-ids list.
+	foreach cmd $::build_id_cmds {
+	    gdb_test "info $cmd" \
+		[multi_line \
+		     "Build Id\\s+File.*" \
+		     "$build_id_exe\\s+[string_to_regexp $exec_filename]\\s*"] \
+		"'info $cmd' after inferior exits"
+	}
+    }
+}
+
+# Compile an executable and shared library that result in a core file.
+# Load the core file into GDB and check the 'info build-ids' output.
+proc_with_prefix test_core_targets {} {
+    # Compile shared library.
+    set libname lib${::testfile}-core.so
+    set objlib [standard_output_file $libname]
+    set opts [list debug shlib buildid]
+    if {[build_executable "build shlib" $objlib $::srcfile2 $opts] == -1} {
+	return
+    }
+
+    # Compile main program, this time arrange for the executable to dump
+    # core.
+    set exec_filename ${::binfile}-core
+    set opts [list debug shlib=$objlib buildid additional_flags=-DDUMP_CORE]
+    if {[build_executable "build exec" $exec_filename $::srcfile $opts] == -1} {
+	return
+    }
+
+    set build_id_lib [get_build_id $objlib]
+    set build_id_exe [get_build_id $exec_filename]
+
+    set corefile [generate_core_file $exec_filename]
+    if {$corefile == ""} {
+	return
+    }
+
+    clean_restart
+
+    if { [allow_python_tests] } {
+	gdb_test_no_output "source $::pyfile" "load python script"
+    }
+
+    # Load the core file.  GDB should auto-load the executable.
+    gdb_test "core-file $corefile" "Program terminated with .*" \
+	"load core file"
+
+    gdb_test "info inferiors" \
+	"\r\n\\*\\s+1\[^\r\n\]+[string_to_regexp $exec_filename]\\s*" \
+	"confirm executable was auto-loaded"
+
+    # The build-ids for all libraries and the executable should now be
+    # visible.
+    foreach cmd $::build_id_cmds {
+	set saw_build_id_lib false
+	set saw_build_id_exe false
+	gdb_test_multiple "info $cmd" "'info $cmd'" {
+	    -re "^info $cmd\r\n" {
+		exp_continue
+	    }
+
+	    -re "^Build Id\\s+File\\s*\r\n" {
+		exp_continue
+	    }
+
+	    -re "^$build_id_exe\\s+[string_to_regexp $exec_filename]\\s*\r\n" {
+		set saw_build_id_exe true
+		exp_continue
+	    }
+
+	    -re "^$build_id_lib\\s+[string_to_regexp $objlib]\\s*\r\n" {
+		set saw_build_id_lib true
+		exp_continue
+	    }
+
+	    -re "^$::gdb_prompt $" {
+		gdb_assert { $saw_build_id_exe && $saw_build_id_lib } \
+		    $gdb_test_name
+	    }
+
+	    -re "^\[^\r\n\]*\r\n" {
+		exp_continue
+	    }
+	}
+    }
+
+    # Re-load the core-file, but first, set the executable to a copy of
+    # the expected executable, but with a different name.  Both the
+    # original executable, from the core file, and the new executable,
+    # should show up in the build-ids output.
+
+    set exec_filename_2 [standard_output_file "${::testfile}-core-2"]
+    remote_exec host "cp \"$exec_filename\" \"$exec_filename_2\""
+
+    clean_restart $exec_filename_2
+
+    if { [allow_python_tests] } {
+	gdb_test_no_output "source $::pyfile" "load python script again"
+    }
+
+    # Load the core file.  GDB will not auto-load the executable, as we've
+    # already told GDB which executable to load.
+    gdb_test "core-file $corefile" "Program terminated with .*" \
+	"load core file a second time"
+
+    gdb_test "info inferiors" \
+	"\r\n\\*\\s+1\[^\r\n\]+[string_to_regexp $exec_filename_2]\\s*" \
+	"confirm executable is copy of original"
+
+    # The build-ids for all libraries and the executable should now be
+    # visible.
+    foreach cmd $::build_id_cmds {
+	set saw_build_id_lib false
+	set saw_build_id_exe false
+	set saw_build_id_exe_2 false
+	gdb_test_multiple "info $cmd" "'info $cmd' with exec file" {
+	    -re "^info $cmd\r\n" {
+		exp_continue
+	    }
+
+	    -re "^Build Id\\s+File\\s*\r\n" {
+		exp_continue
+	    }
+
+	    -re "^$build_id_exe\\s+[string_to_regexp $exec_filename]\\s*\r\n" {
+		set saw_build_id_exe true
+		exp_continue
+	    }
+
+	    -re "^$build_id_exe\\s+[string_to_regexp $exec_filename_2]\\s*\r\n" {
+		set saw_build_id_exe_2 true
+		exp_continue
+	    }
+
+	    -re "^$build_id_lib\\s+[string_to_regexp $objlib]\\s*\r\n" {
+		set saw_build_id_lib true
+		exp_continue
+	    }
+
+	    -re "^$::gdb_prompt $" {
+		gdb_assert { $saw_build_id_exe \
+				 && $saw_build_id_lib \
+				 && $saw_build_id_exe_2 } \
+		    $gdb_test_name
+	    }
+
+	    -re "^\[^\r\n\]*\r\n" {
+		exp_continue
+	    }
+	}
+    }
+}
+
+# Build a new executable and shared library.  Generate a core file
+# from the executable, then delete the executable and shared library.
+#
+# Load the core file into GDB and check the 'info build-ids' output.
+# Ensure that the executable and shared library show up in the output,
+# and have the correct build-id.
+proc_with_prefix test_core_targets_missing_files {} {
+    # Compile shared library, but with a different name.  We're going to
+    # delete this shared library once the core file has been created.
+    set libname lib${::testfile}-missing.so
+    set objlib [standard_output_file $libname]
+    set opts [list debug shlib buildid]
+    if {[build_executable "build shlib" $objlib $::srcfile2 $opts] == -1} {
+	return
+    }
+
+    # Compile main program, again, this program will dump core, but this
+    # time link against the new shared library.
+    set exec_filename ${::binfile}-missing
+    set opts [list debug shlib=$objlib buildid additional_flags=-DDUMP_CORE]
+    if {[build_executable "build exec for missing lib" $exec_filename $::srcfile $opts] == -1} {
+	return
+    }
+
+    # Grab the build-ids.
+    set build_id_lib [get_build_id $objlib]
+    set build_id_exe [get_build_id $exec_filename]
+
+    # Generate the core files.
+    set corefile [generate_core_file $exec_filename]
+    if {$corefile == ""} {
+	return
+    }
+
+    # Now delete the shared library and executable.  The core file will
+    # still reference these files though.
+    remote_exec host "rm \"$objlib\""
+    remote_exec host "rm \"$exec_filename\""
+
+    clean_restart
+
+    if { [allow_python_tests] } {
+	gdb_test_no_output "source $::pyfile" "load python script"
+    }
+
+    # Load the core file.  GDB will not auto-load the executable, as we've
+    # already told GDB which executable to load.
+    gdb_test "core-file $corefile" "Program terminated with .*" \
+	"load core file a third time"
+
+    # The build-ids for all libraries and the executable should now be
+    # visible.  This includes the build-id for the shared library that is
+    # missing from the filesystem, but which is referenced from the core
+    # file.
+    foreach cmd $::build_id_cmds {
+	set saw_build_id_lib false
+	set saw_build_id_exe false
+	gdb_test_multiple "info $cmd" "'info $cmd'" {
+	    -re "^info $cmd\r\n" {
+		exp_continue
+	    }
+
+	    -re "^Build Id\\s+File\\s*\r\n" {
+		exp_continue
+	    }
+
+	    -re "^$build_id_exe\\s+[string_to_regexp $exec_filename]\\s*\r\n" {
+		set saw_build_id_exe true
+		exp_continue
+	    }
+
+	    -re "^$build_id_lib\\s+[string_to_regexp $objlib]\\s*\r\n" {
+		set saw_build_id_lib true
+		exp_continue
+	    }
+
+	    -re "^$::gdb_prompt $" {
+		gdb_assert { $saw_build_id_exe && $saw_build_id_lib } \
+		    $gdb_test_name
+	    }
+
+	    -re "^\[^\r\n\]*\r\n" {
+		exp_continue
+	    }
+	}
+    }
+}
+
+# Run the tests.
+test_exec_targets
+test_core_targets
+test_core_targets_missing_files

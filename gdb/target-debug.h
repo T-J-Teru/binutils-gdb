@@ -192,6 +192,11 @@ target_debug_print_std_vector_static_tracepoint_marker
 { return host_address_to_string (vec.data ()); }
 
 static std::string
+target_debug_print_std_vector_build_id_and_filename_r
+  (const std::vector<build_id_and_filename> &vec)
+{ return host_address_to_string (vec.data ()); }
+
+static std::string
 target_debug_print_const_target_desc_p (const target_desc *tdesc)
 { return host_address_to_string (tdesc); }
 
