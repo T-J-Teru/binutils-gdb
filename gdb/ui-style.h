@@ -330,6 +330,12 @@ struct ui_file_style
     return m_intensity;
   }
 
+  /* Set the intensity of this style.  */
+  void set_intensity (intensity i)
+  {
+    m_intensity = i;
+  }
+
   /* Parse an ANSI escape sequence in BUF, modifying this style.  BUF
      must begin with an ESC character.  Return true if an escape
      sequence was successfully parsed; false otherwise.  In either
