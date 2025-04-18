@@ -179,6 +179,13 @@ info threads [-gid] [-stopped] [-running] [ID]...
   ** New constant gdb.PARAM_COLOR represents color type of a
      gdb.Parameter.value.  Parameter's value is gdb.Color instance.
 
+  ** New class gdb.Style for representing styles, a collection of
+     foreground and background gdb.Color objects, and an intensity.
+
+  ** New constants gdb.INTENSITY_NORMAL, gdb.INTENSITY_BOLD, and
+     gdb.INTENSITY_DIM for use with gdb.Style when representing
+     intensities.
+
   ** The memory_source argument (the second argument) has been removed
      from gdb.disassembler.builtin_disassemble.  This argument was
      never used by GDB, and was added by mistake.  The unused argument
