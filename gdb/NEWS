@@ -138,6 +138,10 @@ info threads [-gid] [-stopped] [-running] [ID]...
      gdb.INTENSITY_DIM for use with gdb.Style when representing
      intensities.
 
+  ** New gdb.StyleParameterSet for creating custom style settings.
+     Use gdb.StyleParameterSet(NAME) to create 'set style NAME ...'
+     and 'show style NAME ...' parameters.
+
   ** The memory_source argument (the second argument) has been removed
      from gdb.disassembler.builtin_disassemble.  This argument was
      never used by GDB, and was added by mistake.  The unused argument
