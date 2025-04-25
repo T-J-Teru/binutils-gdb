@@ -8896,6 +8896,46 @@ code_breakpoint::code_breakpoint (struct gdbarch *gdbarch_,
   filter = std::move (filter_);
 }
 
+static
+breakpoint_source capture_source_lines(gdb::array_view<const symtab_and_line> sals, int num_of_lines)
+{
+  const std::vector<off_t> *offsets;
+  breakpoint_source tmp_source;
+  // we want this number to be configured
+  // by the user but let it be num_of_lines for now
+  tmp_source.captured_lines = num_of_lines;
+  tmp_source.bp_line = sals[0].line;
+  int start_line;
+
+  tmp_source.bp_line = sals[0].line;
+  for (int j = (tmp_source.captured_lines - 1)/2; j >= 0; j--) {
+      if ((start_line = sals[0].line - j) > 0)
+	break;
+  }
+  if (start_line < 0)
+    start_line = sals[0].line;
+  if (g_source_cache.get_line_charpos (sals[0].symtab, &offsets)) {
+      for (int j = 0; j < (tmp_source.captured_lines - 1)/2; j++) {
+	  if (start_line + tmp_source.captured_lines >= (int) offsets->size ())
+	    tmp_source.captured_lines--;
+      }
+      for (int j = 0; j < tmp_source.captured_lines; j++) {
+	  std::string line;
+	  if (!g_source_cache.get_source_lines(sals[0].symtab, start_line + j, start_line + j, &line))
+	    error (_("Failed to capture the source lines.\n"));
+	  tmp_source.source_lines.push_back (line);
+	  if (start_line + j == sals[0].line) {
+	      printf("> %d %s\n", start_line + j, line.c_str());
+	      tmp_source.bp_line_stored = j;
+	  } else {
+	    printf("  %d %s\n", start_line + j, line.c_str());
+	  }
+      }
+  }
+
+  return tmp_source;
+}
+
 static void
 create_breakpoint_sal (struct gdbarch *gdbarch,
 		       gdb::array_view<const symtab_and_line> sals,
@@ -8923,46 +8963,8 @@ create_breakpoint_sal (struct gdbarch *gdbarch,
 				enabled, flags,
 				display_canonical);
 
-  printf("create_breakpoint_sals\n");
-  if ( executable_reloaded == false) {
-      for (int i = 0; i < sals.size(); i++) {
-	  const std::vector<off_t> *offsets;
-	  breakpoint_source tmp_source;
-	  // we want this number to be configured
-	  // by the user but let it be 5 for now
-	  tmp_source.captured_lines = 5;
-	  tmp_source.bp_line = sals[i].line;
-	  int start_line;
-
-	  tmp_source.captured_lines = 5;
-	  tmp_source.bp_line = sals[i].line;
-	  for (int j = (tmp_source.captured_lines - 1)/2; j >= 0; j--) {
-	      if ((start_line = sals[i].line - j) > 0)
-		break;
-	  }
-	  if (start_line < 0)
-	    start_line = sals[i].line;
-	  printf("start_line %d, i: %d, line: %d\n", start_line, i, sals[i].line);
-	  if (g_source_cache.get_line_charpos (sals[i].symtab, &offsets)) {
-	      for (int j = 0; j < (tmp_source.captured_lines - 1)/2; j++) {
-		  if (start_line + tmp_source.captured_lines >= (int) offsets->size ())
-		    tmp_source.captured_lines--;
-	      }
-	      for (int j = 0; j < tmp_source.captured_lines; j++) {
-		  std::string line;
-		  if (!g_source_cache.get_source_lines(sals[i].symtab, start_line + j, start_line + j, &line))
-		    error (_("Failed to capture the source lines.\n"));
-		  tmp_source.source_lines.push_back (line);
-		  if (start_line + j == sals[i].line) {
-		      printf("> %d %s\n", start_line + j, line.c_str());
-		      tmp_source.bp_line_stored = j;
-		  } else
-		    printf("  %d %s\n", start_line + j, line.c_str());
-	      }
-	      b->bp_source = tmp_source;
-	  }
-      }
-  }
+  if ( executable_reloaded == false )
+     b->bp_source = capture_source_lines(sals, 5);
 
   install_breakpoint (internal, std::move (b), 0);
 }
@@ -13225,6 +13227,23 @@ code_breakpoint::location_spec_to_sals (location_spec *locspec,
   return sals;
 }
 
+static void
+print_breakpoint_source (const breakpoint_source &source)
+{
+  printf("PRINT BREAKPOINT SOURCE\n");
+  for (int i = 0; i < source.captured_lines; i++) {
+    if (i == source.bp_line_stored)
+      printf("> %d %s\n", i, source.source_lines[i].data ());
+    else
+      printf("  %d %s\n", i, source.source_lines[i].data ());
+  }
+  
+  printf("captured_lines %d\n", source.captured_lines);
+  printf("bp_line %d\n", source.bp_line);
+  printf("bp_line_stored %d\n", source.bp_line_stored);
+  printf("END\n");
+}
+
 /* The default re_set method, for typical hardware or software
    breakpoints.  Reevaluate the breakpoint and recreate its
    locations.  */
@@ -13233,6 +13252,7 @@ void
 code_breakpoint::re_set_default (struct program_space *filter_pspace)
 {
   std::vector<symtab_and_line> expanded, expanded_end;
+  breakpoint_source tmp_source; 
 
   /* If this breakpoint is thread- or inferior-specific, then find the
      program space in which this breakpoint exists.  Otherwise, for
@@ -13262,29 +13282,65 @@ code_breakpoint::re_set_default (struct program_space *filter_pspace)
 	    expanded_end = std::move (sals_end);
 	}
     }
+  //printf("executable_reloaded %d number %d\n", executable_reloaded, this->number);
+  if (executable_reloaded) {
+      int found;
+      std::vector<symtab_and_line> sals
+	= location_spec_to_sals (locspec.get (), filter_pspace, &found);
+      int bp_stored = bp_source.bp_line_stored;
+      std::string line;
+      // load the line breakpoint is currently set to
+      if (!g_source_cache.get_source_lines(sals[0].symtab, expanded[0].line, expanded[0].line, &line))
+	error (_("Failed to capture the source lines.\n"));
+      // compare the line breakpoint is currently set to with the line the
+      // breakpoint used to be set to before the executable was reloaded
+      if (!(strcmp(line.data(), bp_source.source_lines[bp_stored].data())))
+	printf("The breakpoint %d didn't change location\n", this->number);
+      else {
+	printf("The breakpoint %d changed the location\n", this->number);
+	//re-capture the source lines as exacutable was reloaded
+	tmp_source = capture_source_lines(sals, 10);
+	//printf("printing tmp_source\n");
+	print_breakpoint_source(tmp_source);
+	for (int i = 0; i < tmp_source.captured_lines; i++) {
+	    printf("i %d, bp_source.source_lines[bp_stored].data()) %s, tmp_source.source_lines[i].data() %s\n", i, bp_source.source_lines[bp_stored].data(), tmp_source.source_lines[i].data()); 
+	    if (!(strcmp(bp_source.source_lines[bp_stored].data(), tmp_source.source_lines[i].data()))) {
+		int new_bp_line = tmp_source.bp_line + i - tmp_source.bp_line_stored;
+	      printf("The breakpoint %d moved to line %d\n", this->number,
+		     new_bp_line);
+	      printf("bp_source.bp_line %d i %d, bp_stored %d\n",  bp_source.bp_line, i, bp_source.bp_line_stored);
+	      // Adjust the breakpoint location, only in a case, there's only
+	      // one location assiciated with this breakpoint
+	      if (has_single_location ()) {
+		  location_spec *spec = locspec.get ();
+		  std::string bp_string = sals[0].symtab->filename;
+		  bp_string.append (":");
+		  bp_string.append (std::to_string (new_bp_line));
+		  spec->set_string (std::move (bp_string));
+		  if (spec->type() == EXPLICIT_LOCATION_SPEC)
+		    {
+		      explicit_location_spec *explicit_spec = gdb::checked_static_cast<explicit_location_spec *> (spec);
+		      explicit_spec->line_offset.offset = new_bp_line;
+		    }
+		  tmp_source.bp_line = new_bp_line;
+
+		  sals = location_spec_to_sals (spec, filter_pspace, &found);
+		  sals[0].line = new_bp_line;
+		  if (found)
+		    expanded = std::move (sals);
+	      }
+	    }
+	}
+      // update stored sources with newly loaded ones
+      bp_source = std::move (tmp_source);
+      }
+  }
 
   /* Update the locations for this breakpoint.  For thread-specific
      breakpoints this will remove any old locations that are for the wrong
      program space -- this can happen if the user changes the thread of a
      thread-specific breakpoint.  */
   update_breakpoint_locations (this, filter_pspace, expanded, expanded_end);
-  //printf("executable_reloaded %d number %d\n", executable_reloaded, this->number);
-  if (executable_reloaded) {
-      int found;
-      std::vector<symtab_and_line> sals
-	= location_spec_to_sals (locspec.get (), filter_pspace, &found);
-      int start_line = bp_source.bp_line;
-      int bp_stored = bp_source.bp_line_stored;
-      std::string line;
-      if (!g_source_cache.get_source_lines(sals[0].symtab, start_line, start_line, &line))
-	error (_("Failed to capture the source lines.\n"));
-      if (!(strcmp(line.data(), bp_source.source_lines[bp_stored].data())))
-	printf("The breakpoint %d didn't change location\n", this->number);
-      else
-	printf("The breakpoint %d changed the location\n", this->number);
-      printf("line %s\n", line.data());
-      printf("stored line %s\n", bp_source.source_lines[bp_stored].data());
-  }
 }
 
 /* Re-set breakpoint locations for the current program space.
