@@ -25,11 +25,29 @@
 #include "../features/riscv/64bit-fpu.c"
 #include "../features/riscv/rv32e-xregs.c"
 
+#include "opcode/riscv-opc.h"
+
 #ifndef GDBSERVER
 #define STATIC_IN_GDB static
 #else
 #define STATIC_IN_GDB
 #endif
+
+#ifdef GDBSERVER
+/* Work around issue where trying to include riscv-tdep.h (to get access to canonical RISCV_V0_REGNUM declaration
+   from that header) is problamtic for gdbserver build.  */
+#define RISCV_V0_REGNUM 4162
+#else
+#include "riscv-tdep.h"
+#include "defs.h"
+#endif
+
+static int
+create_feature_riscv_vector_from_features (struct target_desc *result,
+					   long regnum,
+					   const struct riscv_gdbarch_features
+					   features);
+
 
 /* See arch/riscv.h.  */
 
@@ -83,14 +101,168 @@ riscv_create_target_description (const struct riscv_gdbarch_features features)
   else if (features.flen == 8)
     regnum = create_feature_riscv_64bit_fpu (tdesc.get (), regnum);
 
-  /* Currently GDB only supports vector features coming from remote
-     targets.  We don't support creating vector features on native targets
-     (yet).  */
   if (features.vlen != 0)
-    error (_("unable to create vector feature"));
+    regnum =
+      create_feature_riscv_vector_from_features (tdesc.get (),
+						 regnum, features);
 
   return tdesc;
 }
+
+
+
+/* Usually, these target_desc instances are static for an architecture, and expressable
+   in XML format, but this is a special case where length of a RISC-V vector register
+   is not architecturally fixed to a constant (the maximuim width is a defined constant,
+   but it's nice to tailor a target description the actual VLENB) */
+static int
+create_feature_riscv_vector_from_features (struct target_desc *result,
+					   long regnum,
+					   const struct riscv_gdbarch_features
+					   features)
+{
+  struct tdesc_feature *feature;
+  unsigned long bitsize;
+
+  feature = tdesc_create_feature (result, "org.gnu.gdb.riscv.vector");
+  tdesc_type *element_type;
+
+  /* if VLENB is present (which we know it is present if execution reaches this function),
+     then we know by definition that it is at least 4 bytes wide */
+
+  element_type = tdesc_named_type (feature, "uint8");
+  tdesc_create_vector (feature, "bytes", element_type, features.vlen);
+
+  element_type = tdesc_named_type (feature, "uint16");
+  tdesc_create_vector (feature, "shorts", element_type, features.vlen / 2);
+
+  element_type = tdesc_named_type (feature, "uint32");
+  tdesc_create_vector (feature, "words", element_type, features.vlen / 4);
+
+  /* Need VLENB value checks for element chunks larger than 4 bytes */
+
+  if (features.vlen >= 8)
+    {
+      element_type = tdesc_named_type (feature, "uint64");
+      tdesc_create_vector (feature, "longs", element_type, features.vlen / 8);
+    }
+
+  /* QEMU and OpenOCD include the quads width in their target descriptions, so we're
+     following that precedent, even if it's not particularly useful in practice, yet */
+
+  if (features.vlen >= 16)
+    {
+      element_type = tdesc_named_type (feature, "uint128");
+      tdesc_create_vector (feature, "quads", element_type,
+			   features.vlen / 16);
+    }
+
+  tdesc_type_with_fields *type_with_fields;
+  type_with_fields = tdesc_create_union (feature, "riscv_vector");
+  tdesc_type *field_type;
+
+  if (features.vlen >= 16)
+    {
+      field_type = tdesc_named_type (feature, "quads");
+      tdesc_add_field (type_with_fields, "q", field_type);
+    }
+  if (features.vlen >= 8)
+    {
+      field_type = tdesc_named_type (feature, "longs");
+      tdesc_add_field (type_with_fields, "l", field_type);
+    }
+
+  /* Again, we know vlenb is >= 4, so no if guards needed for words/shorts/bytes */
+
+  field_type = tdesc_named_type (feature, "words");
+  tdesc_add_field (type_with_fields, "w", field_type);
+
+  field_type = tdesc_named_type (feature, "shorts");
+  tdesc_add_field (type_with_fields, "s", field_type);
+
+  field_type = tdesc_named_type (feature, "bytes");
+  tdesc_add_field (type_with_fields, "b", field_type);
+
+  /* Register vector and CSR definitions using stable magic regnums to
+     ensure compatibility across GDB and gdbserver builds.  */
+  tdesc_create_reg (feature, "vstart", regnum++, 1, NULL, features.xlen * 8, "int");
+  tdesc_create_reg (feature, "vxsat", regnum++, 1, NULL, features.xlen * 8, "int");
+  tdesc_create_reg (feature, "vxrm", regnum++, 1, NULL, features.xlen * 8, "int");
+  tdesc_create_reg (feature, "vcsr", regnum++, 1, NULL, features.xlen * 8, "int");
+  tdesc_create_reg (feature, "vl", regnum++, 1, NULL, features.xlen * 8, "int");
+  tdesc_create_reg (feature, "vtype", regnum++, 1, NULL, features.xlen * 8, "int");
+  tdesc_create_reg (feature, "vlenb", regnum++, 1, NULL, features.xlen * 8, "int");
+
+  bitsize = features.vlen * 8;
+  tdesc_create_reg (feature, "v0", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v1", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v2", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v3", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v4", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v5", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v6", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v7", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v8", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v9", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v10", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v11", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v12", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v13", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v14", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v15", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v16", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v17", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v18", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v19", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v20", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v21", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v22", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v23", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v24", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v25", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v26", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v27", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v28", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v29", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v30", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+  tdesc_create_reg (feature, "v31", regnum++, 1, NULL, bitsize,
+		    "riscv_vector");
+
+
+  return regnum;
+}
+
 
 #ifndef GDBSERVER
 
