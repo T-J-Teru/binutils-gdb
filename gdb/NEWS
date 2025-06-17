@@ -190,6 +190,9 @@ info threads [-gid] [-stopped] [-running] [ID]...
      Use gdb.StyleParameterSet(NAME) to create 'set style NAME ...'
      and 'show style NAME ...' parameters.
 
+  ** The gdb.write() function now takes an additional, optional,
+     'style' argument, which can be used to style the output.
+
   ** The memory_source argument (the second argument) has been removed
      from gdb.disassembler.builtin_disassemble.  This argument was
      never used by GDB, and was added by mistake.  The unused argument
