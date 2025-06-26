@@ -412,8 +412,6 @@ buildsym_compunit::record_block_range (struct block *block,
   if (start != block->start ()
       || end_inclusive + 1 != block->end ())
     m_pending_addrmap_interesting = true;
-
-  m_pending_addrmap.set_empty (start, end_inclusive, block);
 }
 
 struct blockvector *
@@ -449,9 +447,43 @@ buildsym_compunit::make_blockvector ()
   /* If we needed an address map for this symtab, record it in the
      blockvector.  */
   if (m_pending_addrmap_interesting)
-    blockvector->set_map
-      (new (&m_objfile->objfile_obstack) addrmap_fixed
-       (&m_objfile->objfile_obstack, &m_pending_addrmap));
+    {
+      struct addrmap_mutable pending_addrmap;
+      int num_blocks = blockvector->num_blocks ();
+
+      /* If M_PENDING_ADDRMAP_INTERESTING is true then we must have seen
+	 an interesting block.  If we see one block, then we should at a
+	 minimum have a global block, and a static block.  */
+      gdb_assert (num_blocks > 1);
+
+      /* Assert our understanding of how the blocks are laid out.  */
+      gdb_assert (blockvector->block (0)->is_global_block ());
+      gdb_assert (blockvector->block (1)->is_static_block ());
+
+      /* The 'J > 1' here is so that we don't place the global block into
+	 the map.  For CU with gaps, the static block will reflect the
+	 gaps, while the global block will just reflect the full extent of
+	 the range.  */
+      for (int j = num_blocks; j > 1; )
+	{
+	  --j;
+	  struct block *b = blockvector->block (j);
+
+	  gdb_assert (!b->is_global_block ());
+
+	  if (b->is_contiguous ())
+	    pending_addrmap.set_empty (b->start (), (b->end () - 1), b);
+	  else
+	    {
+	      for (const auto &br : b->ranges ())
+		pending_addrmap.set_empty (br.start (), (br.end () - 1), b);
+	    }
+	}
+
+      blockvector->set_map
+	(new (&m_objfile->objfile_obstack) addrmap_fixed
+	 (&m_objfile->objfile_obstack, &pending_addrmap));
+    }
   else
     blockvector->set_map (nullptr);
 
