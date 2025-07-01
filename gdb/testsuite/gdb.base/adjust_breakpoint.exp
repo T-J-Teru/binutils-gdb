@@ -1,0 +1,40 @@
+# Copyright 2025 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Set the breakpoint to certain line in a $srcfile. Replace the $srcfile
+# with a tmp-$srcfile which would be exactly the same exept one line is missing
+# which changes the line where the breakpoint was set to initially.
+# Check if GDB adjusted the line correctly.
+
+standard_testfile .cpp
+set build_srcfile xxx-${testfile}.cpp
+
+set new_source_file [standard_output_file ${build_srcfile}]
+remote_exec build "cp ${srcdir}/${subdir}/${srcfile} $new_source_file"
+if { [prepare_for_testing "failed to prepare" $testfile $new_source_file] } {
+    return -1
+}
+gdb_breakpoint ${build_srcfile}:11
+sleep 2
+
+remote_exec build "cp ${srcdir}/${subdir}/tmp-${srcfile} $new_source_file"
+if {[build_executable "failed to prepare" $testfile $new_source_file] == -1} {
+    return -1
+}
+
+gdb_test "r" ".*"
+gdb_test "info breakpoints"\
+    "breakpoint.*keep.*y.*$hex.*$srcfile:10.*already hit 1 time"\
+    "info breakpoints show the breakpoint was adjusted"
