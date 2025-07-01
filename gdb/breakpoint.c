@@ -13227,22 +13227,22 @@ code_breakpoint::location_spec_to_sals (location_spec *locspec,
   return sals;
 }
 
-static void
-print_breakpoint_source (const breakpoint_source &source)
-{
-  printf("PRINT BREAKPOINT SOURCE\n");
-  for (int i = 0; i < source.captured_lines; i++) {
-    if (i == source.bp_line_stored)
-      printf("> %d %s\n", i, source.source_lines[i].data ());
-    else
-      printf("  %d %s\n", i, source.source_lines[i].data ());
-  }
-  
-  printf("captured_lines %d\n", source.captured_lines);
-  printf("bp_line %d\n", source.bp_line);
-  printf("bp_line_stored %d\n", source.bp_line_stored);
-  printf("END\n");
-}
+//static void
+//print_breakpoint_source (const breakpoint_source &source)
+//{
+//  printf("PRINT BREAKPOINT SOURCE\n");
+//  for (int i = 0; i < source.captured_lines; i++) {
+//    if (i == source.bp_line_stored)
+//      printf("> %d %s\n", i, source.source_lines[i].data ());
+//    else
+//      printf("  %d %s\n", i, source.source_lines[i].data ());
+//  }
+//  
+//  printf("captured_lines %d\n", source.captured_lines);
+//  printf("bp_line %d\n", source.bp_line);
+//  printf("bp_line_stored %d\n", source.bp_line_stored);
+//  printf("END\n");
+//}
 
 /* The default re_set method, for typical hardware or software
    breakpoints.  Reevaluate the breakpoint and recreate its
@@ -13301,9 +13301,9 @@ code_breakpoint::re_set_default (struct program_space *filter_pspace)
 	//re-capture the source lines as exacutable was reloaded
 	tmp_source = capture_source_lines(sals, 10);
 	//printf("printing tmp_source\n");
-	print_breakpoint_source(tmp_source);
+	//print_breakpoint_source(tmp_source);
 	for (int i = 0; i < tmp_source.captured_lines; i++) {
-	    printf("i %d, bp_source.source_lines[bp_stored].data()) %s, tmp_source.source_lines[i].data() %s\n", i, bp_source.source_lines[bp_stored].data(), tmp_source.source_lines[i].data()); 
+	    //printf("i %d, bp_source.source_lines[bp_stored].data()) %s, tmp_source.source_lines[i].data() %s\n", i, bp_source.source_lines[bp_stored].data(), tmp_source.source_lines[i].data()); 
 	    if (!(strcmp(bp_source.source_lines[bp_stored].data(), tmp_source.source_lines[i].data()))) {
 		int new_bp_line = tmp_source.bp_line + i - tmp_source.bp_line_stored;
 	      printf("The breakpoint %d moved to line %d\n", this->number,
