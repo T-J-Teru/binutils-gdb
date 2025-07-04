@@ -53,6 +53,9 @@ m4_include(../gdbsupport/libiberty.m4)
 dnl For GDB_AC_PTRACE.
 m4_include(../gdbsupport/ptrace.m4)
 
+dnl For AM_GDB_CHECK_FOR_BROKEN_LTO.
+m4_include(../gdbsupport/broken-lto.m4)
+
 m4_include(ax_cxx_compile_stdcxx.m4)
 
 dnl written by Guido Draheim <guidod@gmx.de>, original by Alexandre Oliva 

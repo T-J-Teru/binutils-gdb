@@ -59,6 +59,9 @@ AX_CXX_COMPILE_STDCXX(17, , mandatory)
 
 GDB_AC_COMMON
 
+# LTO is broken on some GCC versions.  GDB will miss-compile.
+AM_GDB_CHECK_FOR_BROKEN_LTO
+
 # Dependency checking.
 ZW_CREATE_DEPDIR
 ZW_PROG_COMPILER_DEPENDENCIES([CC])
