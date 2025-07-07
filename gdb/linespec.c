@@ -2097,9 +2097,15 @@ create_sals_line_offset (struct linespec_state *self,
       for (i = 0; i < intermediate_results.size (); ++i)
 	if (filter[i])
 	  {
-	    struct symbol *sym = (blocks[i]
-				  ? blocks[i]->containing_function ()
-				  : NULL);
+	    struct symbol *sym = nullptr;
+	    struct symbol *linkage_func = nullptr;
+
+	    if (blocks[i] != nullptr)
+	      {
+		sym = blocks[i]->containing_function ();
+		linkage_func = blocks[i]->linkage_function ();
+	      }
+
 	    symtab_and_line &sal = intermediate_results[i];
 
 	    /* Don't consider a match if:
@@ -2126,12 +2132,17 @@ create_sals_line_offset (struct linespec_state *self,
 	       The intent of this heuristic is that a breakpoint requested on
 	       line 11 and 12 will not result in a breakpoint on main, but a
 	       breakpoint on line 13 will.  A breakpoint requested on the empty
-	       line 16 will also result in a breakpoint in main, at line 17.  */
+	       line 16 will also result in a breakpoint in main, at line
+	       17.
+
+	       For inline functions the same logic applies, but we use the
+	       bounds of the non-inline linkage function that contains the
+	       inline function when making the decision.  */
 	    if (!was_exact
-		&& sym != nullptr
-		&& sym->aclass () == LOC_BLOCK
-		&& sal.pc == sym->value_block ()->entry_pc ()
-		&& val.line < sym->line ())
+		&& linkage_func != nullptr
+		&& linkage_func->aclass () == LOC_BLOCK
+		&& sal.pc == linkage_func->value_block ()->entry_pc ()
+		&& val.line < linkage_func->line ())
 	      continue;
 
 	    if (self->funfirstline)

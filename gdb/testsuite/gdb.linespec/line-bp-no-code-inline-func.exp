@@ -1,0 +1,40 @@
+# Copyright 2025 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Try to place a breakpoint on a blank line within an inline function.
+# Ensure that GDB will correctly scan forward looking for the first
+# non-blank code line on which to place the breakpoint.
+
+standard_testfile
+
+set flags {debug}
+lappend_include_file flags $srcdir/lib/attributes.h
+
+if {[prepare_for_testing "prepare" $testfile $srcfile $flags] == -1} {
+    return
+}
+
+# The BP_LINE_NUM is where the breakpoint will actually end up.  The
+# previous line (USE_LINE_NUM) is blank, and is what we use to create
+# the breakpoint.
+set bp_line_num [gdb_get_line_number "Break on previous line"]
+set use_line_num [expr $bp_line_num - 1]
+
+delete_breakpoints
+
+gdb_breakpoint $srcfile:$use_line_num
+
+gdb_test "info breakpoints" \
+    "$srcfile:$bp_line_num"
