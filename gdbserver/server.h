@@ -197,6 +197,11 @@ struct client_state
      are not supported with qRcmd and m packets, but are still supported
      everywhere else.  This is for backward compatibility reasons.  */
   bool error_message_supported = false;
+
+  /* When true, GDB supports receiving multiple watchpoint addresses within
+     a 'T' stop reply packet.  When false, GDB only expects (at most) a
+     single watchpoint address, and gdbserver must select one.  */
+  bool multiple_watchpoint_stop_addr_feature = false;
 };
 
 client_state &get_client_state ();
