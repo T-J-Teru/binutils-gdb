@@ -893,7 +893,7 @@ public:
 
   bool stopped_by_watchpoint () override;
 
-  bool stopped_data_address (CORE_ADDR *) override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
 
   bool watchpoint_addr_within_range (CORE_ADDR, CORE_ADDR, int) override;
 
@@ -1479,7 +1479,7 @@ struct stop_reply : public notif_event
 
   enum target_stop_reason stop_reason;
 
-  CORE_ADDR watch_data_address;
+  std::vector<CORE_ADDR> watch_data_addresses;
 
   int core;
 };
@@ -1637,9 +1637,12 @@ struct remote_thread_info : public private_thread_info
   /* Whether the target stopped for a breakpoint/watchpoint.  */
   enum target_stop_reason stop_reason = TARGET_STOPPED_BY_NO_REASON;
 
-  /* This is set to the data address of the access causing the target
-     to stop for a watchpoint.  */
-  CORE_ADDR watch_data_address = 0;
+  /* This is set to all the watchpoint addresses of the access causing the
+     target to stop for a watchpoint.  Some target (e.g. AArch64) have
+     imprecise watchpoint address reporting, so multiple watchpoints could
+     account for a stop.  All possible watchpoint addresses are reported
+     back to GDB, and GDB must select between them.  */
+  std::vector<CORE_ADDR> watch_data_addresses;
 
   /* Get the thread's resume state.  */
   enum resume_state get_resume_state () const
@@ -6881,7 +6884,7 @@ resume_clear_thread_private_info (struct thread_info *thread)
       remote_thread_info *priv = get_remote_thread_info (thread);
 
       priv->stop_reason = TARGET_STOPPED_BY_NO_REASON;
-      priv->watch_data_address = 0;
+      priv->watch_data_addresses.clear ();
     }
 }
 
@@ -7497,7 +7500,7 @@ remote_target::remote_stop_ns (ptid_t ptid)
 	    sr->ws.set_stopped (GDB_SIGNAL_0);
 	    sr->arch = tp->inf->arch ();
 	    sr->stop_reason = TARGET_STOPPED_BY_NO_REASON;
-	    sr->watch_data_address = 0;
+	    sr->watch_data_addresses.clear ();
 	    sr->core = 0;
 	    this->push_stop_reply (std::move (sr));
 
@@ -8083,7 +8086,7 @@ Packet: '%s'\n"),
 	    {
 	      event->stop_reason = TARGET_STOPPED_BY_WATCHPOINT;
 	      p = unpack_varlen_hex (++p1, &addr);
-	      event->watch_data_address = (CORE_ADDR) addr;
+	      event->watch_data_addresses.push_back ((CORE_ADDR) addr);
 	    }
 	  else if (strprefix (p, p1, "swbreak"))
 	    {
@@ -8596,7 +8599,7 @@ remote_target::process_stop_reply (stop_reply_up stop_reply,
       remote_thread_info *remote_thr = get_remote_thread_info (this, ptid);
       remote_thr->core = stop_reply->core;
       remote_thr->stop_reason = stop_reply->stop_reason;
-      remote_thr->watch_data_address = stop_reply->watch_data_address;
+      remote_thr->watch_data_addresses = stop_reply->watch_data_addresses;
 
       if (target_is_non_stop_p ())
 	{
@@ -11401,20 +11404,16 @@ remote_target::stopped_by_watchpoint ()
 	      == TARGET_STOPPED_BY_WATCHPOINT));
 }
 
-bool
-remote_target::stopped_data_address (CORE_ADDR *addr_p)
+std::vector<CORE_ADDR>
+remote_target::stopped_data_addresses ()
 {
   struct thread_info *thread = inferior_thread ();
 
   if (thread->priv != NULL
-      && (get_remote_thread_info (thread)->stop_reason
-	  == TARGET_STOPPED_BY_WATCHPOINT))
-    {
-      *addr_p = get_remote_thread_info (thread)->watch_data_address;
-      return true;
-    }
+      && (get_remote_thread_info (thread)->stop_reason == TARGET_STOPPED_BY_WATCHPOINT))
+      return get_remote_thread_info (thread)->watch_data_addresses;
 
-  return false;
+  return {};
 }
 
 
