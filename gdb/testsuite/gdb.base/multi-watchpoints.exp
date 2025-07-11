@@ -1,0 +1,15 @@
+standard_testfile
+
+if { [prepare_for_testing "failed to prepare" ${testfile} ${srcfile}] } {
+    return
+}
+
+if {![runto_main]} {
+    return 0
+}
+
+gdb_test "watch a"
+gdb_test "rwatch b"
+
+gdb_test "continue" \
+    "Hardware watchpoint 2: a\r\n.*"

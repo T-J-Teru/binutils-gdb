@@ -231,102 +231,104 @@ bool
 aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
 			      CORE_ADDR addr_trap, CORE_ADDR *addr_p)
 {
+  debug_printf ("enter aarch64_stopped_data_address, address %s\n",
+		core_addr_to_string_nz (addr_trap));
+
+  std::optional<CORE_ADDR> first_matching_address;
+  int total_matches = 0;
+  int total_write_matches = 0;
+  int total_access_matches = 0;
   bool found = false;
-  for (int phase = 0; phase <= 1; ++phase)
-    for (int i = aarch64_num_wp_regs - 1; i >= 0; --i)
-      {
-	if (!(state->dr_ref_count_wp[i]
-	      && DR_CONTROL_ENABLED (state->dr_ctrl_wp[i])))
-	  {
-	    /* Watchpoint disabled.  */
-	    continue;
-	  }
+  for (int i = aarch64_num_wp_regs - 1; i >= 0; --i)
+    {
+      debug_printf ("watchpoint %d:\n", i);
+	
+      if (!(state->dr_ref_count_wp[i]
+	    && DR_CONTROL_ENABLED (state->dr_ctrl_wp[i])))
+	{
+	  /* Watchpoint disabled.  */
+	  debug_printf ("watchpoint %d disabled\n", i);
+	  continue;
+	}
 
-	const enum target_hw_bp_type type
-	  = aarch64_watchpoint_type (state->dr_ctrl_wp[i]);
-	if (type == hw_execute)
-	  {
-	    /* Watchpoint disabled.  */
-	    continue;
-	  }
+      const enum target_hw_bp_type type
+	= aarch64_watchpoint_type (state->dr_ctrl_wp[i]);
+      if (type == hw_execute)
+	{
+	  /* Watchpoint disabled.  */
+	  debug_printf ("watchpoint %d disabled (execute)\n", i);
+	  continue;
+	}
 
-	if (phase == 0)
-	  {
-	    /* Phase 0: No hw_write.  */
-	    if (type == hw_write)
-	      continue;
-	  }
-	else
-	  {
-	    /* Phase 1: Only hw_write.  */
-	    if (type != hw_write)
-	      continue;
-	  }
+      const unsigned int offset
+	= aarch64_watchpoint_offset (state->dr_ctrl_wp[i]);
+      const unsigned int len
+	= aarch64_watchpoint_length (state->dr_ctrl_wp[i]);
+      const CORE_ADDR addr_watch = state->dr_addr_wp[i] + offset;
+      const CORE_ADDR addr_watch_aligned
+	= align_down (state->dr_addr_wp[i], 8);
+      const CORE_ADDR addr_orig = state->dr_addr_orig_wp[i];
 
-	const unsigned int offset
-	  = aarch64_watchpoint_offset (state->dr_ctrl_wp[i]);
-	const unsigned int len
-	  = aarch64_watchpoint_length (state->dr_ctrl_wp[i]);
-	const CORE_ADDR addr_watch = state->dr_addr_wp[i] + offset;
-	const CORE_ADDR addr_watch_aligned
-	  = align_down (state->dr_addr_wp[i], 8);
-	const CORE_ADDR addr_orig = state->dr_addr_orig_wp[i];
+      /* ADDR_TRAP reports the first address of the memory range
+	 accessed by the CPU, regardless of what was the memory
+	 range watched.  Thus, a large CPU access that straddles
+	 the ADDR_WATCH..ADDR_WATCH+LEN range may result in an
+	 ADDR_TRAP that is lower than the
+	 ADDR_WATCH..ADDR_WATCH+LEN range.  E.g.:
 
-	/* ADDR_TRAP reports the first address of the memory range
-	   accessed by the CPU, regardless of what was the memory
-	   range watched.  Thus, a large CPU access that straddles
-	   the ADDR_WATCH..ADDR_WATCH+LEN range may result in an
-	   ADDR_TRAP that is lower than the
-	   ADDR_WATCH..ADDR_WATCH+LEN range.  E.g.:
-
-	   addr: |   4	 |   5	 |   6	 |   7	 |   8	 |
+	 addr:  |   4	 |   5	 |   6	 |   7	 |   8	 |
 				 |---- range watched ----|
-		 |----------- range accessed ------------|
+		|------------ range accessed ------------|
 
-	   In this case, ADDR_TRAP will be 4.  */
-	if (!(addr_trap >= addr_watch_aligned
-	      && addr_trap < addr_watch + len))
-	  {
-	    /* Not a match.  */
-	    continue;
-	  }
+	 In this case, ADDR_TRAP will be 4.  */
+      if (!(addr_trap >= addr_watch_aligned
+	    && addr_trap < addr_watch + len))
+	{
+	  /* Not a match.  */
+	  debug_printf ("watchpoint %d, ignored, address doesn't match\n", i);
+	  continue;
+	}
 
-	/* To match a watchpoint known to GDB core, we must never
-	   report *ADDR_P outside of any ADDR_WATCH..ADDR_WATCH+LEN
-	   range.  ADDR_WATCH <= ADDR_TRAP < ADDR_ORIG is a false
-	   positive on kernels older than 4.10.  See PR
-	   external/20207.  */
-	if (addr_p != nullptr)
-	  *addr_p = addr_orig;
+      if (addr_p == nullptr)
+	{
+	  /* First match, and we don't need to report an address.  No need
+	     to look for other matches.  */
+	  debug_printf ("watchpoint %d is a match (no address to report)\n", i);
+	  return true;
+	}
 
-	if (phase == 0)
-	  {
-	    /* Phase 0: Return first match.  */
-	    return true;
-	  }
+      found = true;
 
-	/* Phase 1.  */
-	if (addr_p == nullptr)
-	  {
-	    /* First match, and we don't need to report an address.  No need
-	       to look for other matches.  */
-	    return true;
-	  }
+      debug_printf ("watchpoint %d has aligned range %s...%s\n",
+		    i,
+		    core_addr_to_string_nz (addr_watch_aligned),
+		    core_addr_to_string_nz (addr_watch + len));
 
-	if (!found)
-	  {
-	    /* First match, and we need to report an address.  Look for other
-	       matches.  */
-	    found = true;
-	    continue;
-	  }
+      total_matches++;
 
-	/* More than one match, and we need to return an address.  No need to
-	   look for further matches.  */
-	return false;
-      }
+      if (type == hw_write)
+	total_write_matches++;
+      else
+	total_access_matches++;
 
-  return found;
+      if (!first_matching_address.has_value ())
+	first_matching_address.emplace (addr_orig);
+    }
+
+  if (!found)
+    return false;
+
+  /* Return false will cause GDB to mark each write match as
+     "unknown", and then try each to see which, if any, have changed.
+     However, GDB will ignore read/access watchpoints in this
+     case.  */
+  if (total_write_matches > 1)
+    return false;
+
+  gdb_assert (first_matching_address.has_value ());
+  *addr_p = first_matching_address.value ();
+
+  return true;
 }
 
 /* Define AArch64 maintenance commands.  */

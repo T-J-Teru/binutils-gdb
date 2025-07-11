@@ -584,6 +584,9 @@ static bool debug_breakpoint = false;
   debug_prefixed_printf_cond (debug_breakpoint, "breakpoint", fmt, \
 			      ##__VA_ARGS__)
 
+#define BREAKPOINT_SCOPED_DEBUG_ENTER_EXIT \
+  scoped_debug_enter_exit (debug_breakpoint, "breakpoint")
+
 /* "show debug breakpoint" implementation.  */
 static void
 show_debug_breakpoint (struct ui_file *file, int from_tty,
@@ -5136,8 +5139,12 @@ bpstat::bpstat ()
 int
 watchpoints_triggered (const target_waitstatus &ws)
 {
+  BREAKPOINT_SCOPED_DEBUG_ENTER_EXIT;
+
   bool stopped_by_watchpoint = target_stopped_by_watchpoint ();
   CORE_ADDR addr;
+
+  breakpoint_debug_printf ("stopped_by_watchpoint = %d", stopped_by_watchpoint);
 
   if (!stopped_by_watchpoint)
     {
@@ -5148,6 +5155,7 @@ watchpoints_triggered (const target_waitstatus &ws)
 	  {
 	    watchpoint &w = gdb::checked_static_cast<watchpoint &> (b);
 
+	    breakpoint_debug_printf ("marking watchpoint %d as not triggered", w.number);
 	    w.watchpoint_triggered = watch_triggered_no;
 	  }
 
@@ -5156,6 +5164,8 @@ watchpoints_triggered (const target_waitstatus &ws)
 
   if (!target_stopped_data_address (current_inferior ()->top_target (), &addr))
     {
+      breakpoint_debug_printf ("no stopped data address found");
+
       /* We were stopped by a watchpoint, but we don't know where.
 	 Mark all watchpoints as unknown.  */
       for (breakpoint &b : all_breakpoints ())
@@ -5163,6 +5173,7 @@ watchpoints_triggered (const target_waitstatus &ws)
 	  {
 	    watchpoint &w = gdb::checked_static_cast<watchpoint &> (b);
 
+	    breakpoint_debug_printf ("marking watchpoint %d as unknown state", w.number);
 	    w.watchpoint_triggered = watch_triggered_unknown;
 	  }
 
@@ -5178,6 +5189,8 @@ watchpoints_triggered (const target_waitstatus &ws)
       {
 	watchpoint &w = gdb::checked_static_cast<watchpoint &> (b);
 
+	breakpoint_debug_printf ("checking watchpoint %d...", w.number);
+
 	w.watchpoint_triggered = watch_triggered_no;
 	for (bp_location &loc : b.locations ())
 	  {
@@ -5188,6 +5201,8 @@ watchpoints_triggered (const target_waitstatus &ws)
 
 		if (newaddr == start)
 		  {
+		    breakpoint_debug_printf ("is masked watchpoint, and masked addresses match (%s)",
+					     core_addr_to_string_nz (newaddr));
 		    w.watchpoint_triggered = watch_triggered_yes;
 		    break;
 		  }
@@ -5197,6 +5212,10 @@ watchpoints_triggered (const target_waitstatus &ws)
 		       (current_inferior ()->top_target (), addr, loc.address,
 			loc.length))
 	      {
+		breakpoint_debug_printf ("address (%s) is within watchpoints range (start: %s, length: %lld)",
+					 core_addr_to_string_nz (addr),
+					 core_addr_to_string_nz (loc.address),
+					 ((unsigned long long) loc.length));
 		w.watchpoint_triggered = watch_triggered_yes;
 		break;
 	      }
