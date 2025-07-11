@@ -231,8 +231,8 @@ bool
 aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
 			      CORE_ADDR addr_trap, CORE_ADDR *addr_p)
 {
-  debug_printf ("enter aarch64_stopped_data_address, address %s\n",
-		core_addr_to_string_nz (addr_trap));
+  //debug_printf ("enter aarch64_stopped_data_address, address %s\n",
+  //		core_addr_to_string_nz (addr_trap));
 
   std::optional<CORE_ADDR> first_matching_address;
   int total_matches = 0;
@@ -241,13 +241,13 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
   bool found = false;
   for (int i = aarch64_num_wp_regs - 1; i >= 0; --i)
     {
-      debug_printf ("watchpoint %d:\n", i);
+      //debug_printf ("watchpoint %d:\n", i);
 	
       if (!(state->dr_ref_count_wp[i]
 	    && DR_CONTROL_ENABLED (state->dr_ctrl_wp[i])))
 	{
 	  /* Watchpoint disabled.  */
-	  debug_printf ("watchpoint %d disabled\n", i);
+	  //debug_printf ("watchpoint %d disabled\n", i);
 	  continue;
 	}
 
@@ -256,7 +256,7 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
       if (type == hw_execute)
 	{
 	  /* Watchpoint disabled.  */
-	  debug_printf ("watchpoint %d disabled (execute)\n", i);
+	  //debug_printf ("watchpoint %d disabled (execute)\n", i);
 	  continue;
 	}
 
@@ -285,7 +285,7 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
 	    && addr_trap < addr_watch + len))
 	{
 	  /* Not a match.  */
-	  debug_printf ("watchpoint %d, ignored, address doesn't match\n", i);
+	  //debug_printf ("watchpoint %d, ignored, address doesn't match\n", i);
 	  continue;
 	}
 
@@ -293,16 +293,16 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
 	{
 	  /* First match, and we don't need to report an address.  No need
 	     to look for other matches.  */
-	  debug_printf ("watchpoint %d is a match (no address to report)\n", i);
+	  //debug_printf ("watchpoint %d is a match (no address to report)\n", i);
 	  return true;
 	}
 
       found = true;
 
-      debug_printf ("watchpoint %d has aligned range %s...%s\n",
+      /* debug_printf ("watchpoint %d has aligned range %s...%s\n",
 		    i,
 		    core_addr_to_string_nz (addr_watch_aligned),
-		    core_addr_to_string_nz (addr_watch + len));
+		    core_addr_to_string_nz (addr_watch + len)); */
 
       total_matches++;
 
