@@ -10674,6 +10674,12 @@ elfcore_grok_gdb_tdesc (bfd *abfd, Elf_Internal_Note *note)
 }
 
 static bool
+elfcore_grok_i386_tls (bfd *abfd, Elf_Internal_Note *note)
+{
+  return elfcore_make_note_pseudosection (abfd, ".reg-i386-tls", note);
+}
+
+static bool
 elfcore_grok_loongarch_cpucfg (bfd *abfd, Elf_Internal_Note *note)
 {
   return elfcore_make_note_pseudosection (abfd, ".reg-loongarch-cpucfg", note);
@@ -11333,6 +11339,13 @@ elfcore_grok_note (bfd *abfd, Elf_Internal_Note *note)
       if (note->namesz == 6
 	  && strcmp (note->namedata, "LINUX") == 0)
 	return elfcore_grok_aarch_tls (abfd, note);
+      else
+	return true;
+
+    case NT_386_TLS:
+      if (note->namesz == 6
+	  && strcmp (note->namedata, "LINUX") == 0)
+	return elfcore_grok_i386_tls (abfd, note);
       else
 	return true;
 
@@ -12594,6 +12607,15 @@ elfcore_write_x86_segbases (bfd *abfd, char *buf, int *bufsiz,
 }
 
 char *
+elfcore_write_i386_tls (bfd *abfd, char *buf, int *bufsiz,
+			    const void *regs, int size)
+{
+  char *note_name = "LINUX";
+  return elfcore_write_note (abfd, buf, bufsiz,
+			     note_name, NT_386_TLS, regs, size);
+}
+
+char *
 elfcore_write_ppc_vmx (bfd *abfd,
 		       char *buf,
 		       int *bufsiz,
@@ -13287,6 +13309,8 @@ elfcore_write_register_note (bfd *abfd,
     return elfcore_write_loongarch_lsx (abfd, buf, bufsiz, data, size);
   if (strcmp (section, ".reg-loongarch-lasx") == 0)
     return elfcore_write_loongarch_lasx (abfd, buf, bufsiz, data, size);
+  if (strcmp (section, ".reg-i386-tls") == 0)
+    return elfcore_write_i386_tls (abfd, buf, bufsiz, data, size);
   return NULL;
 }
 
