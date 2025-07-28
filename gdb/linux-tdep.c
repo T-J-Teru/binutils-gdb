@@ -704,7 +704,13 @@ dump_mapping_p (filter_flags filterflags, const smaps_data &map)
      there'll be no file to read the contents from at core load time.
      The kernel does the same.  */
   if (map.filename == "[vdso]" || map.filename == "[vsyscall]")
-    return true;
+    {
+      if (!map.read)
+	warning (_("unable to dump unreadable %ps mapping"),
+		 styled_string (file_name_style.style (),
+				map.filename.c_str ()));
+      return map.read;
+    }
 
   if (map.vmflags.initialized_p)
     {
