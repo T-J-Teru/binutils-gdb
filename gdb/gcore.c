@@ -406,17 +406,27 @@ gcore_create_callback (CORE_ADDR vaddr, unsigned long size, int read,
   asection *osec;
   flagword flags = SEC_ALLOC | SEC_HAS_CONTENTS | SEC_LOAD;
 
+  /* TODO: Every called claims "don't know what to do pass for modified, so
+     pass it as true".  Which means lots of this function is basically
+     redundant.  We should probably just remove the 'modified' argument.  Or
+     try to figure out if we can pass a real value through.  */
+  gdb_assert (modified != 0);
+
   /* If the memory segment has no permissions set, ignore it, otherwise
      when we later try to access it for read/write, we'll get an error
-     or jam the kernel.  */
-  if (read == 0 && write == 0 && exec == 0 && modified == 0)
+     or jam the kernel.
+
+     APB: Don't ignore it, just clear the 'has contents' flag.  Given the
+     user cannot inspect the contents, there's no difference between having,
+     and not having contents.  This is mostly just guard pages, etc.  */
+  if (read == 0 && write == 0 && exec == 0 /* && modified == 0 */)
     {
       if (info_verbose)
-	gdb_printf ("Ignore segment, %s bytes at %s\n",
+	gdb_printf ("Ignore segment contents, %s bytes at %s\n",
 		    plongest (size), paddress (current_inferior ()->arch (),
 		    vaddr));
-
-      return 0;
+      flags &= ~(SEC_LOAD | SEC_HAS_CONTENTS);
+      /* return 0; */
     }
 
   if (write == 0 && modified == 0 && !solib_keep_data_in_core (vaddr, size))
