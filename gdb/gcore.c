@@ -406,17 +406,16 @@ gcore_create_callback (CORE_ADDR vaddr, unsigned long size, bool read,
   asection *osec;
   flagword flags = SEC_ALLOC | SEC_HAS_CONTENTS | SEC_LOAD;
 
-  /* If the memory segment has no permissions set, ignore it, otherwise
-     when we later try to access it for read/write, we'll get an error
-     or jam the kernel.  */
+  /* If the memory segment has no permissions set, and has not been
+     modified, then there's no reason to copy the contents to the core
+     file.  Instead we can just create a non-loadable mapping.  */
   if (!read && !write && !exec && !modified)
     {
       if (info_verbose)
-	gdb_printf ("Ignore segment, %s bytes at %s\n",
+	gdb_printf ("Ignore segment contents, %s bytes at %s\n",
 		    plongest (size), paddress (current_inferior ()->arch (),
 		    vaddr));
-
-      return 0;
+      flags &= ~(SEC_LOAD | SEC_HAS_CONTENTS);
     }
 
   if (!write && !modified && !solib_keep_data_in_core (vaddr, size))

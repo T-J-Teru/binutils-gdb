@@ -1,0 +1,164 @@
+# Copyright 2025 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Create some mappings that are PROT_NONE.  Used 'gcore' command to
+# dump a core file.  At least one mapping is never touched, either by
+# the inferior, or GDB, prior to dumping the core file, we are
+# checking that the contents of this mapping are not copied into the
+# core file.
+#
+# For another mapping, we initially create the mapping read/write,
+# touch the contents, and then change the mapping to PROT_NONE.  In
+# this case we are checking that GDB does include the mapping in the
+# core file.
+
+require {!is_remote host}
+
+standard_testfile
+
+if {[build_executable "prepare" $testfile $srcfile] == -1} {
+    return
+}
+
+# Take a GDB expression EXPR, get the value as hexadecimal, and
+# convert the output to a regexp by replacing the leading '0x' with
+# '0x0*' so that we can match any leading 0s.
+proc get_hex_val_re { expr } {
+    set addr [get_hexadecimal_valueof $expr "UNKNOWN"]
+    regsub "^0x" $addr "0x0*" re
+    return $re
+}
+
+# Assume that GDB is currently running, and that COREFILE is already
+# loaded into GDB.  Read some addresses from the corefile using GDB,
+# then start readelf and check for the program headers that represent
+# the mappings corresponding to the addresses we just read.
+#
+# This is all about checking that GDB correctly created the program
+# headers in COREFILE, so should only be called when COREFILE was
+# created by GDB.
+proc perform_readelf_check { corefile } {
+    # Information we need to inspect the readelf output below.
+    set addr_0_re [get_hex_val_re "addr\[0\]"]
+    set addr_1_re [get_hex_val_re "addr\[1\]"]
+    set pg_sz_re [get_hex_val_re "pg_sz"]
+
+    # Start readelf to examine the program headers in the core file.
+    set readelf_program [gdb_find_readelf]
+    set command "$readelf_program -Wl $corefile"
+    set readelf_spawn_id [remote_spawn host $command]
+    if { $readelf_spawn_id < 0 || $readelf_spawn_id == "" } {
+	fail "Spawning readelf failed"
+	return
+    }
+
+    # Now actually scan the program headers.
+    set saw_addr_0_line false
+    set saw_addr_1_line false
+    gdb_expect {
+	-re "^\\s*LOAD\\s+$::hex\\s+$addr_0_re\\s+$::hex\\s+$pg_sz_re\\s+$pg_sz_re\\s+R\\s+0x1\\s*\r\n" {
+	    # The important thing here is that the FileSiz field matches the
+	    # MemSiz field.
+	    set saw_addr_0_line true
+	    exp_continue
+	}
+
+	-re "^\\s*LOAD\\s+$::hex\\s+$addr_1_re\\s+$::hex\\s+0x0+\\s+$pg_sz_re\\s+R\\s+0x1\\s*\r\n" {
+	    # The important thing here is that the FileSiz field is zero.
+	    set saw_addr_1_line true
+	    exp_continue
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    # Ignore all other lines.
+	    exp_continue
+	}
+
+	eof {
+	    # By the time readelf has finished, we should have seen both of the
+	    # exepected program header lines.
+	    gdb_assert { $saw_addr_0_line && $saw_addr_1_line } \
+		"saw program header lines for both mappings"
+	}
+    }
+
+    # Ensure the readelf process is closed and cleaned up.
+    catch {
+	close -i $readelf_spawn_id
+	wait -nowait -i $readelf_spawn_id
+    }
+}
+
+# Load COREFILE and check the contents of some mappings.  If
+# READELF_CHECK is true then call perform_readelf_check on COREFILE.
+proc test_core_file { corefile readelf_check } {
+    clean_restart
+
+    # Load the core file.
+    if {[gdb_core_cmd $corefile "load corefile"] == -1} {
+	fail "loading corefile"
+	return
+    }
+
+    # Check GDB auto-loaded the executable correctly.
+    gdb_test "info inferiors 1" \
+	"\r\n\\*\\s+1\\s+\[^\r\n\]+[string_to_regexp $::binfile]\\s*"
+
+    # Move back to main.
+    gdb_test "frame function main" \
+	[multi_line \
+	     "main \\(\\)\[^\r\n\]+" \
+	     "$::decimal\\s+(?:breakpt|abort) \\(\\);"]
+
+    # The mapping at addr[0] was written to by the inferior.  Check the
+    # contents are as expected.
+    gdb_test "p *((int *) addr\[0\])" " = 123" \
+	"check contents of used page"
+
+    # The mapping at addr[1] was not written to by the inferior.  This
+    # mapping didn't have any physical memory assigned at the point the
+    # core file was created.  Reading it now should show as zero.
+    gdb_test "p *((int *) addr\[1\])" " = 0" \
+	"check contents of unused page"
+
+    if { $readelf_check } {
+	perform_readelf_check $corefile
+    }
+}
+
+clean_restart $testfile
+
+if {![runto breakpt]} {
+    return
+}
+
+# Create a core file using 'gcore' command.
+set gcorefile [standard_output_file ${testfile}.gcore]
+gdb_gcore_cmd $gcorefile "save corefile"
+
+with_test_prefix "gcore" {
+    test_core_file $gcorefile true
+}
+
+# Create a core file by allowing the inferior to abort.
+set corefile [core_find $binfile {}]
+if {$corefile == ""} {
+    untested "unable to create or find corefile"
+    return
+}
+
+with_test_prefix "kernel core" {
+    test_core_file $corefile false
+}

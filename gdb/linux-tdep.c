@@ -119,6 +119,12 @@ struct smaps_data
   bool mapping_anon_p;
   bool mapping_file_p;
 
+  /* True if this mapping is unmodified.  For a file backed mapping
+     no writes have been made, so the file contents still reflect the
+     contents of this mapping.  For anonymous mappings the content is
+     still the initial zeros.  */
+  bool unmodified_p;
+
   ULONGEST inode;
   ULONGEST offset;
 };
@@ -1389,6 +1395,9 @@ parse_smaps_data (const char *data,
 	 so we just assume that VM_MAYSHARE is enough.  */
       priv = has_perm ('p');
 
+      /* The Rss field if it is present.  */
+      std::optional<ULONGEST> rss;
+
       /* Try to detect if region should be dumped by parsing smaps
 	 counters.  */
       for (line = strtok_r (NULL, "\n", &t);
@@ -1445,7 +1454,28 @@ parse_smaps_data (const char *data,
 		  mapping_anon_p = 1;
 		}
 	    }
+	  else if (strcmp (keyword, "Rss:") == 0)
+	    {
+	      unsigned long number;
+
+	      if (sscanf (line, "%*s%lu", &number) != 1)
+		{
+		  warning (_("Error parsing smaps file '%s' number for Rss"),
+			   maps_filename.c_str ());
+		  break;
+		}
+
+	      rss.emplace (number);
+	    }
 	}
+
+      /* A mapping is unmodified if its Rss value is zero, this means no
+	 physical memory has been allocated for this mapping yet, or if no
+	 anonymous pages have been allocated for the mapping, meaning all
+	 content is backed by a file.  */
+      bool mapping_unmodified = ((rss.has_value () && rss.value () == 0)
+				 || (has_anonymous && !mapping_anon_p));
+
       /* Save the smaps entry to the vector.  */
 	struct smaps_data map;
 
@@ -1460,6 +1490,7 @@ parse_smaps_data (const char *data,
 	map.has_anonymous = has_anonymous;
 	map.mapping_anon_p = mapping_anon_p? true : false;
 	map.mapping_file_p = mapping_file_p? true : false;
+	map.unmodified_p = mapping_unmodified;
 	map.offset = m.offset;
 	map.inode = m.inode;
 
@@ -1596,8 +1627,7 @@ linux_find_memory_regions_full (struct gdbarch *gdbarch,
 	{
 	  func (map.start_address, map.end_address - map.start_address,
 		map.offset, map.read, map.write, map.exec,
-		true, /* MODIFIED is true because we want to dump
-		      the mapping.  */
+		!map.unmodified_p,
 		map.vmflags.memory_tagging != 0,
 		map.filename, obfd);
 	}
