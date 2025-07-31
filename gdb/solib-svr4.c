@@ -3595,26 +3595,6 @@ lp64_svr4_solib_ops::fetch_link_map_offsets () const
 }
 
 
-/* Return the DSO matching OBJFILE or nullptr if none can be found.  */
-
-static const solib *
-find_solib_for_objfile (struct objfile *objfile)
-{
-  if (objfile == nullptr)
-    return nullptr;
-
-  /* If OBJFILE is a separate debug object file, look for the original
-     object file.  */
-  if (objfile->separate_debug_objfile_backlink != nullptr)
-    objfile = objfile->separate_debug_objfile_backlink;
-
-  for (const solib &so : current_program_space->solibs ())
-    if (so.objfile == objfile)
-      return &so;
-
-  return nullptr;
-}
-
 /* Return the address of the r_debug object for the namespace containing
    SOLIB or zero if it cannot be found.  This may happen when symbol files
    are added manually, for example, or with the main executable.

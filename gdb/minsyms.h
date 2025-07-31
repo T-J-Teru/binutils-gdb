@@ -237,11 +237,14 @@ extern bound_minimal_symbol lookup_minimal_symbol_linkage
 
 /* A variant of lookup_minimal_symbol_linkage that iterates over all
    objfiles of PSPACE.  If ONLY_MAIN is true, then only an objfile with
-   OBJF_MAINLINE will be considered.  */
+   OBJF_MAINLINE will be considered.  This function should receive a
+   program_space::objfile_ranges instead, but we can't include progspace.h
+   here, nor can we do forward declarations of nested types, so std::vector
+   will waste a bit of memory to work around that issue.  */
 
 extern bound_minimal_symbol lookup_minimal_symbol_linkage
-  (program_space *pspace, const char *name, bool match_static_type,
-   bool only_main) ATTRIBUTE_NONNULL (1);
+  (gdb::array_view<objfile *> objfiles_to_search, const char *name,
+   bool match_static_type, bool only_main);
 
 /* Look through all the current minimal symbol tables and find the
    first minimal symbol that matches NAME and PC.  If OBJF is non-NULL,

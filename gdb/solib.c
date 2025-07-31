@@ -1825,8 +1825,92 @@ solib_linker_namespace_count (program_space *pspace)
   return 0;
 }
 
-/* Implementation of the linker_namespace convenience variable.
+/* See solib.h.  */
 
+const solib *
+find_solib_for_objfile (struct objfile *objfile)
+{
+  if (objfile == nullptr)
+    return nullptr;
+
+  /* If OBJFILE is a separate debug object file, look for the original
+     object file.  */
+  if (objfile->separate_debug_objfile_backlink != nullptr)
+    objfile = objfile->separate_debug_objfile_backlink;
+
+  for (const solib &so : objfile->pspace ()->solibs ())
+    if (so.objfile == objfile)
+      return &so;
+
+  return nullptr;
+}
+
+/* See solib.h.  */
+
+std::vector<objfile *>
+get_objfiles_in_linker_namespace (int nsid, program_space *pspace)
+{
+  std::vector<objfile *> objfiles_in_ns;
+  const solib_ops *ops = pspace->solib_ops ();
+
+  gdb_assert (ops->supports_namespaces ());
+
+  /* If we're looking at the default namespace, we also need
+     to add the mainline objfiles by hand, since there is no
+     solib associated with those files.  We add them first
+     because if we're searching for copy relocations, they
+     should be in the main file, so we'll find it faster.  */
+  if (nsid == 0)
+    for (objfile &objf : pspace->objfiles ())
+      if ((objf.flags & OBJF_MAINLINE) != 0)
+	objfiles_in_ns.push_back (&objf);
+
+  std::vector<const solib *> solibs = ops->get_solibs_in_ns (nsid);
+  /* Reserve for efficiency.  */
+  objfiles_in_ns.reserve (solibs.size () + objfiles_in_ns.size ());
+  for (const solib *so : solibs)
+    objfiles_in_ns.push_back (so->objfile);
+
+  return objfiles_in_ns;
+}
+
+/* See solib.h.  */
+
+std::vector<objfile *>
+get_objfiles_in_linker_namespace (objfile *objfile)
+{
+  program_space *pspace = objfile->pspace ();
+  const solib_ops *ops = pspace->solib_ops ();
+  const solib *so = find_solib_for_objfile (objfile);
+
+  /* If the inferior hasn't started yet, the solib_ops won't be
+     set for the program space.  Since namespaces only make sense
+     when the inferior has already created some, we can just skip
+     it here.  */
+  if (ops != nullptr && ops->supports_namespaces ()
+      /* If we're searching for a symbol from the linker, we'll reach here
+	 before having any namespaces.  Return all objfiles since the
+	 boundaries haven't been setup yet.  */
+      && ops->num_active_namespaces () > 0
+      /* When trying to load libthread_db, we can search for a symbol in an
+	 objfile with no associated solib.  In that case, again, we should
+	 return all objfiles.  */
+      && so != nullptr)
+    {
+      return get_objfiles_in_linker_namespace (ops->find_solib_ns (*so),
+					       pspace);
+    }
+
+  /* If any of the previous conditions isn't satisfied, we return
+     the full list of objfiles in the inferior.  */
+  std::vector<struct objfile *> found_objfiles;
+  for (struct objfile &objf : objfile->pspace ()->objfiles ())
+    found_objfiles.push_back (&objf);
+
+  return found_objfiles;
+}
+
+/* Implementation of the linker_namespace convenience variable.
    This returns the GDB internal identifier of the linker namespace,
    for the selected frame, as an integer.  If the inferior doesn't support
    linker namespaces, this always returns 0.  */

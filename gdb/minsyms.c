@@ -54,6 +54,7 @@
 #include "gdbsupport/cxx-thread.h"
 #include "gdbsupport/parallel-for.h"
 #include "inferior.h"
+#include "solib.h"
 
 /* Return true if MINSYM is a cold clone symbol.
    Recognize f.i. these symbols (mangled/demangled):
@@ -584,19 +585,21 @@ lookup_minimal_symbol_linkage (const char *name, struct objfile *objf,
 /* See minsyms.h.  */
 
 bound_minimal_symbol
-lookup_minimal_symbol_linkage (program_space *pspace, const char *name,
-			       bool match_static_type, bool only_main)
+lookup_minimal_symbol_linkage (gdb::array_view<objfile *> objfiles_to_search,
+			       const char *name, bool match_static_type,
+			       bool only_main)
 {
-  for (objfile &objfile : pspace->objfiles ())
+  for (objfile *objfile : objfiles_to_search)
     {
-      if (objfile.separate_debug_objfile_backlink != nullptr)
+      if (objfile == nullptr
+	  || objfile->separate_debug_objfile_backlink != nullptr)
 	continue;
 
-      if (only_main && (objfile.flags & OBJF_MAINLINE) == 0)
+      if (only_main && (objfile->flags & OBJF_MAINLINE) == 0)
 	continue;
 
       bound_minimal_symbol minsym
-	= lookup_minimal_symbol_linkage (name, &objfile, match_static_type);
+	= lookup_minimal_symbol_linkage (name, objfile, match_static_type);
       if (minsym.minsym != nullptr)
 	return minsym;
     }

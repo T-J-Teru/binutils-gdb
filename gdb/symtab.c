@@ -74,6 +74,7 @@
 #include "gdbsupport/common-utils.h"
 #include <optional>
 #include "gdbsupport/unordered_set.h"
+#include "solib.h"
 
 /* Forward declarations for local functions.  */
 
@@ -6573,8 +6574,12 @@ symbol::get_maybe_copied_address () const
   gdb_assert (this->loc_class () == LOC_STATIC);
 
   const char *linkage_name = this->linkage_name ();
+
+  std::vector<struct objfile *> objfiles_to_search
+    (get_objfiles_in_linker_namespace (this->objfile ()));
+
   bound_minimal_symbol minsym
-    = lookup_minimal_symbol_linkage (this->objfile ()->pspace (), linkage_name,
+    = lookup_minimal_symbol_linkage (objfiles_to_search, linkage_name,
 				     false, false);
   if (minsym.minsym != nullptr)
     return minsym.value_address ();
@@ -6591,8 +6596,12 @@ minimal_symbol::get_maybe_copied_address (objfile *objf) const
   gdb_assert ((objf->flags & OBJF_MAINLINE) == 0);
 
   const char *linkage_name = this->linkage_name ();
+
+  std::vector<struct objfile *> objfiles_to_search
+    (get_objfiles_in_linker_namespace (objf));
+
   bound_minimal_symbol found
-    = lookup_minimal_symbol_linkage (objf->pspace (), linkage_name,
+    = lookup_minimal_symbol_linkage (objfiles_to_search, linkage_name,
 				     false, true);
   if (found.minsym != nullptr)
     return found.value_address ();
