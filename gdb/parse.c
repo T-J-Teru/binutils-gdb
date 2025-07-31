@@ -420,7 +420,8 @@ parse_exp_in_context (const char **stringptr, CORE_ADDR pc,
 
   parser_state ps (lang, get_current_arch (), expression_context_block,
 		   expression_context_pc, flags, *stringptr,
-		   completer != nullptr, tracker);
+		   completer != nullptr, tracker,
+		   current_program_space->solib_ops ());
 
   scoped_restore_current_language lang_saver (lang->la_language);
 

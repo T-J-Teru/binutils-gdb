@@ -608,6 +608,7 @@ compare_filenames_for_search (const char *filename, const char *search_name)
 
 void
 iterate_over_symtabs (program_space *pspace, const char *name,
+		      LONGEST linker_ns,
 		      gdb::function_view<bool (symtab *)> callback)
 {
   gdb::unique_xmalloc_ptr<char> real_path;
@@ -620,20 +621,43 @@ iterate_over_symtabs (program_space *pspace, const char *name,
       gdb_assert (IS_ABSOLUTE_PATH (real_path.get ()));
     }
 
-  for (objfile &objfile : pspace->objfiles ())
-    if (objfile.map_symtabs_matching_filename (name, real_path.get (),
-					       callback))
+  std::vector<objfile *> objfiles_to_search;
+  if (linker_ns >= 0)
+    {
+      gdb_assert (pspace->solib_ops ()->supports_namespaces ());
+      objfiles_to_search
+	= get_objfiles_in_linker_namespace (linker_ns, pspace);
+    }
+  else
+    {
+      for (objfile &objf : pspace->objfiles ())
+	objfiles_to_search.push_back (&objf);
+    }
+
+  /*
+  for (objfile *objfile : objfiles_to_search)
+    if (iterate_over_some_symtabs (name, real_path.get (),
+				   objfile->compunit_symtabs, nullptr,
+				   callback))
+	return;
+  */
+
+  /* Same search rules as above apply here, but now we look through the
+     psymtabs.  */
+  for (objfile *objfile : objfiles_to_search)
+    if (objfile->map_symtabs_matching_filename (name, real_path.get (),
+						callback))
       return;
 }
 
 /* See symtab.h.  */
 
 symtab *
-lookup_symtab (program_space *pspace, const char *name)
+lookup_symtab (program_space *pspace, const char *name, LONGEST linker_ns)
 {
   struct symtab *result = NULL;
 
-  iterate_over_symtabs (pspace, name, [&] (symtab *symtab)
+  iterate_over_symtabs (pspace, name, linker_ns, [&] (symtab *symtab)
     {
       result = symtab;
       return true;
@@ -6156,7 +6180,7 @@ collect_file_symbol_completion_matches (completion_tracker &tracker,
 
   /* Go through symtabs for SRCFILE and check the externs and statics
      for symbols which match.  */
-  iterate_over_symtabs (current_program_space, srcfile, [&] (symtab *s)
+  iterate_over_symtabs (current_program_space, srcfile, -1, [&] (symtab *s)
     {
       add_symtab_completions (s->compunit (),
 			      tracker, mode, lookup_name,

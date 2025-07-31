@@ -26,6 +26,7 @@
 #include "expression.h"
 #include "symtab.h"
 #include "expop.h"
+#include "solib.h"
 
 struct block;
 struct language_defn;
@@ -147,7 +148,8 @@ struct parser_state : public expr_builder
 		parser_flags flags,
 		const char *input,
 		bool completion,
-		innermost_block_tracker *tracker)
+		innermost_block_tracker *tracker,
+		const solib_ops *ops)
     : expr_builder (lang, gdbarch),
       expression_context_block (context_block),
       expression_context_pc (context_pc),
@@ -157,7 +159,8 @@ struct parser_state : public expr_builder
       comma_terminates ((flags & PARSER_COMMA_TERMINATES) != 0),
       parse_completion (completion),
       void_context_p ((flags & PARSER_VOID_CONTEXT) != 0),
-      debug ((flags & PARSER_DEBUG) != 0)
+      debug ((flags & PARSER_DEBUG) != 0),
+      m_solib_ops (ops)
   {
   }
 
@@ -263,6 +266,19 @@ struct parser_state : public expr_builder
     push (expr::make_operation<T> (std::move (lhs), std::move (rhs)));
   }
 
+  void set_linker_namespace (LONGEST ns_id)
+  {
+    if (m_solib_ops->supports_namespaces ())
+      linker_namespace = ns_id;
+    else
+      error (_("Linker namespaces are not supported"));
+  }
+
+  LONGEST get_linker_namespace ()
+  {
+    return linker_namespace;
+  }
+
   /* Function called from the various parsers' yyerror functions to throw
      an error.  The error will include a message identifying the location
      of the error within the current expression.  */
@@ -323,6 +339,16 @@ private:
 
   /* Stack of operations.  */
   std::vector<expr::operation_up> m_operations;
+
+  /* If the expression is being restricted to a specific namespace, this is
+     where that information is stored for the block lookup.  It should be
+     accessed through setter/getters to ensure that the linker namespace is
+     only set when the gdbarch supports it.  */
+  LONGEST linker_namespace = -1;
+
+  /* Used to figure out if an inferior is capable of handling linker
+     namespaces at all.  */
+  const solib_ops *m_solib_ops;
 };
 
 /* A string token, either a char-string or bit-string.  Char-strings are

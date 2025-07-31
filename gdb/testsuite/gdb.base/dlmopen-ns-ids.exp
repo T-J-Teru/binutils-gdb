@@ -332,6 +332,7 @@ proc_with_prefix test_print_namespace_symbol {} {
     gdb_breakpoint "change_global" allow-pending
     gdb_continue_to_breakpoint "change_global"
 
+    set ns0 [ns_id_for_command 0]
     set ns1 [ns_id_for_command 1]
     set ns2 [ns_id_for_command 2]
 
@@ -359,6 +360,12 @@ proc_with_prefix test_print_namespace_symbol {} {
     # returning a random one, we just say we didn't find one.
     gdb_test "print gdb_dlmopen_glob" \
 	"No symbol .gdb_dlmopen_glob. in the current linker namespace."
+
+    # Minimal testing for finding files in namespaces.
+    gdb_test "print ${ns1}::'${::srcfile_lib}'::gdb_dlmopen_glob" \
+	".* = 2"
+    gdb_test "print ${ns0}::'${::srcfile_lib}'::gdb_dlmopen_glob" \
+	"Nothing named .${::srcfile_lib}. in specified context."
 }
 
 test_info_shared
