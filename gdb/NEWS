@@ -223,6 +223,12 @@ info threads [-gid] [-stopped] [-running] [ID]...
   These new flags can be useful to get a reduced list when there is a
   large number of threads.
 
+print
+  The print command now accepts the following syntax to print values
+  from a specific linker namespace: `[[N]]::foo'.  N is the namespace
+  identifier as understood by GDB.
+
+
 * GDB-internal Thread Local Storage (TLS) support
 
   ** Linux targets for the x86_64, aarch64, ppc64, s390x, and riscv

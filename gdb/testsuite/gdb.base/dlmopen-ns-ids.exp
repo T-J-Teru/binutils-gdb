@@ -123,6 +123,10 @@ proc get_first_so_ns {} {
     return $ns
 }
 
+proc ns_id_for_command {ns} {
+    return "\[\[$ns\]\]"
+}
+
 # Run the tests relating to the command "info sharedlibrary", to
 # verify that the namespace ID is consistent.
 proc test_info_shared {} {
@@ -315,6 +319,49 @@ proc test_info_linker_namespaces {} {
 		    ".*" ] "print namespaces with no argument"
 }
 
+# Test that we can use the [[N]]::symbol syntax, and it's variations
+# like [[N]]::func::symbol.
+proc_with_prefix test_print_namespace_symbol {} {
+    clean_restart $::binfile
+
+    if { ![runto_main] } {
+	return
+    }
+
+    gdb_breakpoint [gdb_get_line_number "TAG: first dlclose"]
+    gdb_breakpoint "change_global" allow-pending
+    gdb_continue_to_breakpoint "change_global"
+
+    set ns1 [ns_id_for_command 1]
+    set ns2 [ns_id_for_command 2]
+
+    # Test finding location of variables.
+    gdb_test "print ${ns1}::gdb_dlmopen_glob" ".* = 0" "before changing"
+    gdb_test_no_output "set ${ns1}::gdb_dlmopen_glob = 1"
+    gdb_test "print ${ns1}::gdb_dlmopen_glob" ".* = 1" "after changing"
+    gdb_test "print ${ns2}::gdb_dlmopen_glob" ".* = 0" "other namespace"
+
+    gdb_test "print gdb_dlmopen_glob" ".* = 1" "changed the right variable"
+
+    # Test finding functions in specific namespaces.
+    gdb_test "print ${ns1}::inc (2)" ".* = 3"
+    gdb_test "print ${ns2}::inc (2)" ".* = 2"
+
+    # Test finding a specific block in the backtrace.
+    gdb_test "print n" ".* = 1"
+    gdb_test "print ${ns1}::func_with_other_call::n" ".* = 0"
+    gdb_test "print ${ns2}::func_with_other_call::n" \
+	"No frame is currently executing in block func_with_other_call."
+
+    # Leave to default namespace.
+    gdb_continue_to_breakpoint "TAG: first dlclose"
+    # This global doesn't exist in the default namespace.  Rather than
+    # returning a random one, we just say we didn't find one.
+    gdb_test "print gdb_dlmopen_glob" \
+	"No symbol .gdb_dlmopen_glob. in the current linker namespace."
+}
+
 test_info_shared
 test_conv_vars
 test_info_linker_namespaces
+test_print_namespace_symbol

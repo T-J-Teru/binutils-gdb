@@ -358,6 +358,13 @@ struct ttype
     struct type *type;
   };
 
+struct bval_type
+  {
+    bool search_namespace;
+    const struct block *b_val;
+    LONGEST namespace_val;
+  };
+
 struct symtoken
   {
     struct stoken stoken;

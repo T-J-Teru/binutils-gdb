@@ -211,6 +211,14 @@ bound_minimal_symbol lookup_minimal_symbol (program_space *pspace,
 					    objfile *obj = nullptr,
 					    const char *sfile = nullptr);
 
+/* Same as above, but only look for a minimal symbol in the objfiles that
+   belong to the current linker namespace.  This function is only meant to
+   be called when attempting to resolve a symbol from a user command, and
+   there are multiple linker namespaces available to resolve it in.  */
+
+bound_minimal_symbol lookup_minimal_symbol_in_linker_namespace
+  (program_space *pspace, const char *name);
+
 /* Look through all the minimal symbol tables in PSPACE and find the
    first minimal symbol that matches NAME and has text type.  If OBJF
    is non-NULL, limit the search to that objfile.  Returns a bound

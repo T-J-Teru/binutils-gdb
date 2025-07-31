@@ -10686,6 +10686,12 @@ you can choose a different format by specifying @samp{/@var{f}}, where
 @var{f} is a letter specifying the format; see @ref{Output Formats,,Output
 Formats}.
 
+Additionally, if the inferior supports linker namespaces, @value{GDBN}
+has implemented the following syntax to allow users to resolve symbols
+to a specific namespace: @code{[[@var{n}]]::@var{symbol}}.  Here @var{n}
+is @value{GDBN}'s namespace identifier, which may be different from the
+inferior's identifier.
+
 @anchor{print options}
 The @code{print} command supports a number of options that allow
 overriding relevant global print settings as set by @code{set print}

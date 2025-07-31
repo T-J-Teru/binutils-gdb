@@ -335,7 +335,10 @@ lookup_minimal_symbol_demangled (const lookup_name_info &lookup_name,
     }
 }
 
-/* Look through all the current minimal symbol tables and find the
+/* Main implementation for the lookup_minimal_symbol function.
+   Receives a list of objfiles in which to look for the symbol.
+
+   Look through all the current minimal symbol tables and find the
    first minimal symbol that matches NAME.  If OBJF is non-NULL, limit
    the search to that objfile.  If SFILE is non-NULL, the only file-scope
    symbols considered will be from that source file (global symbols are
@@ -355,9 +358,9 @@ lookup_minimal_symbol_demangled (const lookup_name_info &lookup_name,
    Obviously, there must be distinct mangled names for each of these,
    but the demangled names are all the same: S::S or S::~S.  */
 
-bound_minimal_symbol
-lookup_minimal_symbol (program_space *pspace, const char *name, objfile *objf,
-		       const char *sfile)
+static bound_minimal_symbol
+lookup_minimal_symbol_in_objfiles (std::vector<objfile *> objfile_list,
+				   const char *name, const char *sfile)
 {
   found_minimal_symbols found;
 
@@ -373,53 +376,50 @@ lookup_minimal_symbol (program_space *pspace, const char *name, objfile *objf,
 
   lookup_name_info lookup_name (name, symbol_name_match_type::FULL);
 
-  for (objfile &objfile : pspace->objfiles ())
+  for (objfile *objfile_ptr : objfile_list)
     {
+      objfile &objfile = *objfile_ptr;
+
       if (found.external_symbol.minsym != NULL)
 	break;
 
-      if (objf == NULL || objf == &objfile
-	  || objf == objfile.separate_debug_objfile_backlink)
+      symbol_lookup_debug_printf ("lookup_minimal_symbol (%s, %s, %s)",
+				  name, sfile != NULL ? sfile : "NULL",
+				  objfile_debug_name (&objfile));
+
+      /* Do two passes: the first over the ordinary hash table,
+	 and the second over the demangled hash table.  */
+      lookup_minimal_symbol_mangled (name, sfile, &objfile,
+				     objfile.per_bfd->msymbol_hash,
+				     mangled_hash, mangled_cmp, found);
+
+      /* If not found, try the demangled hash table.  */
+      if (found.external_symbol.minsym == NULL)
 	{
-	  symbol_lookup_debug_printf ("lookup_minimal_symbol (%s, %s, %s, %s)",
-				      host_address_to_string (pspace),
-				      name, sfile != NULL ? sfile : "NULL",
-				      objfile_debug_name (&objfile));
-
-	  /* Do two passes: the first over the ordinary hash table,
-	     and the second over the demangled hash table.  */
-	  lookup_minimal_symbol_mangled (name, sfile, &objfile,
-					 objfile.per_bfd->msymbol_hash,
-					 mangled_hash, mangled_cmp, found);
-
-	  /* If not found, try the demangled hash table.  */
-	  if (found.external_symbol.minsym == NULL)
+	  /* Once for each language in the demangled hash names
+	     table (usually just zero or one languages).  */
+	  for (unsigned iter = 0; iter < nr_languages; ++iter)
 	    {
-	      /* Once for each language in the demangled hash names
-		 table (usually just zero or one languages).  */
-	      for (unsigned iter = 0; iter < nr_languages; ++iter)
-		{
-		  if (!objfile.per_bfd->demangled_hash_languages.test (iter))
-		    continue;
-		  enum language lang = (enum language) iter;
+	      if (!objfile.per_bfd->demangled_hash_languages.test (iter))
+		continue;
+	      enum language lang = (enum language) iter;
 
-		  unsigned int hash
-		    = (lookup_name.search_name_hash (lang)
-		       % MINIMAL_SYMBOL_HASH_SIZE);
+	      unsigned int hash
+		= (lookup_name.search_name_hash (lang)
+		   % MINIMAL_SYMBOL_HASH_SIZE);
 
-		  symbol_name_matcher_ftype *match
-		    = language_def (lang)->get_symbol_name_matcher
-							(lookup_name);
-		  struct minimal_symbol **msymbol_demangled_hash
-		    = objfile.per_bfd->msymbol_demangled_hash;
+	      symbol_name_matcher_ftype *match
+		= language_def (lang)->get_symbol_name_matcher
+						    (lookup_name);
+	      struct minimal_symbol **msymbol_demangled_hash
+		= objfile.per_bfd->msymbol_demangled_hash;
 
-		  lookup_minimal_symbol_demangled (lookup_name, sfile, &objfile,
-						   msymbol_demangled_hash,
-						   hash, match, found);
+	      lookup_minimal_symbol_demangled (lookup_name, sfile, &objfile,
+					       msymbol_demangled_hash,
+					       hash, match, found);
 
-		  if (found.external_symbol.minsym != NULL)
-		    break;
-		}
+	      if (found.external_symbol.minsym != NULL)
+		break;
 	    }
 	}
     }
@@ -470,6 +470,42 @@ lookup_minimal_symbol (program_space *pspace, const char *name, objfile *objf,
   /* Not found.  */
   symbol_lookup_debug_printf ("lookup_minimal_symbol (...) = NULL");
   return {};
+}
+
+/* See minsyms.h.  */
+
+bound_minimal_symbol
+lookup_minimal_symbol (program_space *pspace, const char *name, objfile *objf,
+		       const char *sfile)
+{
+  std::vector<objfile *> search_objfiles;
+  if (objf != nullptr)
+    {
+      search_objfiles.push_back (objf);
+      if (objf->separate_debug_objfile_backlink != nullptr)
+	search_objfiles.push_back (objf->separate_debug_objfile_backlink);
+    }
+  else
+    {
+      for (objfile &objfile : pspace->objfiles ())
+	search_objfiles.push_back (&objfile);
+    }
+
+  return lookup_minimal_symbol_in_objfiles (search_objfiles, name, sfile);
+}
+
+/* See minsyms.h.  */
+
+bound_minimal_symbol
+lookup_minimal_symbol_in_linker_namespace (program_space *pspace,
+					   const char *name)
+{
+  LONGEST curr_namespace;
+  get_internalvar_integer (lookup_internalvar ("_linker_namespace"),
+			   &curr_namespace);
+  return lookup_minimal_symbol_in_objfiles
+      (get_objfiles_in_linker_namespace (curr_namespace, pspace),
+       name, nullptr);
 }
 
 /* See gdbsupport/symbol.h.  */
