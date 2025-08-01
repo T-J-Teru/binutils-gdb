@@ -4171,7 +4171,7 @@ captured_main (int argc, char *argv[])
      If getopt_long is free to reorder ARGV then it will try to steal those
      arguments for itself.  */
   while ((longindex = -1,
-	  optc = getopt_long (argc, argv, "+", longopts, &longindex)) != -1)
+	  optc = getopt_long (argc, argv, "+:", longopts, &longindex)) != -1)
     {
       /* As a GNU extension, getopt_long supports '--arg value' form,
 	 without an '=' symbol between the 'arg' and the 'value'.  This
@@ -4223,7 +4223,7 @@ captured_main (int argc, char *argv[])
 	      /* For required arguments, if we don't have an argument, then
 		 this is an errror, set OPTC to reflect this.  */
 	      if (longopts[longindex].has_arg == required_argument)
-		optc = '?';
+		optc = ':';
 	    }
 	}
 
@@ -4390,6 +4390,7 @@ captured_main (int argc, char *argv[])
 	  }
 	  break;
 
+	case ':':
 	case '?':
 	  /* Figuring out which element of ARGV contained the invalid
 	     argument is not simple.  There are a couple of cases we need
@@ -4416,7 +4417,11 @@ captured_main (int argc, char *argv[])
 	  else
 	    bad_arg = argv[optind];
 
-	  fprintf (stderr, "Unknown argument: %s\n", bad_arg.c_str ());
+	  if (optc == '?')
+	    fprintf (stderr, _("Unknown argument: %s\n"), bad_arg.c_str ());
+	  else
+	    fprintf (stderr, _("Missing argument value for: %s\n"),
+		     bad_arg.c_str ());
 	  exit (1);
 	}
     }
