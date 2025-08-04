@@ -646,12 +646,28 @@ aarch64_region_ok_for_watchpoint (CORE_ADDR addr, int len)
   return 1;
 }
 
+[[maybe_unused]] static void 
+apb_debug (const char *fmt, ...)
+{
+  va_list ap;
+
+  if (getenv ("APB_DEBUG") == nullptr)
+    return;
+
+  va_start (ap, fmt);
+  vfprintf (stderr, fmt, ap);
+  va_end (ap);
+}
+
 /* See nat/aarch64-hw-point.h.  */
 
 bool
 aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
 			      CORE_ADDR addr_trap, CORE_ADDR *addr_p)
 {
+  apb_debug ("APB: ---------- Enter: aarch64_stopped_data_address ----------\n");
+  apb_debug ("APB: addr_trap = %s\n", core_addr_to_string_nz (addr_trap));
+
   /* Address of the first watchpoint matching ADDR_TRAP.  */
   std::optional<CORE_ADDR> first_matching_address;
 
@@ -710,12 +726,29 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
       const CORE_ADDR max_access_size = type == hw_write ? 16 : 8;
       const CORE_ADDR addr_watch_base = addr_watch_aligned -
 	  (max_access_size - AARCH64_HWP_MAX_LEN_PER_REG);
+
+
+      apb_debug ("APB: WP %d, %s..%s, addr_watch_aligned = %s, addr_watch = %s, addr_orig = %s, len = %d, offset = %d\n",
+		 i,
+		 core_addr_to_string_nz (addr_watch_base),
+		 core_addr_to_string_nz (addr_watch + len),
+		 core_addr_to_string_nz (addr_watch_aligned), core_addr_to_string_nz (addr_watch),
+		 core_addr_to_string_nz (addr_orig), len, offset);
+
+
+      
       if (!(addr_trap >= addr_watch_base
 	    && addr_trap < addr_watch + len))
       {
 	/* Not a match.  */
 	continue;
       }
+
+      apb_debug ("APB: Match for %d, type: %s, range: %s..%s\n",
+		 i,
+		 (type == hw_write ? "write" : "access"),
+		 core_addr_to_string_nz (addr_watch_base),
+		 core_addr_to_string_nz (addr_watch + len));
 
       if (addr_p == nullptr)
 	{
@@ -733,6 +766,8 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
 	first_matching_address.emplace (addr_orig);
     }
 
+  apb_debug ("APB: total_write_matches = %d, total_access_matches = %d\n", total_write_matches, total_access_matches);                                                                                            
+
   /* If there were no matching watchpoints, or we found multiple possible
      write watchpoints and no read watchpoints, then return false.  This
      will cause GDB to check the value held in each write watchpoint to see
@@ -746,6 +781,7 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
      watchpoint.  In any case, return the first matching watchpoint.  This
      might not be the correct choice, but it's currently the best we can
      do.  */
+  apb_debug ("APB: returning address %s\n", core_addr_to_string_nz (first_matching_address.value ()));
   *addr_p = first_matching_address.value ();
 
   return true;
