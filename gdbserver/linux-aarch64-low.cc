@@ -119,7 +119,7 @@ protected:
 
   bool low_stopped_by_watchpoint () override;
 
-  CORE_ADDR low_stopped_data_address () override;
+  std::vector<CORE_ADDR> low_stopped_data_address () override;
 
   bool low_siginfo_fixup (siginfo_t *native, gdb_byte *inf,
 			  int direction) override;
@@ -550,7 +550,7 @@ aarch64_remove_non_address_bits (CORE_ADDR pointer)
 
 /* Implementation of linux target ops method "low_stopped_data_address".  */
 
-CORE_ADDR
+std::vector<CORE_ADDR>
 aarch64_target::low_stopped_data_address ()
 {
   siginfo_t siginfo;
@@ -559,12 +559,12 @@ aarch64_target::low_stopped_data_address ()
 
   /* Get the siginfo.  */
   if (ptrace (PTRACE_GETSIGINFO, pid, NULL, &siginfo) != 0)
-    return (CORE_ADDR) 0;
+    return {};
 
   /* Need to be a hardware breakpoint/watchpoint trap.  */
   if (siginfo.si_signo != SIGTRAP
       || (siginfo.si_code & 0xffff) != 0x0004 /* TRAP_HWBKPT */)
-    return (CORE_ADDR) 0;
+    return {};
 
   /* Make sure to ignore the top byte, otherwise we may not recognize a
      hardware watchpoint hit.  The stopped data addresses coming from the
@@ -574,11 +574,7 @@ aarch64_target::low_stopped_data_address ()
 
   /* Check if the address matches any watched address.  */
   state = aarch64_get_debug_reg_state (current_thread->id.pid ());
-  CORE_ADDR result;
-  if (aarch64_stopped_data_address (state, addr_trap, &result))
-    return result;
-
-  return (CORE_ADDR) 0;
+  return aarch64_stopped_data_address (state, addr_trap);
 }
 
 /* Implementation of linux target ops method "low_stopped_by_watchpoint".  */
@@ -586,7 +582,7 @@ aarch64_target::low_stopped_data_address ()
 bool
 aarch64_target::low_stopped_by_watchpoint ()
 {
-  return (low_stopped_data_address () != 0);
+  return !low_stopped_data_address ().empty ();
 }
 
 /* Fetch the thread-local storage pointer for libthread_db.  */

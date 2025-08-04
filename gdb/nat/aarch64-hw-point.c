@@ -661,21 +661,15 @@ apb_debug (const char *fmt, ...)
 
 /* See nat/aarch64-hw-point.h.  */
 
-bool
+std::vector<CORE_ADDR>
 aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
-			      CORE_ADDR addr_trap, CORE_ADDR *addr_p)
+			      CORE_ADDR addr_trap)
 {
   apb_debug ("APB: ---------- Enter: aarch64_stopped_data_address ----------\n");
   apb_debug ("APB: addr_trap = %s\n", core_addr_to_string_nz (addr_trap));
 
-  /* Address of the first watchpoint matching ADDR_TRAP.  */
-  std::optional<CORE_ADDR> first_matching_address;
-
-  /* The number of hw_write watchpoints matching ADDR_TRAP.  */
-  int total_write_matches = 0;
-
-  /* The number of non hw_write watchpoints matching ADDR_TRAP.  */
-  int total_access_matches = 0;
+  /* ... */
+  std::vector<CORE_ADDR> matching_addresses;
 
   for (int i = aarch64_num_wp_regs - 1; i >= 0; --i)
     {
@@ -750,39 +744,12 @@ aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
 		 core_addr_to_string_nz (addr_watch_base),
 		 core_addr_to_string_nz (addr_watch + len));
 
-      if (addr_p == nullptr)
-	{
-	  /* First match, and we don't need to report an address.  No need
-	     to look for other matches.  */
-	  return true;
-	}
-
-      if (type == hw_write)
-	total_write_matches++;
-      else
-	total_access_matches++;
-
-      if (!first_matching_address.has_value ())
-	first_matching_address.emplace (addr_orig);
+      matching_addresses.push_back (addr_orig);
     }
 
-  apb_debug ("APB: total_write_matches = %d, total_access_matches = %d\n", total_write_matches, total_access_matches);                                                                                            
-
-  /* If there were no matching watchpoints, or we found multiple possible
-     write watchpoints and no read watchpoints, then return false.  This
-     will cause GDB to check the value held in each write watchpoint to see
-     which (if any) have changed.  */
-  if (!first_matching_address.has_value ()
-      || (total_write_matches > 1 && total_access_matches == 0))
-    return false;
-
-  /* We definitely found a matching watchpoint.  Either a single write
-     watchpoint, or any number of write watchpoints and at least one access
-     watchpoint.  In any case, return the first matching watchpoint.  This
-     might not be the correct choice, but it's currently the best we can
-     do.  */
-  apb_debug ("APB: returning address %s\n", core_addr_to_string_nz (first_matching_address.value ()));
-  *addr_p = first_matching_address.value ();
-
-  return true;
+  apb_debug ("APB: matching addresses:");
+  for (CORE_ADDR &a : matching_addresses)
+    apb_debug (" %s", core_addr_to_string_nz (a));
+  apb_debug ("\n");
+  return matching_addresses;
 }

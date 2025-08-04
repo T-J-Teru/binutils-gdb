@@ -159,7 +159,7 @@ public:
   int region_ok_for_hw_watchpoint (CORE_ADDR, int) override;
 
   int can_use_hw_breakpoint (enum bptype, int, int) override;
-  bool stopped_data_address (CORE_ADDR *) override;
+  std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR) override;
 
   void procfs_init_inferior (int pid);
 };
@@ -3051,13 +3051,15 @@ procfs_target::stopped_by_watchpoint ()
    procfs_stopped_by_watchpoint returned 1, thus no further checks are
    done.  The function also assumes that ADDR is not NULL.  */
 
-bool
-procfs_target::stopped_data_address (CORE_ADDR *addr)
+std::vector<CORE_ADDR>
+procfs_target::stopped_data_address (CORE_ADDR addr)
 {
   procinfo *pi;
 
   pi = find_procinfo_or_die (inferior_ptid.pid (), 0);
-  return proc_watchpoint_address (pi, addr);
+  std::vector<CORE_ADDR> results;
+  results.push_back (proc_watchpoint_address (pi, addr));
+  return results;
 }
 
 int

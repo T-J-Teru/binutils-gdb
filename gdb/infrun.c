@@ -6889,14 +6889,14 @@ handle_signal_stop (struct execution_control_state *ecs)
 	("stop_pc=%s", paddress (reg_gdbarch, ecs->event_thread->stop_pc ()));
       if (target_stopped_by_watchpoint ())
 	{
-	  CORE_ADDR addr;
-
 	  infrun_debug_printf ("stopped by watchpoint");
 
-	  if (target_stopped_data_address (current_inferior ()->top_target (),
-					   &addr))
-	    infrun_debug_printf ("stopped data address=%s",
-				 paddress (reg_gdbarch, addr));
+	  std::vector<CORE_ADDR> addr
+	    = target_stopped_data_address (current_inferior ()->top_target (), 0);
+
+	  if (!addr.empty ())
+	    infrun_debug_printf ("stopped data address=%s",	/* TODO: many addr?  */
+				 paddress (reg_gdbarch, addr[0]));
 	  else
 	    infrun_debug_printf ("(no data address available)");
 	}

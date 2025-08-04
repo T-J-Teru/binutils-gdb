@@ -2496,8 +2496,8 @@ check_stopped_by_watchpoint (struct lwp_info *lp)
   if (linux_target->low_stopped_by_watchpoint ())
     {
       lp->stop_reason = TARGET_STOPPED_BY_WATCHPOINT;
-      lp->stopped_data_address_p
-	= linux_target->low_stopped_data_address (&lp->stopped_data_address);
+      lp->stopped_data_address = linux_target->low_stopped_data_address (0);
+      lp->stopped_data_address_p = !lp->stopped_data_address.empty ();
     }
 
   return lp->stop_reason == TARGET_STOPPED_BY_WATCHPOINT;
@@ -2515,16 +2515,14 @@ linux_nat_target::stopped_by_watchpoint ()
   return lp->stop_reason == TARGET_STOPPED_BY_WATCHPOINT;
 }
 
-bool
-linux_nat_target::stopped_data_address (CORE_ADDR *addr_p)
+std::vector<CORE_ADDR>
+linux_nat_target::stopped_data_address (CORE_ADDR addr_p)
 {
   struct lwp_info *lp = find_lwp_pid (inferior_ptid);
 
   gdb_assert (lp != NULL);
 
-  *addr_p = lp->stopped_data_address;
-
-  return lp->stopped_data_address_p;
+  return lp->stopped_data_address;
 }
 
 /* Commonly any breakpoint / watchpoint generate only SIGTRAP.  */

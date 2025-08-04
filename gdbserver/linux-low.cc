@@ -2206,10 +2206,10 @@ linux_process_target::low_stopped_by_watchpoint ()
   return false;
 }
 
-CORE_ADDR
+std::vector<CORE_ADDR>
 linux_process_target::low_stopped_data_address ()
 {
-  return 0;
+  return {};
 }
 
 /* Return the ptrace options that we want to try to enable.  */
@@ -5641,7 +5641,7 @@ linux_process_target::stopped_by_watchpoint ()
   return lwp->stop_reason == TARGET_STOPPED_BY_WATCHPOINT;
 }
 
-CORE_ADDR
+std::vector<CORE_ADDR>
 linux_process_target::stopped_data_address ()
 {
   struct lwp_info *lwp = get_thread_lwp (current_thread);

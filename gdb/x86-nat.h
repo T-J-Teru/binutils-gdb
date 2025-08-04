@@ -104,8 +104,16 @@ struct x86_nat_target : public BaseTarget
   bool stopped_by_watchpoint () override
   { return x86_stopped_by_watchpoint (); }
 
-  bool stopped_data_address (CORE_ADDR *addr_p) override
-  { return x86_stopped_data_address (addr_p); }
+  std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR addr_p) override
+  {
+    CORE_ADDR addr;
+    std::vector<CORE_ADDR> results;
+
+    if (x86_stopped_data_address (&addr))
+      results.push_back (addr);
+
+    return results;
+  }
 
   /* A target must provide an implementation of the
      "supports_stopped_by_hw_breakpoint" target method before this

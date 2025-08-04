@@ -601,8 +601,8 @@ struct target_ops
       TARGET_DEFAULT_RETURN (false);
     virtual bool have_steppable_watchpoint ()
       TARGET_DEFAULT_RETURN (false);
-    virtual bool stopped_data_address (CORE_ADDR *)
-      TARGET_DEFAULT_RETURN (false);
+    virtual std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR)
+      TARGET_DEFAULT_RETURN (std::vector<CORE_ADDR> ());
     virtual bool watchpoint_addr_within_range (CORE_ADDR, CORE_ADDR, int)
       TARGET_DEFAULT_FUNC (default_watchpoint_addr_within_range);
 
