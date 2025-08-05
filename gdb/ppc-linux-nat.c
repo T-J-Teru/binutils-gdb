@@ -2969,11 +2969,11 @@ ppc_linux_nat_target::low_stopped_data_addresses ()
   siginfo_t siginfo;
 
   if (!linux_nat_get_siginfo (inferior_ptid, &siginfo))
-    return false;
+    return {};
 
   if (siginfo.si_signo != SIGTRAP
       || (siginfo.si_code & 0xffff) != 0x0004 /* TRAP_HWBKPT */)
-    return false;
+    return {};
 
   gdb_assert (!m_dreg_interface.unavailable_p ());
 
@@ -2999,11 +2999,10 @@ ppc_linux_nat_target::low_stopped_data_addresses ()
 	if (slot_bp_pair.first == slot
 	    && (slot_bp_pair.second.trigger_type
 		== PPC_BREAKPOINT_TRIGGER_EXECUTE))
-	  return false;
+	  return {};
     }
 
-  *addr_p = (CORE_ADDR) (uintptr_t) siginfo.si_addr;
-  return true;
+  return { (CORE_ADDR) (uintptr_t) siginfo.si_addr };
 }
 
 /* Return true if INFERIOR_PTID is known to have been stopped by a
