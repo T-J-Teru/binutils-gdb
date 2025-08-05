@@ -104,15 +104,13 @@ struct x86_nat_target : public BaseTarget
   bool stopped_by_watchpoint () override
   { return x86_stopped_by_watchpoint (); }
 
-  std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR addr_p) override
+  std::vector<CORE_ADDR> stopped_data_addresses () override
   {
     CORE_ADDR addr;
-    std::vector<CORE_ADDR> results;
-
     if (x86_stopped_data_address (&addr))
-      results.push_back (addr);
+      return { addr };
 
-    return results;
+    return {};
   }
 
   /* A target must provide an implementation of the

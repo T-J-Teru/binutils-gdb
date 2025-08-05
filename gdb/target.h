@@ -601,7 +601,7 @@ struct target_ops
       TARGET_DEFAULT_RETURN (false);
     virtual bool have_steppable_watchpoint ()
       TARGET_DEFAULT_RETURN (false);
-    virtual std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR)
+    virtual std::vector<CORE_ADDR> stopped_data_addresses ()
       TARGET_DEFAULT_RETURN (std::vector<CORE_ADDR> ());
     virtual bool watchpoint_addr_within_range (CORE_ADDR, CORE_ADDR, int)
       TARGET_DEFAULT_FUNC (default_watchpoint_addr_within_range);
@@ -2172,8 +2172,8 @@ extern int target_ranged_break_num_registers (void);
 /* Return non-zero if target knows the data address which triggered this
    target_stopped_by_watchpoint, in such case place it to *ADDR_P.  Only the
    INFERIOR_PTID task is being queried.  */
-#define target_stopped_data_address(target, addr_p) \
-  (target)->stopped_data_address (addr_p)
+#define target_stopped_data_addresses(target) \
+  (target)->stopped_data_addresses ()
 
 /* Return non-zero if ADDR is within the range of a watchpoint spanning
    LENGTH bytes beginning at START.  */

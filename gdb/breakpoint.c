@@ -2140,7 +2140,7 @@ add_dummy_location (struct breakpoint *b,
    The following constraints influence the location where we can reset
    hardware watchpoints:
 
-   * target_stopped_by_watchpoint and target_stopped_data_address are
+   * target_stopped_by_watchpoint and target_stopped_data_addresses are
      called several times when GDB stops.
 
    [linux] 
@@ -5259,7 +5259,7 @@ watchpoints_triggered (const target_waitstatus &ws)
     }
 
   std::vector<CORE_ADDR> addr_list
-    = target_stopped_data_address (current_inferior ()->top_target (), 0);
+    = target_stopped_data_addresses (current_inferior ()->top_target ());
   if (addr_list.empty ())
     {
       /* We were stopped by a watchpoint, but we don't know where.

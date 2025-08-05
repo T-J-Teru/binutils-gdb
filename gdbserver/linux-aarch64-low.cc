@@ -574,7 +574,7 @@ aarch64_target::low_stopped_data_address ()
 
   /* Check if the address matches any watched address.  */
   state = aarch64_get_debug_reg_state (current_thread->id.pid ());
-  return aarch64_stopped_data_address (state, addr_trap);
+  return aarch64_stopped_data_addresses (state, addr_trap);
 }
 
 /* Implementation of linux target ops method "low_stopped_by_watchpoint".  */

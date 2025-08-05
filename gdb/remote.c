@@ -893,7 +893,7 @@ public:
 
   bool stopped_by_watchpoint () override;
 
-  std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR) override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
 
   bool watchpoint_addr_within_range (CORE_ADDR, CORE_ADDR, int) override;
 
@@ -11402,7 +11402,7 @@ remote_target::stopped_by_watchpoint ()
 }
 
 std::vector<CORE_ADDR>
-remote_target::stopped_data_address (CORE_ADDR addr_p)
+remote_target::stopped_data_addresses ()
 {
   struct thread_info *thread = inferior_thread ();
 

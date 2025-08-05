@@ -6891,8 +6891,9 @@ handle_signal_stop (struct execution_control_state *ecs)
 	{
 	  infrun_debug_printf ("stopped by watchpoint");
 
+	  auto inf_target = current_inferior ()->top_target ();
 	  std::vector<CORE_ADDR> addr
-	    = target_stopped_data_address (current_inferior ()->top_target (), 0);
+	    = target_stopped_data_addresses (inf_target);
 
 	  if (!addr.empty ())
 	    infrun_debug_printf ("stopped data address=%s",	/* TODO: many addr?  */

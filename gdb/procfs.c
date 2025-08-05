@@ -699,22 +699,21 @@ proc_what (procinfo *pi)
 }
 
 /* This function is only called when PI is stopped by a watchpoint.
-   Assuming the OS supports it, write to *ADDR the data address which
-   triggered it and return 1.  Return 0 if it is not possible to know
-   the address.  */
+   Assuming the OS supports it, return a vector containing the data address
+   which triggered the watchpoint.  Return an empty vector if it is not
+   possible to know the address.  */
 
-static int
-proc_watchpoint_address (procinfo *pi, CORE_ADDR *addr)
+static std::vector<CORE_ADDR>
+proc_watchpoint_address (procinfo *pi)
 {
   if (!pi->status_valid)
     if (!proc_get_status (pi))
-      return 0;
+      return {};
 
   gdbarch *arch = current_inferior ()->arch ();
-  *addr = gdbarch_pointer_to_address
+  return { gdbarch_pointer_to_address
 	    (arch, builtin_type (arch)->builtin_data_ptr,
-	     (gdb_byte *) &pi->prstatus.pr_lwp.pr_info.si_addr);
-  return 1;
+	     (gdb_byte *) &pi->prstatus.pr_lwp.pr_info.si_addr) };
 }
 
 /* Returns the pr_nsysarg field (number of args to the current
@@ -3045,21 +3044,16 @@ procfs_target::stopped_by_watchpoint ()
   return false;
 }
 
-/* Returns 1 if the OS knows the position of the triggered watchpoint,
-   and sets *ADDR to that address.  Returns 0 if OS cannot report that
-   address.  This function is only called if
-   procfs_stopped_by_watchpoint returned 1, thus no further checks are
-   done.  The function also assumes that ADDR is not NULL.  */
+/* Returns a vector containing the position of the triggered watchpoint.
+   Returns the empty vector if OS cannot report that address.  This
+   function is only called if procfs_stopped_by_watchpoint returned 1, thus
+   no further checks are done.  */
 
 std::vector<CORE_ADDR>
-procfs_target::stopped_data_address (CORE_ADDR addr)
+procfs_target::stopped_data_addresses ()
 {
-  procinfo *pi;
-
-  pi = find_procinfo_or_die (inferior_ptid.pid (), 0);
-  std::vector<CORE_ADDR> results;
-  results.push_back (proc_watchpoint_address (pi, addr));
-  return results;
+  procinfo *pi = find_procinfo_or_die (inferior_ptid.pid (), 0);
+  return proc_watchpoint_address (pi);
 }
 
 int

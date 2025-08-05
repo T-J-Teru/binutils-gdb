@@ -215,14 +215,14 @@ aarch64_point_is_aligned (ptid_t ptid, int is_watchpoint, CORE_ADDR addr,
 
    Another limitation is that because the watched region is enlarged,
    the watchpoint fault address discovered by
-   aarch64_stopped_data_address may be outside of the original watched
+   aarch64_stopped_data_addresses may be outside of the original watched
    region, especially when the triggering instruction is accessing a
    larger region.  When the fault address is not within any known
    range, watchpoints_triggered in gdb will get confused, as the
    higher-level watchpoint management is only aware of original
    watched regions, and will think that some unknown watchpoint has
    been triggered.  To prevent such a case,
-   aarch64_stopped_data_address implementations in gdb and gdbserver
+   aarch64_stopped_data_addresses implementations in gdb and gdbserver
    try to match the trapped address with a watched region, and return
    an address within the latter. */
 
@@ -662,10 +662,10 @@ apb_debug (const char *fmt, ...)
 /* See nat/aarch64-hw-point.h.  */
 
 std::vector<CORE_ADDR>
-aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
-			      CORE_ADDR addr_trap)
+aarch64_stopped_data_addresses (const struct aarch64_debug_reg_state *state,
+				CORE_ADDR addr_trap)
 {
-  apb_debug ("APB: ---------- Enter: aarch64_stopped_data_address ----------\n");
+  apb_debug ("APB: ---------- Enter: aarch64_stopped_data_addresses ----------\n");
   apb_debug ("APB: addr_trap = %s\n", core_addr_to_string_nz (addr_trap));
 
   /* ... */

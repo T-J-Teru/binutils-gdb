@@ -70,7 +70,7 @@ public:
 
   bool stopped_by_watchpoint () override;
 
-  std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR) override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
 
   bool stopped_by_sw_breakpoint () override;
   bool supports_stopped_by_sw_breakpoint () override;
@@ -146,7 +146,7 @@ public:
   virtual bool low_stopped_by_watchpoint ()
   { return false; }
 
-  virtual std::vector<CORE_ADDR> low_stopped_data_address (CORE_ADDR addr_p)
+  virtual std::vector<CORE_ADDR> low_stopped_data_addresses ()
   { return {}; }
 
   /* The method to call, if any, when a new thread is attached.  */
@@ -267,8 +267,7 @@ struct lwp_info : intrusive_list_node<lwp_info>
      STOPPED_DATA_ADDRESS contains such data address.  Otherwise,
      STOPPED_DATA_ADDRESS_P is false, and STOPPED_DATA_ADDRESS is
      undefined.  Only valid if STOPPED_BY_WATCHPOINT is true.  */
-  int stopped_data_address_p = 0;
-  std::vector<CORE_ADDR> stopped_data_address;
+  std::vector<CORE_ADDR> stopped_data_addresses;
 
   /* Non-zero if we expect a duplicated SIGINT.  */
   int ignore_sigint = 0;

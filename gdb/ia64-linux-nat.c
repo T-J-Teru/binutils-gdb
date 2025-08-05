@@ -686,27 +686,26 @@ ia64_linux_nat_target::low_new_thread (struct lwp_info *lp)
     enable_watchpoints_in_psr (lp->ptid);
 }
 
-bool
-ia64_linux_nat_target::stopped_data_address (CORE_ADDR *addr_p)
+std::vector<CORE_ADDR>
+ia64_linux_nat_target::stopped_data_addresses ()
 {
   CORE_ADDR psr;
   siginfo_t siginfo;
   regcache *regcache = get_thread_regcache (inferior_thread ());
 
   if (!linux_nat_get_siginfo (inferior_ptid, &siginfo))
-    return false;
+    return {};
 
   if (siginfo.si_signo != SIGTRAP
       || (siginfo.si_code & 0xffff) != 0x0004 /* TRAP_HWBKPT */)
-    return false;
+    return {};
 
   regcache_cooked_read_unsigned (regcache, IA64_PSR_REGNUM, &psr);
   psr |= IA64_PSR_DD;	/* Set the dd bit - this will disable the watchpoint
 			   for the next instruction.  */
   regcache_cooked_write_unsigned (regcache, IA64_PSR_REGNUM, psr);
 
-  *addr_p = (CORE_ADDR) siginfo.si_addr;
-  return true;
+  return { (CORE_ADDR) siginfo.si_addr };
 }
 
 bool

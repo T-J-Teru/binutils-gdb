@@ -115,8 +115,8 @@ enum target_hw_bp_type aarch64_watchpoint_type (unsigned int ctrl);
    watchpoint.  The address of the matched watchpoint is returned in
    *ADDR_P.  */
 
-std::vector<CORE_ADDR> aarch64_stopped_data_address (const struct aarch64_debug_reg_state *state,
-						     CORE_ADDR addr_trap);
+extern std::vector<CORE_ADDR> aarch64_stopped_data_addresses
+  (const struct aarch64_debug_reg_state *state, CORE_ADDR addr_trap);
 
 int aarch64_handle_breakpoint (enum target_hw_bp_type type, CORE_ADDR addr,
 			       int len, int is_insert, ptid_t ptid,

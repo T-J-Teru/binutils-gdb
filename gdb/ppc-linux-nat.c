@@ -535,7 +535,7 @@ struct ppc_linux_nat_target final : public linux_nat_target
   /* Override linux_nat_target low methods.  */
   bool low_stopped_by_watchpoint () override;
 
-  bool low_stopped_data_address (CORE_ADDR *) override;
+  std::vector<CORE_ADDR> low_stopped_data_addresses () override;
 
   void low_new_thread (struct lwp_info *lp) override;
 
@@ -2963,8 +2963,8 @@ ppc_linux_nat_target::low_prepare_to_resume (struct lwp_info *lp)
    hardware watchpoint, false otherwise.  If true is returned, write the
    address that the kernel reported as causing the SIGTRAP in ADDR_P.  */
 
-bool
-ppc_linux_nat_target::low_stopped_data_address (CORE_ADDR *addr_p)
+std::vector<CORE_ADDR>
+ppc_linux_nat_target::low_stopped_data_addresses ()
 {
   siginfo_t siginfo;
 
@@ -3012,8 +3012,7 @@ ppc_linux_nat_target::low_stopped_data_address (CORE_ADDR *addr_p)
 bool
 ppc_linux_nat_target::low_stopped_by_watchpoint ()
 {
-  CORE_ADDR addr;
-  return low_stopped_data_address (&addr);
+  return !low_stopped_data_addresses ().empty ();
 }
 
 bool

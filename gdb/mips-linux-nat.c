@@ -602,12 +602,12 @@ mips_linux_nat_target::stopped_by_watchpoint ()
    where the watch triggered (if known).  Return 1 if the address was
    known.  */
 
-bool
-mips_linux_nat_target::stopped_data_address (CORE_ADDR *paddr)
+std::vector<CORE_ADDR>
+mips_linux_nat_target::stopped_data_addresses ()
 {
   /* On mips we don't know the low order 3 bits of the data address,
-     so we must return false.  */
-  return false;
+     so we must return an empty vector.  */
+  return {};
 }
 
 /* Target to_region_ok_for_hw_watchpoint implementation.  Return 1 if
