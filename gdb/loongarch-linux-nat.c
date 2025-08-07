@@ -77,7 +77,7 @@ public:
 
   /* Add our hardware breakpoint and watchpoint implementation.  */
   bool stopped_by_watchpoint () override;
-  bool stopped_data_address (CORE_ADDR *) override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
 
   int insert_hw_breakpoint (struct gdbarch *gdbarch,
 			    struct bp_target_info *bp_tgt) override;
@@ -621,9 +621,7 @@ loongarch_linux_nat_target::stopped_data_addresses ()
 bool
 loongarch_linux_nat_target::stopped_by_watchpoint ()
 {
-  CORE_ADDR addr;
-
-  return stopped_data_address (&addr);
+  return !stopped_data_addresses ().empty ();
 }
 
 /* Insert a hardware-assisted breakpoint at BP_TGT->reqstd_address.

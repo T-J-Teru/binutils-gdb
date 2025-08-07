@@ -60,7 +60,7 @@ public:
 
   bool stopped_by_watchpoint () override;
 
-  bool stopped_data_address (CORE_ADDR *) override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
 
   int region_ok_for_hw_watchpoint (CORE_ADDR, int) override;
 

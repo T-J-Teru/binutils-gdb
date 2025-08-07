@@ -57,7 +57,7 @@ struct aarch64_fbsd_nat_target final : public fbsd_nat_target
 #ifdef HAVE_DBREG
   /* Hardware breakpoints and watchpoints.  */
   bool stopped_by_watchpoint () override;
-  bool stopped_data_address (CORE_ADDR *) override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
   bool stopped_by_hw_breakpoint () override;
   bool supports_stopped_by_hw_breakpoint () override;
 
@@ -163,7 +163,7 @@ aarch64_fbsd_nat_target::stopped_data_addresses ()
 bool
 aarch64_fbsd_nat_target::stopped_by_watchpoint ()
 {
-  return stopped_data_address (nullptr);
+  return !stopped_data_addresses ().empty ();
 }
 
 /* Implement the "stopped_by_hw_breakpoint" target_ops method.  */

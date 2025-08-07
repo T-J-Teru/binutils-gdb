@@ -5412,7 +5412,7 @@ watchpoint_check (bpstat *bs)
 
       if (is_masked_watchpoint (b))
 	/* Since we don't know the exact trigger address (from
-	   stopped_data_address), just tell the user we've triggered
+	   stopped_data_addresses), just tell the user we've triggered
 	   a mask watchpoint.  */
 	return WP_VALUE_CHANGED;
 
