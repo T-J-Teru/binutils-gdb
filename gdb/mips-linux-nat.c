@@ -598,9 +598,10 @@ mips_linux_nat_target::stopped_by_watchpoint ()
   return false;
 }
 
-/* Target to_stopped_data_address implementation.  Set the address
-   where the watch triggered (if known).  Return 1 if the address was
-   known.  */
+/* Target stopped_data_addresses implementation.  Return a vector
+   containing the address(es) of the watchpoint(s) that triggered, if
+   known.  Return an empty vector if it is unknown which watchpoint(s)
+   triggered.  */
 
 std::vector<CORE_ADDR>
 mips_linux_nat_target::stopped_data_addresses ()

@@ -590,7 +590,7 @@ loongarch_linux_nat_target::watchpoint_addr_within_range (CORE_ADDR addr,
 }
 
 
-/* Implement the "stopped_data_address" target_ops method.  */
+/* Implement the "stopped_data_addresses" target_ops method.  */
 
 std::vector<CORE_ADDR>
 loongarch_linux_nat_target::stopped_data_addresses ()

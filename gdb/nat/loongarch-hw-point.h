@@ -100,7 +100,7 @@ void loongarch_show_debug_reg_state (struct loongarch_debug_reg_state *state,
 
 int loongarch_region_ok_for_watchpoint (CORE_ADDR addr, int len);
 
-/* Helper for the "stopped_data_address/low_stopped_data_addresses" target
+/* Helper for the "stopped_data_address/low_stopped_data_address" target
    method.  Returns TRUE if a hardware watchpoint trap at ADDR_TRAP matches
    a set watchpoint.  The address of the matched watchpoint is returned in
    *ADDR_P.  */

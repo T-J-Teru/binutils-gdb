@@ -159,7 +159,7 @@ public:
   int region_ok_for_hw_watchpoint (CORE_ADDR, int) override;
 
   int can_use_hw_breakpoint (enum bptype, int, int) override;
-  std::vector<CORE_ADDR> stopped_data_address (CORE_ADDR) override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
 
   void procfs_init_inferior (int pid);
 };
@@ -699,21 +699,22 @@ proc_what (procinfo *pi)
 }
 
 /* This function is only called when PI is stopped by a watchpoint.
-   Assuming the OS supports it, return a vector containing the data address
-   which triggered the watchpoint.  Return an empty vector if it is not
-   possible to know the address.  */
+   Assuming the OS supports it, write to *ADDR the data address which
+   triggered it and return 1.  Return 0 if it is not possible to know
+   the address.  */
 
-static std::vector<CORE_ADDR>
-proc_watchpoint_address (procinfo *pi)
+static int
+proc_watchpoint_address (procinfo *pi, CORE_ADDR *addr)
 {
   if (!pi->status_valid)
     if (!proc_get_status (pi))
-      return {};
+      return 0;
 
   gdbarch *arch = current_inferior ()->arch ();
-  return { gdbarch_pointer_to_address
+  *addr = gdbarch_pointer_to_address
 	    (arch, builtin_type (arch)->builtin_data_ptr,
-	     (gdb_byte *) &pi->prstatus.pr_lwp.pr_info.si_addr) };
+	     (gdb_byte *) &pi->prstatus.pr_lwp.pr_info.si_addr);
+  return 1;
 }
 
 /* Returns the pr_nsysarg field (number of args to the current
@@ -3053,7 +3054,10 @@ std::vector<CORE_ADDR>
 procfs_target::stopped_data_addresses ()
 {
   procinfo *pi = find_procinfo_or_die (inferior_ptid.pid (), 0);
-  return proc_watchpoint_address (pi);
+  CORE_ADDR addr;
+  if (proc_watchpoint_address (pi, &addr))
+    return { addr };
+  return {};
 }
 
 int

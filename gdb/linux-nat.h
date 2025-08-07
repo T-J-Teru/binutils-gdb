@@ -146,8 +146,8 @@ public:
   virtual bool low_stopped_by_watchpoint ()
   { return false; }
 
-  virtual std::vector<CORE_ADDR> low_stopped_data_addresses ()
-  { return {}; }
+  virtual bool low_stopped_data_address (CORE_ADDR *addr_p)
+  { return false; }
 
   /* The method to call, if any, when a new thread is attached.  */
   virtual void low_new_thread (struct lwp_info *)
@@ -267,7 +267,8 @@ struct lwp_info : intrusive_list_node<lwp_info>
      STOPPED_DATA_ADDRESS contains such data address.  Otherwise,
      STOPPED_DATA_ADDRESS_P is false, and STOPPED_DATA_ADDRESS is
      undefined.  Only valid if STOPPED_BY_WATCHPOINT is true.  */
-  std::vector<CORE_ADDR> stopped_data_addresses;
+  int stopped_data_address_p = 0;
+  CORE_ADDR stopped_data_address = 0;
 
   /* Non-zero if we expect a duplicated SIGINT.  */
   int ignore_sigint = 0;

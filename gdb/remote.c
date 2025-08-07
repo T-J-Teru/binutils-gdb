@@ -1637,8 +1637,12 @@ struct remote_thread_info : public private_thread_info
   /* Whether the target stopped for a breakpoint/watchpoint.  */
   enum target_stop_reason stop_reason = TARGET_STOPPED_BY_NO_REASON;
 
-  /* This is set to the data address of the access causing the target
-     to stop for a watchpoint.  */
+  /* This is set to all the watchpoint addresses of the access causing the
+     target to stop for a watchpoint.  For some targets (e.g. AArch64)
+     targets cannot watch small (e.g. single byte) regions, so multiple
+     watchpoints could account for a stop.  All possible watchpoint
+     addresses are reported back to GDB, and GDB must select between
+     them.  */
   std::vector<CORE_ADDR> watch_data_address;
 
   /* Get the thread's resume state.  */

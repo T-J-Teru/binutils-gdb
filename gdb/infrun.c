@@ -6889,17 +6889,26 @@ handle_signal_stop (struct execution_control_state *ecs)
 	("stop_pc=%s", paddress (reg_gdbarch, ecs->event_thread->stop_pc ()));
       if (target_stopped_by_watchpoint ())
 	{
-	  infrun_debug_printf ("stopped by watchpoint");
-
 	  auto inf_target = current_inferior ()->top_target ();
-	  std::vector<CORE_ADDR> addr
+	  std::vector<CORE_ADDR> addr_list
 	    = target_stopped_data_addresses (inf_target);
 
-	  if (!addr.empty ())
-	    infrun_debug_printf ("stopped data address=%s",	/* TODO: many addr?  */
-				 paddress (reg_gdbarch, addr[0]));
+	  std::string addr_str;
+	  if (addr_list.empty ())
+	    addr_str = "(no data addressses available)";
 	  else
-	    infrun_debug_printf ("(no data address available)");
+	    {
+	      for (const CORE_ADDR addr : addr_list)
+		{
+		  if (addr_str.length () > 0)
+		    addr_str += ", ";
+
+		  addr_str += paddress (reg_gdbarch, addr);
+		}
+	    }
+
+	  infrun_debug_printf ("stopped by watchpoint, data addresses = %s",
+			       addr_str.c_str ());
 	}
     }
 

@@ -535,7 +535,7 @@ struct ppc_linux_nat_target final : public linux_nat_target
   /* Override linux_nat_target low methods.  */
   bool low_stopped_by_watchpoint () override;
 
-  std::vector<CORE_ADDR> low_stopped_data_addresses () override;
+  bool low_stopped_data_address (CORE_ADDR *) override;
 
   void low_new_thread (struct lwp_info *lp) override;
 
@@ -2963,17 +2963,17 @@ ppc_linux_nat_target::low_prepare_to_resume (struct lwp_info *lp)
    hardware watchpoint, false otherwise.  If true is returned, write the
    address that the kernel reported as causing the SIGTRAP in ADDR_P.  */
 
-std::vector<CORE_ADDR>
-ppc_linux_nat_target::low_stopped_data_addresses ()
+bool
+ppc_linux_nat_target::low_stopped_data_address (CORE_ADDR *addr_p)
 {
   siginfo_t siginfo;
 
   if (!linux_nat_get_siginfo (inferior_ptid, &siginfo))
-    return {};
+    return false;
 
   if (siginfo.si_signo != SIGTRAP
       || (siginfo.si_code & 0xffff) != 0x0004 /* TRAP_HWBKPT */)
-    return {};
+    return false;
 
   gdb_assert (!m_dreg_interface.unavailable_p ());
 
@@ -2999,10 +2999,11 @@ ppc_linux_nat_target::low_stopped_data_addresses ()
 	if (slot_bp_pair.first == slot
 	    && (slot_bp_pair.second.trigger_type
 		== PPC_BREAKPOINT_TRIGGER_EXECUTE))
-	  return {};
+	  return false;
     }
 
-  return { (CORE_ADDR) (uintptr_t) siginfo.si_addr };
+  *addr_p = (CORE_ADDR) (uintptr_t) siginfo.si_addr;
+  return true;
 }
 
 /* Return true if INFERIOR_PTID is known to have been stopped by a
@@ -3011,7 +3012,8 @@ ppc_linux_nat_target::low_stopped_data_addresses ()
 bool
 ppc_linux_nat_target::low_stopped_by_watchpoint ()
 {
-  return !low_stopped_data_addresses ().empty ();
+  CORE_ADDR addr;
+  return low_stopped_data_address (&addr);
 }
 
 bool
