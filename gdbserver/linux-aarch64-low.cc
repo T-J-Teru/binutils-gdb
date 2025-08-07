@@ -119,7 +119,7 @@ protected:
 
   bool low_stopped_by_watchpoint () override;
 
-  std::vector<CORE_ADDR> low_stopped_data_address () override;
+  std::vector<CORE_ADDR> low_stopped_data_addresses () override;
 
   bool low_siginfo_fixup (siginfo_t *native, gdb_byte *inf,
 			  int direction) override;
@@ -548,10 +548,10 @@ aarch64_remove_non_address_bits (CORE_ADDR pointer)
   return aarch64_remove_top_bits (pointer, mask);
 }
 
-/* Implementation of linux target ops method "low_stopped_data_address".  */
+/* Implementation of linux target ops method "low_stopped_data_addresses".  */
 
 std::vector<CORE_ADDR>
-aarch64_target::low_stopped_data_address ()
+aarch64_target::low_stopped_data_addresses ()
 {
   siginfo_t siginfo;
   struct aarch64_debug_reg_state *state;
@@ -582,7 +582,7 @@ aarch64_target::low_stopped_data_address ()
 bool
 aarch64_target::low_stopped_by_watchpoint ()
 {
-  return !low_stopped_data_address ().empty ();
+  return !low_stopped_data_addresses ().empty ();
 }
 
 /* Fetch the thread-local storage pointer for libthread_db.  */

@@ -410,7 +410,7 @@ process_stratum_target::stopped_by_watchpoint ()
 }
 
 std::vector<CORE_ADDR>
-process_stratum_target::stopped_data_address ()
+process_stratum_target::stopped_data_addresses ()
 {
   return {};
 }

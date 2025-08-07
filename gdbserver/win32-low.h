@@ -89,7 +89,7 @@ struct win32_target_ops
   int (*remove_point) (enum raw_bkpt_type type, CORE_ADDR addr,
 		       int size, struct raw_breakpoint *bp);
   int (*stopped_by_watchpoint) (void);
-  std::vector<CORE_ADDR> (*stopped_data_address) (void);
+  CORE_ADDR (*stopped_data_address) (void);
 };
 
 extern struct win32_target_ops the_low_target;
@@ -144,7 +144,7 @@ public:
 
   bool stopped_by_watchpoint () override;
 
-  std::vector<CORE_ADDR> stopped_data_address () override;
+  std::vector<CORE_ADDR> stopped_data_addresses () override;
 
   bool supports_qxfer_siginfo () override;
 

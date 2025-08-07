@@ -1182,7 +1182,7 @@ prepare_resume_reply (char *buf, ptid_t ptid, const target_waitstatus &status)
 
 	if (the_target->stopped_by_watchpoint ())
 	  {
-	    std::vector<CORE_ADDR> addr_vec = the_target->stopped_data_address ();
+	    std::vector<CORE_ADDR> addr_vec = the_target->stopped_data_addresses ();
 
 	    for (const CORE_ADDR addr : addr_vec)
 	      {

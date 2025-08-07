@@ -158,7 +158,7 @@ protected:
 
   bool low_stopped_by_watchpoint () override;
 
-  std::vector<CORE_ADDR> low_stopped_data_address () override;
+  std::vector<CORE_ADDR> low_stopped_data_addresses () override;
 
   /* collect_ptrace_register/supply_ptrace_register are not needed in the
      native i386 case (no registers smaller than an xfer unit), and are not
@@ -713,15 +713,14 @@ x86_target::low_stopped_by_watchpoint ()
 }
 
 std::vector<CORE_ADDR>
-x86_target::low_stopped_data_address ()
+x86_target::low_stopped_data_addresses ()
 {
   struct process_info *proc = current_process ();
-  std::vector<CORE_ADDR> results;
   CORE_ADDR addr;
   if (x86_dr_stopped_data_address (&proc->priv->arch_private->debug_reg_state,
 				   &addr))
-    results.push_back (addr);
-  return results;
+    return { addr };
+  return {};
 }
 
 /* Called when a new process is created.  */
