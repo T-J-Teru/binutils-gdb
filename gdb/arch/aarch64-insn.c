@@ -18,8 +18,9 @@
 
 #include "aarch64-insn.h"
 
-/* Toggle this file's internal debugging dump.  */
-bool aarch64_debug = false;
+/* When true, display debugging related to AArch64 instruction decoding
+   within this file.  */
+bool aarch64_debug_insn = false;
 
 /* Determine if specified bits within an instruction opcode matches a
    specific pattern.
@@ -68,9 +69,9 @@ aarch64_decode_adr (CORE_ADDR addr, uint32_t insn, int *is_adrp,
       else
 	*offset = (immhi | immlo);
 
-      aarch64_debug_printf ("decode: 0x%s 0x%x %s x%u, #?",
-			    core_addr_to_string_nz (addr), insn,
-			    *is_adrp ?  "adrp" : "adr", *rd);
+      aarch64_debug_insn_printf ("decode: 0x%s 0x%x %s x%u, #?",
+				 core_addr_to_string_nz (addr), insn,
+				 *is_adrp ?  "adrp" : "adr", *rd);
       return 1;
     }
   return 0;
@@ -97,10 +98,10 @@ aarch64_decode_b (CORE_ADDR addr, uint32_t insn, int *is_bl,
       *is_bl = (insn >> 31) & 0x1;
       *offset = sbits (insn, 0, 25) * 4;
 
-      aarch64_debug_printf ("decode: 0x%s 0x%x %s 0x%s",
-			    core_addr_to_string_nz (addr), insn,
-			    *is_bl ? "bl" : "b",
-			    core_addr_to_string_nz (addr + *offset));
+      aarch64_debug_insn_printf ("decode: 0x%s 0x%x %s 0x%s",
+				 core_addr_to_string_nz (addr), insn,
+				 *is_bl ? "bl" : "b",
+				 core_addr_to_string_nz (addr + *offset));
 
       return 1;
     }
@@ -127,9 +128,10 @@ aarch64_decode_bcond (CORE_ADDR addr, uint32_t insn, unsigned *cond,
       *cond = (insn >> 0) & 0xf;
       *offset = sbits (insn, 5, 23) * 4;
 
-      aarch64_debug_printf ("decode: 0x%s 0x%x b<%u> 0x%s",
-			    core_addr_to_string_nz (addr), insn, *cond,
-			    core_addr_to_string_nz (addr + *offset));
+      aarch64_debug_insn_printf ("decode: 0x%s 0x%x b<%u> 0x%s",
+				 core_addr_to_string_nz (addr),
+				 insn, *cond,
+				 core_addr_to_string_nz (addr + *offset));
       return 1;
     }
   return 0;
@@ -159,10 +161,10 @@ aarch64_decode_cb (CORE_ADDR addr, uint32_t insn, int *is64, int *is_cbnz,
       *is_cbnz = (insn >> 24) & 0x1;
       *offset = sbits (insn, 5, 23) * 4;
 
-      aarch64_debug_printf ("decode: 0x%s 0x%x %s 0x%s",
-			    core_addr_to_string_nz (addr), insn,
-			    *is_cbnz ? "cbnz" : "cbz",
-			    core_addr_to_string_nz (addr + *offset));
+      aarch64_debug_insn_printf ("decode: 0x%s 0x%x %s 0x%s",
+				 core_addr_to_string_nz (addr), insn,
+				 *is_cbnz ? "cbnz" : "cbz",
+				 core_addr_to_string_nz (addr + *offset));
       return 1;
     }
   return 0;
@@ -192,10 +194,10 @@ aarch64_decode_tb (CORE_ADDR addr, uint32_t insn, int *is_tbnz,
       *bit = ((insn >> (31 - 4)) & 0x20) | ((insn >> 19) & 0x1f);
       *imm = sbits (insn, 5, 18) * 4;
 
-      aarch64_debug_printf ("decode: 0x%s 0x%x %s x%u, #%u, 0x%s",
-			    core_addr_to_string_nz (addr), insn,
-			    *is_tbnz ? "tbnz" : "tbz", *rt, *bit,
-			    core_addr_to_string_nz (addr + *imm));
+      aarch64_debug_insn_printf ("decode: 0x%s 0x%x %s x%u, #%u, 0x%s",
+				 core_addr_to_string_nz (addr), insn,
+				 *is_tbnz ? "tbnz" : "tbz", *rt, *bit,
+				 core_addr_to_string_nz (addr + *imm));
       return 1;
     }
   return 0;
@@ -234,10 +236,10 @@ aarch64_decode_ldr_literal (CORE_ADDR addr, uint32_t insn, int *is_w,
       *rt = (insn >> 0) & 0x1f;
       *offset = sbits (insn, 5, 23) * 4;
 
-      aarch64_debug_printf ("decode: %s 0x%x %s %s%u, #?",
-			    core_addr_to_string_nz (addr), insn,
-			    *is_w ? "ldrsw" : "ldr",
-			    *is64 ? "x" : "w", *rt);
+      aarch64_debug_insn_printf ("decode: %s 0x%x %s %s%u, #?",
+				 core_addr_to_string_nz (addr), insn,
+				 *is_w ? "ldrsw" : "ldr",
+				 *is64 ? "x" : "w", *rt);
 
       return 1;
     }

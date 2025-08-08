@@ -26639,14 +26639,45 @@ When @value{GDBN} is debugging the AArch64 architecture, it provides the
 following special commands:
 
 @table @code
-@item set debug aarch64
+@item set debug aarch64 infcall @r{[}on@r{|}off@r{]}
+@kindex set debug aarch64 infcall
+When @samp{on}, display debugging messages related to AArch64 inferior
+function calls.
+
+@item show debug aarch64 infcall
+@kindex show debug aarch64 infcall
+Show whether inferior function call related debugging messages will be
+displayed.
+
+@item set debug aarch64 insn @r{[}on@r{|}off@r{]}
+@kindex set debug aarch64 insn
+When @samp{on}, display debugging messages related to AArch64
+instruction decoding.  This is not related to the general
+disassembler, but rather for things like displaced stepping.
+
+@item show debug aarch64 insn
+@kindex show debug aarch64 insn
+Show whether AArch64 instruction decoding related debugging messages
+will be displayed.
+
+@item set debug aarch64 prologue @r{[}on@r{|}off@r{]}
+@kindex set debug aarch64 prologue
+When @samp{on}, display debugging messages related to AArch64
+function prologue analysis.
+
+@item show debug aarch64 prologue
+@kindex show debug aarch64 prologue
+Show whether AArch64 function prologue analysis related debugging
+messages will be displayed.
+
+@item set debug aarch64 @r{[}on@r{|}off@r{]}
 @kindex set debug aarch64
-This command determines whether AArch64 architecture-specific debugging
-messages are to be displayed.
+Setting this to @samp{on} or @samp{off} will turn on or off all
+@command{set debug aarch64} sub-commands.
 
 @item show debug aarch64
-Show whether AArch64 debugging messages are displayed.
-
+@kindex show debug aarch64
+This command will show the status of all the sub-commands.
 @end table
 
 @subsubsection AArch64 Scalable Vector Extension

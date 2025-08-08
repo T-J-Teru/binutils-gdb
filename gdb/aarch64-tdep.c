@@ -46,12 +46,12 @@
 #include "aarch64-tdep.h"
 #include "aarch64-ravenscar-thread.h"
 #include "arch/aarch64-mte.h"
-
+#include "top.h"
 #include "record.h"
 #include "record-full.h"
 #include "arch/aarch64-insn.h"
 #include "gdbarch.h"
-
+#include "cli/cli-decode.h"
 #include "opcode/aarch64.h"
 #include <algorithm>
 #include <unordered_map>
@@ -60,6 +60,26 @@
 #include "inferior.h"
 /* For std::sqrt and std::pow.  */
 #include <cmath>
+
+/* When on, print debugging related to inferior function calls.  */
+
+static bool aarch64_debug_infcall;
+
+/* Print an "aarch64-infcall" debug statement.  */
+
+#define aarch64_debug_infcall_printf(fmt, ...)				\
+  debug_prefixed_printf_cond (aarch64_debug_infcall, "aarch64-infcall",	\
+			      fmt, ##__VA_ARGS__)
+
+/* When on, print debugging related to prologue analysis.  */
+
+static bool aarch64_debug_prologue;
+
+/* Print an "aarch64-prologue" debug statement.  */
+
+#define aarch64_debug_prologue_printf(fmt, ...)				\
+  debug_prefixed_printf_cond (aarch64_debug_infcall, "aarch64-prologue", \
+			      fmt, ##__VA_ARGS__)
 
 /* A Homogeneous Floating-Point or Short-Vector Aggregate may have at most
    four members.  */
@@ -229,13 +249,6 @@ struct za_pseudo_encoding
   /* Qualifier index (0 ~ 4).  These map to B, H, S, D and Q.  */
   uint8_t qualifier_index;
 };
-
-static void
-show_aarch64_debug (struct ui_file *file, int from_tty,
-		    struct cmd_list_element *c, const char *value)
-{
-  gdb_printf (file, _("AArch64 debugging is %s.\n"), value);
-}
 
 namespace {
 
@@ -436,9 +449,9 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 	    regs[rd] = regs[rm];
 	  else
 	    {
-	      aarch64_debug_printf ("prologue analysis gave up "
-				    "addr=%s opcode=0x%x (orr x register)",
-				    core_addr_to_string_nz (start), insn);
+	      aarch64_debug_prologue_printf
+		("prologue analysis gave up addr=%s opcode=0x%x "
+		 "(orr x register)", core_addr_to_string_nz (start), insn);
 
 	      break;
 	    }
@@ -563,9 +576,9 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 	    continue;
 	  else
 	    {
-	      aarch64_debug_printf ("prologue analysis gave up addr=%s"
-				    " opcode=0x%x (iclass)",
-				    core_addr_to_string_nz (start), insn);
+	      aarch64_debug_prologue_printf
+		("prologue analysis gave up addr=%s opcode=0x%x (iclass)",
+		 core_addr_to_string_nz (start), insn);
 	      break;
 	    }
 
@@ -577,9 +590,9 @@ aarch64_analyze_prologue (struct gdbarch *gdbarch,
 	}
       else
 	{
-	  aarch64_debug_printf ("prologue analysis gave up addr=%s"
-				" opcode=0x%x",
-				core_addr_to_string_nz (start), insn);
+	  aarch64_debug_prologue_printf
+	    ("prologue analysis gave up addr=%s opcode=0x%x",
+	     core_addr_to_string_nz (start), insn);
 
 	  break;
 	}
@@ -1702,9 +1715,9 @@ pass_in_x (struct gdbarch *gdbarch, struct regcache *regcache,
 	  && (typecode == TYPE_CODE_STRUCT || typecode == TYPE_CODE_UNION))
 	regval <<= ((X_REGISTER_SIZE - partial_len) * TARGET_CHAR_BIT);
 
-      aarch64_debug_printf ("arg %d in %s = 0x%s", info->argnum,
-			    gdbarch_register_name (gdbarch, regnum),
-			    phex (regval, X_REGISTER_SIZE));
+      aarch64_debug_infcall_printf ("arg %d in %s = 0x%s", info->argnum,
+				    gdbarch_register_name (gdbarch, regnum),
+				    phex (regval, X_REGISTER_SIZE));
 
       regcache_cooked_write_unsigned (regcache, regnum, regval);
       len -= partial_len;
@@ -1739,8 +1752,8 @@ pass_in_v (struct gdbarch *gdbarch,
       memcpy (reg.data (), buf, len);
       regcache->cooked_write (regnum, reg);
 
-      aarch64_debug_printf ("arg %d in %s", info->argnum,
-			    gdbarch_register_name (gdbarch, regnum));
+      aarch64_debug_infcall_printf ("arg %d in %s", info->argnum,
+				    gdbarch_register_name (gdbarch, regnum));
 
       return 1;
     }
@@ -1771,8 +1784,8 @@ pass_on_stack (struct aarch64_call_info *info, struct type *type,
   if (align > 16)
     align = 16;
 
-  aarch64_debug_printf ("arg %d len=%d @ sp + %d\n", info->argnum, len,
-			info->nsaa);
+  aarch64_debug_infcall_printf ("arg %d len=%d @ sp + %d\n",
+				info->argnum, len, info->nsaa);
 
   item.len = len;
   item.data = buf;
@@ -1922,10 +1935,10 @@ aarch64_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
   /* The struct_return pointer occupies X8.  */
   if (return_method != return_method_normal)
     {
-      aarch64_debug_printf ("struct return in %s = 0x%s",
-			    gdbarch_register_name
-			      (gdbarch, AARCH64_STRUCT_RETURN_REGNUM),
-			    paddress (gdbarch, struct_addr));
+      aarch64_debug_infcall_printf ("struct return in %s = 0x%s",
+				    gdbarch_register_name
+				    (gdbarch, AARCH64_STRUCT_RETURN_REGNUM),
+				    paddress (gdbarch, struct_addr));
 
       regcache_cooked_write_unsigned (regcache, AARCH64_STRUCT_RETURN_REGNUM,
 				      struct_addr);
@@ -2546,7 +2559,7 @@ aarch64_extract_return_value (struct type *type, struct regcache *regs,
 	  gdb::byte_vector buf (register_size (gdbarch, regno));
 	  gdb_assert (len <= buf.size ());
 
-	  aarch64_debug_printf
+	  aarch64_debug_infcall_printf
 	    ("read HFA or HVA return value element %d from %s",
 	     i + 1, gdbarch_register_name (gdbarch, regno));
 
@@ -2660,7 +2673,7 @@ aarch64_store_return_value (struct type *type, struct regcache *regs,
 	  gdb::byte_vector tmpbuf (register_size (gdbarch, regno));
 	  gdb_assert (len <= tmpbuf.size ());
 
-	  aarch64_debug_printf
+	  aarch64_debug_infcall_printf
 	    ("write HFA or HVA return value element %d to %s",
 	     i + 1, gdbarch_register_name (gdbarch, regno));
 
@@ -2748,7 +2761,7 @@ aarch64_return_value (struct gdbarch *gdbarch, struct value *func_value,
 	      of the memory block shall be passed as an additional argument to
 	      the function in x8.  */
 
-	  aarch64_debug_printf ("return value in memory");
+	  aarch64_debug_infcall_printf ("return value in memory");
 
 	  if (read_value != nullptr)
 	    {
@@ -2772,7 +2785,7 @@ aarch64_return_value (struct gdbarch *gdbarch, struct value *func_value,
 				    (*read_value)->contents_raw ().data ());
     }
 
-  aarch64_debug_printf ("return value in registers");
+  aarch64_debug_infcall_printf ("return value in registers");
 
   return RETURN_VALUE_REGISTER_CONVENTION;
 }
@@ -4914,19 +4927,124 @@ static void aarch64_process_record_test (void);
 }
 #endif
 
+/* The set and show lists for 'set debug aarch64' and 'show debug aarch64'
+   prefixes.  */
+
+static struct cmd_list_element *set_debug_aarch64_cmd_list = nullptr;
+static struct cmd_list_element *show_debug_aarch64_cmd_list = nullptr;
+
+/* The show callback for all 'show debug aarch64 VARNAME' variables.  */
+
+static void
+show_aarch64_debug_variable (struct ui_file *file, int from_tty,
+			     struct cmd_list_element *c,
+			     const char *value)
+{
+  gdb_printf (file, _("AArch64 debug variable `%s' is set to: %s\n"),
+	      c->name, value);
+}
+
+/* Implement 'set debug aarch64'.  This is provided for backward
+   compatibility.  Before AArch64 debug was split into multiple different
+   sub-options there was just 'set debug aarch64 on|off'.  This function
+   allows that to still work, but now 'set debug aarch64 on' will set each
+   sub-option to 'on'.
+
+   Doing 'set debug aarch64' with no value acts like a normal 'set' prefix
+   command, it displays help text for each of the sub-commands.  */
+
+static void
+set_debug_aarch64_cmd (const char *args, int from_tty,
+		       struct cmd_list_element *c)
+{
+  /* With no arguments, act like any "normal" prefix set command.  */
+  if (args == nullptr)
+    {
+      /* Look past all aliases.  */
+      while (c->is_alias ())
+	c = c->alias_target;
+
+      help_list (*c->subcommands, c->prefixname_no_space ().c_str (),
+		 all_commands, gdb_stdout);
+
+      return;
+    }
+
+  bool enable = true;
+  if (strcmp (args, "off") == 0)
+    enable = false;
+  else if (strcmp (args, "on") == 0)
+    enable = true;
+  else
+    {
+      LONGEST val = parse_and_eval_long (args);
+      if (val == 0)
+	enable = false;
+      else
+	enable = true;
+    }
+
+  for (struct cmd_list_element *sub = *c->subcommands;
+       sub != nullptr;
+       sub = sub->next)
+    {
+      std::string cmd = string_printf ("set debug aarch64 %s %s",
+				   sub->name, (enable ? "on" : "off"));
+      execute_command (cmd.c_str (), from_tty);
+    }
+}
+
 INIT_GDB_FILE (aarch64_tdep)
 {
   gdbarch_register (bfd_arch_aarch64, aarch64_gdbarch_init,
 		    aarch64_dump_tdep);
 
-  /* Debug this file's internals.  */
-  add_setshow_boolean_cmd ("aarch64", class_maintenance, &aarch64_debug, _("\
-Set AArch64 debugging."), _("\
-Show AArch64 debugging."), _("\
-When on, AArch64 specific debugging is enabled."),
-			    NULL,
-			    show_aarch64_debug,
+  /* Add root prefix command for all "set debug aarch64" and "show debug
+     aarch64" commands.  */
+  auto set_show =
+    add_setshow_prefix_cmd ("aarch64", no_class,
+			    _("AArch64 specific debug commands."),
+			    _("AArch64 specific debug commands."),
+			    &set_debug_aarch64_cmd_list,
+			    &show_debug_aarch64_cmd_list,
 			    &setdebuglist, &showdebuglist);
+  set_show.set->func = set_debug_aarch64_cmd;
+  set_show.set->allow_unknown = true;
+
+  add_setshow_boolean_cmd ("insn", class_maintenance,
+			   &aarch64_debug_insn,  _("\
+Set debugging of AArch64 instruction decoding."), _("\
+Show debugging of AArch64 instruction decoding."), _("\
+When on, print debugging related to AArch64 instruction decoding.  This\n\
+is not debugging related to the general disassembler, but debugging\n\
+related to the instruction decoded needed for things like displaced\n\
+stepping."),
+			   nullptr,
+			   show_aarch64_debug_variable,
+			   &set_debug_aarch64_cmd_list,
+			   &show_debug_aarch64_cmd_list);
+
+  add_setshow_boolean_cmd ("infcall", class_maintenance,
+			   &aarch64_debug_infcall,  _("\
+Set debugging of AArch64 inferior calls."), _("\
+Show debugging of AArch64 inferior calls."), _("\
+When on, print debugging related to AArch64 inferior calls.  This is\n\
+mostly debugging of ABI related logic, e.g. how are arguments and return\n\
+values passed."),
+			   nullptr,
+			   show_aarch64_debug_variable,
+			   &set_debug_aarch64_cmd_list,
+			   &show_debug_aarch64_cmd_list);
+
+  add_setshow_boolean_cmd ("prologue", class_maintenance,
+			   &aarch64_debug_prologue,  _("\
+Set debugging of AArch64 prologue analysis."), _("\
+Show debugging of AArch64 prologue analysis."), _("\
+When on, print debugging related to AArch64 prologue analysis."),
+			   nullptr,
+			   show_aarch64_debug_variable,
+			   &set_debug_aarch64_cmd_list,
+			   &show_debug_aarch64_cmd_list);
 
 #if GDB_SELF_TEST
   selftests::register_test ("aarch64-analyze-prologue",

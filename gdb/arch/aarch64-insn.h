@@ -19,12 +19,13 @@
 #ifndef GDB_ARCH_AARCH64_INSN_H
 #define GDB_ARCH_AARCH64_INSN_H
 
-extern bool aarch64_debug;
+extern bool aarch64_debug_insn;
 
-/* Print an "aarch64" debug statement.  */
+/* Print an "aarch64-insn" debug statement.  */
 
-#define aarch64_debug_printf(fmt, ...) \
-  debug_prefixed_printf_cond (aarch64_debug, "aarch64", fmt, ##__VA_ARGS__)
+#define aarch64_debug_insn_printf(fmt, ...)		  \
+  debug_prefixed_printf_cond (aarch64_debug_insn, "aarch64-insn", \
+			      fmt, ##__VA_ARGS__)
 
 /* Support routines for instruction parsing.  */
 

@@ -89,6 +89,16 @@ info linker-namespaces [[N]]
   Print information about the given linker namespace (identified as N),
   or about all the namespaces if no argument is given.
 
+set debug aarch64 infcall
+show debug aarch64 infcall
+set debug aarch64 insn
+show debug aarch64 insn
+set debug aarch64 prologue
+show debug aarch64 prologue
+  The existing 'set debug aarch64' and 'show debug aarch64' have now
+  been split into these three sub-commands.  Using 'set debug aarch64
+  on|off' will turn on or off all the separate sub-commands.
+
 * Changed commands
 
 info sharedlibrary
