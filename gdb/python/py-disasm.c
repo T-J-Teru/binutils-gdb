@@ -258,6 +258,7 @@ disasm_info_fill (disasm_info_object *obj, struct gdbarch *gdbarch,
 		  program_space *progspace, bfd_vma address,
 		  disassemble_info *di, disasm_info_object *next)
 {
+  gdb_assert (obj != nullptr);
   obj->gdbarch = gdbarch;
   obj->program_space = progspace;
   obj->address = address;
@@ -1158,13 +1159,17 @@ gdbpy_disassembler::gdbpy_disassembler (disasm_info_object *obj)
 
 struct scoped_disasm_info_object
 {
-  /* Constructor.  */
+  /* Constructor.  This calls PyObject_New, which can fail.  If this
+     happens then 'this->get ()' will return NULL.  Immediately after
+     calling this constructor, if PyObject_New failed, then a Python error
+     will be set.  */
   scoped_disasm_info_object (struct gdbarch *gdbarch, CORE_ADDR memaddr,
 			     disassemble_info *info)
     : m_disasm_info (allocate_disasm_info_object ())
   {
-    disasm_info_fill (m_disasm_info.get (), gdbarch, current_program_space,
-		      memaddr, info, nullptr);
+    if (m_disasm_info != nullptr)
+      disasm_info_fill (m_disasm_info.get (), gdbarch, current_program_space,
+			memaddr, info, nullptr);
   }
 
   /* Upon destruction mark m_disasm_info as invalid.  */
@@ -1246,6 +1251,11 @@ gdbpy_print_insn (struct gdbarch *gdbarch, CORE_ADDR memaddr,
      object will be marked as invalid when we leave this scope.  */
   scoped_disasm_info_object scoped_disasm_info (gdbarch, memaddr, info);
   disasm_info_object *disasm_info = scoped_disasm_info.get ();
+  if (disasm_info == nullptr)
+    {
+      gdbpy_print_stack ();
+      return {};
+    }
 
   /* Call into the registered disassembler to (possibly) perform the
      disassembly.  */
