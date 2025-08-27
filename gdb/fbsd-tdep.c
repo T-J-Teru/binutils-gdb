@@ -548,7 +548,8 @@ fbsd_core_pid_to_str (struct gdbarch *gdbarch, ptid_t ptid)
    string in a static buffer.  */
 
 static const char *
-fbsd_core_thread_name (struct gdbarch *gdbarch, struct thread_info *thr)
+fbsd_core_thread_name (struct gdbarch *gdbarch, bfd *cbfd,
+		       struct thread_info *thr)
 {
   static char buf[80];
   struct bfd_section *section;
@@ -564,7 +565,6 @@ fbsd_core_thread_name (struct gdbarch *gdbarch, struct thread_info *thr)
 	 extract the null-terminated name from the start of the
 	 note.  */
       thread_section_name section_name (".thrmisc", thr->ptid);
-      bfd *cbfd = current_program_space->core_bfd ();
 
       section = bfd_get_section_by_name (cbfd, section_name.c_str ());
       if (section != NULL && bfd_section_size (section) > 0)

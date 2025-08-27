@@ -1780,7 +1780,10 @@ How the core target extracts the name of a thread from a core file.
 """,
     type="const char *",
     name="core_thread_name",
-    params=[("struct thread_info *", "thr")],
+    params=[
+        ("struct bfd *", "cbfd"),
+        ("struct thread_info *", "thr")
+    ],
     predicate=True,
 )
 
