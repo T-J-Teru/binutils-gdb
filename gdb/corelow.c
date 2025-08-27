@@ -307,8 +307,8 @@ private: /* per-core data */
   mapped_file_info m_mapped_file_info;
 
   /* Build m_core_file_mappings and m_mapped_file_info.  Called from the
-     constructor.  */
-  void build_file_mappings ();
+     constructor.  CBFD is the core file to analyse.  */
+  void build_file_mappings (struct bfd *cbfd);
 
   /* FIXME: kettenis/20031023: Eventually this field should
      disappear.  */
@@ -322,9 +322,11 @@ private: /* per-core data */
 
 core_target::core_target ()
 {
+  struct bfd *cbfd = current_program_space->core_bfd ();
+
   /* Find a first arch based on the BFD.  We need the initial gdbarch so
      we can setup the hooks to find a target description.  */
-  m_core_gdbarch = gdbarch_from_bfd (current_program_space->core_bfd ());
+  m_core_gdbarch = gdbarch_from_bfd (cbfd);
 
   /* If the arch is able to read a target description from the core, it
      could yield a more specific gdbarch.  */
@@ -333,7 +335,7 @@ core_target::core_target ()
   if (tdesc != nullptr)
     {
       struct gdbarch_info info;
-      info.abfd = current_program_space->core_bfd ();
+      info.abfd = cbfd;
       info.target_desc = tdesc;
       m_core_gdbarch = gdbarch_find_by_info (info);
     }
@@ -341,12 +343,12 @@ core_target::core_target ()
   if (!m_core_gdbarch
       || !gdbarch_iterate_over_regset_sections_p (m_core_gdbarch))
     error (_("\"%s\": Core file format not supported"),
-	   bfd_get_filename (current_program_space->core_bfd ()));
+	   bfd_get_filename (cbfd));
 
   /* Find the data section */
-  m_core_section_table = build_section_table (current_program_space->core_bfd ());
+  m_core_section_table = build_section_table (cbfd);
 
-  build_file_mappings ();
+  build_file_mappings (cbfd);
 }
 
 /* Construct the table for file-backed mappings if they exist.
@@ -363,7 +365,7 @@ core_target::core_target ()
    will go away (be deallocated) when the core target is detached.  */
 
 void
-core_target::build_file_mappings ()
+core_target::build_file_mappings (struct bfd *cbfd)
 {
   /* Type holding information about a single file mapped into the inferior
      at the point when the core file was created.  Associates a build-id
@@ -412,8 +414,7 @@ core_target::build_file_mappings ()
 
   /* See linux_read_core_file_mappings() in linux-tdep.c for an example
      read_core_file_mappings method.  */
-  gdbarch_read_core_file_mappings (m_core_gdbarch,
-				   current_program_space->core_bfd (),
+  gdbarch_read_core_file_mappings (m_core_gdbarch, cbfd,
 
     /* After determining the number of mappings, read_core_file_mappings
        will invoke this lambda.  */
@@ -448,8 +449,7 @@ core_target::build_file_mappings ()
       });
 
   /* Get the build-id of the core file.  */
-  const bfd_build_id *core_build_id
-    = build_id_bfd_get (current_program_space->core_bfd ());
+  const bfd_build_id *core_build_id = build_id_bfd_get (cbfd);
 
   for (const auto &[filename, file_data] : mapped_files)
     {
@@ -612,8 +612,7 @@ core_target::build_file_mappings ()
 	  /* Ensure that the bfd will be closed when core_bfd is closed.
 	     This can be checked before/after a core file detach via "maint
 	     info bfds".  */
-	  gdb_bfd_record_inclusion (current_program_space->core_bfd (),
-				    abfd.get ());
+	  gdb_bfd_record_inclusion (cbfd, abfd.get ());
 
 	  /* Create sections for each mapped region.  */
 	  for (const mapped_file::region &region : file_data.regions)
