@@ -60,7 +60,9 @@
 
 /* Forward declarations.  */
 
+class core_target;
 static void core_target_open (const char *arg, int from_tty);
+static core_target *get_current_core_target ();
 
 /* A mem_range and the build-id associated with the file mapped into the
    given range.  */
@@ -1051,16 +1053,13 @@ core_target_open (const char *arg, int from_tty)
 
   target_preopen (from_tty);
 
+  /* Target preopen will remove any existing core_target.  */
+  gdb_assert (get_current_core_target () == nullptr);
+
   std::string filename = extract_single_filename_arg (arg);
 
   if (filename.empty ())
-    {
-      if (current_program_space->core_bfd ())
-	error (_("No core file specified.  (Use `detach' "
-		 "to stop debugging a core file.)"));
-      else
-	error (_("No core file specified."));
-    }
+    error (_("No core file specified."));
 
   if (!IS_ABSOLUTE_PATH (filename.c_str ()))
     filename = gdb_abspath (filename);
