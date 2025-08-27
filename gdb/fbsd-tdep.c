@@ -594,8 +594,8 @@ fbsd_core_thread_name (struct gdbarch *gdbarch, struct thread_info *thr)
 /* Implement the "core_xfer_siginfo" gdbarch method.  */
 
 static LONGEST
-fbsd_core_xfer_siginfo (struct gdbarch *gdbarch, gdb_byte *readbuf,
-			ULONGEST offset, ULONGEST len)
+fbsd_core_xfer_siginfo (struct gdbarch *gdbarch, struct bfd *cbfd,
+			gdb_byte *readbuf, ULONGEST offset, ULONGEST len)
 {
   size_t siginfo_size;
 
@@ -607,7 +607,6 @@ fbsd_core_xfer_siginfo (struct gdbarch *gdbarch, gdb_byte *readbuf,
     return -1;
 
   thread_section_name section_name (".note.freebsdcore.lwpinfo", inferior_ptid);
-  bfd *cbfd = current_program_space->core_bfd ();
   asection *section = bfd_get_section_by_name (cbfd, section_name.c_str ());
   if (section == NULL)
     return -1;
