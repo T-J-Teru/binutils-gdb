@@ -1811,7 +1811,10 @@ Returns true if the layout was read successfully.
 """,
     type="bool",
     name="core_read_x86_xsave_layout",
-    params=[("x86_xsave_layout &", "xsave_layout")],
+    params=[
+        ("struct bfd *", "cbfd"),
+        ("x86_xsave_layout &", "xsave_layout")
+    ],
     predicate=True,
 )
 

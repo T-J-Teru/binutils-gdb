@@ -1074,8 +1074,8 @@ extern void set_gdbarch_core_xfer_siginfo (struct gdbarch *gdbarch, gdbarch_core
 
 extern bool gdbarch_core_read_x86_xsave_layout_p (struct gdbarch *gdbarch);
 
-typedef bool (gdbarch_core_read_x86_xsave_layout_ftype) (struct gdbarch *gdbarch, x86_xsave_layout &xsave_layout);
-extern bool gdbarch_core_read_x86_xsave_layout (struct gdbarch *gdbarch, x86_xsave_layout &xsave_layout);
+typedef bool (gdbarch_core_read_x86_xsave_layout_ftype) (struct gdbarch *gdbarch, struct bfd *cbfd, x86_xsave_layout &xsave_layout);
+extern bool gdbarch_core_read_x86_xsave_layout (struct gdbarch *gdbarch, struct bfd *cbfd, x86_xsave_layout &xsave_layout);
 extern void set_gdbarch_core_read_x86_xsave_layout (struct gdbarch *gdbarch, gdbarch_core_read_x86_xsave_layout_ftype *core_read_x86_xsave_layout);
 
 /* BFD target to use when generating a core file. */
