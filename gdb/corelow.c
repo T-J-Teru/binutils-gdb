@@ -1630,6 +1630,7 @@ core_target::xfer_partial (enum target_object object, const char *annex,
 	  else
 	    {
 	      *xfered_len = gdbarch_core_xfer_shared_libraries (m_core_gdbarch,
+								current_program_space->core_bfd (),
 								readbuf,
 								offset, len);
 
@@ -1651,6 +1652,7 @@ core_target::xfer_partial (enum target_object object, const char *annex,
 	    {
 	      *xfered_len
 		= gdbarch_core_xfer_shared_libraries_aix (m_core_gdbarch,
+							  current_program_space->core_bfd (),
 							  readbuf, offset,
 							  len);
 
