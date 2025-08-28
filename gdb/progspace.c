@@ -332,8 +332,8 @@ print_program_space (struct ui_out *uiout, int requested)
       else
 	uiout->field_skip ("exec");
 
-      if (pspace->cbfd != nullptr)
-	uiout->field_string ("core", bfd_get_filename (pspace->cbfd.get ()),
+      if (pspace->core_bfd () != nullptr)
+	uiout->field_string ("core", bfd_get_filename (pspace->core_bfd ()),
 			     file_name_style.style ());
       else
 	uiout->field_skip ("core");
@@ -440,6 +440,13 @@ update_address_spaces (void)
 }
 
 
+
+/* See progspace.h.  */
+bfd *
+program_space::core_bfd () const
+{
+  return get_inferior_core_file (current_inferior ());
+}
 
 /* See progspace.h.  */
 

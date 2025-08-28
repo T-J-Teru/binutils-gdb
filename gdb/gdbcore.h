@@ -258,4 +258,8 @@ std::optional<core_target_mapped_file_info>
 core_target_find_mapped_file (const char *filename,
 			      std::optional<CORE_ADDR> addr);
 
+/* ... */
+
+extern bfd * get_inferior_core_file (inferior *inf);
+
 #endif /* GDB_GDBCORE_H */
