@@ -258,4 +258,9 @@ std::optional<core_target_mapped_file_info>
 core_target_find_mapped_file (const char *filename,
 			      std::optional<CORE_ADDR> addr);
 
+/* Return the core file bfd for inferior INF, if that inferior has a core
+   file loaded.  Otherwise, return NULL.  */
+
+extern bfd *get_inferior_core_bfd (inferior *inf);
+
 #endif /* GDB_GDBCORE_H */

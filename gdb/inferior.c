@@ -575,7 +575,7 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
 	exec_name_len = std::max (strlen (inf->pspace->exec_filename ()),
 				  exec_name_len);
 
-      if (inf->pspace->core_bfd () != nullptr)
+      if (get_inferior_core_bfd (inf) != nullptr)
 	include_core = true;
 
       ++inf_count;
@@ -636,7 +636,7 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
 
       if (include_core)
 	{
-	  bfd *cbfd = inf->pspace->core_bfd ();
+	  bfd *cbfd = get_inferior_core_bfd (inf);
 	  if (cbfd != nullptr)
 	    uiout->field_string ("core-file", bfd_get_filename (cbfd),
 				 file_name_style.style ());
@@ -644,7 +644,7 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
 	    uiout->field_skip ("core-file");
 	}
       else
-	gdb_assert (inf->pspace->core_bfd () == nullptr);
+	gdb_assert (get_inferior_core_bfd (inf) == nullptr);
 
       /* Print extra info that isn't really fit to always present in
 	 tabular form.  Currently we print the vfork parent/child
