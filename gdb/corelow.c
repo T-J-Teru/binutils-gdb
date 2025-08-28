@@ -284,6 +284,23 @@ public:
   bfd *core_bfd () const
   { return m_core_bfd.get (); }
 
+
+  void validate_files () const
+  {
+    bfd *exec = current_program_space->exec_bfd ();
+    bfd *cbfd = this->core_bfd ();
+
+    gdb_assert (cbfd != nullptr);
+
+    if (exec != nullptr)
+      {
+	if (!core_file_matches_executable_p (cbfd, exec))
+	  warning (_("core file may not match specified executable file."));
+	else if (gdb_bfd_get_mtime (exec) > gdb_bfd_get_mtime (cbfd))
+	  warning (_("exec file is newer than core file."));
+      }
+  }
+
 private: /* per-core data */
 
   /* Get rid of the core inferior.  */
@@ -2170,6 +2187,17 @@ mapped_file_info::lookup (const char *filename,
     }
 
   return {};
+}
+
+/* If we have both a core file and an exec file,
+   print a warning if they don't go together.  */
+
+void
+validate_files (void)
+{
+  core_target *targ = get_current_core_target ();
+  if (targ != nullptr)
+    targ->validate_files ();
 }
 
 /* See gdbcore.h.  */
