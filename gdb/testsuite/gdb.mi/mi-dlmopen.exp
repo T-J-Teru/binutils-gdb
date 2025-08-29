@@ -156,7 +156,7 @@ proc check_solib_unload_events {} {
 	-disp keep -func main -file ".*$::srcfile" -line $::bp_main
 
     # Run past all the dlopen and dlmopen calls.
-    mi_execute_to "exec-continue" "breakpoint-hit" main "" ".*" $::bp_loaded \
+    mi_execute_to "exec-continue" "breakpoint-hit" {\[\[0\]\]::main} "" ".*" $::bp_loaded \
 	{"" "disp=\"keep\""} "continue until all libraries are loaded"
 
     # Check that the dynamic linker has now been loaded multiple times.

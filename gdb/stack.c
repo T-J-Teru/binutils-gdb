@@ -1362,6 +1362,14 @@ print_frame (struct ui_out *uiout,
     annotate_frame_function_name ();
 
     string_file stb;
+
+    /* Print the linker namespace containing the frame, if there
+       are multiple namespaces active.  */
+    if (pc.has_value ()
+	&& solib_linker_namespace_count (current_program_space) > 1)
+      gdb_printf (&stb, "[[%d]]::",
+		  linker_namespace_for_addr (*pc, current_program_space));
+
     gdb_puts (funname ? funname.get () : "??", &stb);
     uiout->field_stream ("func", stb, function_name_style.style ());
     uiout->wrap_hint (3);

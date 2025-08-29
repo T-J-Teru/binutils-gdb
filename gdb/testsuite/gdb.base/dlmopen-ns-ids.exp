@@ -21,7 +21,7 @@
 
 require allow_dlmopen_tests
 
-standard_testfile -main.c -lib.c
+standard_testfile -main.c -lib.c -framefilter.py
 
 set srcfile_lib $srcfile2
 set so_name dlmopen-lib.so
@@ -194,6 +194,11 @@ proc_with_prefix test_conv_vars {} {
     gdb_test "print \$_linker_namespace" ".* = 0" \
 	"Still in the default namespace"
 
+    # There should be no namespace ID visible, since there's
+    # only one namespace loaded.
+    gdb_test "backtrace" "\#0\\s+main .*" \
+	"No namespace ID in backtrace"
+
     gdb_breakpoint "inc" allow-pending
     gdb_breakpoint [gdb_get_line_number "TAG: first dlclose"]
 
@@ -202,13 +207,29 @@ proc_with_prefix test_conv_vars {} {
 
 	gdb_test "print \$_linker_namespace" ".* = $dl" \
 	    "Verify we're in namespace $dl"
+
+	gdb_test "frame" "\#0\\s+\\\[\\\[$dl\\\]\\\]::inc.*" \
+	    "Namespace ID in the frame"
     }
 
     # Check that we display the namespace of the selected
     # frame, not the lowermost one.
-    gdb_test "up" "\#1.*in main.*"
+    gdb_test "up" "\#1.*in \\\[\\\[0\\\]\\\]::main.*"
     gdb_test "print \$_linker_namespace" ".* = 0" \
 	"print namespace of selected frame"
+
+    gdb_test "backtrace" [multi_line \
+	    "\#0\\s+\\\[\\\[1\\\]\\\]::inc \[^\r\n\]*" \
+	    "\#1\\s+$::hex in \\\[\\\[0\\\]\\\]::main \[^\r\n\]*" ] \
+	"raw backtrace"
+
+    set remote_python_file [gdb_remote_download host \
+				$::srcdir/$::subdir/$::srcfile3]
+    gdb_test_no_output "source $remote_python_file" "load frame filter"
+    gdb_test "backtrace" [multi_line \
+	    "\#0\\s+\\\[\\\[1\\\]\\\]::inc \[^\r\n\]*" \
+	    "\#1\\s+$::hex in \\\[\\\[0\\\]\\\]::main \[^\r\n\]*" ] \
+	"With null frame filter"
 
     gdb_continue_to_breakpoint "first dlclose"
     gdb_test "print \$_linker_namespace_count" "4" "all SOs loaded"

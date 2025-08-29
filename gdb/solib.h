@@ -335,6 +335,12 @@ extern const char *solib_name_from_address (struct program_space *, CORE_ADDR);
 
 extern bool solib_contains_address_p (const solib &, CORE_ADDR);
 
+/* Given the address ADDR, return which linker namespace contains
+   this address in PSPACE.  If ADDR is present in multiple namespaces,
+   an arbitrary one is returned.  */
+
+extern int linker_namespace_for_addr (CORE_ADDR addr, program_space *pspace);
+
 /* Return whether the data starting at VADDR, size SIZE, must be kept
    in a core file for shared libraries loaded before "gcore" is used
    to be handled correctly when the core file is loaded.  This only
