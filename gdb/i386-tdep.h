@@ -303,7 +303,10 @@ enum i386_regnum
   I386_PKRU_REGNUM,
   I386_PL3_SSP_REGNUM,
   I386_FSBASE_REGNUM,
-  I386_GSBASE_REGNUM
+  I386_GSBASE_REGNUM,
+  /* Remember to update the entry below when adding new entries.  */
+  I386_LAST_REGNUM = I386_GSBASE_REGNUM
+  /* STOP!  New entries should not be added before I386_LAST_REGNUM.  */
 };
 
 /* Register numbers of RECORD_REGMAP.  */
