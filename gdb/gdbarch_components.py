@@ -2881,3 +2881,14 @@ SHADOW_STACK_ENABLED to false.
     predefault="default_get_shadow_stack_pointer",
     invalid=False,
 )
+
+Method(
+    comment="""
+Create an instance of core_target, or a sub-class of core_target.
+""",
+    type="core_target *",
+    name="create_core_target",
+    params=[("bfd *", "cbfd")],
+    predefault="default_create_core_target",
+    invalid=False,
+)

@@ -1016,6 +1016,23 @@ locate_exec_from_corefile_build_id (bfd *abfd,
     }
 }
 
+/* See arch-utils.h.  */
+
+core_target *default_create_core_target (struct gdbarch *gdbarch,
+					 bfd *cbfd)
+{
+  return new core_target (cbfd);
+}
+
+/* ... */
+
+static core_target *
+create_core_target (bfd *cbfd)
+{
+  struct gdbarch *gdbarch = gdbarch_from_bfd (cbfd);
+  return gdbarch_create_core_target (gdbarch, cbfd);
+}
+
 /* Open and set up the core file bfd.  */
 
 static void
@@ -1067,7 +1084,7 @@ core_target_open (const char *arg, int from_tty)
 	     filename.c_str (), bfd_errmsg (bfd_get_error ()));
     }
 
-  core_target *target = new core_target (std::move (temp_bfd));
+  core_target *target = create_core_target (temp_bfd.get ());
 
   /* Own the target until it is successfully pushed.  */
   target_ops_up target_holder (target);

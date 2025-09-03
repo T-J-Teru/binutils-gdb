@@ -1817,3 +1817,9 @@ extern void set_gdbarch_shadow_stack_push (struct gdbarch *gdbarch, gdbarch_shad
 typedef std::optional<CORE_ADDR> (gdbarch_get_shadow_stack_pointer_ftype) (struct gdbarch *gdbarch, regcache *regcache, bool &shadow_stack_enabled);
 extern std::optional<CORE_ADDR> gdbarch_get_shadow_stack_pointer (struct gdbarch *gdbarch, regcache *regcache, bool &shadow_stack_enabled);
 extern void set_gdbarch_get_shadow_stack_pointer (struct gdbarch *gdbarch, gdbarch_get_shadow_stack_pointer_ftype *get_shadow_stack_pointer);
+
+/* Create an instance of core_target, or a sub-class of core_target. */
+
+typedef core_target * (gdbarch_create_core_target_ftype) (struct gdbarch *gdbarch, bfd *cbfd);
+extern core_target * gdbarch_create_core_target (struct gdbarch *gdbarch, bfd *cbfd);
+extern void set_gdbarch_create_core_target (struct gdbarch *gdbarch, gdbarch_create_core_target_ftype *create_core_target);
