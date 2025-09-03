@@ -261,6 +261,7 @@ struct gdbarch
   gdbarch_read_core_file_mappings_ftype *read_core_file_mappings = default_read_core_file_mappings;
   gdbarch_use_target_description_from_corefile_notes_ftype *use_target_description_from_corefile_notes = default_use_target_description_from_corefile_notes;
   gdbarch_core_parse_exec_context_ftype *core_parse_exec_context = default_core_parse_exec_context;
+  gdbarch_create_core_target_ftype *create_core_target = default_create_core_target;
 };
 
 /* Create a new ``struct gdbarch'' based on information provided by
@@ -533,6 +534,7 @@ verify_gdbarch (struct gdbarch *gdbarch)
   /* Skip verify of read_core_file_mappings, invalid_p == 0.  */
   /* Skip verify of use_target_description_from_corefile_notes, invalid_p == 0.  */
   /* Skip verify of core_parse_exec_context, invalid_p == 0.  */
+  /* Skip verify of create_core_target, invalid_p == 0.  */
   if (!log.empty ())
     internal_error (_("verify_gdbarch: the following are invalid ...%s"),
 		    log.c_str ());
@@ -1401,6 +1403,9 @@ gdbarch_dump (struct gdbarch *gdbarch, struct ui_file *file)
   gdb_printf (file,
 	      "gdbarch_dump: core_parse_exec_context = <%s>\n",
 	      host_address_to_string (gdbarch->core_parse_exec_context));
+  gdb_printf (file,
+	      "gdbarch_dump: create_core_target = <%s>\n",
+	      host_address_to_string (gdbarch->create_core_target));
   if (gdbarch->dump_tdep != NULL)
     gdbarch->dump_tdep (gdbarch, file);
 }
@@ -5528,4 +5533,21 @@ set_gdbarch_core_parse_exec_context (struct gdbarch *gdbarch,
 				     gdbarch_core_parse_exec_context_ftype core_parse_exec_context)
 {
   gdbarch->core_parse_exec_context = core_parse_exec_context;
+}
+
+core_target *
+gdbarch_create_core_target (struct gdbarch *gdbarch, bfd *cbfd)
+{
+  gdb_assert (gdbarch != NULL);
+  gdb_assert (gdbarch->create_core_target != NULL);
+  if (gdbarch_debug >= 2)
+    gdb_printf (gdb_stdlog, "gdbarch_create_core_target called\n");
+  return gdbarch->create_core_target (gdbarch, cbfd);
+}
+
+void
+set_gdbarch_create_core_target (struct gdbarch *gdbarch,
+				gdbarch_create_core_target_ftype create_core_target)
+{
+  gdbarch->create_core_target = create_core_target;
 }

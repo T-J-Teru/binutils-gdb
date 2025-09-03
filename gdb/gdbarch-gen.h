@@ -1789,3 +1789,9 @@ extern void set_gdbarch_use_target_description_from_corefile_notes (struct gdbar
 typedef core_file_exec_context (gdbarch_core_parse_exec_context_ftype) (struct gdbarch *gdbarch, bfd *cbfd);
 extern core_file_exec_context gdbarch_core_parse_exec_context (struct gdbarch *gdbarch, bfd *cbfd);
 extern void set_gdbarch_core_parse_exec_context (struct gdbarch *gdbarch, gdbarch_core_parse_exec_context_ftype *core_parse_exec_context);
+
+/* Create an instance of core_target, or a sub-class of core_target. */
+
+typedef core_target * (gdbarch_create_core_target_ftype) (struct gdbarch *gdbarch, bfd *cbfd);
+extern core_target * gdbarch_create_core_target (struct gdbarch *gdbarch, bfd *cbfd);
+extern void set_gdbarch_create_core_target (struct gdbarch *gdbarch, gdbarch_create_core_target_ftype *create_core_target);

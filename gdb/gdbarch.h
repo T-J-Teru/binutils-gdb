@@ -61,6 +61,7 @@ struct inferior;
 struct x86_xsave_layout;
 struct solib_ops;
 struct core_file_exec_context;
+struct core_target;
 
 #include "regcache.h"
 

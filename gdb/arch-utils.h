@@ -24,6 +24,7 @@
 #include "gdbsupport/environ.h"
 #include "filenames.h"
 
+class core_target;
 class frame_info_ptr;
 struct minimal_symbol;
 struct type;
@@ -413,5 +414,9 @@ extern enum return_value_convention default_gdbarch_return_value
      (struct gdbarch *gdbarch, struct value *function, struct type *valtype,
       struct regcache *regcache, struct value **read_value,
       const gdb_byte *writebuf);
+
+/* ... */
+extern core_target *default_create_core_target
+     (struct gdbarch *gdbarch, bfd *cbfd);
 
 #endif /* GDB_ARCH_UTILS_H */
