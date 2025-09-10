@@ -10,6 +10,11 @@
 
 GNU/Linux/MicroBlaze (gdbserver) microblazeel-*linux*
 
+* Changed commands
+
+maintenance info program-spaces
+  This command no longer displays the core file name.
+
 *** Changes in GDB 17
 
 * Debugging Linux programs that use x86-64 or x86-64 with 32-bit pointer
