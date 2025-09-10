@@ -15,6 +15,12 @@ GNU/Linux/MicroBlaze (gdbserver) microblazeel-*linux*
 maintenance info program-spaces
   This command no longer displays the core file name.
 
+info inferiors
+  If any inferior has a core file loaded, then an additional 'Core
+  File' column will be added to the output.  This column will contain
+  the name of the loaded core file, or will be empty for inferiors
+  with no core file loaded.
+
 *** Changes in GDB 17
 
 * Debugging Linux programs that use x86-64 or x86-64 with 32-bit pointer

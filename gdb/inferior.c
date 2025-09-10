@@ -558,6 +558,8 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
 {
   int inf_count = 0;
   size_t connection_id_len = 20;
+  size_t exec_name_len = 17;
+  bool include_core = false;
 
   /* Compute number of inferiors we will print.  */
   for (inferior *inf : all_inferiors ())
@@ -569,6 +571,13 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
       if (connection_id_len < conn.size ())
 	connection_id_len = conn.size ();
 
+      if (inf->pspace->exec_filename () != nullptr)
+	exec_name_len = std::max (strlen (inf->pspace->exec_filename ()),
+				  exec_name_len);
+
+      if (inf->pspace->core_bfd () != nullptr)
+	include_core = true;
+
       ++inf_count;
     }
 
@@ -578,13 +587,17 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
       return;
     }
 
-  ui_out_emit_table table_emitter (uiout, 5, inf_count, "inferiors");
+  int num_columns = include_core ? 6 : 5;
+  ui_out_emit_table table_emitter (uiout, num_columns, inf_count, "inferiors");
   uiout->table_header (1, ui_left, "current", "");
   uiout->table_header (4, ui_left, "number", "Num");
   uiout->table_header (17, ui_left, "target-id", "Description");
   uiout->table_header (connection_id_len, ui_left,
 		       "connection-id", "Connection");
-  uiout->table_header (17, ui_left, "exec", "Executable");
+  uiout->table_header (exec_name_len, ui_left, "exec", "Executable");
+
+  if (include_core)
+    uiout->table_header (1, ui_left, "core-file", "Core File");
 
   uiout->table_body ();
 
@@ -620,6 +633,18 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
 			     file_name_style.style ());
       else
 	uiout->field_skip ("exec");
+
+      if (include_core)
+	{
+	  bfd *cbfd = inf->pspace->core_bfd ();
+	  if (cbfd != nullptr)
+	    uiout->field_string ("core-file", bfd_get_filename (cbfd),
+				 file_name_style.style ());
+	  else
+	    uiout->field_skip ("core-file");
+	}
+      else
+	gdb_assert (inf->pspace->core_bfd () == nullptr);
 
       /* Print extra info that isn't really fit to always present in
 	 tabular form.  Currently we print the vfork parent/child
