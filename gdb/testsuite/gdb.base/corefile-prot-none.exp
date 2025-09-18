@@ -68,15 +68,16 @@ proc perform_readelf_check { corefile } {
     set saw_addr_0_line false
     set saw_addr_1_line false
     gdb_expect {
-	-re "^\\s*LOAD\\s+$::hex\\s+$addr_0_re\\s+$::hex\\s+$pg_sz_re\\s+$pg_sz_re\\s+R\\s+0x1\\s*\r\n" {
+	-re "^\\s*LOAD\\s+$::hex\\s+$addr_0_re\\s+$::hex\\s+$pg_sz_re\\s+$pg_sz_re\\s+0x1\\s*\r\n" {
 	    # The important thing here is that the FileSiz field matches the
-	    # MemSiz field.
+	    # MemSiz field, and that the Flg field is empty.
 	    set saw_addr_0_line true
 	    exp_continue
 	}
 
-	-re "^\\s*LOAD\\s+$::hex\\s+$addr_1_re\\s+$::hex\\s+0x0+\\s+$pg_sz_re\\s+R\\s+0x1\\s*\r\n" {
-	    # The important thing here is that the FileSiz field is zero.
+	-re "^\\s*LOAD\\s+$::hex\\s+$addr_1_re\\s+$::hex\\s+0x0+\\s+$pg_sz_re\\s+0x1\\s*\r\n" {
+	    # The important thing here is that the FileSiz field is zero, and
+	    # that the Flg field is empty.
 	    set saw_addr_1_line true
 	    exp_continue
 	}

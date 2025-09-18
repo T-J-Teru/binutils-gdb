@@ -130,7 +130,25 @@ void
 write_gcore_file (bfd *obfd)
 {
   target_prepare_to_generate_core ();
-  SCOPE_EXIT { target_done_generating_core (); };
+  SCOPE_EXIT {
+    /* GDB's BFD framework only expects one type of data to be stored in
+       the userdata field, that is a 'gdb_bfd_section_data', but that is
+       only used when reading in from a BFD (e.g. during DWARF parsing).
+
+       During core file creation we end up adding a different type of
+       userdata to a section.  The problem is, if we leave that userdata in
+       place and allow gdb_bfd.c to try and clean up, it will interpret the
+       userdata as the wrong type, and badness follows.
+
+       Avoid this by manually cleaning up the core file userdata now.  The
+       user data is allocated with bfd_zalloc on the BFD's memory store,
+       so we don't actually need to free anything, just discarding the
+       pointer is enough.  */
+    for (asection *sect : gdb_bfd_sections (obfd))
+      bfd_set_section_userdata (sect, nullptr);
+
+    target_done_generating_core ();
+  };
   write_gcore_file_1 (obfd);
 }
 
@@ -361,6 +379,14 @@ derive_heap_segment (bfd *abfd, bfd_vma *bottom, bfd_vma *top)
   return 0;
 }
 
+/* Data added to some sections when creating a core file.  */
+struct gcore_section_userdata
+{
+  /* When true, this indicates that the section was created to represent a
+     memory mapping that was unreadable.  */
+  bool unreadable_p;
+};
+
 static void
 make_output_phdrs (bfd *obfd, asection *osec)
 {
@@ -381,7 +407,17 @@ make_output_phdrs (bfd *obfd, asection *osec)
   else
     p_type = PT_NULL;
 
-  p_flags |= PF_R;	/* Segment is readable.  */
+  /* Is this section readable?  BFD doesn't really have a concept of a
+     section that is neither readable, or writable, so we implement this
+     ourselves within the section's userdata.  */
+  bool readable = true;
+  gcore_section_userdata *ud
+    = (gcore_section_userdata *) bfd_section_userdata (osec);
+  if (ud != nullptr && ud->unreadable_p)
+    readable = false;
+
+  if (readable)
+    p_flags |= PF_R;	/* Segment is readable.  */
   if (!(bfd_section_flags (osec) & SEC_READONLY))
     p_flags |= PF_W;	/* Segment is writable.  */
   if (bfd_section_flags (osec) & SEC_CODE)
@@ -466,6 +502,21 @@ gcore_create_callback (CORE_ADDR vaddr, unsigned long size, bool read,
       warning (_("Couldn't make gcore segment: %s"),
 	       bfd_errmsg (bfd_get_error ()));
       return 1;
+    }
+
+  if (!exec && !read && !write)
+    {
+      /* BFD doesn't really have a concept of a section being neither
+	 readable, or writable, so we store a flag in the userdata to
+	 indicate that this is the case.  We do need to be careful to
+	 remove this userdata before the gdb_bfd.{h,c} framework tries to
+	 close the BFD, as GDB's BFD framework only expects a single
+	 userdata type to be stored within a section, and this isn't it.  */
+      gcore_section_userdata *ud
+	= (gcore_section_userdata *) bfd_zalloc (osec->owner, sizeof (*ud));
+      ud->unreadable_p = true;
+      gdb_assert (bfd_section_userdata (osec) == nullptr);
+      bfd_set_section_userdata (osec, ud);
     }
 
   if (info_verbose)
