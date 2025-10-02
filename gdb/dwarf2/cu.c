@@ -121,6 +121,20 @@ dwarf2_cu::addr_type () const
   struct objfile *objfile = this->per_objfile->objfile;
   struct type *void_type = builtin_type (objfile)->builtin_void;
   struct type *addr_type = lookup_pointer_type (void_type);
+
+  /* This isn't wrong, but likely isn't optimal.  THIS CU might be reading
+     from a DWO file, in which case THIS->dwo_unit will be non-NULL, and
+     the contents of the DWO section will already have been read in.
+     However, the THIS->per_cu->addr_size () call is assuming that the CU
+     is not being read through a DWO, and ends up trying to read the
+     header for the stub CU in OBJFILE, which might not be read in yet.
+     Ideally, we'd fetch the address size from either the DWO or OBJFILE's
+     CU, depending on which is in use.
+
+     However, the address size should be the same in them both, so lets
+     just load in the stub CU, and then we'll be OK to fetch the address
+     size from there.  */
+  this->per_cu->section->read (objfile);
   int addr_size = this->per_cu->addr_size ();
 
   if (addr_type->length () == addr_size)

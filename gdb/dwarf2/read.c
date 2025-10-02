@@ -18500,6 +18500,7 @@ dwarf2_per_cu::get_header () const
 {
   if (!m_header_read_in)
     {
+      gdb_assert (this->section->readin);
       const gdb_byte *info_ptr
 	= this->section->buffer + to_underlying (this->sect_off);
 
