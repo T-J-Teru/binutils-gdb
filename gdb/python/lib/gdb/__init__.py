@@ -34,6 +34,10 @@ from _gdb import (
     parameter,
     selected_inferior,
     write,
+    Parameter,
+    COMMAND_NONE,
+    Color,
+    PARAM_COLOR
 )
 
 # isort: split
