@@ -4083,13 +4083,16 @@ minsym_found (struct linespec_state *self, struct objfile *objfile,
 
   CORE_ADDR func_addr;
   bool is_function = msymbol_is_function (objfile, msymbol, &func_addr);
+  bool is_ifunc = false;
 
   if (is_function)
     {
       const char *msym_name = msymbol->linkage_name ();
 
-      if (msymbol->type () == mst_text_gnu_ifunc
-	  || msymbol->type () == mst_data_gnu_ifunc)
+      is_ifunc = (msymbol->type () == mst_text_gnu_ifunc
+		  || msymbol->type () == mst_data_gnu_ifunc);
+
+      if (is_ifunc)
 	want_start_sal = gnu_ifunc_resolve_name (msym_name, &func_addr);
       else
 	want_start_sal = true;
@@ -4098,7 +4101,32 @@ minsym_found (struct linespec_state *self, struct objfile *objfile,
   symtab_and_line sal;
 
   if (is_function && want_start_sal)
-    sal = find_function_start_sal (func_addr, NULL, self->funfirstline);
+    {
+      sal = find_function_start_sal (func_addr, NULL, self->funfirstline);
+
+      /* If SAL already has a section then we'll use that.  If not, then we
+	 can try to find a section.
+
+	 In the ifunc case though we cannot rely on the section of MSYMBOL,
+	 the ifunc target could be in a different section, or even a
+	 different objfile, from the original MSYMBOL.  For this case, we
+	 fall back to looking up a section based on FUNC_ADDR.
+
+	 For the non-ifunc case, we can use the section of MSYMBOL, as
+	 that's how we filled in FUNC_ADDR, so they should be in the same
+	 section.  */
+      if (sal.section == nullptr)
+	{
+	  if (!is_ifunc)
+	    sal.section = msymbol->obj_section (objfile);
+	  else
+	    {
+	      sal.section = find_pc_overlay (func_addr);
+	      if (sal.section == nullptr)
+		sal.section = find_pc_section (func_addr);
+	    }
+	}
+    }
   else
     {
       sal.objfile = objfile;
@@ -4110,14 +4138,13 @@ minsym_found (struct linespec_state *self, struct objfile *objfile,
       else
 	sal.pc = msymbol->value_address (objfile);
       sal.pspace = current_program_space;
-    }
 
-  /* Don't use the section from the msymbol, the code above might have
-     adjusted FUNC_ADDR, in which case the msymbol's section might not be
-     the section containing FUNC_ADDR.  It might not even be in the same
-     objfile.  As the section is primarily to assist with overlay
-     debugging, it should reflect the SAL's pc value.  */
-  sal.section = find_pc_overlay (sal.pc);
+      /* We can assign the section based on MSYMBOL here because the
+	 breakpoint is actually being placed at (or near) MSYMBOL.  Note,
+	 this is not a path where ifunc resolution can have occurred, which
+	 could adjust FUNC_ADDR significantly.  */
+      sal.section = msymbol->obj_section (objfile);
+    }
 
   if (self->maybe_add_address (objfile->pspace (), sal.pc))
     add_sal_to_sals (self, result, &sal, msymbol->natural_name (), false);
