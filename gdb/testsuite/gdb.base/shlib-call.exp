@@ -59,8 +59,7 @@ if { [gdb_compile_shlib ${lib1src} ${lib1} $lib_opts] != ""
 
 # Start with a fresh gdb.
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 gdb_load_shlib $lib1
 gdb_load_shlib $lib2
 
@@ -162,8 +161,7 @@ gdb_test "step" "mainshr1 \\(g=4\\) at.*return 2.g;" \
 
 # Start with a fresh gdb.
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 # PR's 16495, 18213
 # test that we can re-set breakpoints in shared libraries

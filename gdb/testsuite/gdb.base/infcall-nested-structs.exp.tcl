@@ -81,8 +81,7 @@ proc start_nested_structs_test { lang types } {
     }
 
     # Start with a fresh gdb.
-    clean_restart
-    gdb_load $binfile
+    clean_restart $testfile
 
     # Make certain that the output is consistent
     gdb_test_no_output "set print sevenbit-strings"

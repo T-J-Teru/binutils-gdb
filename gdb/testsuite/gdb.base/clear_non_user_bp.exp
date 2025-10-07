@@ -47,8 +47,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/main.c" "${binfile}" executable {debug}]
 }
 
 # Start with a fresh gdb.
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 if {![runto_main]} {
     return 0

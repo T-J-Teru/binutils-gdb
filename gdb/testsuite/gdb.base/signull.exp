@@ -37,8 +37,7 @@ if { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {debu
     return -1
 }
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 #
 # Run to `main' where we begin our tests.

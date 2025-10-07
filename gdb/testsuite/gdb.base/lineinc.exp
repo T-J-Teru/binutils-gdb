@@ -86,8 +86,7 @@ if {[gdb_compile "${srcdir}/${subdir}/${srcfile}" ${binfile} executable \
     return -1
 }
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 # Any command that causes GDB to read the debugging info for the
 # lineinc.c compilation unit will do here.

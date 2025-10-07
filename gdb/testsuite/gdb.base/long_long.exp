@@ -30,8 +30,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable [con
 # use this to debug:
 #log_user 1
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 if {![runto known_types]} {
    return

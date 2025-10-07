@@ -33,8 +33,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {deb
     }
 
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 
 #

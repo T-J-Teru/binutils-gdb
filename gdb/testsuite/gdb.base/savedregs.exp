@@ -35,8 +35,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {deb
 }
 
 # get things started
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 # Advance to main
 if {![runto_main]} {

@@ -49,8 +49,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" \
 
 # Start with a fresh gdb.
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 gdb_test_no_output "set print sevenbit-strings"
 gdb_test_no_output "set print address off"
 gdb_test_no_output "set width 0"

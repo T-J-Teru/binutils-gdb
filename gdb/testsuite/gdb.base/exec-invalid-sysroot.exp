@@ -19,8 +19,8 @@
 
 standard_testfile foll-exec.c
 
-global binfile
-set binfile [standard_output_file "foll-exec"]
+set testfile "foll-exec"
+set binfile [standard_output_file $testfile]
 set testfile2 "execd-prog"
 set srcfile2 ${testfile2}.c
 set binfile2 [standard_output_file ${testfile2}]
@@ -43,7 +43,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable $com
 }
 
 proc do_exec_sysroot_test {} {
-    global binfile srcfile srcfile2 testfile testfile2
+    global binfile srcfile srcfile2
     global gdb_prompt
 
     gdb_test_no_output "set sysroot /a/path/that/does/not/exist"
@@ -69,6 +69,5 @@ proc do_exec_sysroot_test {} {
 }
 
 # Start with a fresh gdb
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 do_exec_sysroot_test

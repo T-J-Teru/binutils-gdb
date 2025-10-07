@@ -22,8 +22,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/${srcfile}" "${binfile}" executable {deb
 
 # Get things started.
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 
 if {![runto marker1]} {
     untested "couldn't run to marker1"

@@ -44,8 +44,7 @@ if  { [gdb_compile "${srcdir}/${subdir}/${srcfile1}" "${binfile1}" executable {d
 # on the first instruction of function "main" ("*main"), then
 # run to that breakpoint.
 
-clean_restart
-gdb_load $binfile1
+clean_restart $testfile1
 
 with_test_prefix "${testfile1}" {
 

@@ -34,8 +34,7 @@ if { [gdb_compile_shlib $libsrc $libobj {debug}] != ""
     return -1
 }
 
-clean_restart
-gdb_load $binfile
+clean_restart $testfile
 gdb_load_shlib $libobj
 
 if {![runto_main]} {
