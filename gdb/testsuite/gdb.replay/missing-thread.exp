@@ -73,7 +73,7 @@ proc_with_prefix record_initial_logfile { log_filename } {
     gdb_test "continue" \
 	"Thread $::decimal \[^\r\n\]+ received signal SIGTRAP, .*"
 
-    gdb_test "disconnect" ".*" \
+    gdb_test "disconnect" "^Ending remote debugging\\." \
 	"disconnect after seeing signal"
 }
 
@@ -173,7 +173,8 @@ proc_with_prefix replay_with_log { remote_log expect_error non_stop } {
 	    "Thread ${::decimal}(?: \[^\r\n\]+)? received signal SIGTRAP, .*"
     }
 
-    gdb_test "disconnect" ".*" \
+
+    gdb_test "disconnect" "^Ending remote debugging\\." \
 	"disconnect after seeing signal"
 }
 

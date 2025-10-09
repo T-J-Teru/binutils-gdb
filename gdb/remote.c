@@ -711,6 +711,8 @@ public: /* data */
      reply packet.  */
   gdb::unordered_set<int> last_seen_expedited_registers;
 
+  bool last_qthreadoptions_was_reset = true;
+
 private:
   /* Asynchronous signal handle registered as event loop source for
      when we have pending events ready to be passed to the core.  */
@@ -5419,6 +5421,8 @@ remote_target::start_remote_1 (int from_tty, int extended_p)
      target.  Instead, it offers to drop the (potentially wedged)
      connection.  */
   scoped_mark_target_starting target_is_starting (this);
+
+  rs->last_qthreadoptions_was_reset = false;
 
   QUIT;
 
@@ -15942,6 +15946,8 @@ remote_target::commit_requested_thread_options ()
       p += strlen (p);
     };
 
+  bool saw_interesting_thread = false;
+
   /* Now set non-zero options for threads that need them.  We don't
      bother with the case of all threads of a process wanting the same
      non-zero options as that's not an expected scenario.  */
@@ -15951,6 +15957,8 @@ remote_target::commit_requested_thread_options ()
 
       if (options == 0)
 	continue;
+
+      saw_interesting_thread = true;
 
       /* It might be possible to we have more threads with options
 	 than can fit a single QThreadOptions packet.  So build each
@@ -15986,7 +15994,10 @@ remote_target::commit_requested_thread_options ()
       p += osize;
     }
 
-  flush ();
+  if (saw_interesting_thread || !rs->last_qthreadoptions_was_reset)
+    flush ();
+
+  rs->last_qthreadoptions_was_reset = !saw_interesting_thread;
 }
 
 static void
