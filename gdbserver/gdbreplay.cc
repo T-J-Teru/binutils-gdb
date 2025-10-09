@@ -261,6 +261,8 @@ remote_open (const char *name)
   remote_desc_out = remote_desc_in;
 }
 
+int lineno = 1;
+
 static int
 logchar (FILE *fp, bool print)
 {
@@ -354,6 +356,13 @@ logchar (FILE *fp, bool print)
     default:
       break;
     }
+
+  if (ch == EOL)
+    {
+      ++lineno;
+      fprintf (stderr, "Moving to line %d\n", lineno);
+    }
+
   return (ch);
 }
 
