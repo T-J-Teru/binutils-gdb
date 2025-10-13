@@ -4498,7 +4498,10 @@ remote_target::update_thread_list ()
 		 may end up with a seemingly live inferior (i.e.  pid
 		 != 0) that has no threads.  */
 	      if (has_single_non_exited_thread (tp.inf))
-		continue;
+		{
+		  set_thread_exited (&tp);
+		  continue;
+		}
 
 	      /* Do not remove the thread if we've requested to be
 		 notified of its exit.  For example, the thread may be
