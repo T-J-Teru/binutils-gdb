@@ -56,6 +56,7 @@
 #include <optional>
 #include "source.h"
 #include "cli/cli-style.h"
+#include "finish-thread-state.h"
 
 /* Local functions: */
 
