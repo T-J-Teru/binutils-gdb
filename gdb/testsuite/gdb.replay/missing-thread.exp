@@ -133,7 +133,12 @@ proc update_replay_log { in_filename out_filename drop_both } {
 # an error as the required thread is missing.  When EXPECT_ERROR is false
 # then we expect the test to complete as normal.  NON_STOP is eithe 'on' or
 # 'off' and indicates GDBs non-stop mode.
-proc_with_prefix replay_with_log { remote_log expect_error non_stop } {
+#
+# When DISCON is true then we expect GDB to become out of sync with
+# the remote and be disconnected after the second 'continue'.  This
+# happens when we have forced both threads to be removed from the
+# remote log.
+proc_with_prefix replay_with_log { remote_log expect_error non_stop discon } {
     clean_restart $::testfile
 
     # Make sure we're disconnected, in case we're testing with an
@@ -165,6 +170,11 @@ proc_with_prefix replay_with_log { remote_log expect_error non_stop } {
 	    lappend expected_output "\\\[Switching to Thread \[^\r\n\]+\\\]"
 	}
 
+	if { $discon } {
+	    lappend expected_output \
+		"Remote communication error\\.  Target disconnected: error while reading: Connection reset by peer\\."
+	}
+
 	gdb_test "continue" [multi_line {*}$expected_output]
     } else {
 	# This is the original behaviour, we see this when running
@@ -173,9 +183,10 @@ proc_with_prefix replay_with_log { remote_log expect_error non_stop } {
 	    "Thread ${::decimal}(?: \[^\r\n\]+)? received signal SIGTRAP, .*"
     }
 
-
-    gdb_test "disconnect" "^Ending remote debugging\\." \
-	"disconnect after seeing signal"
+    if { !$discon } {
+	gdb_test "disconnect" "^Ending remote debugging\\." \
+	    "disconnect after seeing signal"
+    }
 }
 
 # Run the complete test cycle; generate an initial log file, modify the log
@@ -208,24 +219,25 @@ proc run_test { non_stop } {
     with_test_prefix "with unmodified log" {
 	# Replay with the unmodified log.  This confirms that we can replay this
 	# scenario correctly.
-	replay_with_log $remote_log false $non_stop
+	replay_with_log $remote_log false $non_stop false
     }
 
     with_test_prefix "missing 1 thread log" {
 	# Now replay with the modified log, this time the thread that receives
 	# the event should be missing from the thread list, GDB will give an
 	# error when the inferior stops.
-	replay_with_log $missing_1_log true $non_stop
+	replay_with_log $missing_1_log true $non_stop false
     }
 
     with_test_prefix "missing 2 threads log" {
+	# TODO: This isn't true.
 	# When we drop both threads from the <threads> reply, GDB doesn't
 	# actually remove both threads from the inferior; an inferior must
 	# always have at least one thread.  So in this case, as the primary
 	# thread is first, GDB drops this, then retains the second thread, which
 	# is the one we're stopping in, and so, we don't expect to see the error
 	# in this case.
-	replay_with_log $missing_2_log false $non_stop
+	replay_with_log $missing_2_log true $non_stop true
     }
 }
 
