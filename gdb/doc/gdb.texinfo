@@ -22406,6 +22406,15 @@ possibility that those objects may cross-talk.  Each set of isolated
 shared objects is said to belong to a ``namespace'', and linker related
 actions such as relocations do not cross namespace boundaries.
 
+When multiple linker namespaces are active, @value{GDBN} will print the
+identifier of the namespace that contains the function, when a function
+is printed.  It will look like this:
+
+@smallexample
+#0  [[1]]::inc (n=0) at dlmopen-ns-ids-lib.c
+#1  0x0000000000400591 in [[0]]::main () at dlmopen-ns-ids-main.c
+@end smallexample
+
 @kindex info dll
 @item info dll @var{regex}
 This is an alias of @code{info sharedlibrary}.

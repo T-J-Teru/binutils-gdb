@@ -54,6 +54,10 @@
   on the index.  Any existing indexes should be regenerated.
 * Support for Floating Point Mode Register (FPMR) in AArch64.
 
+* When debugging an inferior with multiple linker namespaces, functions
+  will be printed like so [[N]]::foo, where N is the namespace that
+  contains foo.  For example [[0]]::main.
+
 * New targets
 
 GNU/Linux/MicroBlaze (gdbserver) microblazeel-*linux*

@@ -1825,6 +1825,22 @@ solib_linker_namespace_count (program_space *pspace)
   return 0;
 }
 
+/* See solib.h.  */
+
+int
+linker_namespace_for_addr (CORE_ADDR addr, program_space *pspace)
+{
+  for (const solib &so : pspace->solibs ())
+    if (solib_contains_address_p (so, addr))
+      {
+	if (so.ops().supports_namespaces ())
+	  return so.ops ().find_solib_ns (so);
+	break;
+      }
+
+  return 0;
+}
+
 /* Implementation of the linker_namespace convenience variable.
 
    This returns the GDB internal identifier of the linker namespace,
@@ -1833,19 +1849,10 @@ solib_linker_namespace_count (program_space *pspace)
 
 static value *
 linker_namespace_make_value (gdbarch *gdbarch, internalvar *var,
-				     void *ignore)
+			     void *ignore)
 {
-  int nsid = 0;
   CORE_ADDR curr_pc = get_frame_pc (get_selected_frame ());
-
-  for (const solib &so : current_program_space->solibs ())
-    if (solib_contains_address_p (so, curr_pc))
-      {
-	if (so.ops ().supports_namespaces ())
-	  nsid = so.ops ().find_solib_ns (so);
-
-	break;
-      }
+  int nsid = linker_namespace_for_addr (curr_pc, current_program_space);
 
   /* If the PC is not in an SO, or the solib_ops doesn't support
      linker namespaces, the inferior is in the default namespace.  */
