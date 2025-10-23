@@ -2620,6 +2620,40 @@ amd64_analyze_register_saves (CORE_ADDR pc, CORE_ADDR current_pc,
 	    return pc;
 	}
 
+      /* mov register to ?? */
+      if (op == 0x89)
+	{
+	  pc_offset +=1;
+	  if (target_read_code (pc + pc_offset, &op, 1) == -1)
+	    return pc;
+
+	  /* mov register to memory with SIB byte.  */
+	  if ((op & 0xc7) != 0x44)
+	    return pc;
+
+	  reg += ((op >> 3) & 0x7);
+
+	  pc_offset += 1;
+	  if (target_read_code (pc + pc_offset, &op, 1) == -1)
+	    return pc;
+
+	  /* No scale, no index register, and %rsp base.  */
+	  if (op != 0x24)
+	    return pc;
+
+	  pc_offset +=1;
+	  if (target_read_code (pc + pc_offset, &op, 1) == -1)
+	    return pc;
+
+	  CORE_ADDR offset = static_cast<CORE_ADDR> (static_cast<int8_t> (op));
+
+	  int regnum = amd64_arch_reg_to_regnum (reg);
+	  cache->saved_regs[regnum] = offset;
+
+	  pc += 1 + pc_offset;
+	  continue;
+	}
+
       /* push %rax|%rcx|%rdx|%rbx|%rsp|%rbp|%rsi|%rdi
 
 	 or with 0x41 prefix:
@@ -2866,9 +2900,6 @@ amd64_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc)
   amd64_init_frame_cache (&cache);
   pc = amd64_analyze_prologue (gdbarch, start_pc, 0xffffffffffffffffLL,
 			       &cache);
-  if (cache.frameless_p)
-    return start_pc;
-
   return amd64_skip_xmm_prologue (pc, start_pc);
 }
 
