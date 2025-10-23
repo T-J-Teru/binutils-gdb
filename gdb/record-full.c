@@ -45,6 +45,7 @@
 #include "top.h"
 #include "valprint.h"
 #include "interps.h"
+#include "gdbsupport/scope-exit.h"
 
 #include <signal.h>
 

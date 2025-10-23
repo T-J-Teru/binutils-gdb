@@ -83,6 +83,7 @@
 #include "gdbsupport/array-view.h"
 #include <optional>
 #include "gdbsupport/common-utils.h"
+#include "gdbsupport/scope-exit.h"
 
 /* Prototypes for local functions.  */
 

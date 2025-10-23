@@ -30,6 +30,7 @@
 #include "gdbthread.h"
 #include "thread-fsm.h"
 #include "inferior.h"
+#include "gdbsupport/scope-exit.h"
 
 cli_interp_base::cli_interp_base (const char *name)
   : interp (name)

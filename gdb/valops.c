@@ -42,6 +42,7 @@
 #include "extension.h"
 #include "gdbsupport/byte-vector.h"
 #include "typeprint.h"
+#include "gdbsupport/scope-exit.h"
 
 /* Local functions.  */
 

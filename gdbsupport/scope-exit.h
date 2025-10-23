@@ -46,53 +46,11 @@
 	 // any code you like here.
        }
 
-   See also forward_scope_exit.
-*/
-
-/* CRTP base class for cancelable scope_exit-like classes.  Implements
-   the common call-custom-function-from-dtor functionality.  Classes
-   that inherit this implement the on_exit() method, which is called
-   from scope_exit_base's dtor.  */
-
-template <typename CRTP>
-class scope_exit_base
-{
-public:
-  scope_exit_base () = default;
-
-  ~scope_exit_base ()
-  {
-    if (!m_released)
-      {
-	auto *self = static_cast<CRTP *> (this);
-	self->on_exit ();
-      }
-  }
-
-  DISABLE_COPY_AND_ASSIGN (scope_exit_base);
-
-  /* If this is called, then the wrapped function will not be called
-     on destruction.  */
-  void release () noexcept
-  {
-    m_released = true;
-  }
-
-private:
-
-  /* True if released.  Mutable because of the copy ctor hack
-     above.  */
-  mutable bool m_released = false;
-};
-
-/* The scope_exit class.  */
+   See also forward_scope_exit.  */
 
 template<typename EF>
-class scope_exit : public scope_exit_base<scope_exit<EF>>
+class scope_exit
 {
-  /* For access to on_exit().  */
-  friend scope_exit_base<scope_exit<EF>>;
-
 public:
 
   template<typename EFP,
@@ -126,17 +84,29 @@ public:
     rhs.release ();
   }
 
+  ~scope_exit ()
+  {
+    if (!m_released)
+      m_exit_function ();
+  }
+
   DISABLE_COPY_AND_ASSIGN (scope_exit);
   void operator= (scope_exit &&) = delete;
 
-private:
-  void on_exit ()
+  /* If this is called, then the wrapped function will not be called
+     on destruction.  */
+  void release () noexcept
   {
-    m_exit_function ();
+    m_released = true;
   }
 
+private:
   /* The function to call on scope exit.  */
   EF m_exit_function;
+
+  /* Only when false will m_exit_function be called from the class
+     dtor.  */
+  bool m_released = false;
 };
 
 template <typename EF>

@@ -27,6 +27,7 @@
 #include "inferior.h"
 #include "regcache.h"
 #include "target/target.h"
+#include "gdbsupport/scope-exit.h"
 
 /* Default destructor for displaced_step_copy_insn_closure.  */
 

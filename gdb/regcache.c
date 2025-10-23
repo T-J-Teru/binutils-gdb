@@ -31,6 +31,7 @@
 #include "gdbsupport/unordered_map.h"
 #include <unordered_map>
 #include "cli/cli-cmds.h"
+#include "gdbsupport/scope-exit.h"
 
 /*
  * DATA STRUCTURE

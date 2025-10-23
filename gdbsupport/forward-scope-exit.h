@@ -18,7 +18,6 @@
 #ifndef GDBSUPPORT_FORWARD_SCOPE_EXIT_H
 #define GDBSUPPORT_FORWARD_SCOPE_EXIT_H
 
-#include "gdbsupport/scope-exit.h"
 #include <functional>
 
 /* A forward_scope_exit is like scope_exit, but instead of giving it a
@@ -84,15 +83,7 @@ struct forward_scope_exit;
 template<typename Function, Function *function,
 	 typename Res, typename... Args>
 class forward_scope_exit<Function, function, Res (Args...)>
-  : public scope_exit_base<forward_scope_exit<Function,
-					      function,
-					      Res (Args...)>>
 {
-  /* For access to on_exit().  */
-  friend scope_exit_base<forward_scope_exit<Function,
-					    function,
-					    Res (Args...)>>;
-
 public:
   explicit forward_scope_exit (Args ...args)
     : m_bind_function (function, args...)
@@ -100,16 +91,28 @@ public:
     /* Nothing.  */
   }
 
-private:
-  void on_exit ()
+  ~forward_scope_exit ()
   {
-    m_bind_function ();
+    if (!m_released)
+      m_bind_function ();
   }
 
+  /* If this is called, then the wrapped function will not be called
+     on destruction.  */
+  void release () noexcept
+  {
+    m_released = true;
+  }
+
+private:
   /* The function and the arguments passed to the ctor, all packed in
      a std::bind.  */
   decltype (std::bind (function, std::declval<Args> ()...))
     m_bind_function;
+
+  /* Only when false will m_exit_function be called from the class
+     dtor.  */
+  bool m_released = false;
 };
 
 } /* namespace detail */

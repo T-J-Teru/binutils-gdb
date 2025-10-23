@@ -55,6 +55,7 @@
 #include "valprint.h"
 #include "cli/cli-decode.h"
 #include "cli/cli-style.h"
+#include "gdbsupport/scope-exit.h"
 
 [[noreturn]] static void generic_tls_error (void);
 

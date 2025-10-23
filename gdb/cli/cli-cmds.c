@@ -57,6 +57,7 @@
 #include "gdbsupport/pathstuff.h"
 #include "gdbsupport/gdb_tilde_expand.h"
 #include "gdbsupport/eintr.h"
+#include "gdbsupport/scope-exit.h"
 
 #ifdef TUI
 #include "tui/tui.h"

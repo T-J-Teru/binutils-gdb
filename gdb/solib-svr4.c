@@ -44,6 +44,7 @@
 #include "auxv.h"
 #include "gdb_bfd.h"
 #include "probe.h"
+#include "gdbsupport/scope-exit.h"
 
 #include <map>
 

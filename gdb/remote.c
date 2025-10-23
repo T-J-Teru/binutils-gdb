@@ -82,6 +82,7 @@
 #include "cli/cli-style.h"
 #include "gdbsupport/remote-args.h"
 #include "gdbsupport/gdb_argv_vec.h"
+#include "gdbsupport/scope-exit.h"
 
 /* The remote target.  */
 

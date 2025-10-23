@@ -47,6 +47,7 @@
 #include <forward_list>
 #include "objfiles.h"
 #include "interps.h"
+#include "gdbsupport/scope-exit.h"
 
 static const target_info record_btrace_target_info = {
   "record-btrace",

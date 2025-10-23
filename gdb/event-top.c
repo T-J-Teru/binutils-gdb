@@ -45,6 +45,7 @@
 #include "async-event.h"
 #include "bt-utils.h"
 #include "pager.h"
+#include "gdbsupport/scope-exit.h"
 
 /* readline include files.  */
 #include "readline/readline.h"

@@ -66,6 +66,7 @@
 #include "producer.h"
 #include "infcall.h"
 #include "maint.h"
+#include "gdbsupport/scope-exit.h"
 
 /* Register names.  */
 

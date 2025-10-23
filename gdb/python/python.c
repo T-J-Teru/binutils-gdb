@@ -36,6 +36,7 @@
 #include "observable.h"
 #include "build-id.h"
 #include "cli/cli-style.h"
+#include "gdbsupport/scope-exit.h"
 
 #if GDB_SELF_TEST
 #include "gdbsupport/selftest.h"
