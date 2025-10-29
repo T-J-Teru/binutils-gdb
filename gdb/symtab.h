@@ -2075,7 +2075,8 @@ const char *multiple_symbols_select_mode (void);
 
 /* Lookup a symbol table in PSPACE by source file name.  */
 
-extern symtab *lookup_symtab (program_space *pspace, const char *name);
+extern symtab *lookup_symtab (program_space *pspace, const char *name,
+			      LONGEST linker_ns = -1);
 
 /* An object of this type is passed as the 'is_a_field_of_this'
    argument to lookup_symbol and lookup_symbol_in_language.  */
@@ -2804,9 +2805,13 @@ using for_each_symtab_callback_ftype = std::function<void (symtab *)>;
 /* Check in PSPACE for symtabs of a specific name.  *If* there is no '/' in
    the name, a match after a '/' in the symtab filename will also work.
 
+   If LINKER_NS is 0 or greater, only the objfiles in the provided linker
+   namespace will be iterated over.
+
    Call CALLBACK with each symtab that is found.  */
 
 void for_each_symtab (program_space *pspace, const char *name,
+		      LONGEST linker_ns,
 		      for_each_symtab_callback_ftype callback);
 
 /* Callback type for function find_symtab.  */

@@ -1073,6 +1073,7 @@ block	:	BLOCKNAME
 			{
 			    $$.search_namespace = true;
 			    $$.namespace_val = $2.val;
+			    pstate->set_linker_namespace ($2.val);
 			}
 	;
 
@@ -1089,12 +1090,24 @@ block	:	block COLONCOLON name
 						 SEARCH_FUNCTION_DOMAIN,
 						 nullptr);
 
-			  if (tem.symbol == nullptr)
+			  if (tem.symbol == nullptr && !$$.search_namespace)
 			    error (_("No function \"%ps\" in specified context."),
 				   styled_string (function_name_style.style (),
 						  copy.c_str ()));
+			  else if (tem.symbol == nullptr && $$.search_namespace)
+			    /* COPY can be a function or a file.  There is no way
+			       to identify which the user intended, so emit a
+			       generic warning instead.  */
+			    error (_("Nothing named \"%s\" in specified context."),
+				   copy.c_str ());
 			  $$.b_val = tem.symbol->value_block ();
 			  $$.search_namespace = false;
+			}
+	|	block COLONCOLON FILENAME
+			{
+			    if (!$1.search_namespace)
+				error (_("Filename must be the first part of the expression"));
+			    $$ = $3;
 			}
 	;
 
@@ -3207,7 +3220,8 @@ classify_name (struct parser_state *par_state, const struct block *block,
 	  || is_quoted_name)
 	{
 	  /* See if it's a file name. */
-	  if (auto symtab = lookup_symtab (current_program_space, copy.c_str ());
+	  if (auto symtab = lookup_symtab (current_program_space, copy.c_str (),
+					   par_state->get_linker_namespace ());
 	      symtab != nullptr)
 	    {
 	      yylval.bval.b_val

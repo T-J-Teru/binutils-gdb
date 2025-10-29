@@ -633,10 +633,13 @@ compare_filenames_for_search (const char *filename, const char *search_name)
 /* Return the first symtab in PSPACE matching NAME and for which
    CALLBACK returns true.
 
+   If LINKER_NS is 0 or greater, only the objfiles in the provided linker
+   namespace will be iterated over.
+
    See documentation for for_each_symtab for how exactly NAME is matched.  */
 
 static symtab *
-find_symtab (program_space *pspace, const char *name,
+find_symtab (program_space *pspace, const char *name, LONGEST linker_ns,
 	     find_symtab_callback_ftype callback)
 {
   gdb::unique_xmalloc_ptr<char> real_path;
@@ -649,10 +652,23 @@ find_symtab (program_space *pspace, const char *name,
       gdb_assert (IS_ABSOLUTE_PATH (real_path.get ()));
     }
 
-  for (objfile &objfile : pspace->objfiles ())
+  std::vector<objfile *> objfiles_to_search;
+  if (linker_ns >= 0)
+    {
+      gdb_assert (pspace->solib_ops ()->supports_namespaces ());
+      objfiles_to_search
+	= get_objfiles_in_linker_namespace (linker_ns, pspace);
+    }
+  else
+    {
+      for (objfile &objf : pspace->objfiles ())
+	objfiles_to_search.push_back (&objf);
+    }
+
+  for (objfile *objfile : objfiles_to_search)
     if (symtab *result
-	  = objfile.find_symtab_matching_filename (name, real_path.get (),
-						   callback);
+	= objfile->find_symtab_matching_filename (name, real_path.get (),
+						  callback);
 	result != nullptr)
       return result;
 
@@ -663,9 +679,10 @@ find_symtab (program_space *pspace, const char *name,
 
 void
 for_each_symtab (program_space *pspace, const char *name,
+		 LONGEST linker_ns,
 		 for_each_symtab_callback_ftype callback)
 {
-  find_symtab (pspace, name, [&] (symtab *symtab)
+  find_symtab (pspace, name, linker_ns, [&] (symtab *symtab)
 	       {
 		 callback (symtab);
 		 return false;
@@ -675,9 +692,10 @@ for_each_symtab (program_space *pspace, const char *name,
 /* See symtab.h.  */
 
 symtab *
-lookup_symtab (program_space *pspace, const char *name)
+lookup_symtab (program_space *pspace, const char *name, LONGEST linker_ns)
 {
-  return find_symtab (pspace, name, [&] (symtab *symtab) { return true; });
+  return find_symtab (pspace, name, linker_ns,
+		      [&] (symtab *symtab) { return true; });
 }
 
 
@@ -6184,7 +6202,7 @@ collect_file_symbol_completion_matches (completion_tracker &tracker,
 
   /* Go through symtabs for SRCFILE and check the externs and statics
      for symbols which match.  */
-  for_each_symtab (current_program_space, srcfile, [&] (symtab *s)
+  for_each_symtab (current_program_space, srcfile, -1, [&] (symtab *s)
     {
       add_symtab_completions (s->compunit (),
 			      tracker, mode, lookup_name,

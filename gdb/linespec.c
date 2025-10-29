@@ -3617,11 +3617,11 @@ collect_symtabs_from_filename (const char *file,
 	  if (pspace->executing_startup)
 	    continue;
 
-	  for_each_symtab (pspace, file, collector);
+	  for_each_symtab (pspace, file, -1, collector);
 	}
     }
   else
-    for_each_symtab (search_pspace, file, collector);
+    for_each_symtab (search_pspace, file, -1, collector);
 
   /* It is tempting to use the unordered_dense 'extract' method here,
      and remove the separate vector -- but it's unclear if ordering
