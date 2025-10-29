@@ -47,6 +47,9 @@ main (void)
       fun (dl);
     }
 
+  fun = dlsym (handle[0], "func_with_other_call");
+  fun (0);
+
   dlclose (handle[0]); /* TAG: first dlclose */
   dlclose (handle[1]); /* TAG: second dlclose */
   dlclose (handle[2]); /* TAG: third dlclose */

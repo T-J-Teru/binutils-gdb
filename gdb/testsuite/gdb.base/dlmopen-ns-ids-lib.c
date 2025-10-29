@@ -26,3 +26,17 @@ inc (int n)
   int amount = gdb_dlmopen_glob;
   return n + amount;  /* bp.inc.  */
 }
+
+static int
+change_global (int n)
+{
+  gdb_dlmopen_glob += n;
+  return n;
+}
+
+__attribute__((visibility ("default")))
+int
+func_with_other_call (int n)
+{
+  return change_global (n + 1);
+}
