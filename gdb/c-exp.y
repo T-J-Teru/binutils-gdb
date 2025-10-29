@@ -174,7 +174,7 @@ using namespace expr;
     struct ttype tsym;
     struct symtoken ssym;
     int voidval;
-    const struct block *bval;
+    struct bval_type bval;
     enum exp_opcode opcode;
 
     struct stoken_vector svec;
@@ -262,6 +262,7 @@ static void c_print_token (FILE *file, int type, YYSTYPE value);
 %token TYPEOF
 %token DECLTYPE
 %token TYPEID
+%token DOUBLESQUAREOPEN DOUBLESQUARECLOSE
 
 /* Special type cases, put in to allow the parser to distinguish different
    legal basetypes.  */
@@ -1057,30 +1058,42 @@ exp     :       FALSEKEYWORD
 
 block	:	BLOCKNAME
 			{
-			  if ($1.sym.symbol)
-			    $$ = $1.sym.symbol->value_block ();
-			  else
+			  if ($1.sym.symbol == nullptr)
 			    error (_("No file or function \"%s\"."),
 				   copy_name ($1.stoken).c_str ());
+			  $$.search_namespace = false;
+			  $$.b_val = $1.sym.symbol->value_block ();
 			}
 	|	FILENAME
 			{
 			  $$ = $1;
+			}
+	|	DOUBLESQUAREOPEN INT DOUBLESQUARECLOSE
+			{
+			    $$.search_namespace = true;
+			    $$.namespace_val = $2.val;
 			}
 	;
 
 block	:	block COLONCOLON name
 			{
 			  std::string copy = copy_name ($3);
-			  struct symbol *tem
-			    = lookup_symbol (copy.c_str (), $1,
-					     SEARCH_FUNCTION_DOMAIN,
-					     nullptr).symbol;
+			  struct block_symbol tem;
 
-			  if (tem == nullptr)
+			  if ($1.search_namespace)
+			    tem = lookup_symbol_in_linker_namespace
+				(copy.c_str (), $1.namespace_val, SEARCH_FUNCTION_DOMAIN);
+			  else
+			    tem = lookup_symbol (copy.c_str (), $1.b_val,
+						 SEARCH_FUNCTION_DOMAIN,
+						 nullptr);
+
+			  if (tem.symbol == nullptr)
 			    error (_("No function \"%s\" in specified context."),
 				   copy.c_str ());
-			  $$ = tem->value_block (); }
+			  $$.b_val = tem.symbol->value_block ();
+			  $$.search_namespace = false;
+			}
 	;
 
 variable:	name_not_typename ENTRY
@@ -1099,9 +1112,15 @@ variable:	name_not_typename ENTRY
 variable:	block COLONCOLON name
 			{
 			  std::string copy = copy_name ($3);
-			  struct block_symbol sym
-			    = lookup_symbol (copy.c_str (), $1,
-					     SEARCH_VFT, NULL);
+			  struct block_symbol sym;
+
+			  if ($1.search_namespace)
+			    sym = lookup_symbol_in_linker_namespace
+				    (copy.c_str (), $1.namespace_val,
+				     SEARCH_VFT);
+			  else
+			    sym = lookup_symbol (copy.c_str (), $1.b_val,
+						 SEARCH_VFT, NULL);
 
 			  if (sym.symbol == 0)
 			    error (_("No symbol \"%s\" in specified context."),
@@ -1197,13 +1216,25 @@ variable:	name_not_typename
 			    {
 			      std::string arg = copy_name ($1.stoken);
 
-			      bound_minimal_symbol msymbol
-				= lookup_minimal_symbol (current_program_space, arg.c_str ());
+			      int active_linker_nss
+				= solib_linker_namespace_count
+				  (current_program_space);
+			      bound_minimal_symbol msymbol;
+
+			      if (active_linker_nss > 1)
+				msymbol = lookup_minimal_symbol_in_linker_namespace
+				  (current_program_space, arg.c_str ());
+			      else
+				msymbol = lookup_minimal_symbol
+				  (current_program_space, arg.c_str ());
 			      if (msymbol.minsym == NULL)
 				{
 				  if (!have_full_symbols (current_program_space)
 				      && !have_partial_symbols (current_program_space))
 				    error (_("No symbol table is loaded.  Use the \"file\" command."));
+				  else if (active_linker_nss > 1)
+				    error (_("No symbol \"%s\" in the current linker namespace."),
+					   arg.c_str ());
 				  else
 				    error (_("No symbol \"%s\" in current context."),
 					   arg.c_str ());
@@ -2541,7 +2572,9 @@ static const struct c_token tokentab2[] =
     {"!=", NOTEQUAL, OP_NULL, 0},
     {"<=", LEQ, OP_NULL, 0},
     {">=", GEQ, OP_NULL, 0},
-    {".*", DOT_STAR, OP_NULL, FLAG_CXX}
+    {".*", DOT_STAR, OP_NULL, FLAG_CXX},
+    {"[[", DOUBLESQUAREOPEN, OP_NULL, 0},
+    {"]]", DOUBLESQUARECLOSE, OP_NULL, 0},
   };
 
 /* Identifier-like tokens.  Only type-specifiers than can appear in
@@ -3173,8 +3206,9 @@ classify_name (struct parser_state *par_state, const struct block *block,
 	  if (auto symtab = lookup_symtab (current_program_space, copy.c_str ());
 	      symtab != nullptr)
 	    {
-	      yylval.bval
+	      yylval.bval.b_val
 		= symtab->compunit ()->blockvector ()->static_block ();
+	      yylval.bval.search_namespace = false;
 
 	      return FILENAME;
 	    }
@@ -3424,7 +3458,7 @@ yylex (void)
   name_obstack.clear ();
   checkpoint = 0;
   if (current.token == FILENAME)
-    search_block = current.value.bval;
+    search_block = current.value.bval.b_val;
   else if (current.token == COLONCOLON)
     search_block = NULL;
   else
@@ -3608,7 +3642,7 @@ c_print_token (FILE *file, int type, YYSTYPE value)
       break;
 
     case FILENAME:
-      parser_fprintf (file, "bval<%s>", host_address_to_string (value.bval));
+      parser_fprintf (file, "bval<%s>", host_address_to_string (value.bval.b_val));
       break;
     }
 }
