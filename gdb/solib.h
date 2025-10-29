@@ -20,6 +20,9 @@
 #ifndef GDB_SOLIB_H
 #define GDB_SOLIB_H
 
+/* Forward decl's for prototypes */
+struct objfile;
+
 #include "gdb_bfd.h"
 #include "gdbsupport/function-view.h"
 #include "gdbsupport/intrusive_list.h"
@@ -408,5 +411,21 @@ extern void handle_solib_event (void);
 /* Calculate the number of linker namespaces active in PSPACE.  */
 
 extern int solib_linker_namespace_count (program_space *pspace);
+
+/* Return a vector with pointers of all objfiles in the namespace
+   NSID.  This version assumes that the inferior supports namespaces.  */
+
+std::vector<objfile *> get_objfiles_in_linker_namespace
+  (int nsid, program_space *pspace);
+
+/* Return a vector with pointers of all objfiles in the same namespace
+   as OBJFILE.  If the inferior doesn't support namespaces, return all
+   objfiles in the program_space.  */
+
+std::vector<objfile *> get_objfiles_in_linker_namespace (objfile *objfile);
+
+/* Return the DSO matching OBJFILE or nullptr if none can be found.  */
+
+const solib *find_solib_for_objfile (struct objfile *objfile);
 
 #endif /* GDB_SOLIB_H */
