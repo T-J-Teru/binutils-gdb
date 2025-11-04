@@ -5966,6 +5966,27 @@ Like @code{Objfile.lookup_global_symbol}, but searches for a global
 symbol with static linkage named @var{name} in this objfile.
 @end defun
 
+@defun Objfile.symtabs (@r{[}expand@r{]})
+Return a tuple containing all the @code{gdb.Symtab} objects currently
+associated with this objfile (@pxref{Symbol Tables In Python}).
+
+@value{GDBN} only creates symtabs from the debug information when
+needed.  For example, stopping within a function requires @value{GDBN}
+to create the symtab containing that function so that @value{GDBN} can
+locate function arguments, and function local variables.
+
+When @var{expand} is @code{False}, its default value, the
+@code{Objfile.symtabs} method will only return the symtabs associated
+with this objfile that @value{GDBN} has created so far.  There could
+be additional symtabs associated with this objfile that have not yet
+been created.
+
+When @var{expand} is @code{True}, @value{GDBN} will first expand every
+symtab within this objfile, and then return all these
+@code{gdb.Symtab} objects.  This expansion will take more time than
+just returning the list of already expanded symtabs.
+@end defun
+
 @node Frames In Python
 @subsubsection Accessing inferior stack frames from Python
 

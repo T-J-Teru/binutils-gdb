@@ -108,6 +108,13 @@ qExecAndArgs
      contains the gdb.Corefile object if a core file is loaded into
      the inferior, otherwise, this contains None.
 
+  ** New Objfile.symtabs([expand]) method.  This returns a list of
+     gdb.Symtab objects associated with the objfile.  The optional
+     'expand' argument is a boolean, and defaults to False.  When
+     False, only symtabs that have already been expanded are returned.
+     When True, all symtabs from the objfile are expanded, and then
+     returned.
+
 *** Changes in GDB 17
 
 * Debugging Linux programs that use x86-64 or x86-64 with 32-bit pointer

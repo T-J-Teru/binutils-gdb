@@ -528,6 +528,58 @@ objfpy_lookup_static_symbol (PyObject *self, PyObject *args, PyObject *kw)
   Py_RETURN_NONE;
 }
 
+/* Implement Objfile.symtabs([expand]).  Return a tuple of symtabs
+   associated with this objfile.  When optional argument EXPAND is
+   provided, if this is true, then all symtabs associated with this
+   objfile are first expanded.  */
+
+static PyObject *
+objfpy_symtabs (PyObject *self, PyObject *args, PyObject *kw)
+{
+  objfile_object *obj = (objfile_object *) self;
+
+  OBJFPY_REQUIRE_VALID (obj);
+
+  static const char *keywords[] = { "expand", nullptr };
+  int expand_p = 0;
+
+  if (!gdb_PyArg_ParseTupleAndKeywords (args, kw, "|p", keywords, &expand_p))
+    return nullptr;
+
+  /* If requested, expand all symtabs in this objfile.  */
+  if (expand_p)
+    {
+      try
+	{
+	  obj->objfile->expand_all_symtabs ();
+	}
+      catch (const gdb_exception &except)
+	{
+	  return gdbpy_handle_gdb_exception (nullptr, except);
+	}
+    }
+
+  /* A list to store all the symtabs in.  */
+  gdbpy_ref<> list (PyList_New (0));
+  if (list == nullptr)
+    return nullptr;
+
+  /* Build the list containing all symtabs from this objfile.  */
+  for (compunit_symtab &cust : obj->objfile->compunits ())
+    {
+      for (symtab *symtab : cust.filetabs ())
+	{
+	  gdbpy_ref<> py_symtab (symtab_to_symtab_object (symtab));
+
+	  if (PyList_Append (list.get (), py_symtab.get ()))
+	    return nullptr;
+	}
+    }
+
+  /* Convert the list to a tuple for the user.  */
+  return PyList_AsTuple (list.get ());
+}
+
 /* Implement repr() for gdb.Objfile.  */
 
 static PyObject *
@@ -733,6 +785,11 @@ Look up a global symbol in this objfile and return it." },
     METH_VARARGS | METH_KEYWORDS,
     "lookup_static_symbol (name [, domain]).\n\
 Look up a static-linkage global symbol in this objfile and return it." },
+
+  { "symtabs", (PyCFunction) objfpy_symtabs, METH_VARARGS | METH_KEYWORDS,
+    "symtabs([expand]).\n\
+Return a tuple of symtabs associated with this objfile.  When EXPAND\n\
+is true, expand all symtabs first." },
 
   { NULL }
 };

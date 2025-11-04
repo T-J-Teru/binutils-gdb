@@ -26,8 +26,65 @@ if { [prepare_for_testing "failed to prepare" ${testfile} ${srcfile}] } {
     return -1
 }
 
+# Test Objfile.symtabs before starting the inferior.
+with_test_prefix "before starting inferior" {
+
+    # If we are using a board which splits the debug into into a
+    # separate objfile, then the Objfile.symtabs tests will not work;
+    # they are written assuming that the debug is contained within the
+    # main objfile.
+    set objfile_count 0
+    gdb_test_multiple "python print(len(gdb.objfiles()))" "count objfiles" {
+	-re -wrap "^($decimal)" {
+	    set objfile_count $expect_out(1,string)
+	}
+    }
+
+    if { $objfile_count == 1 } {
+	gdb_py_test_silent_cmd "python objfile = gdb.current_progspace().symbol_file" \
+	    "Get objfile file for main executable" 1
+
+	# If GDB was started with the -readnow flag then all symtabs
+	# will already have been expanded; these tests, which rely on
+	# lazy symtab expansion, will fail.
+	if { ![readnow]} {
+	    gdb_test "python print(len(objfile.symtabs()))" "^0" \
+		"no symtabs before starting the inferior"
+	    gdb_test "python print(len(objfile.symtabs(False)))" "^0" \
+		"no symtabs before starting the inferior, passing unnamed argument"
+	    gdb_test "python print(len(objfile.symtabs(expand = False)))" "^0" \
+		"no symtabs before starting the inferior, passing named argument"
+	}
+
+	# Request symtabs in 'objfile' be expanded.
+	gdb_test "python print(len(objfile.symtabs(True)))" "^1" \
+	    "expand symtabs"
+    }
+}
+
+clean_restart $testfile
+
 if {![runto_main]} {
     return 0
+}
+
+# Test Objfile.symtabs after running to main.  The symtab for main
+# should now be expanded.  If the debug information is split into a
+# separate objfile then there will be no symtabs in the main objfile.
+if { $objfile_count == 1 } {
+    gdb_py_test_silent_cmd "python objfile = gdb.current_progspace().symbol_file" \
+	"Get objfile file for main executable" 0
+    gdb_py_test_silent_cmd "python symtabs = objfile.symtabs()" \
+	"Get symtabs from objfile" 0
+    gdb_test "python print(len(symtabs))" "^1" \
+	"one symtab after starting the inferior"
+    gdb_test "python print(type(symtabs\[0\]))" "<class 'gdb.Symtab'>" \
+	"type of items in symtabs() result"
+    gdb_test "python print(symtabs\[0\])" [string_to_regexp $srcfile] \
+	"correct gdb.Symtab result"
+    gdb_test "python symtabs\[0\] = None" \
+	"'tuple' object does not support item assignment" \
+	"cannot modify result of symtabs call"
 }
 
 set python_error_text "Error occurred in Python.*"
