@@ -12,6 +12,10 @@ create_feature_riscv_64bit_fpu (struct target_desc *result, long regnum)
   tdesc_type_with_fields *type_with_fields;
   type_with_fields = tdesc_create_union (feature, "riscv_double");
   tdesc_type *field_type;
+  field_type = tdesc_named_type (feature, "bfloat16");
+  tdesc_add_field (type_with_fields, "bfloat16", field_type);
+  field_type = tdesc_named_type (feature, "ieee_half");
+  tdesc_add_field (type_with_fields, "half", field_type);
   field_type = tdesc_named_type (feature, "ieee_single");
   tdesc_add_field (type_with_fields, "float", field_type);
   field_type = tdesc_named_type (feature, "ieee_double");
