@@ -1,0 +1,200 @@
+# Copyright 2025 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test IEEE half-float (FP16) support in RISC-V FPU registers.
+
+require {istarget "riscv*-*-*"}
+
+standard_testfile
+
+# Compile with Zfhmin extension enabled
+set flags [list debug additional_flags=-march=rv64gc_zfhmin]
+
+if { [prepare_for_testing "failed to prepare" ${testfile} ${srcfile} $flags] } {
+    return -1
+}
+
+if { ![runto_main] } {
+    return -1
+}
+
+# Test half-float fields in FPU registers
+with_test_prefix "half" {
+    # Set breakpoint after half-float conversion
+    set line1 [gdb_get_line_number "first breakpoint here"]
+    gdb_breakpoint $line1
+    gdb_continue_to_breakpoint "line1" ".*$srcfile:$line1.*"
+
+    # Test reading half values from ft registers
+    gdb_test "print \$ft0.half" \
+	"= 0" \
+	"ft0.half is 0"
+
+    gdb_test "print \$ft1.half" \
+	"= 0.125" \
+	"ft1.half is 0.125"
+
+    gdb_test "print \$ft2.half" \
+	"= 0.25" \
+	"ft2.half is 0.25"
+
+    gdb_test "print \$ft3.half" \
+	"= 0.375" \
+	"ft3.half is 0.375"
+
+    gdb_test "print \$ft4.half" \
+	"= 0.5" \
+	"ft4.half is 0.5"
+
+    gdb_test "print \$ft5.half" \
+	"= 0.625" \
+	"ft5.half is 0.625"
+
+    gdb_test "print \$ft6.half" \
+	"= 0.75" \
+	"ft6.half is 0.75"
+
+    gdb_test "print \$ft7.half" \
+	"= 0.875" \
+	"ft7.half is 0.875"
+
+    # Test second checkpoint with fa registers
+    set line2 [gdb_get_line_number "second breakpoint here"]
+    gdb_breakpoint $line2
+    gdb_continue_to_breakpoint "line2" ".*$srcfile:$line2.*"
+
+    gdb_test "print \$fa0.half" \
+	"= 2" \
+	"fa0.half is 2"
+
+    gdb_test "print \$fa1.half" \
+	"= 2.125" \
+	"fa1.half is 2.125"
+
+    gdb_test "print \$fa2.half" \
+	"= 2.25" \
+	"fa2.half is 2.25"
+
+    gdb_test "print \$fa3.half" \
+	"= 2.375" \
+	"fa3.half is 2.375"
+
+    # Test setting half values
+    gdb_test_no_output "set var \$ft0.half = 32.25" \
+	"set ft0.half to 32.25"
+
+    gdb_test "print \$ft0.half" \
+	"= 32.25" \
+	"ft0.half is 32.25 after set"
+
+    gdb_test_no_output "set var \$fa0.half = 33.5" \
+	"set fa0.half to 33.5"
+
+    gdb_test "print \$fa0.half" \
+	"= 33.5" \
+	"fa0.half is 33.5 after set"
+
+    gdb_test_no_output "set var \$fa1.half = 22.75" \
+	"set fa1.half to 22.75"
+
+    gdb_test "print \$fa1.half" \
+	"= 22.75" \
+	"fa1.half is 22.75 after set"
+
+    # Test that setting half doesn't corrupt other fields
+    gdb_test_no_output "set var \$ft1.half = 1.5" \
+	"set ft1.half to 1.5"
+
+    gdb_test "print \$ft1.half" \
+	"= 1.5" \
+	"ft1.half is 1.5"
+
+    # Verify the register union structure includes half
+    gdb_test "ptype \$ft0" \
+	"type = union \[^\r\n\]* \\{.*half.*\\}" \
+	"ft0 union has half field"
+}
+
+# Test all FPU register types (ft, fa, fs)
+with_test_prefix "all_registers" {
+    # Test temporary registers (ft0-ft11)
+    gdb_test "print \$ft8.half" \
+	"= .*" \
+	"ft8.half is accessible"
+
+    gdb_test "print \$ft11.half" \
+	"= .*" \
+	"ft11.half is accessible"
+
+    # Test argument registers (fa0-fa7)
+    gdb_test "print \$fa4.half" \
+	"= .*" \
+	"fa4.half is accessible"
+
+
+
+    gdb_test "print \$fa7.half" \
+	"= .*" \
+	"fa7.half is accessible"
+
+    # Test saved registers (fs0-fs11)
+    gdb_test "print \$fs0.half" \
+	"= .*" \
+	"fs0.half is accessible"
+
+    gdb_test "print \$fs11.half" \
+	"= .*" \
+	"fs11.half is accessible"
+}
+
+# Test type information
+with_test_prefix "type_info" {
+    gdb_test "whatis \$ft0.half" \
+	"type = builtin_type_ieee_half" \
+	"ft0.half has correct type"
+}
+
+# Test fp16 variables
+with_test_prefix "variables" {
+    # Test scalar variable
+    gdb_test "print fp16_scalar" \
+	"= 1.5" \
+	"fp16_scalar prints correctly"
+
+    gdb_test "whatis fp16_scalar" \
+	"type = _Float16" \
+	"fp16_scalar has correct type"
+
+    # Test array variable
+    gdb_test "print fp16_array" \
+	"= \\{0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5\\}" \
+	"fp16_array prints correctly"
+
+    gdb_test "whatis fp16_array" \
+	"type = _Float16 \\\[8\\\]" \
+	"fp16_array has correct type"
+
+    # Test array element access
+    gdb_test "print fp16_array\[0\]" \
+	"= 0" \
+	"fp16_array\[0\] is 0"
+
+    gdb_test "print fp16_array\[3\]" \
+	"= 1.5" \
+	"fp16_array\[3\] is 1.5"
+    gdb_test "print fp16_array\[7\]" \
+	"= 3.5" \
+	"fp16_array\[7\] is 3.5"
+}
