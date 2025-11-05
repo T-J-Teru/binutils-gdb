@@ -168,7 +168,7 @@ gdb_test_multiple "info registers \$ft0" $message {
 	set freg_extension ""
 	pass $message
     }
-    -re "ft0 \+\{float = .*\r\n$gdb_prompt $" {
+    -re "ft0 \+\{.*float = .*\r\n$gdb_prompt $" {
 	set freg_extension ".float"
 	pass $message
     }
