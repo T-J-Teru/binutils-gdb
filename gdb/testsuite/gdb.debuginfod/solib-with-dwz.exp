@@ -302,7 +302,9 @@ proc run_test { cache db debug_dir use_filename } {
 	    #
 	    # If/when this xfail is addressed, the comment at the start of
 	    # this file will need updating too.
-	    setup_xfail "*-*-*"
+	    if { $use_filename } {
+		setup_xfail "*-*-*"
+	    }
 	    gdb_assert { !$saw_source_download } \
 		"$gdb_test_name, no source download"
 
