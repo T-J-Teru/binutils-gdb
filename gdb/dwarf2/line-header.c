@@ -417,3 +417,46 @@ dwarf_decode_line_header (sect_offset sect_off, bool is_dwz,
 
   return lh;
 }
+
+/* See dwarf2/line-header.h.  */
+
+struct symtab *
+file_entry::symtab (dwarf2_cu &cu)
+{
+  if (m_symtab == nullptr)
+    {
+      buildsym_compunit *builder = cu.get_builder ();
+      compunit_symtab *cust = builder->get_compunit_symtab ();
+
+      {
+	std::string filename_holder;
+	const char *filename = this->name;
+	const char *dirname = cu.line_header->include_dir_at (this->d_index);
+
+	/* In order not to lose the line information directory,
+	   we concatenate it to the filename when it makes sense.
+	   Note that the Dwarf3 standard says (speaking of filenames in line
+	   information): ``The directory index is ignored for file names
+	   that represent full path names''.  Thus ignoring dirname in the
+	   `else' branch below isn't an issue.  */
+
+	if (!IS_ABSOLUTE_PATH (filename) && dirname != NULL)
+	  {
+	    filename_holder = path_join (dirname, filename);
+	    filename = filename_holder.c_str ();
+	  }
+
+	std::string filename_for_id = cu.line_header->file_file_name (*this);
+	cu.get_builder ()->start_subfile (filename, filename_for_id.c_str ());
+      }
+
+      subfile *sf = builder->get_current_subfile ();
+      if (sf->symtab == nullptr)
+	sf->symtab = allocate_symtab (cust, sf->name.c_str (),
+				      sf->name_for_id.c_str ());
+
+      m_symtab = sf->symtab;
+    }
+
+  return m_symtab;
+}
