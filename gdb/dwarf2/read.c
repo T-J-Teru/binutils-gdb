@@ -6222,8 +6222,8 @@ dwarf2_cu::setup_type_unit_groups (struct die_info *die)
 	      sf->symtab = allocate_symtab (cust, name, name_for_id);
 	    }
 
-	  fe.symtab = b->get_current_subfile ()->symtab;
-	  tug_unshare->symtabs[i] = fe.symtab;
+	  fe.set_symtab (b->get_current_subfile ()->symtab);
+	  tug_unshare->symtabs[i] = fe.symtab (*this);
 	}
     }
   else
@@ -6241,7 +6241,7 @@ dwarf2_cu::setup_type_unit_groups (struct die_info *die)
       for (i = 0; i < file_names.size (); ++i)
 	{
 	  file_entry &fe = file_names[i];
-	  fe.symtab = tug_unshare->symtabs[i];
+	  fe.set_symtab (tug_unshare->symtabs[i]);
 	}
     }
 
@@ -11584,7 +11584,7 @@ process_structure_scope (struct die_info *die, struct dwarf2_cu *cu)
 	    {
 	      /* Any related symtab will do.  */
 	      symtab
-		= cu->line_header->file_names ()[0].symtab;
+		= cu->line_header->file_names ()[0].symtab (*cu);
 	    }
 	  else
 	    {
@@ -16587,6 +16587,9 @@ dwarf_decode_lines (struct line_header *lh, struct dwarf2_cu *cu,
   if (decode_mapping)
     dwarf_decode_lines_1 (lh, cu, lowpc);
 
+  if (cu->per_cu->is_dwz)
+    return;
+
   /* Make sure a symtab is created for every file, even files
      which contain only variables (i.e. no code with associated
      line numbers).  */
@@ -16602,7 +16605,7 @@ dwarf_decode_lines (struct line_header *lh, struct dwarf2_cu *cu,
 	sf->symtab = allocate_symtab (cust, sf->name.c_str (),
 				      sf->name_for_id.c_str ());
 
-      fe.symtab = sf->symtab;
+      fe.set_symtab (sf->symtab);
     }
 }
 
@@ -16879,7 +16882,7 @@ new_symbol (struct die_info *die, struct type *type, struct dwarf2_cu *cu,
 	      if (fe == NULL)
 		complaint (_("file index out of range"));
 	      else
-		sym->set_symtab (fe->symtab);
+		sym->set_symtab (fe->symtab (*file_cu));
 	    }
 	}
 
