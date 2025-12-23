@@ -28,7 +28,7 @@
 #include "gdbsupport/gdb_tilde_expand.h"
 #include "gdbsupport/gdb_signals.h"
 #include "gdbsupport/buildargv.h"
-#include "gdbsupport/gdb_argv_vec.h"
+#include "gdbsupport/gdb_unique_ptr.h"
 #include <vector>
 
 extern char **environ;
@@ -52,7 +52,7 @@ public:
      strings to which the array point.  */
   char **argv ()
   {
-    return m_argv.argv ();
+    return m_argv.data ();
   }
 
 private:
@@ -72,7 +72,24 @@ private:
 		       const char *shell_file);
 
   /* The argument vector.  This owns the strings within it.  */
-  gdb::argv_vec m_argv;
+  std::vector<char *> m_argv;
+
+  /* Vector that owns copies of all the strings.  */
+  std::vector<gdb::unique_xmalloc_ptr<char>> m_data;
+
+  /* If STR is not NULL then create a copy of STR which is stored in
+     m_data, add a pointer to the string to the back of m_argv.  If STR is
+     NULL then add a NULL pointer to the back of m_argv.  */
+  void push_back (const char *str)
+  {
+    if (str != nullptr)
+      {
+	m_data.push_back (make_unique_xstrdup (str));
+	m_argv.push_back (m_data.back ().get ());
+      }
+    else
+      m_argv.push_back (nullptr);
+  }
 };
 
 /* Create argument vector for straight call to execvp.  Breaks up ALLARGS
@@ -87,15 +104,15 @@ void
 execv_argv::init_for_no_shell (const char *exec_file,
 			       const std::string &allargs)
 {
-  m_argv.push_back (xstrdup (exec_file));
+  this->push_back (exec_file);
 
   gdb_argv argv (allargs.c_str ());
 
   for (const auto &a : argv)
-    m_argv.push_back (xstrdup (a));
+    this->push_back (a);
 
   /* NULL-terminate the vector.  */
-  m_argv.push_back (NULL);
+  this->push_back (nullptr);
 }
 
 /* When executing a command under the given shell, return true if the
@@ -215,10 +232,10 @@ execv_argv::init_for_shell (const char *exec_file,
   /* If we decided above to start up with a shell, we exec the shell.
      "-c" says to interpret the next arg as a shell command to
      execute, and this command is "exec <target-program> <args>".  */
-  m_argv.push_back (xstrdup (shell_file));
-  m_argv.push_back (xstrdup ("-c"));
-  m_argv.push_back (xstrdup (shell_command.c_str ()));
-  m_argv.push_back (NULL);
+  this->push_back (shell_file);
+  this->push_back ("-c");
+  this->push_back (shell_command.c_str ());
+  this->push_back (nullptr);
 }
 
 /* See nat/fork-inferior.h.  */
