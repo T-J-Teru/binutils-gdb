@@ -4061,7 +4061,7 @@ print_operands (bfd_vma pc, const aarch64_opcode *opcode,
 static void
 remove_dot_suffix (char *name, const aarch64_inst *inst)
 {
-  char *ptr;
+  const char *ptr;
   size_t len;
 
   ptr = strchr (inst->opcode->name, '.');
