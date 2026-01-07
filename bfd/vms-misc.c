@@ -492,14 +492,14 @@ get_vms_time_string (unsigned char *tbuf)
 }
 
 /* Create module name from filename (ie, extract the basename and convert it
-   in upper cases).  Works on both VMS and UNIX pathes.
+   in upper cases).  Works on both VMS and UNIX paths.
    The result has to be free().  */
 
 char *
 vms_get_module_name (const char *filename, bool upcase)
 {
   char *fname, *fptr;
-  const char *fout;
+  const char *fout, *p;
 
   /* Strip VMS path.  */
   fout = strrchr (filename, ']');
@@ -511,9 +511,9 @@ vms_get_module_name (const char *filename, bool upcase)
     fout = filename;
 
   /* Strip UNIX path.  */
-  fptr = strrchr (fout, '/');
-  if (fptr != NULL)
-    fout = fptr + 1;
+  p = strrchr (fout, '/');
+  if (p != NULL)
+    fout = p + 1;
 
   fname = strdup (fout);
 
