@@ -1284,7 +1284,9 @@ find_frame_funname (const frame_info_ptr &frame, enum language *funlang,
   func = get_frame_function (frame);
   if (func)
     {
-      const char *print_name = func->print_name ();
+      std::string print_name
+	= func->print_name_with_namespace (get_frame_pc_if_available (frame),
+					   get_frame_program_space (frame));
 
       *funlang = func->language ();
       if (funcp)
@@ -1296,13 +1298,13 @@ find_frame_funname (const frame_info_ptr &frame, enum language *funlang,
 	     stored in the symbol table, but we stored a version
 	     with DMGL_PARAMS turned on, and here we don't want to
 	     display parameters.  So remove the parameters.  */
-	  funname = cp_remove_params (print_name);
+	  funname = cp_remove_params (print_name.c_str ());
 	}
 
       /* If we didn't hit the C++ case above, set *funname
 	 here.  */
       if (funname == NULL)
-	funname = make_unique_xstrdup (print_name);
+	funname = make_unique_xstrdup (print_name.c_str ());
     }
   else
     {
@@ -1370,6 +1372,7 @@ print_frame (struct ui_out *uiout,
     annotate_frame_function_name ();
 
     string_file stb;
+
     gdb_puts (funname ? funname.get () : "??", &stb);
     uiout->field_stream ("func", stb, function_name_style.style ());
     uiout->wrap_hint (3);

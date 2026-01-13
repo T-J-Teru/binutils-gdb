@@ -768,6 +768,21 @@ gdb_mangle_name (struct type *type, int method_id, int signature_id)
 
 /* See symtab.h.  */
 
+std::string
+general_symbol_info::print_name_with_namespace (std::optional <CORE_ADDR> pc,
+						program_space *pspace)
+{
+  std::string name = print_name ();
+  if (pc.has_value ()
+      && solib_linker_namespace_count (pspace) > 1)
+    return string_printf
+      ("[[%d]]::%s", linker_namespace_for_addr (*pc, pspace),
+       name.c_str ());
+  return name;
+}
+
+/* See symtab.h.  */
+
 void
 general_symbol_info::set_demangled_name (const char *name,
 					 struct obstack *obstack)

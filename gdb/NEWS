@@ -66,6 +66,10 @@
   automatically set to UTF-8.  (Users can use the Windows 'chcp'
   command to change the output codepage of the console.)
 
+* When debugging an inferior with multiple linker namespaces, functions
+  will be printed like so [[N]]::foo, where N is the namespace that
+  contains foo.  For example [[0]]::main.
+
 * New targets
 
 GNU/Linux/MicroBlaze (gdbserver) microblazeel-*linux*

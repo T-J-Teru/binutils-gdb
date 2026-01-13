@@ -449,9 +449,10 @@ struct general_symbol_info
   /* Short version as to when to use which name accessor:
      Use natural_name () to refer to the name of the symbol in the original
      source code.  Use linkage_name () if you want to know what the linker
-     thinks the symbol's name is.  Use print_name () for output.  Use
-     demangled_name () if you specifically need to know whether natural_name ()
-     and linkage_name () are different.  */
+     thinks the symbol's name is.  Use print_name_with_namespace () for most
+     output.  Use print_name () if you have a reason to always omit the
+     namespace identifier.  Use demangled_name () if you specifically need
+     to know whether natural_name () and linkage_name () are different.  */
 
   const char *linkage_name () const
   { return m_name; }
@@ -470,6 +471,12 @@ struct general_symbol_info
      purposes (e.g. storing in a hashtable): it's only suitable for output.  */
   const char *print_name () const
   { return demangle ? natural_name () : linkage_name (); }
+
+  /* Similar to print_name, but may prefix the name of the symbol with the
+     linker namespace identifier, if the target supports it and the inferior
+     has more than one identifier loaded.  */
+  std::string print_name_with_namespace
+    (std::optional <CORE_ADDR> pc, program_space *pspace);
 
   /* Return the demangled name for a symbol based on the language for
      that symbol.  If no demangled name exists, return NULL.  */
