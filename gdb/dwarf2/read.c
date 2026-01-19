@@ -18700,6 +18700,33 @@ show_check_physname (struct ui_file *file, int from_tty,
 	      value);
 }
 
+/* The "info dwarf-objfiles" command.  */
+
+static void
+info_dwarf_objfiles_command (const char *args, int from_tty)
+{
+  for (struct program_space *pspace : program_spaces)
+    for (objfile &objfile : pspace->objfiles ())
+    {
+      char prefix = ' ';
+      if ((objfile.flags & OBJF_DOWNLOAD_DEFERRED) != 0)
+	prefix = 'D';
+
+      const char *filename = objfile_filename (&objfile);
+      if (filename != nullptr)
+	filename = basename (filename);
+      else
+	filename = "<no filename>";
+
+      const char *indent = "";
+      if (objfile.separate_debug_objfile_backlink != nullptr)
+	indent = "  ";
+
+      gdb_printf ("%c %s%s\t[%s]\n", prefix, indent, filename,
+		  host_address_to_string (&objfile));
+    }
+}
+
 INIT_GDB_FILE (dwarf2_read)
 {
   add_setshow_prefix_cmd ("dwarf", class_maintenance,
@@ -18794,4 +18821,9 @@ the demangler."),
   selftests::register_test ("dwarf2_find_containing_comp_unit",
 			    selftests::find_containing_comp_unit::run_test);
 #endif
+
+  add_info ("dwarf-objfiles", info_dwarf_objfiles_command,
+	    _("\
+DWARF Information About All Objfiles.\n\
+Information about all objfiles, and the DWARF within them."));
 }
