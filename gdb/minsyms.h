@@ -241,7 +241,8 @@ extern bound_minimal_symbol lookup_minimal_symbol_linkage
 
 extern bound_minimal_symbol lookup_minimal_symbol_linkage
   (gdb::array_view<objfile *> objfiles_to_search, const char *name,
-   bool match_static_type, bool only_main);
+   bool match_static_type, bool only_main,
+   program_space *pspace, gdb::function_view<bool (struct objfile *)> filter_cb);
 
 /* Look through all the current minimal symbol tables and find the
    first minimal symbol that matches NAME and PC.  If OBJF is non-NULL,

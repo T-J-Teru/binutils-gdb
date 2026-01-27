@@ -610,8 +610,28 @@ lookup_minimal_symbol_linkage (const char *name, struct objfile *objf,
 bound_minimal_symbol
 lookup_minimal_symbol_linkage (gdb::array_view<objfile *> objfiles_to_search,
 			       const char *name, bool match_static_type,
-			       bool only_main)
+			       bool only_main, program_space *pspace,
+			       gdb::function_view<bool (struct objfile *)> filter_cb)
 {
+  if (getenv ("APB_CHECK") != nullptr)
+    {
+      std::vector<objfile *> master_list;
+      for (objfile *objfile : objfiles_to_search)
+	master_list.push_back (objfile);
+
+      std::vector<objfile *> check_list;
+      for (objfile &objfile : pspace->objfiles ())
+	if (filter_cb (&objfile))
+	  check_list.push_back (&objfile);
+
+      std::sort (master_list.begin (), master_list.end ());
+      std::sort (check_list.begin (), check_list.end ());
+
+      if (master_list != check_list)
+	fprintf (stderr, "\n\nAPB: Difference found in objfile list\n\n\n");
+    }
+
+
   for (objfile *objfile : objfiles_to_search)
     {
       if (objfile == nullptr

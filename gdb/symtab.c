@@ -6649,7 +6649,12 @@ symbol::get_maybe_copied_address () const
 
   bound_minimal_symbol minsym
     = lookup_minimal_symbol_linkage (objfiles_to_search, linkage_name,
-				     false, false);
+				     false, false,
+				     this->objfile ()->pspace (),
+				     [&] (struct objfile *objfile) -> bool
+				     {
+				       return true;
+				     });
   if (minsym.minsym != nullptr)
     return minsym.value_address ();
 
@@ -6693,7 +6698,12 @@ minimal_symbol::get_maybe_copied_address (objfile *objf) const
 
   bound_minimal_symbol found
     = lookup_minimal_symbol_linkage (objfiles_to_search, linkage_name,
-				     false, true);
+				     false, true,
+				     objf->pspace (),
+				     [&] (struct objfile *objfile) -> bool
+				     {
+				       return true;
+				     });
   if (found.minsym != nullptr)
     return found.value_address ();
 
