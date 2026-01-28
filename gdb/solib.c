@@ -1043,6 +1043,8 @@ print_solib_list_table (std::vector<const solib *> solib_list,
 		     && ops->num_active_namespaces () > 1);
 
   int num_cols = 4;
+  if (getenv ("APB_DEBUG") != nullptr)
+    num_cols++;
   if (print_namespace)
     num_cols++;
 
@@ -1056,6 +1058,8 @@ print_solib_list_table (std::vector<const solib *> solib_list,
     if (print_namespace)
       uiout->table_header (9, ui_left, "namespace", "Linker NS");
     uiout->table_header (12 - 1, ui_left, "syms-read", "Syms Read");
+    if (getenv ("APB_DEBUG") != nullptr)
+      uiout->table_header (16, ui_left, "objfile", "Objfile");
     uiout->table_header (0, ui_noalign, "name", "Shared Object Library");
 
     uiout->table_body ();
@@ -1098,6 +1102,10 @@ print_solib_list_table (std::vector<const solib *> solib_list,
 	  }
 	else
 	  uiout->field_string ("syms-read", so->symbols_loaded ? "Yes" : "No");
+
+	if (getenv ("APB_DEBUG") != nullptr)
+	  uiout->field_string ("objfile",
+			       host_address_to_string (so->objfile));
 
 	uiout->field_string ("name", so->name, file_name_style.style ());
 
@@ -1850,6 +1858,9 @@ find_solib_for_objfile (struct objfile *objfile)
 std::vector<objfile *>
 get_objfiles_in_linker_namespace (int nsid, program_space *pspace)
 {
+  if (getenv ("APB_DEBUG") != nullptr)
+    printf ("XXX: get_objfiles_in_linker_namespace, nsid = %d\n", nsid);
+
   std::vector<objfile *> objfiles_in_ns;
   const solib_ops *ops = pspace->solib_ops ();
 
@@ -1863,13 +1874,25 @@ get_objfiles_in_linker_namespace (int nsid, program_space *pspace)
   if (nsid == 0)
     for (objfile &objf : pspace->objfiles ())
       if ((objf.flags & OBJF_MAINLINE) != 0)
-	objfiles_in_ns.push_back (&objf);
+	{
+	  if (getenv ("APB_DEBUG") != nullptr)
+	    printf ("XXX: Adding mainline objfile [%s] %s\n",
+		    host_address_to_string (&objf),
+		    objf.original_name);
+	  objfiles_in_ns.push_back (&objf);
+	}
 
   std::vector<const solib *> solibs = ops->get_solibs_in_ns (nsid);
   /* Reserve for efficiency.  */
   objfiles_in_ns.reserve (solibs.size () + objfiles_in_ns.size ());
   for (const solib *so : solibs)
-    objfiles_in_ns.push_back (so->objfile);
+    {
+      if (getenv ("APB_DEBUG") != nullptr)
+	printf ("XXX: Adding library objfile [%s] %s\n",
+		host_address_to_string (so->objfile),
+		so->objfile->original_name);
+      objfiles_in_ns.push_back (so->objfile);
+    }
 
   return objfiles_in_ns;
 }
@@ -1900,6 +1923,9 @@ get_objfiles_in_linker_namespace (objfile *objfile)
       return get_objfiles_in_linker_namespace (ops->find_solib_ns (*so),
 					       pspace);
     }
+
+  if (getenv ("APB_DEBUG") != nullptr)
+    printf ("XXX: get_objfiles_in_linker_namespace, return all objfiles\n");
 
   /* If any of the previous conditions isn't satisfied, we return
      the full list of objfiles in the inferior.  */

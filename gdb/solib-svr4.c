@@ -49,6 +49,8 @@
 
 static void svr4_relocate_main_executable (void);
 static void probes_table_remove_objfile_probes (struct objfile *objfile);
+static struct svr4_info *get_svr4_info (program_space *pspace);
+static CORE_ADDR find_debug_base_for_solib (const solib *solib);
 
 /* On SVR4 systems, a list of symbols in the dynamic linker where
    GDB can try to place a breakpoint to monitor shared library
@@ -426,6 +428,74 @@ struct svr4_info
   std::vector<CORE_ADDR> glibc_tls_slots;
 };
 
+static void
+debug_print_solib_lists (struct svr4_info *info)
+{
+  gdb_assert (info != nullptr);
+
+  if (getenv ("APB_DEBUG") != nullptr)
+    printf ("XXX: Dump of svr4_info::solib_lists:\n");
+
+  /* Iterate over the map<CORE_ADDR, std::vector<svr4_so>> */
+  for (const auto &entry : info->solib_lists)
+    {
+      CORE_ADDR key = entry.first;
+      const std::vector<svr4_so> &so_list = entry.second;
+
+      int nsid = -1;
+      auto it = std::find (info->namespace_id.begin (), info->namespace_id.end (), key);
+      if (it != info->namespace_id.end ())
+	nsid = (int) std::distance (info->namespace_id.begin (), it);
+
+      /* Print the namespace identifier (the r_debug address) */
+      if (getenv ("APB_DEBUG") != nullptr)
+	printf ("XXX: Namespace Key (r_debug): %s [[%2d]]\n", phex (key, sizeof (key)), nsid);
+
+      /* Iterate over the vector of svr4_so objects in this namespace */
+      for (const svr4_so &so : so_list)
+        {
+	  if (getenv ("APB_DEBUG") != nullptr)
+	    printf ("XXX:    %s\n", so.name.c_str ());
+        }
+    }
+}
+
+extern bool svr4_in_same_namespace (const solib_ops *, const solib *, objfile *);
+
+bool
+svr4_in_same_namespace (const solib_ops *ops, const solib *so, objfile *objf)
+{
+  int nsid = ops->find_solib_ns (*so);
+
+  if (nsid == 0 && (objf->flags & OBJF_MAINLINE) != 0)
+    {
+      if (getenv ("APB_DEBUG") != nullptr)
+	printf ("  -> Main objfile in namespace 0\n");
+      return true;
+    }
+
+  if (getenv ("APB_DEBUG") != nullptr)
+    printf ("  ~ debug base for solib is: %s\n",
+	    core_addr_to_string_nz (find_debug_base_for_solib (so)));
+
+  for (const solib &other : objf->pspace ()->solibs ())
+    {
+      /* Ignore libraries in the other namespace.  */
+      if (find_debug_base_for_solib (so) != find_debug_base_for_solib (&other))
+	continue;
+
+      /* Found this objfile.  */
+      if (other.objfile == objf)
+	{
+	  if (getenv ("APB_DEBUG") != nullptr)
+	    printf ("  -> Found library in same namespace with this objfile\n");
+	  return true;
+	}
+    }
+
+  return false;
+}
+
 /* Per-program-space data key.  */
 static const registry<program_space>::key<svr4_info> solib_svr4_pspace_data;
 
@@ -452,6 +522,19 @@ static bool
 svr4_is_default_namespace (const svr4_info *info, CORE_ADDR debug_base)
 {
   return debug_base == info->default_debug_base;
+}
+
+/* ... */
+
+static void
+update_solib_ids (solib &so)
+{
+  if (getenv ("APB_DEBUG") != nullptr)
+    printf ("update_solib_ids, solib = %s\n",
+	    so.original_name.c_str ());
+
+  struct svr4_info *info = get_svr4_info (current_program_space);
+  debug_print_solib_lists (info);
 }
 
 /* Free the probes table.  */
@@ -3771,4 +3854,7 @@ INIT_GDB_FILE (svr4_solib)
   /* Set up observers for tracking GLIBC TLS module id slots.  */
   gdb::observers::solib_loaded.attach (tls_maybe_fill_slot, "solib-svr4");
   gdb::observers::solib_unloaded.attach (tls_maybe_erase_slot, "solib-svr4");
+
+  gdb::observers::solib_loaded.attach (update_solib_ids, "solib-svr4");
+
 }

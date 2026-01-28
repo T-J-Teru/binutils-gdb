@@ -628,7 +628,18 @@ lookup_minimal_symbol_linkage (gdb::array_view<objfile *> objfiles_to_search,
       std::sort (check_list.begin (), check_list.end ());
 
       if (master_list != check_list)
-	fprintf (stderr, "\n\nAPB: Difference found in objfile list\n\n\n");
+	{
+	  fprintf (stderr, "\n\nAPB: Difference found in objfile list.\n");
+	  fprintf (stderr, "APB: master_list:\n");
+	  for (objfile *o : master_list)
+	    printf ("  [%s] %s\n", host_address_to_string (o),
+		    o->original_name);
+	  fprintf (stderr, "APB: check_list:\n");
+	  for (objfile *o : check_list)
+	    printf ("  [%s] %s\n", host_address_to_string (o),
+		    o->original_name);
+
+	}
     }
 
 

@@ -6634,11 +6634,70 @@ symbol::set_symtab (struct symtab *symtab)
   owner.symtab = symtab;
 }
 
+extern bool svr4_in_same_namespace (const solib_ops *, const solib *, objfile *);
+
+static bool
+in_same_namespace (objfile *a, objfile *b)
+{
+  program_space *pspace = a->pspace ();
+  const solib_ops *ops = pspace->solib_ops ();
+  const solib *so = find_solib_for_objfile (a);
+
+  if (getenv ("APB_DEBUG") != nullptr)
+    {
+      printf ("in_same_namespace:\n");
+      printf ("  (a) [%s] %s\n", host_address_to_string (a), a->original_name);
+      printf ("  (b) [%s] %s\n", host_address_to_string (b), b->original_name);
+    }
+
+  if (ops == nullptr
+      || so == nullptr
+      || !ops->supports_namespaces ()
+      || ops->num_active_namespaces () == 0)
+    {
+      if (getenv ("APB_DEBUG") != nullptr)
+	printf ("  -> Namespaces not supported, or ops, or so missing\n");
+      return true;
+    }
+
+  gdb_assert (b->pspace () == pspace);
+
+  if (b->separate_debug_objfile_backlink != nullptr)
+    {
+      if (getenv ("APB_DEBUG") != nullptr)
+	printf ("  -> is separate debug file, ignore it\n");
+      return false;
+    }
+
+  return svr4_in_same_namespace (ops, so, b);
+  
+#if 0
+
+  int nsid = ops->find_solib_ns (*so);
+
+  if (nsid == 0 && (b->flags & OBJF_MAINLINE) != 0)
+    {
+      printf ("  -> Main objfile in namespace 0\n");
+      return true;
+    }
+
+  const solib *other_so = find_solib_for_objfile (b);
+
+  int other_nsid = (other_so != nullptr) ? ops->find_solib_ns (*other_so) : -1;
+  printf ("  -> [[%2d]] <=> [[%2d]] => %d\n",
+	  nsid, other_nsid, (other_so != nullptr && other_nsid == nsid));
+  return (other_so != nullptr && other_nsid == nsid);
+#endif
+}
+
 /* See symtab.h.  */
 
 CORE_ADDR
 symbol::get_maybe_copied_address () const
 {
+  if (getenv ("APB_DEBUG") != nullptr)
+    printf ("==================== symbol::get_maybe_copied_address ====================\n");
+
   gdb_assert (this->maybe_copied);
   gdb_assert (this->loc_class () == LOC_STATIC);
 
@@ -6653,7 +6712,7 @@ symbol::get_maybe_copied_address () const
 				     this->objfile ()->pspace (),
 				     [&] (struct objfile *objfile) -> bool
 				     {
-				       return true;
+				       return in_same_namespace (this->objfile (), objfile);
 				     });
   if (minsym.minsym != nullptr)
     return minsym.value_address ();
@@ -6688,6 +6747,9 @@ symbol::relocate (gdb::array_view<const CORE_ADDR> delta)
 CORE_ADDR
 minimal_symbol::get_maybe_copied_address (objfile *objf) const
 {
+  if (getenv ("APB_DEBUG") != nullptr)
+    printf ("==================== minimal_symbol::get_maybe_copied_address ====================\n");
+  
   gdb_assert (this->maybe_copied (objf));
   gdb_assert ((objf->flags & OBJF_MAINLINE) == 0);
 
@@ -6702,7 +6764,7 @@ minimal_symbol::get_maybe_copied_address (objfile *objf) const
 				     objf->pspace (),
 				     [&] (struct objfile *objfile) -> bool
 				     {
-				       return true;
+				       return in_same_namespace (objf, objfile);
 				     });
   if (found.minsym != nullptr)
     return found.value_address ();
