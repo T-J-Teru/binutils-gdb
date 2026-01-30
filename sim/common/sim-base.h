@@ -236,6 +236,12 @@ struct sim_state {
   void *arch_data;
 #define STATE_ARCH_DATA(sd) ((sd)->arch_data)
 
+  /* Callback to get the target description for this simulator.
+     Set by architecture-specific code if target descriptions are supported.
+     Returns the target description structure, or NULL if not supported.  */
+  const struct sim_tdesc *(*tdesc_get) (SIM_DESC sd);
+#define STATE_TDESC_GET(sd) ((sd)->tdesc_get)
+
   /* Marker for those wanting to do sanity checks.
      This should remain the last member of this struct to help catch
      miscompilation errors.  */

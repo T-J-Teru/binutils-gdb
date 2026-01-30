@@ -863,7 +863,8 @@ riscv_libsim_a_AR = $(AR) $(ARFLAGS)
 @SIM_ENABLE_ARCH_riscv_TRUE@	%,riscv/dv-%.o,$(SIM_HW_DEVICES)) \
 @SIM_ENABLE_ARCH_riscv_TRUE@	riscv/interp.o riscv/machs.o \
 @SIM_ENABLE_ARCH_riscv_TRUE@	riscv/sim-main.o \
-@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/sim-resume.o
+@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/sim-resume.o \
+@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/riscv-tdesc.o
 @SIM_ENABLE_ARCH_riscv_TRUE@am_riscv_libsim_a_OBJECTS =  \
 @SIM_ENABLE_ARCH_riscv_TRUE@	$(am__objects_1)
 @SIM_ENABLE_ARCH_riscv_TRUE@nodist_riscv_libsim_a_OBJECTS =  \
@@ -3052,7 +3053,8 @@ testsuite_common_CPPFLAGS = \
 @SIM_ENABLE_ARCH_riscv_TRUE@	riscv/interp.o \
 @SIM_ENABLE_ARCH_riscv_TRUE@	riscv/machs.o \
 @SIM_ENABLE_ARCH_riscv_TRUE@	riscv/sim-main.o \
-@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/sim-resume.o
+@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/sim-resume.o \
+@SIM_ENABLE_ARCH_riscv_TRUE@	riscv/riscv-tdesc.o
 
 @SIM_ENABLE_ARCH_riscv_TRUE@riscv_run_SOURCES = 
 @SIM_ENABLE_ARCH_riscv_TRUE@riscv_run_LDADD = \

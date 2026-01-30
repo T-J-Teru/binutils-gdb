@@ -134,6 +134,9 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
   if (sim_core_read_buffer (sd, NULL, read_map, &c, 4, 1) == 0)
     sim_do_commandf (sd, "memory-size %#x", DEFAULT_MEM_SIZE);
 
+  /* Set up target description callback for GDB.  */
+  STATE_TDESC_GET (sd) = riscv_tdesc_get;
+
   return sd;
 }
 

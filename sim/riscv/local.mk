@@ -28,7 +28,8 @@ nodist_%C%_libsim_a_SOURCES = \
 	%D%/interp.o \
 	%D%/machs.o \
 	%D%/sim-main.o \
-	%D%/sim-resume.o
+	%D%/sim-resume.o \
+	%D%/riscv-tdesc.o
 $(%C%_libsim_a_OBJECTS) $(%C%_libsim_a_LIBADD): %D%/hw-config.h
 
 noinst_LIBRARIES += %D%/libsim.a
