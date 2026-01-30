@@ -44,6 +44,7 @@
 #include "memory-map.h"
 #include "remote.h"
 #include "gdbsupport/buildargv.h"
+#include "xml-tdesc.h"
 
 /* Prototypes */
 
@@ -1294,10 +1295,13 @@ gdbsim_target::read_description ()
   struct sim_inferior_data *sim_data
     = get_sim_inferior_data (current_inferior (), SIM_INSTANCE_NEEDED);
 
-  char *tdesc_xml = sim_target_description (sim_data->gdbsim_desc);
-  gdb_assert (tdesc_xml == nullptr);
+  gdb::unique_xmalloc_ptr<char> tdesc_xml
+    (sim_target_description (sim_data->gdbsim_desc));
 
-  return nullptr;
+  if (tdesc_xml == nullptr)
+    return nullptr;
+
+  return string_read_description_xml (tdesc_xml.get ());
 }
 
 INIT_GDB_FILE (remote_sim)

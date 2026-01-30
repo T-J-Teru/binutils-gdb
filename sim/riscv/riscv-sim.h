@@ -71,6 +71,9 @@ extern void initialize_cpu (SIM_DESC, SIM_CPU *, int);
 extern void initialize_env (SIM_DESC, const char * const *argv,
 			    const char * const *env);
 
+/* Return the target description for the current RISC-V configuration.  */
+extern const struct sim_tdesc *riscv_tdesc_get (SIM_DESC sd);
+
 #define DEFAULT_MEM_SIZE (64 * 1024 * 1024)
 
 #define RISCV_XLEN(cpu) MACH_WORD_BITSIZE (CPU_MACH (cpu))
