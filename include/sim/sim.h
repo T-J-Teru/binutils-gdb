@@ -212,6 +212,21 @@ void sim_info (SIM_DESC sd, bool verbose);
 char *sim_memory_map (SIM_DESC sd);
 
 
+/* Return a target description in XML format.
+
+   The returned string contains an XML target description document that
+   specifies the registers available in the simulator and their numbering.
+   This allows GDB to understand the simulator's register layout without
+   requiring architecture-specific register_sim_regno functions.
+
+   Returns NULL if the simulator does not support target descriptions for
+   the current architecture.
+
+   The caller is responsible for freeing the returned string.  */
+
+char *sim_target_description (SIM_DESC sd);
+
+
 /* Run (or resume) the simulated program.
 
    STEP, when non-zero indicates that only a single simulator cycle

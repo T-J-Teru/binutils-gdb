@@ -44,6 +44,7 @@
 #include "memory-map.h"
 #include "remote.h"
 #include "gdbsupport/buildargv.h"
+#include "xml-tdesc.h"
 
 /* Prototypes */
 
@@ -112,6 +113,11 @@ struct sim_inferior_data {
 
   /* Flag which indicates whether resume should step or not.  */
   bool resume_step = false;
+
+  /* Flag which indicates whether the simulator provided a target
+     description.  When true, we use gdbarch_remote_register_number
+     for register access instead of gdbarch_register_sim_regno.  */
+  bool has_target_desc = false;
 };
 
 static const target_info gdbsim_target_info = {
@@ -167,6 +173,13 @@ struct gdbsim_target final
   bool has_all_memory ()  override;
   bool has_memory ()  override;
   std::vector<mem_region> memory_map () override;
+
+  /* Read a target description from the simulator.  Returns NULL if
+     this simulator target doesn't support XML target descriptions, or
+     if the string returned from the simulator isn't a valid target
+     description.  Otherwise, returns the parsed target
+     description.  */
+  const struct target_desc *read_description () override;
 
 private:
   sim_inferior_data *get_inferior_data_by_ptid (ptid_t ptid,
@@ -455,7 +468,27 @@ gdbsim_target::fetch_registers (struct regcache *regcache, int regno)
       return;
     }
 
-  switch (gdbarch_register_sim_regno (gdbarch, regno))
+  /* When the simulator provides a target description, use the remote
+     register number for register access.  Otherwise, fall back to the
+     legacy sim regno mechanism.  */
+  int sim_regno = -1;
+  if (!sim_data->has_target_desc)
+    sim_regno = gdbarch_register_sim_regno (gdbarch, regno);
+  else
+    {
+      sim_regno = gdbarch_remote_register_number (gdbarch, regno);
+      if (sim_regno == -1)
+	sim_regno = SIM_REGNO_DOES_NOT_EXIST;
+      gdb_assert (sim_regno != LEGACY_SIM_REGNO_IGNORE);
+
+      /* A temporary check while we add target description support to
+	 the simulator.  Once this is complete we'll be removing the
+	 legacy gdbarch_register_rim_regno method, at which point this
+	 check will need to go.  */
+      gdb_assert (sim_regno == gdbarch_register_sim_regno (gdbarch, regno));
+    }
+
+  switch (sim_regno)
     {
     case LEGACY_SIM_REGNO_IGNORE:
       break;
@@ -476,18 +509,14 @@ gdbsim_target::fetch_registers (struct regcache *regcache, int regno)
 
 	gdb_assert (regno >= 0 && regno < gdbarch_num_regs (gdbarch));
 	nr_bytes = sim_fetch_register (sim_data->gdbsim_desc,
-				       gdbarch_register_sim_regno
-					 (gdbarch, regno),
-				       buf.data (), regsize);
+				       sim_regno, buf.data (), regsize);
 	if (nr_bytes > 0 && nr_bytes != regsize && warn_user)
 	  {
 	    gdb_printf (gdb_stderr,
 			"Size of register %s (%d/%d) "
 			"incorrect (%d instead of %d))",
 			gdbarch_register_name (gdbarch, regno),
-			regno,
-			gdbarch_register_sim_regno (gdbarch, regno),
-			nr_bytes, regsize);
+			regno, sim_regno, nr_bytes, regsize);
 	    warn_user = 0;
 	  }
 	/* FIXME: cagney/2002-05-27: Should check `nr_bytes == 0'
@@ -523,7 +552,28 @@ gdbsim_target::store_registers (struct regcache *regcache, int regno)
 	store_registers (regcache, regno);
       return;
     }
-  else if (gdbarch_register_sim_regno (gdbarch, regno) >= 0)
+
+  /* When the simulator provides a target description, use the remote
+     register number for register access.  Otherwise, fall back to the
+     legacy sim regno mechanism.  */
+  int sim_regno = -1;
+  if (!sim_data->has_target_desc)
+    sim_regno = gdbarch_register_sim_regno (gdbarch, regno);
+  else
+    {
+      sim_regno = gdbarch_remote_register_number (gdbarch, regno);
+      if (sim_regno == -1)
+	sim_regno = SIM_REGNO_DOES_NOT_EXIST;
+      gdb_assert (sim_regno != LEGACY_SIM_REGNO_IGNORE);
+
+      /* A temporary check while we add target description support to
+	 the simulator.  Once this is complete we'll be removing the
+	 legacy gdbarch_register_rim_regno method, at which point this
+	 check will need to go.  */
+      gdb_assert (sim_regno == gdbarch_register_sim_regno (gdbarch, regno));
+    }
+
+  if (sim_regno >= 0)
     {
       int regsize = register_size (gdbarch, regno);
       gdb::byte_vector tmp (regsize);
@@ -531,9 +581,7 @@ gdbsim_target::store_registers (struct regcache *regcache, int regno)
 
       regcache->cooked_read (regno, tmp.data ());
       nr_bytes = sim_store_register (sim_data->gdbsim_desc,
-				     gdbarch_register_sim_regno
-				       (gdbarch, regno),
-				     tmp.data (), regsize);
+				     sim_regno, tmp.data (), regsize);
 
       if (nr_bytes > 0 && nr_bytes != regsize)
 	internal_error (_("Register size different to expected"));
@@ -1281,6 +1329,29 @@ gdbsim_target::memory_map ()
     result = parse_memory_map (text.get ());
 
   return result;
+}
+
+/* See class declaration.  */
+
+const struct target_desc *
+gdbsim_target::read_description ()
+{
+  struct sim_inferior_data *sim_data
+    = get_sim_inferior_data (current_inferior (), SIM_INSTANCE_NEEDED);
+
+  gdb::unique_xmalloc_ptr<char> tdesc_xml
+    (sim_target_description (sim_data->gdbsim_desc));
+
+  if (tdesc_xml == nullptr)
+    return nullptr;
+
+  const struct target_desc *tdesc
+    = string_read_description_xml (tdesc_xml.get ());
+
+  if (tdesc != nullptr)
+    sim_data->has_target_desc = true;
+
+  return tdesc;
 }
 
 INIT_GDB_FILE (remote_sim)
