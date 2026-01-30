@@ -168,6 +168,8 @@ struct gdbsim_target final
   bool has_memory ()  override;
   std::vector<mem_region> memory_map () override;
 
+  const struct target_desc *read_description () override;
+
 private:
   sim_inferior_data *get_inferior_data_by_ptid (ptid_t ptid,
 						int sim_instance_needed);
@@ -1281,6 +1283,21 @@ gdbsim_target::memory_map ()
     result = parse_memory_map (text.get ());
 
   return result;
+}
+
+/* Read the target description from the simulator.  Returns nullptr
+   to indicate that no target description is available.  */
+
+const struct target_desc *
+gdbsim_target::read_description ()
+{
+  struct sim_inferior_data *sim_data
+    = get_sim_inferior_data (current_inferior (), SIM_INSTANCE_NEEDED);
+
+  char *tdesc_xml = sim_target_description (sim_data->gdbsim_desc);
+  gdb_assert (tdesc_xml == nullptr);
+
+  return nullptr;
 }
 
 INIT_GDB_FILE (remote_sim)
