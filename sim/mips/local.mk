@@ -66,6 +66,7 @@ nodist_%C%_libsim_a_SOURCES = \
 	%D%/cp1.o \
 	%D%/dsp.o \
 	%D%/mdmx.o \
+	%D%/mips-tdesc.o \
 	%D%/sim-main.o \
 	%D%/sim-resume.o
 ## Workaround Automake bug where $(SIM_MIPS_MULTI_OBJ) isn't copied from LIBADD

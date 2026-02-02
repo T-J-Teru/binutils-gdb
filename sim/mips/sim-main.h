@@ -1050,6 +1050,9 @@ void mips_cpu_exception_trigger(SIM_DESC sd, sim_cpu* cpu, address_word pc);
 void mips_cpu_exception_suspend(SIM_DESC sd, sim_cpu* cpu, int exception);
 void mips_cpu_exception_resume(SIM_DESC sd, sim_cpu* cpu, int exception);
 
+/* Return the target description for the current MIPS configuration.  */
+extern const struct sim_tdesc *mips_tdesc_get (SIM_DESC sd);
+
 /* Macros for determining whether a MIPS IV or MIPS V part is subject
    to the hi/lo restrictions described in mips.igen.  */
 

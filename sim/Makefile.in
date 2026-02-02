@@ -731,7 +731,8 @@ am__DEPENDENCIES_1 =
 @SIM_ENABLE_ARCH_mips_TRUE@	$(patsubst \
 @SIM_ENABLE_ARCH_mips_TRUE@	%,mips/dv-%.o,$(mips_SIM_EXTRA_HW_DEVICES)) \
 @SIM_ENABLE_ARCH_mips_TRUE@	mips/cp1.o mips/dsp.o mips/mdmx.o \
-@SIM_ENABLE_ARCH_mips_TRUE@	mips/sim-main.o mips/sim-resume.o
+@SIM_ENABLE_ARCH_mips_TRUE@	mips/mips-tdesc.o mips/sim-main.o \
+@SIM_ENABLE_ARCH_mips_TRUE@	mips/sim-resume.o
 @SIM_ENABLE_ARCH_mips_TRUE@am_mips_libsim_a_OBJECTS =  \
 @SIM_ENABLE_ARCH_mips_TRUE@	$(am__objects_1)
 @SIM_ENABLE_ARCH_mips_TRUE@nodist_mips_libsim_a_OBJECTS =  \
@@ -2675,6 +2676,7 @@ testsuite_common_CPPFLAGS = \
 @SIM_ENABLE_ARCH_mips_TRUE@	mips/cp1.o \
 @SIM_ENABLE_ARCH_mips_TRUE@	mips/dsp.o \
 @SIM_ENABLE_ARCH_mips_TRUE@	mips/mdmx.o \
+@SIM_ENABLE_ARCH_mips_TRUE@	mips/mips-tdesc.o \
 @SIM_ENABLE_ARCH_mips_TRUE@	mips/sim-main.o \
 @SIM_ENABLE_ARCH_mips_TRUE@	mips/sim-resume.o
 

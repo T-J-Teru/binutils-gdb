@@ -810,6 +810,9 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb,
       CPU_PC_STORE (cpu) = mips_pc_set;
     }
 
+  /* Set up target description callback for GDB.  */
+  STATE_TDESC_GET (sd) = mips_tdesc_get;
+
   return sd;
 }
 
