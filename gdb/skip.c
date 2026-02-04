@@ -509,36 +509,146 @@ skiplist_entry::do_skip_file_p (const symtab_and_line &function_sal) const
   return result;
 }
 
+/* Split FILENAME into components separated by '/'.  Skip any empty
+   components.  */
+
+static std::vector<std::string>
+split_components (const std::string &filename)
+{
+  std::vector<std::string> components;
+  std::string::size_type start = 0;
+
+  while (start < filename.size ())
+    {
+      auto pos = filename.find ('/', start);
+      if (pos == std::string::npos)
+	{
+	  components.push_back (filename.substr (start));
+	  break;
+	}
+      if (pos > start)
+	components.push_back (filename.substr (start, pos - start));
+      start = pos + 1;
+    }
+
+  return components;
+}
+
+/* Iterator type used by match_components function.  */
+
+using rev_iter = std::vector<std::string>::const_reverse_iterator;
+
+/* Recursively match pattern components PAT to PAT_END against filename
+   components FILE to FILE_END, working right-to-left (using reverse
+   iterators).  Because we're using reverse iterators, PAT and FILE
+   actually point to the right most element in the pattern or file, these
+   are the things we are going to match next.
+
+   A pattern component that is exactly "**" matches zero or more filename
+   components.  All other pattern components are matched against a single
+   filename component using fnmatch.
+
+   When the pattern is exhausted but filename components remain (on the
+   left), the result depends on IS_ABSOLUTE: non-absolute patterns are
+   right-anchored and allow unmatched leading (on the left) filename
+   components, while absolute patterns require all filename components to
+   be matched.  */
+
+static bool
+match_components (rev_iter pat, rev_iter pat_end,
+		  rev_iter file, rev_iter file_end, bool is_absolute)
+{
+  /* Both pattern and filename are exhausted, this means they matched.  */
+  if (pat == pat_end && file == file_end)
+    return true;
+
+  /* Pattern exhausted but filename components remain on the left. For
+     non-absolute patterns this is fine, this is a match.  For absolute
+     patterns all pattern components must be consumed, so this indicates a
+     non-match.  */
+  if (pat == pat_end)
+    return !is_absolute;
+
+  /* Found the "**" pattern.  This is modeled on the bash globstar feature
+     and matches 0, 1, 2, etc filename components.  */
+  if (*pat == "**")
+    {
+      rev_iter next_pat = pat + 1;
+
+      /* Ignore sequences of '**'.  */
+      while (next_pat != pat_end && *next_pat == "**")
+	next_pat++;
+
+      for (rev_iter f = file; ; ++f)
+	{
+	  if (match_components (next_pat, pat_end, f, file_end, is_absolute))
+	    return true;
+	  if (f == file_end)
+	    break;
+	}
+      return false;
+    }
+
+  /* Filename exhausted but pattern remains, and pattern is not "**", this
+     means the pattern didn't match.  */
+  if (file == file_end)
+    return false;
+
+  /* Match a single component with fnmatch.  */
+  if (fnmatch (pat->c_str (), file->c_str (),
+	       FNM_FILE_NAME | FNM_NOESCAPE) == 0)
+    return match_components (pat + 1, pat_end, file + 1, file_end,
+			     is_absolute);
+
+  return false;
+}
+
 bool
 skiplist_entry::do_skip_gfile_p (const symtab_and_line &function_sal) const
 {
-  bool result;
-
-  /* Check first sole SYMTAB->FILENAME.  It may not be a substring of
-     symtab_to_fullname as it may contain "./" etc.  */
-  if (gdb_filename_fnmatch (m_file.c_str (), function_sal.symtab->filename (),
-			    FNM_FILE_NAME | FNM_NOESCAPE) == 0)
-    result = true;
-
-  /* Before we invoke symtab_to_fullname, which is expensive, do a quick
-     comparison of the basenames.
-     Note that we assume that lbasename works with glob-style patterns.
-     If the basename of the glob pattern is something like "*.c" then this
-     isn't much of a win.  Oh well.  */
-  else if (!basenames_may_differ
+  /* If basenames don't match then the full pattern cannot match.  */
+  if (!basenames_may_differ
       && gdb_filename_fnmatch (lbasename (m_file.c_str ()),
 			       lbasename (function_sal.symtab->filename ()),
 			       FNM_FILE_NAME | FNM_NOESCAPE) != 0)
-    result = false;
-  else
-    {
-      /* Note: symtab_to_fullname caches its result, thus we don't have to.  */
-      const char *fullname = symtab_to_fullname (function_sal.symtab);
+    return false;
 
-      result = compare_glob_filenames_for_search (fullname, m_file.c_str ());
+  /* Split the pattern into its component parts.  */
+  std::vector<std::string> pat_components = split_components (m_file);
+
+  /* If the pattern is absolute, e.g. starts with '/', then we're going to
+     have to compare against the full filename, we can skip the check
+     against the symtab filename.  */
+  bool is_absolute_pattern = IS_ABSOLUTE_PATH (m_file.c_str ());
+
+  /* The symtab's filename might not be the full filename, this will depend
+     on how the symtab was compiled and/or how the DWARF was generated.
+     But with gcc at least, compiling a relative filename results in a
+     symtab with a relative filename.  However, in many cases, the skip
+     pattern is also only a partial filename, and matches against the end
+     part of the symtab filename, so rather than the (relatively expensive)
+     fullname lookup, check first against the symtab filename.  */
+  if (!basenames_may_differ && !is_absolute_pattern)
+    {
+      std::vector<std::string> filename_components
+	= split_components (function_sal.symtab->filename ());
+
+      if (match_components (pat_components.crbegin (),
+			    pat_components.crend (),
+			    filename_components.crbegin (),
+			    filename_components.crend (),
+			    is_absolute_pattern))
+	return true;
     }
 
-  return result;
+  const char *fullname = symtab_to_fullname (function_sal.symtab);
+  std::vector<std::string> fullname_components = split_components (fullname);
+
+  return match_components (pat_components.crbegin (),
+			   pat_components.crend (),
+			   fullname_components.crbegin (),
+			   fullname_components.crend (),
+			   is_absolute_pattern);
 }
 
 bool
