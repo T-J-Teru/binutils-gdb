@@ -91,6 +91,12 @@ show progress-bars enabled
   content, to be disabled (the set command), or to see if
   progress-bars are currently enabled or not (the show command).
 
+delete skip
+enable skip
+disable skip
+  These are new aliases for 'skip delete', 'skip enable', and 'skip
+  disable' respectively.
+
 * Changed commands
 
 maintenance info program-spaces
