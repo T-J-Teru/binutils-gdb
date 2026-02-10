@@ -43,6 +43,11 @@
    skipping. */
 static bool debug_skip = false;
 
+/* Print a "skip" debug statement.  */
+
+#define skip_debug_printf(fmt, ...) \
+  debug_prefixed_printf_cond (debug_skip, "skip", fmt, ##__VA_ARGS__)
+
 class skiplist_entry
 {
 public:
@@ -709,11 +714,9 @@ skiplist_entry::skip_file_p (const symtab_and_line &function_sal) const
   if (function_sal.symtab == NULL)
     return false;
 
-  if (debug_skip)
-    gdb_printf (gdb_stdlog,
-		"skip: checking if file %s matches %sglob %s...",
-		function_sal.symtab->filename (),
-		(m_file_is_glob ? "" : "non-"), m_file.c_str ());
+  skip_debug_printf ("checking if file %s matches %sglob %s",
+		     function_sal.symtab->filename (),
+		     (m_file_is_glob ? "" : "non-"), m_file.c_str ());
 
   bool result;
   if (m_file_is_glob)
@@ -721,8 +724,7 @@ skiplist_entry::skip_file_p (const symtab_and_line &function_sal) const
   else
     result = do_skip_file_p (function_sal);
 
-  if (debug_skip)
-    gdb_printf (gdb_stdlog, result ? "yes.\n" : "no.\n");
+  skip_debug_printf (result ? "yes" : "no");
 
   return result;
 }
@@ -737,10 +739,8 @@ skiplist_entry::skip_function_p (const char *function_name) const
 
   if (m_function_is_regexp)
     {
-      if (debug_skip)
-	gdb_printf (gdb_stdlog,
-		    "skip: checking if function %s matches regex %s...",
-		    function_name, m_function.c_str ());
+      skip_debug_printf ("checking if function %s matches regex %s",
+			 function_name, m_function.c_str ());
 
       gdb_assert (m_compiled_function_regexp);
       result
@@ -748,16 +748,12 @@ skiplist_entry::skip_function_p (const char *function_name) const
     }
   else
     {
-      if (debug_skip)
-	gdb_printf (gdb_stdlog,
-		    ("skip: checking if function %s matches non-regex "
-		     "%s..."),
-		    function_name, m_function.c_str ());
+      skip_debug_printf ("checking if function %s matches non-regex %s",
+			 function_name, m_function.c_str ());
       result = (strcmp_iw (function_name, m_function.c_str ()) == 0);
     }
 
-  if (debug_skip)
-    gdb_printf (gdb_stdlog, result ? "yes.\n" : "no.\n");
+  skip_debug_printf (result ? "yes" : "no");
 
   return result;
 }
