@@ -6,6 +6,9 @@
 
 #undef _FILE_OFFSET_BITS
 
+/* Define to 1 if C library functions and headers need _GNU_SOURCE. */
+#undef _GNU_SOURCE
+
 /* Define if on MINIX.  */
 #undef _MINIX
 

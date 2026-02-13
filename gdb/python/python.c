@@ -1828,8 +1828,7 @@ do_start_initialization ()
     return false;
 
   /* Release the GIL while gdb runs.  */
-  PyThreadState_Swap (NULL);
-  PyEval_ReleaseLock ();
+  PyEval_SaveThread ();
 
   make_final_cleanup (finalize_python, NULL);
 

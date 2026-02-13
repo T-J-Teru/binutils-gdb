@@ -274,9 +274,10 @@ gdb_PySys_GetObject (const char *name)
 
 #define PySys_GetObject gdb_PySys_GetObject
 
-/* PySys_SetPath's 'path' parameter was missing the 'const' qualifier
-   before Python 3.6.  Hence, we wrap it in a function to avoid errors
-   when compiled with -Werror.  */
+/* PySys_SetPath was removed in Python 3.13.  For older versions, the
+   'path' parameter was missing the 'const' qualifier before Python
+   3.6.  Hence, we wrap it in a function to avoid errors when compiled
+   with -Werror.  */
 
 #ifdef IS_PY3K
 # define GDB_PYSYS_SETPATH_CHAR wchar_t
@@ -287,7 +288,16 @@ gdb_PySys_GetObject (const char *name)
 static inline void
 gdb_PySys_SetPath (const GDB_PYSYS_SETPATH_CHAR *path)
 {
+#if PY_VERSION_HEX >= 0x030d0000
+  PyObject *path_obj = PyUnicode_FromWideChar (path, -1);
+  if (path_obj != NULL)
+    {
+      PySys_SetObject ("path", path_obj);
+      Py_DECREF (path_obj);
+    }
+#else
   PySys_SetPath (const_cast<GDB_PYSYS_SETPATH_CHAR *> (path));
+#endif
 }
 
 #define PySys_SetPath gdb_PySys_SetPath

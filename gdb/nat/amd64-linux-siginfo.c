@@ -17,6 +17,12 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+#include "config.h"
+#ifdef GDBSERVER
+#include "build-gnulib-gdbserver/config.h"
+#else
+#include "build-gnulib/config.h"
+#endif
 #include <signal.h>
 #include "common-defs.h"
 #include "amd64-linux-siginfo.h"

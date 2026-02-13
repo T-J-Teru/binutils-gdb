@@ -51,12 +51,16 @@ gdbpy_readline_wrapper (FILE *sys_stdin, FILE *sys_stdout,
 	return NULL;
 
       /* The thread state is nulled during gdbpy_readline_wrapper,
-	 with the original value saved in the following undocumented
-	 variable (see Python's Parser/myreadline.c and
-	 Modules/readline.c).  */
-      PyEval_RestoreThread (_PyOS_ReadlineTState);
-      gdbpy_convert_exception (except);
-      PyEval_SaveThread ();
+	 with the original value saved in an undocumented variable
+	 (see Python's Parser/myreadline.c and Modules/readline.c).
+	 We use PyGILState_Ensure/Release to safely acquire the GIL
+	 and set the exception, which also works in Python 3.13+
+	 where the private _PyOS_ReadlineTState was removed.  */
+      {
+	PyGILState_STATE gilstate = PyGILState_Ensure ();
+	gdbpy_convert_exception (except);
+	PyGILState_Release (gilstate);
+      }
       return NULL;
     }
   END_CATCH
