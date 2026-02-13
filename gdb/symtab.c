@@ -4261,8 +4261,52 @@ symbol_search::compare_search_syms (const symbol_search &sym_a,
   if (sym_a.block != sym_b.block)
     return sym_a.block - sym_b.block;
 
-  return strcmp (SYMBOL_PRINT_NAME (sym_a.symbol),
-		 SYMBOL_PRINT_NAME (sym_b.symbol));
+  c = strcmp (SYMBOL_PRINT_NAME (sym_a.symbol),
+	      SYMBOL_PRINT_NAME (sym_b.symbol));
+
+  if (c != 0)
+    return c;
+
+  /* These two symbols have the same name.  It is possible, with types,
+     that we can see two symbols with the same name, but different types,
+     consider in C: 'typedef struct foo { ... } foo;' which creates a
+     'struct foo' type and a 'foo' typedef type.  For now this is the only
+     case we handle.  In all other cases, we treat symbols with the same
+     name as being the same.
+
+
+     First, check the types, if they are the same, then consider these
+     symbols as the same.  */
+  if (TYPE_CODE (SYMBOL_TYPE (sym_a.symbol))
+      == TYPE_CODE (SYMBOL_TYPE (sym_b.symbol)))
+    return 0;
+
+  /* The types are different, but if neither is a typedef then we still
+     consider these symbols as the same.  */
+  if (TYPE_CODE (SYMBOL_TYPE (sym_a.symbol)) != TYPE_CODE_TYPEDEF
+      && TYPE_CODE (SYMBOL_TYPE (sym_b.symbol)) != TYPE_CODE_TYPEDEF)
+    return 0;
+
+  /* The symbols have different types, and one is a typedef.  They cannot
+     both be typedefs or we'd have taken the "types are the same" exit path
+     above.  If the two types are defined on different lines then order by
+     line number.  As line numbers are unsigned, don't subtract one from
+     the other in order to avoid underflow.  */
+  if (SYMBOL_LINE (sym_a.symbol) != SYMBOL_LINE (sym_b.symbol))
+    return (SYMBOL_LINE (sym_a.symbol) > SYMBOL_LINE (sym_b.symbol) ? 1 : -1);
+
+  /* The symbols have different types, and one is a typedef, but both
+     symbols are defined on the same line.  For example:
+
+     typedef struct foo { int a; } foo;
+
+     In this case we sort the typedef after the non-typedef.  This is an
+     arbitrary decision, but I think looks slightly nicer in the 'info
+     types' output; first we get the type, then the typedef.  */
+  if (TYPE_CODE (SYMBOL_TYPE (sym_a.symbol)) == TYPE_CODE_TYPEDEF)
+    return 1;
+  else
+    return -1;
 }
 
 /* Sort the symbols in RESULT and remove duplicates.  */
