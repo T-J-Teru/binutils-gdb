@@ -55,7 +55,7 @@
 #define DW2_GDB_INDEX_SYMBOL_KIND_SET_VALUE(cu_index, value) \
   do { \
     gdb_assert ((value) >= GDB_INDEX_SYMBOL_KIND_TYPE \
-                && (value) <= GDB_INDEX_SYMBOL_KIND_OTHER); \
+                && (value) <= GDB_INDEX_SYMBOL_KIND_UNUSED5); \
     GDB_INDEX_SYMBOL_KIND_SET_VALUE((cu_index), (value)); \
   } while (0)
 
@@ -281,9 +281,46 @@ symtab_index_entry::minimize ()
   if (name == nullptr || cu_indices.empty ())
     return;
 
-  std::sort (cu_indices.begin (), cu_indices.end ());
+  /* We sort the indexes in a funny way: GDB_INDEX_SYMBOL_KIND_UNUSED5
+     is always sorted last; then otherwise we sort by numeric value.
+     This ensures that we prefer the definition when both a definition
+     and a declaration (stub type) are seen.  */
+  std::sort (cu_indices.begin (), cu_indices.end (),
+	     [] (offset_type vala, offset_type valb)
+	       {
+		 auto kinda = GDB_INDEX_SYMBOL_KIND_VALUE (vala);
+		 auto kindb = GDB_INDEX_SYMBOL_KIND_VALUE (valb);
+		 if (kinda != kindb)
+		   {
+		     /* Declaration sorts last.  */
+		     if (kinda == GDB_INDEX_SYMBOL_KIND_UNUSED5)
+		       return false;
+		     if (kindb == GDB_INDEX_SYMBOL_KIND_UNUSED5)
+		       return true;
+		   }
+		 return vala < valb;
+	       });
   auto from = std::unique (cu_indices.begin (), cu_indices.end ());
   cu_indices.erase (from, cu_indices.end ());
+
+  /* Rewrite GDB_INDEX_SYMBOL_KIND_UNUSED5.  This ensures that a type
+     declaration will be deleted by the subsequent squashing step, if
+     warranted.  */
+  for (auto &val : cu_indices)
+    {
+      gdb_index_symbol_kind kind = GDB_INDEX_SYMBOL_KIND_VALUE (val);
+      if (kind != GDB_INDEX_SYMBOL_KIND_UNUSED5)
+	continue;
+
+      offset_type newval = 0;
+      DW2_GDB_INDEX_CU_SET_VALUE (newval, GDB_INDEX_CU_VALUE (val));
+      DW2_GDB_INDEX_SYMBOL_STATIC_SET_VALUE
+	(newval, GDB_INDEX_SYMBOL_STATIC_VALUE (val));
+      DW2_GDB_INDEX_SYMBOL_KIND_SET_VALUE (newval,
+					   GDB_INDEX_SYMBOL_KIND_TYPE);
+
+      val = newval;
+    }
 
   /* We don't want to enter a type more than once, so
      remove any such duplicates from the list as well.  When doing
