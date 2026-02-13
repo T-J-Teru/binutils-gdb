@@ -170,6 +170,10 @@ struct symtab_index_entry
   /* A sorted vector of the indices of all the CUs that hold an object
      of this name.  */
   std::vector<offset_type> cu_indices;
+
+  /* Minimize CU_INDICES, sorting them and removing duplicates as
+     appropriate.  */
+  void minimize ();
 };
 
 /* The symbol table.  This is a power-of-2-sized hash table.  */
@@ -178,6 +182,13 @@ struct mapped_symtab
   mapped_symtab ()
   {
     data.resize (1024);
+  }
+
+  /* Minimize each entry in the symbol table, removing duplicates.  */
+  void minimize ()
+  {
+    for (symtab_index_entry &item : data)
+      item.minimize ();
   }
 
   offset_type n_elements = 0;
@@ -262,21 +273,36 @@ add_index_entry (struct mapped_symtab *symtab, const char *name,
   slot.cu_indices.push_back (cu_index_and_attrs);
 }
 
-/* Sort and remove duplicates of all symbols' cu_indices lists.  */
+/* See symtab_index_entry.  */
 
-static void
-uniquify_cu_indices (struct mapped_symtab *symtab)
+void
+symtab_index_entry::minimize ()
 {
-  for (auto &entry : symtab->data)
+  if (name == nullptr || cu_indices.empty ())
+    return;
+
+  std::sort (cu_indices.begin (), cu_indices.end ());
+  auto from = std::unique (cu_indices.begin (), cu_indices.end ());
+  cu_indices.erase (from, cu_indices.end ());
+
+  /* We don't want to enter a variable or type more than once, so
+     remove any such duplicates from the list as well.  When doing
+     this, we want to keep the entry from the first CU -- but this is
+     implicit due to the sort.  This choice is done because it's
+     similar to what gdb historically did for partial symbols.  */
+  std::unordered_set<offset_type> seen;
+  from = std::remove_if (cu_indices.begin (), cu_indices.end (),
+			 [&] (offset_type val)
     {
-      if (entry.name != NULL && !entry.cu_indices.empty ())
-	{
-	  auto &cu_indices = entry.cu_indices;
-	  std::sort (cu_indices.begin (), cu_indices.end ());
-	  auto from = std::unique (cu_indices.begin (), cu_indices.end ());
-	  cu_indices.erase (from, cu_indices.end ());
-	}
-    }
+      gdb_index_symbol_kind kind = GDB_INDEX_SYMBOL_KIND_VALUE (val);
+      if (kind != GDB_INDEX_SYMBOL_KIND_TYPE
+	  && kind != GDB_INDEX_SYMBOL_KIND_VARIABLE)
+	return false;
+
+      val &= ~GDB_INDEX_CU_MASK;
+      return !seen.insert (val).second;
+    });
+  cu_indices.erase (from, cu_indices.end ());
 }
 
 /* A form of 'const char *' suitable for container keys.  Only the
@@ -1358,7 +1384,7 @@ write_gdbindex (struct dwarf2_per_objfile *dwarf2_per_objfile, FILE *out_file)
 
   /* Now that we've processed all symbols we can shrink their cu_indices
      lists.  */
-  uniquify_cu_indices (&symtab);
+  symtab.minimize ();
 
   data_buf symtab_vec, constant_pool;
   write_hash_table (&symtab, symtab_vec, constant_pool);
