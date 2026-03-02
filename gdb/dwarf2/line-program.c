@@ -445,12 +445,25 @@ lnp_state_machine::record_line (bool end_sequence)
 		  (end_sequence ? "\t(end sequence)" : ""));
     }
 
+  /*  Activate dwarf_find_and_extend_inline_block_range for line number info:
+
+	Line number    Starting address	   View	   Stmt
+		 42	     0x1000074c		      x
+		 43	     0x1000074c	      1	      x
+		 43	     0x1000074c	      2
+		 54	     0x1000074c	      3
+		 55	     0x10000750
+
+      at entry 55/0x10000750 with:
+      - m_last_address == 0x1000074c
+      - m_address == 0x10000750
+      - m_last_line == 54.  */
   if (m_address != m_last_address
       && m_stmt_at_address
       && m_cu->producer_is_gcc ()
       && (m_flags & LEF_IS_STMT) == 0)
     dwarf_find_and_extend_inline_block_range (m_cu, m_last_address,
-					      m_address, m_line);
+					      m_address, m_last_line);
 
   file_entry *fe = current_file ();
 
