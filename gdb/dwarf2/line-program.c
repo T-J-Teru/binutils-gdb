@@ -181,8 +181,9 @@ private:
   /* The last file a line number was recorded for.  */
   struct subfile *m_last_subfile = NULL;
 
-  /* The address of the last line entry.  */
+  /* The address and line of the last line entry.  */
   unrelocated_addr m_last_address;
+  unsigned int m_last_line = 0;
 
   /* Set to true when a previous line at the same address (using
      m_last_address) had LEF_IS_STMT set in m_flags.  This is reset to false
@@ -508,6 +509,8 @@ lnp_state_machine::record_line (bool end_sequence)
       m_last_address = m_address;
     }
   m_stmt_at_address |= (m_flags & LEF_IS_STMT) != 0;
+
+  m_last_line = m_line;
 }
 
 lnp_state_machine::lnp_state_machine (struct dwarf2_cu *cu, gdbarch *arch)
