@@ -196,7 +196,7 @@ private:
   /* The last line number that was recorded, used to coalesce
      consecutive entries for the same line.  This can happen, for
      example, when discriminators are present.  PR 17276.  */
-  unsigned int m_last_line = 0;
+  unsigned int m_last_recorded_line = 0;
   bool m_line_has_non_zero_discriminator = false;
 };
 
@@ -301,7 +301,7 @@ lnp_state_machine::record_line_p ()
 {
   if (m_builder->get_current_subfile () != m_last_subfile)
     return true;
-  if (m_line != m_last_line)
+  if (m_line != m_last_recorded_line)
     return true;
   /* Same line for the same file that we've seen already.
      As a last check, for pr 17276, only record the line if the line
@@ -495,7 +495,7 @@ lnp_state_machine::record_line (bool end_sequence)
 	    {
 	      m_last_subfile = m_builder->get_current_subfile ();
 	      record_line_1 (m_line, lte_flags);
-	      m_last_line = m_line;
+	      m_last_recorded_line = m_line;
 	    }
 	}
     }
