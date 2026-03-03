@@ -158,9 +158,9 @@ struct glob_bracket_expr
   const char *end () const;
 
 private:
-  /* When true the character group is negated, that is we want to match
-     everything not mentioned in the group.  When false we only want to
-     match things mentioned in the group.  */
+  /* When true the character bracket expression is negated, that is we want
+     to match everything not mentioned in the expression.  When false we
+     only want to match things mentioned in the expression.  */
   bool m_negated = false;
 
   /* Each string is something like '[:alpha:]' and represents a character
@@ -173,7 +173,7 @@ private:
      second entry is the range end.  Both are inclusive.  */
   std::vector<std::pair<char, char>> m_char_ranges;
 
-  /* Single characters within the group.  */
+  /* Single characters within the bracket expression.  */
   std::unordered_set<char> m_chars;
 
   /* Points at the closing ']' for the bracket expression.  */
@@ -211,7 +211,7 @@ at_character_class (const char *ptr)
 }
 
 /* Return true if PTR is pointing to something like 'A-B', a character
-   range as could be found within a filename glob's character group.  */
+   range as could be found within a glob's bracket expression.  */
 
 static bool
 at_character_range (const char *ptr)
@@ -260,6 +260,18 @@ sanitize_range (unsigned char start, unsigned char end)
   results.emplace_back (start, '/' - 1);
   results.emplace_back ('/' + 1, end);
   return results;
+}
+
+/* CHAR_CLASS should be a character class name like "[:name:]".  Return
+   true if CHAR_CLASS matches '/'.  */
+
+static bool
+character_class_matches_slash (const std::string &char_class)
+{
+  std::string pattern = string_printf ("[%s]", char_class.c_str ());
+  compiled_regex re (pattern.c_str (), REG_NOSUB | REG_EXTENDED,
+		     _("regexp"));
+  return re.exec ("/", 0, nullptr, 0) == 0;
 }
 
 /* See class declaration above.  */
@@ -316,7 +328,7 @@ glob_bracket_expr::parse (const char *ptr)
 	  char range_start = *ptr;
 	  char range_end = *(ptr + 2);
 
-	  if (range_start == '/' || range_end == '/')
+	  if (IS_DIR_SEPARATOR (range_start) || IS_DIR_SEPARATOR (range_end))
 	    return {};
 
 	  std::vector<std::pair<char, char>> ranges
@@ -358,6 +370,18 @@ glob_bracket_expr::parse (const char *ptr)
 	  if (cc == "[:upper:]")
 	    cc = "[:lower:]";
 #endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
+	  if (character_class_matches_slash (cc))
+	    {
+	      /* We are converting a glob to a regexp and trying to
+		 replicate the FNM_PATHNAME flag of fnmatch.  If we allow a
+		 character class that matches '/' then this might cause
+		 problems.
+
+		 We could try to split the class into multiple ranges that
+		 cover all the same characters, but not '/', but for now we
+		 just give an error.  */
+	      error ("unsupported character class '%s'", cc.c_str ());
+	    }
 	  result.m_char_classes.push_back (std::move (cc));
 	  ptr = end;
 	}
@@ -549,23 +573,24 @@ glob_to_regexp (const std::string& glob)
 
 	  if (g.has_value ())
 	    {
-	      /* Add a regexp version of this character group.  */
+	      /* Add a regexp version of this bracket expression.  */
 	      result += g->to_string ();
 
-	      /* Skip over the character group in the glob.  */
+	      /* Skip over the bracket expression in the glob.  */
 	      ptr = g->end ();
 	    }
 	  else
 	    {
-	      /* Not a character group.  This is probably an invalid glob,
-		 but for now, lets just treat this as a literal '['.  */
+	      /* Not a bracket expression.  Just treat this as a literal
+		 character.  */
 	      result += "\\[";
 	    }
 	}
       else
 	{
-	  /* All other characters are passed through unchanged.  */
+	  /* All other characters are passed through.  */
 	  char c = *ptr;
+
 #ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
 	  c = c_tolower (c);
 #endif
@@ -573,7 +598,9 @@ glob_to_regexp (const std::string& glob)
 	}
     }
 
+  /* Anchor the regexp to the end of the filename.  */
   result += '$';
+
   return result;
 }
 
@@ -1584,8 +1611,6 @@ static constexpr std::initializer_list<skip_gfile_test> skip_gfile_tests = {
   { "[[:digit:]]dir/*.c", "/tmp/", "adir/foo.c", false },
   { "adir/[[:digit:]]*.c", "/tmp/", "adir/1foo.c", true },
   { "[[:digit:]]*.c", "/tmp/", "adir/1foo.c", true },
-  { "[[:DIGIT:]]*.c", "/tmp/", "adir/1foo.c", true },
-  { "[[:DiGiT:]]*.c", "/tmp/", "adir/1foo.c", true },
 
   /* [[:alpha:]] matches any alphabetic character.  */
   { "[[:alpha:]]dir/*.c", "/tmp/", "adir/foo.c", true },
@@ -1649,6 +1674,24 @@ static constexpr std::initializer_list<skip_gfile_test> skip_gfile_tests = {
   { "[A-C]dir/*.c", "/tmp/", "cdir/foo.c", true },
   { "[A-C]dir/*.c", "/tmp/", "Bdir/foo.c", true },
   { "[A-C]dir/*.c", "/tmp/", "ddir/foo.c", false },
+
+  /* A range that overlaps into the upper case characters [=-D] will
+     be split into two: [=-@] and [a-d].  */
+  { "[=-D]dir/*.c", "/tmp/", "@dir/foo.c", true },
+  { "[=-D]dir/*.c", "/tmp/", "=dir/foo.c", true },
+  { "[=-D]dir/*.c", "/tmp/", "adir/foo.c", true },
+  { "[=-D]dir/*.c", "/tmp/", "ddir/foo.c", true },
+  { "[=-D]dir/*.c", "/tmp/", "Adir/foo.c", true },
+  { "[=-D]dir/*.c", "/tmp/", "Ddir/foo.c", true },
+
+  /* A similar thing happens with ranges that overlap the end of the
+     upper case character range.  */
+  { "[W-_]dir/*.c", "/tmp/", "[dir/foo.c", true },
+  { "[W-_]dir/*.c", "/tmp/", "_dir/foo.c", true },
+  { "[W-_]dir/*.c", "/tmp/", "wdir/foo.c", true },
+  { "[W-_]dir/*.c", "/tmp/", "zdir/foo.c", true },
+  { "[W-_]dir/*.c", "/tmp/", "Wdir/foo.c", true },
+  { "[W-_]dir/*.c", "/tmp/", "Zdir/foo.c", true },
 
   /* A full upper case range [A-Z] is converted to [a-z].  */
   { "[A-Z]dir/*.c", "/tmp/", "mdir/foo.c", true },
