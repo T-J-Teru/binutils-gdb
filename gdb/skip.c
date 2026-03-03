@@ -196,6 +196,10 @@ at_character_class (const char *ptr)
     return false;
   ++ptr;
 
+  /* Require at least one character in the class name.  */
+  if (!c_isalpha (*ptr))
+    return false;
+
   while (c_isalpha (*ptr))
     ++ptr;
 
@@ -234,7 +238,7 @@ at_character_range (const char *ptr)
    vector will be returned.  */
 
 static std::vector<std::pair<char, char>>
-sanitize_range (char start, char end)
+sanitize_range (unsigned char start, unsigned char end)
 {
   std::vector<std::pair<char, char>> results;
 
@@ -244,7 +248,6 @@ sanitize_range (char start, char end)
   if (end == '/')
     --end;
 
-  gdb_assert (results.empty ());
   if (end < start)
     return results;
 
@@ -276,6 +279,12 @@ glob_bracket_expr::parse (const char *ptr)
 #ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
     c = c_tolower (c);
 #endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
+
+#ifdef HAVE_DOS_BASED_FILE_SYSTEM
+    if (IS_DIR_SEPARATOR (c))
+      c = '/';
+#endif /* HAVE_DOS_BASED_FILE_SYSTEM */
+
     result.m_chars.insert (c);
   };
 
@@ -345,6 +354,7 @@ glob_bracket_expr::parse (const char *ptr)
 	  gdb_assert (end != nullptr);
 	  std::string cc (ptr, end - ptr + 1);
 #ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
+	  /* Character class names are all lower case.  */
 	  if (cc == "[:upper:]")
 	    cc = "[:lower:]";
 #endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
@@ -1134,7 +1144,7 @@ private:
    RE is the compiled regexp version of PATTERN, created when the
    skiplist_entry was created.
 
-   The two callbacks GET_FILENAME and GET_FILENAME return the result of
+   The two callbacks GET_FILENAME and GET_FULLNAME return the result of
    symtab::filename and symtab_to_fullname respectively.  These are
    provided as callbacks though so that the self tests don't need to create
    fake symtabs.
@@ -1572,6 +1582,10 @@ static constexpr std::initializer_list<skip_gfile_test> skip_gfile_tests = {
      digit character.  */
   { "[[:digit:]]dir/*.c", "/tmp/", "1dir/foo.c", true },
   { "[[:digit:]]dir/*.c", "/tmp/", "adir/foo.c", false },
+  { "adir/[[:digit:]]*.c", "/tmp/", "adir/1foo.c", true },
+  { "[[:digit:]]*.c", "/tmp/", "adir/1foo.c", true },
+  { "[[:DIGIT:]]*.c", "/tmp/", "adir/1foo.c", true },
+  { "[[:DiGiT:]]*.c", "/tmp/", "adir/1foo.c", true },
 
   /* [[:alpha:]] matches any alphabetic character.  */
   { "[[:alpha:]]dir/*.c", "/tmp/", "adir/foo.c", true },
@@ -1650,6 +1664,10 @@ static constexpr std::initializer_list<skip_gfile_test> skip_gfile_tests = {
   { "[ABCD]dir/*.c", "/tmp/", "adir/foo.c", true },
   { "[ABCD]dir/*.c", "/tmp/", "Cdir/foo.c", true },
   { "[ABCD]dir/*.c", "/tmp/", "edir/foo.c", false },
+
+  { "[[:upper:]]dir/*.c", "/tmp/", "adir/foo.c", true },
+  { "[[:UPPER:]]dir/*.c", "/tmp/", "adir/foo.c", true },
+  { "[[:UpPeR:]]dir/*.c", "/tmp/", "adir/foo.c", true },
 #endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
 
 #ifdef HAVE_DOS_BASED_FILE_SYSTEM
@@ -1733,7 +1751,6 @@ test_skip_gfile_matching ()
 					(test.expect_match
 					 ? "Yes" : "No")).c_str ()));
 
-      //SELF_CHECK (matched == test.expect_match);
       if (matched != test.expect_match)
 	failure_count++;
     }
