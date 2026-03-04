@@ -288,11 +288,6 @@ glob_bracket_expr::parse (const char *ptr)
      insensitive, this converts C to lower case.  */
   auto record_single_char = [&] (char c) -> void
   {
-#ifdef HAVE_DOS_BASED_FILE_SYSTEM
-    if (IS_DIR_SEPARATOR (c))
-      c = '/';
-#endif /* HAVE_DOS_BASED_FILE_SYSTEM */
-
     result.m_chars.insert (c);
   };
 
@@ -539,7 +534,11 @@ glob_to_regexp (const std::string& glob)
 	  /* After a slash we can see '**' again.  On builds where
 	     backslash is also a possible directory separator, this
 	     converts the backslash to a forward slash.  */
+#ifdef HAVE_DOS_BASED_FILE_SYSTEM
+	  result += "(\\|/)";
+#else
 	  result += '/';
+#endif /* not HAVE_DOS_BASED_FILE_SYSTEM */
 	  can_globstar = true;
 	}
       else if (*ptr == '\\')
@@ -1082,59 +1081,6 @@ skiplist_entry::do_skip_file_p (const symtab_and_line &function_sal) const
   return result;
 }
 
-#if defined HAVE_DOS_BASED_FILE_SYSTEM
-
-/* A class which takes a filename string and on DOS based file systems
-   converts backslashes to forward slashes, and on case insensitive file
-   systems converts every character to lower case.  */
-
-struct normalised_filename
-{
-  /* Store a normalised version of FILENAME.  */
-  explicit normalised_filename (const char *filename)
-    : m_filename (filename)
-  {
-    char *p = m_filename.data ();
-    for (size_t i = 0; i < m_filename.size (); ++i)
-      {
-	if (p[i] == '\\')
-	  p[i] = '/';
-      }
-  }
-
-  /* Return the normalised string.  */
-  const char *c_str () const
-  { return m_filename.c_str (); }
-
-private:
-
-  /* Backing store for the normalised filename.  */
-  std::string m_filename;
-};
-
-#else
-
-/* A simple version of the above for file systems that don't use backslash
-   as a directory separator, and which are case sensitive.  This class just
-   holds the pointer passed in without adjusting anything.  */
-struct normalised_filename
-{
-  /* Just store the pointer FILENAME.  */
-  explicit normalised_filename (const char *filename)
-    : m_filename (filename)
-  { /* Nothing.  */ }
-
-  /* Return the pointer as passed to the constructor.  */
-  const char *c_str () const
-  { return m_filename; }
-
-private:
-  /* Store the pointer that was passed to the constructor.  */
-  const char *m_filename = nullptr;
-};
-
-#endif /* not HAVE_DOS_BASED_FILE_SYSTEM */
-
 /* The implementation of skiplist_entry::do_skip_gfile_p.  This exists as a
    separate function so that this function can be unit tested.
 
@@ -1183,14 +1129,11 @@ do_skip_gfile_p (const std::string &pattern, const compiled_regex &re,
      fullname lookup, check first against the symtab filename.  */
   if (!basenames_may_differ && !is_absolute_pattern)
     {
-      normalised_filename filename (get_filename ());
-
-      if (re.exec (filename.c_str (), 0, nullptr, 0) == 0)
+      if (re.exec (get_filename (), 0, nullptr, 0) == 0)
 	return true;
     }
 
-  normalised_filename fullname (get_fullname ());
-  return re.exec (fullname.c_str (), 0, nullptr, 0) == 0;
+  return re.exec (get_fullname (), 0, nullptr, 0) == 0;
 }
 
 bool
