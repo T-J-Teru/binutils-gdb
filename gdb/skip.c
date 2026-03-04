@@ -288,10 +288,6 @@ glob_bracket_expr::parse (const char *ptr)
      insensitive, this converts C to lower case.  */
   auto record_single_char = [&] (char c) -> void
   {
-#ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
-    c = c_tolower (c);
-#endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
-
 #ifdef HAVE_DOS_BASED_FILE_SYSTEM
     if (IS_DIR_SEPARATOR (c))
       c = '/';
@@ -338,25 +334,7 @@ glob_bracket_expr::parse (const char *ptr)
 	      if (p.first == p.second)
 		record_single_char (p.first);
 	      else
-		{
-		  char s = p.first;
-		  char e = p.second;
-
-#ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
-		  if (s >= 'A' && e <= 'Z')
-		    {
-		      gdb_assert (s <= e);
-		      s = c_tolower (s);
-		      e = c_tolower (e);
-		    }
-		  else if (s >= 'A' && s <= 'Z')
-		    s = ('A' - 1);
-		  else if (e >= 'A' && e <= 'Z')
-		    e = ('Z' + 1);
-#endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
-
-		  result.m_char_ranges.emplace_back (s, e);
-		}
+		result.m_char_ranges.push_back (std::move (p));
 	    }
 	  ptr += 2;
 	}
@@ -365,11 +343,6 @@ glob_bracket_expr::parse (const char *ptr)
 	  const char *end = strchr (ptr, ']');
 	  gdb_assert (end != nullptr);
 	  std::string cc (ptr, end - ptr + 1);
-#ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
-	  /* Character class names are all lower case.  */
-	  if (cc == "[:upper:]")
-	    cc = "[:lower:]";
-#endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
 	  if (character_class_matches_slash (cc))
 	    {
 	      /* We are converting a glob to a regexp and trying to
@@ -462,6 +435,17 @@ glob_bracket_expr::end () const
   gdb_assert (m_end != nullptr);
   return m_end;
 }
+
+/* When we convert a filename glob into a regular expression, these are
+   the flags to use.  If filenames are case insensitive then we add the
+   ICASE (ignore case) flag.  */
+
+static constexpr int file_glob_regexp_flags = (REG_NOSUB
+					       | REG_EXTENDED
+#ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
+					       | REG_ICASE
+#endif /* HAVE_CASE_INSENSITIVE_FILE_SYSTEM */
+					       );
 
 /* GLOB is the user supplied glob pattern as supplied to the 'skip -gfile
    GLOB' command.  This function builds and returns a regular expression
@@ -589,12 +573,7 @@ glob_to_regexp (const std::string& glob)
       else
 	{
 	  /* All other characters are passed through.  */
-	  char c = *ptr;
-
-#ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
-	  c = c_tolower (c);
-#endif
-	  result += c;
+	  result += *ptr;
 	}
     }
 
@@ -620,8 +599,7 @@ skiplist_entry::skiplist_entry (bool file_is_glob,
     {
       gdb_assert (!m_file.empty ());
       m_compiled_file_regexp.emplace (glob_to_regexp (m_file).c_str (),
-				      REG_NOSUB | REG_EXTENDED,
-				      _("regexp"));
+				      file_glob_regexp_flags, _("regexp"));
     }
 
   if (m_function_is_regexp)
@@ -1104,8 +1082,7 @@ skiplist_entry::do_skip_file_p (const symtab_and_line &function_sal) const
   return result;
 }
 
-#if defined HAVE_DOS_BASED_FILE_SYSTEM \
-  || defined HAVE_CASE_INSENSITIVE_FILE_SYSTEM
+#if defined HAVE_DOS_BASED_FILE_SYSTEM
 
 /* A class which takes a filename string and on DOS based file systems
    converts backslashes to forward slashes, and on case insensitive file
@@ -1120,14 +1097,8 @@ struct normalised_filename
     char *p = m_filename.data ();
     for (size_t i = 0; i < m_filename.size (); ++i)
       {
-#ifdef HAVE_DOS_BASED_FILE_SYSTEM
 	if (p[i] == '\\')
 	  p[i] = '/';
-#endif
-
-#ifdef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
-	p[i] = c_tolower (p[i]);
-#endif
       }
   }
 
@@ -1162,7 +1133,7 @@ private:
   const char *m_filename = nullptr;
 };
 
-#endif /* ! (HAVE_DOS_BASED_FILE_SYSTEM || HAVE_CASE_INSENSITIVE_FILE_SYSTEM) */
+#endif /* not HAVE_DOS_BASED_FILE_SYSTEM */
 
 /* The implementation of skiplist_entry::do_skip_gfile_p.  This exists as a
    separate function so that this function can be unit tested.
@@ -1778,7 +1749,7 @@ test_skip_gfile_matching ()
       if (run_verbose ())
 	debug_printf ("Regexp (%s)\n", file_re.c_str ());
 
-      compiled_regex re (file_re.c_str (), REG_NOSUB | REG_EXTENDED,
+      compiled_regex re (file_re.c_str (), file_glob_regexp_flags,
 			 _("regexp"));
 
       bool matched = do_skip_gfile_p (pattern, re,
