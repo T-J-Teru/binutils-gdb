@@ -1874,21 +1874,30 @@ lookup_selected_frame (struct frame_id a_frame_id, int frame_level)
       return;
     }
 
-  /* Nothing else to do, the frame layout really changed.  Select the
-     innermost stack frame.  */
-  select_frame (get_current_frame ());
+  /* We are unable to restore the required frame, so instead we'll
+     select the current (innermost) frame.  Do this before actually
+     setting the frame as print_stack_frame can make calls into
+     extension language hooks, which could invalidate the frame cache,
+     which will clear the selected frame.
 
-  /* Warn the user.  */
+     We only warn the user if we're trying to select something other
+     than frame #0 though, as the fallback is to just select the
+     current frame #0, even if it's different to the frame #0 we tried
+     to find (e.g. the frame-id changed).  */
   if (frame_level > 0 && !current_uiout->is_mi_like_p ())
     {
-      warning (_("Couldn't restore frame #%d in "
-		 "current thread.  Bottom (innermost) frame selected:"),
+      warning (_("Couldn't restore frame #%d in current thread.  "
+		 "Innermost frame selected:"),
 	       frame_level);
       /* For MI, we should probably have a notification about current
 	 frame change.  But this error is not very likely, so don't
 	 bother for now.  */
-      print_stack_frame (get_selected_frame (NULL), 1, SRC_AND_LOC, 1);
+      print_stack_frame (get_current_frame (), 1, SRC_AND_LOC, 1);
     }
+
+  /* We couldn't find the frame we were looking for, so just restore
+     the innermost frame instead.  */
+  select_frame (get_current_frame ());
 }
 
 bool
