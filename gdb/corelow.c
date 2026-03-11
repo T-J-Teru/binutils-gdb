@@ -405,12 +405,25 @@ core_target::build_file_mappings ()
   gdb::unordered_string_map<struct bfd *> bfd_map;
   gdb::unordered_set<std::string> unavailable_paths;
 
-  /* All files mapped into the core file.  The key is the filename.  */
+  /* All files mapped into the core file.  */
   std::vector<core_mapped_file> mapped_files
     = gdb_read_core_file_mappings (m_core_gdbarch, this->core_bfd ());
 
   for (const core_mapped_file &file_data : mapped_files)
     {
+      /* A mapping without a filename can still have a build-id.  Tracking
+	 these mappings is useful as when the shared libraries are loaded,
+	 if the shared library is within this anonymous region, we can
+	 validate the build-id of the shared library being loaded.  */
+      if (file_data.filename.empty ())
+	{
+	  gdb_assert (file_data.build_id != nullptr);
+	  std::vector<mem_range> ranges = file_data.mem_ranges ();
+	  m_mapped_file_info.add (nullptr, nullptr, nullptr,
+				  std::move (ranges), file_data.build_id);
+	  continue;
+	}
+
       /* If this mapped file is marked as the main executable then record
 	 the filename as we can use this later.  */
       if (file_data.is_main_exec && m_expected_exec_filename.empty ())
@@ -475,10 +488,6 @@ core_target::build_file_mappings ()
 	      gdb_assert (abfd != nullptr);
 	    }
 	}
-
-      std::vector<mem_range> ranges;
-      for (const core_mapped_file::region &region : file_data.regions)
-	ranges.emplace_back (region.start, region.end - region.start);
 
       if (expanded_fname == nullptr
 	  || abfd == nullptr
@@ -592,7 +601,7 @@ core_target::build_file_mappings ()
 	 libraries.  */
       if (file_data.build_id != nullptr)
 	{
-	  normalize_mem_ranges (&ranges);
+	  std::vector<mem_range> ranges = file_data.mem_ranges ();
 
 	  const char *actual_filename = nullptr;
 	  gdb::unique_xmalloc_ptr<char> soname;
@@ -1963,7 +1972,6 @@ mapped_file_info::add (const char *soname,
 		       const bfd_build_id *build_id)
 {
   gdb_assert (build_id != nullptr);
-  gdb_assert (expected_filename != nullptr);
 
   if (soname != nullptr)
     {
@@ -1983,13 +1991,17 @@ mapped_file_info::add (const char *soname,
 	m_soname_to_build_id_map[soname] = build_id;
     }
 
-  /* When the core file is initially opened and the mapped files are
-     parsed, we group the build-id information based on the file name.  As
-     a consequence, we should see each EXPECTED_FILENAME value exactly
-     once.  This means that each insertion should always succeed.  */
-  const auto inserted
-    = m_filename_to_build_id_map.emplace (expected_filename, build_id).second;
-  gdb_assert (inserted);
+  /* Ignore empty filenames.  */
+  if (expected_filename != nullptr)
+    {
+      /* When the core file is initially opened and the mapped files are
+	 parsed, we group the build-id information based on the file name.  As
+	 a consequence, we should see each EXPECTED_FILENAME value exactly
+	 once.  This means that each insertion should always succeed.  */
+      const auto inserted
+	= m_filename_to_build_id_map.emplace (expected_filename, build_id).second;
+      gdb_assert (inserted);
+    }
 
   /* Setup the reverse build-id to file name map.  */
   if (actual_filename != nullptr)
@@ -2135,9 +2147,19 @@ gdb_read_core_file_mappings (struct gdbarch *gdbarch, struct bfd *cbfd)
     [&] (ULONGEST start, ULONGEST end, ULONGEST file_ofs,
 	 const char *filename, const bfd_build_id *build_id)
       {
-	/* Architecture-specific read_core_mapping methods are expected to
-	   weed out non-file-backed mappings.  */
-	gdb_assert (filename != nullptr);
+	if (filename == nullptr)
+	  {
+	    /* A mapping without a filename MUST have a build-id, and the
+	       file_ofs MUST be 0, but the file_ofs is actually meaningless
+	       in this case.  */
+	    gdb_assert (build_id != nullptr);
+	    gdb_assert (file_ofs == 0);
+
+	    results.emplace_back ();
+	    results.back ().build_id = build_id;
+	    results.back ().regions.emplace_back (start, end, file_ofs);
+	    return;
+	  }
 
 	/* Add this mapped region to the data for FILENAME.  */
 	auto iter = mapped_files.find (filename);
