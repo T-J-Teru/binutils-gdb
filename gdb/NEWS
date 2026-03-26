@@ -66,6 +66,11 @@
   automatically set to UTF-8.  (Users can use the Windows 'chcp'
   command to change the output codepage of the console.)
 
+* In C++ GDB now accepts constructor-style expressions "TYPE (ARGS)"
+  when TYPE names a class, struct, or union in the current expression
+  context.  This allows objects to be constructed directly during
+  expression evalution.
+
 * New targets
 
 GNU/Linux/MicroBlaze (gdbserver) microblazeel-*linux*

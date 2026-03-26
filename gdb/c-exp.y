@@ -200,7 +200,7 @@ static void c_print_token (FILE *file, int type, YYSTYPE value);
 #endif
 %}
 
-%type <voidval> exp exp1 type_exp start variable qualified_name lcurly function_method
+%type <voidval> exp exp1 type_exp start variable qualified_name lcurly function_method typename_for_ctor
 %type <lval> rcurly
 %type <tval> type typebase scalar_type tag_name_or_complete
 %type <tvec> nonempty_typelist func_mod parameter_typelist
@@ -231,7 +231,7 @@ static void c_print_token (FILE *file, int type, YYSTYPE value);
 %token <ssym> NAME /* BLOCKNAME defined below to give it higher precedence. */
 %token <ssym> UNKNOWN_CPP_NAME
 %token <voidval> COMPLETE
-%token <tsym> TYPENAME
+%token <tsym> TYPENAME TYPENAME_CTOR
 %token <theclass> CLASSNAME	/* ObjC Class name */
 %type <sval> name
 %type <qval> qual_field_name field_name field_name_or_complete
@@ -532,6 +532,26 @@ msgarg	:	name ':' exp
 			{ add_msglist(0, 1);   }
 	|	',' exp	/* Variable number of args.  */
 			{ add_msglist(0, 0);   }
+	;
+
+exp	:	typename_for_ctor '('
+			{ pstate->start_arglist (); }
+		arglist ')'	%prec ARROW
+			{
+			  std::vector<operation_up> args
+			    = pstate->pop_vector (pstate->end_arglist ());
+			  operation_up type_op = pstate->pop ();
+			  pstate->push_new<funcall_operation>
+			    (std::move (type_op), std::move (args));
+			}
+	;
+
+exp	:	typename_for_ctor '(' ')'	%prec ARROW
+			{
+			  operation_up type_op = pstate->pop ();
+			  pstate->push_new<funcall_operation>
+			    (std::move (type_op), std::vector<operation_up> ());
+			}
 	;
 
 exp	:	exp '('
@@ -1473,6 +1493,12 @@ scalar_type:
 	|	SIGNED_KEYWORD
 			{ $$ = lookup_signed_typename (pstate->language (),
 						       "int"); }
+	;
+
+/* Constructor-style calls.  */
+typename_for_ctor
+	:	TYPENAME_CTOR
+			{ pstate->push_new<type_operation> ($1.type); }
 	;
 
 /* Implements (approximately): (type-qualifier)* type-specifier.
@@ -3118,6 +3144,34 @@ static int popping;
    built up.  */
 static auto_obstack name_obstack;
 
+/* Return TYPENAME_CTOR only when the next token is '(', so this
+   token is used solely for constructor calls.  Otherwise return TYPENAME.
+   NAME_END is the character just past the name (e.g. yylval.sval.ptr +
+   yylval.sval.length).  */
+
+static int
+typename_token_for (struct parser_state *par_state, struct type *type,
+		    const char *name_end)
+{
+  if (type == nullptr
+      || par_state->language ()->la_language != language_cplus)
+    return TYPENAME;
+  type = check_typedef (type);
+  if (type->code () != TYPE_CODE_STRUCT && type->code () != TYPE_CODE_UNION)
+    return TYPENAME;
+  /* Only return TYPENAME_CTOR when followed by '('.  */
+  if (name_end == nullptr)
+    return TYPENAME;
+  {
+    const char *p = name_end;
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+      ++p;
+    if (*p != '(')
+      return TYPENAME;
+  }
+  return TYPENAME_CTOR;
+}
+
 /* Classify a NAME token.  The contents of the token are in `yylval'.
    Updates yylval and returns the new token type.  BLOCK is the block
    in which lookups start; this can be NULL to mean the global scope.
@@ -3161,7 +3215,8 @@ classify_name (struct parser_state *par_state, const struct block *block,
 	  if (bsym.symbol != NULL)
 	    {
 	      yylval.tsym.type = bsym.symbol->type ();
-	      return TYPENAME;
+	      return typename_token_for (par_state, yylval.tsym.type,
+					 yylval.sval.ptr + yylval.sval.length);
 	    }
 	}
 
@@ -3188,7 +3243,8 @@ classify_name (struct parser_state *par_state, const struct block *block,
   if (bsym.symbol && bsym.symbol->loc_class () == LOC_TYPEDEF)
     {
       yylval.tsym.type = bsym.symbol->type ();
-      return TYPENAME;
+      return typename_token_for (par_state, yylval.tsym.type,
+				 yylval.sval.ptr + yylval.sval.length);
     }
 
   /* See if it's an ObjC classname.  */
@@ -3274,7 +3330,9 @@ classify_inner_name (struct parser_state *par_state,
       if (base_type != NULL)
 	{
 	  yylval.tsym.type = base_type;
-	  return TYPENAME;
+	  return typename_token_for (par_state, yylval.tsym.type,
+				     yylval.ssym.stoken.ptr
+				     + yylval.ssym.stoken.length);
 	}
 
       return ERROR;
@@ -3294,14 +3352,18 @@ classify_inner_name (struct parser_state *par_state,
 	if (base_type != NULL)
 	  {
 	    yylval.tsym.type = base_type;
-	    return TYPENAME;
+	    return typename_token_for (par_state, yylval.tsym.type,
+				       yylval.ssym.stoken.ptr
+				       + yylval.ssym.stoken.length);
 	  }
       }
       return ERROR;
 
     case LOC_TYPEDEF:
       yylval.tsym.type = yylval.ssym.sym.symbol->type ();
-      return TYPENAME;
+      return typename_token_for (par_state, yylval.tsym.type,
+				 yylval.ssym.stoken.ptr
+				 + yylval.ssym.stoken.length);
 
     default:
       return NAME;
@@ -3336,7 +3398,7 @@ handle_qualified_field_name (qualified_name_token token)
       int kind = classify_inner_name (pstate,
 				      pstate->expression_context_block,
 				      type);
-      if (kind != TYPENAME)
+      if (kind != TYPENAME && kind != TYPENAME_CTOR)
 	error (_("could not find type '%s'"), accum.c_str ());
 
       type = yylval.tsym.type;
@@ -3388,7 +3450,8 @@ yylex (void)
     current.token = classify_name (pstate, pstate->expression_context_block,
 				   is_quoted_name, last_lex_was_structop);
   if (pstate->language ()->la_language != language_cplus
-      || (current.token != TYPENAME && current.token != COLONCOLON
+      || (current.token != TYPENAME && current.token != TYPENAME_CTOR
+	  && current.token != COLONCOLON
 	  && current.token != FILENAME
 	  && (cpstate->assume_classification == TYPE_CODE_UNDEF
 	      || current.token != NAME))
@@ -3434,6 +3497,7 @@ yylex (void)
   else
     {
       gdb_assert (current.token == TYPENAME
+		  || current.token == TYPENAME_CTOR
 		  || cpstate->assume_classification != TYPE_CODE_UNDEF);
       search_block = pstate->expression_context_block;
       obstack_grow (&name_obstack, current.value.sval.ptr,
@@ -3464,7 +3528,8 @@ yylex (void)
 						  context_type);
 	  /* We keep going until we either run out of names, or until
 	     we have a qualified name which is not a type.  */
-	  if (classification != TYPENAME && classification != NAME)
+	  if (classification != TYPENAME && classification != TYPENAME_CTOR
+	      && classification != NAME)
 	    break;
 
 	  /* Accept up to this token.  */
@@ -3595,6 +3660,7 @@ c_print_token (FILE *file, int type, YYSTYPE value)
       break;
 
     case TYPENAME:
+    case TYPENAME_CTOR:
       parser_fprintf (file, "tsym<type=%s, name=%s>",
 		      value.tsym.type->safe_name (),
 		      copy_name (value.tsym.stoken).c_str ());

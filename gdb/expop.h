@@ -1597,6 +1597,11 @@ public:
 		   struct expression *exp,
 		   enum noside noside) override;
 
+  value *evaluate_funcall (struct type *expect_type,
+			   struct expression *exp,
+			   enum noside noside,
+			   const std::vector<operation_up> &args) override;
+
   enum exp_opcode opcode () const override
   { return OP_TYPE; }
 

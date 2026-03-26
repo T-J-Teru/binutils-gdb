@@ -1,0 +1,188 @@
+# Copyright (C) 2026 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This file is part of the gdb testsuite.
+
+# Test constructor calls and casting via inferior function calls:
+# - Simple struct S with constructor (int, default 0).
+# - Base and Derived; cast derived to base, construct Base from Derived.
+# - Typedef and using aliases: ctor resolution must use the class ctor even
+#   when the expression names a typedef or alias (DWARF may name types
+#   differently from the underlying class tag).
+# - swapcopy: two ints with a user-defined copy ctor that swaps them
+#   (non-trivially copyable); pass-by-value in inferior calls must run it.
+
+require allow_cplus_tests
+
+standard_testfile .cc
+
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile {debug c++}]} {
+    return -1
+}
+
+if {![runto_main]} {
+    return
+}
+
+# Run to stop-here to ensure all locals are initialized.
+gdb_breakpoint [gdb_get_line_number "stop-here"]
+gdb_continue_to_breakpoint "stop-here"
+
+# Simple tests involving "struct S".
+gdb_test "ptype S" [multi_line \
+    {type = struct S \{} \
+    {    int x;} \
+    "" \
+    {    S\(int\);} \
+    {    S operator\+\(int\) const;} \
+    {\}}]
+
+gdb_test "print s0" " = \\{x = 0\\}" "print s0 default ctor"
+gdb_test "print s1" " = \\{x = 42\\}" "print s1 with 42"
+gdb_test "print S(99)" " = \\{x = 99\\}" "construct S(99) via inferior function call"
+
+gdb_test "ptype swapcopy" [multi_line \
+    {type = struct swapcopy \{} \
+    {    int lo;} \
+    {    int hi;} \
+    "" \
+    {    swapcopy\(int, int\);} \
+    {    swapcopy\(const swapcopy ?&\);} \
+    {\}}]
+gdb_test "print swapcopy(1, 2)" { = \{lo = 1, hi = 2\}} \
+    "construct swapcopy via inferior function call"
+gdb_test {print swapcopy($)} {= \{lo = 2, hi = 1\}} \
+    "call copy ctor on object via history"
+gdb_test "print swapcopy_first_byval(swapcopy(10, 20))" "= 20" \
+    "pass-by-value copy ctor swaps members"
+gdb_test "print swapcopy_first_byval(swp)" "= 40" \
+    "swapcopy local passed by value uses copy ctor"
+
+gdb_test "print S_td(33)" " = \\{x = 33\\}" \
+    "construct S via typedef name (not underlying struct tag)"
+gdb_test "print S_u(34)" " = \\{x = 34\\}" "construct S via using alias"
+gdb_test "print Base_td(8)" { = \{x = 8\}} "construct Base via typedef name"
+gdb_test "print Base_u(9)" { = \{x = 9\}} "construct Base via using alias"
+gdb_test "print NS::NsBaseTd(5)" { = \{x = 5\}} \
+    "construct Base via typedef in namespace"
+gdb_test "print NS::NsBaseU(6)" { = \{x = 6\}} \
+    "construct Base via using alias in namespace"
+gdb_test "print NS::Derived_td(1, 2)" { = \{<Base> = \{x = 1\}, y = 2\}} \
+    "construct NS::Derived via typedef name"
+gdb_test "print NS::Derived_u(3, 4)" { = \{<Base> = \{x = 3\}, y = 4\}} \
+    "construct NS::Derived via using alias"
+gdb_test "print U_td(55)" { = \{x = 55\}} \
+    "construct global union U via typedef name"
+gdb_test "print NS::Nu_td(66)" { = \{a = 66\}} \
+    "construct NS::U via typedef name"
+
+# Tests involving "Base" and "Derived".
+set base_re [multi_line \
+    {type = struct Base \{} \
+    {    int x;} \
+    "" \
+    {    Base\(void\);} \
+    {    Base\(int\);} \
+    {    Base\(const Base ?&\);} \
+    {\}}]
+gdb_test "ptype Base" $base_re
+
+set derived_re [multi_line \
+    {type = class NS::Derived : public Base \{} \
+    {  public:} \
+    {    int y;} \
+    "" \
+    {    Derived\(void\);} \
+    {    Derived\(int, int\);} \
+    {\}}]
+gdb_test "ptype NS::Derived" $derived_re
+
+gdb_test "print d" { = \{<Base> = \{x = 0\}, y = 0\}}
+gdb_test "print d1" { = \{<Base> = \{x = 10\}, y = 20\}}
+gdb_test "print b" { = \{x = 0\}}
+gdb_test "print b1" { = \{x = 5\}}
+gdb_test "print b2" { = \{x = 10\}}
+gdb_test "print (Base)(d1)" { = \{x = 10\}} "cast (Base)(d1) slices to Base"
+gdb_test "print Base(d1)" { = \{x = 10\}} "construct Base(d1) from Derived"
+gdb_test "print Base()" { = \{x = 0\}} "construct Base() default"
+gdb_test "print Base(7)" { = \{x = 7\}} "construct Base(7) with argument"
+gdb_test "print NS::Derived()" { = \{<Base> = \{x = 0\}, y = 0\}} \
+    "construct NS::Derived() via inferior function call"
+gdb_test "print NS::Derived().y" " = 0" "construct NS::Derived() and access .y"
+gdb_test "print NS::Derived(1, 2)" { = \{<Base> = \{x = 1\}, y = 2\}} \
+    "construct NS::Derived(1, 2) via inferior function call"
+gdb_test "print NS::Derived(1, 2).y" " = 2" \
+    "construct NS::Derived(1, 2) and access .y"
+gdb_test "print ((Base)d1).x" " = 10" "cast ((Base)d1).x"
+
+# Print the types of these "temporary" objects.
+gdb_test "ptype Base()" $base_re "ptype of Base temporary"
+gdb_test "ptype NS::Derived(15, 25)" $derived_re \
+	"ptype of NS::Derived temporary"
+
+# Tests involving unions.
+gdb_test "ptype U" [multi_line \
+    {type = union U \{} \
+    {    int x;} \
+    "" \
+    {    U\(void\);} \
+    {    U\(int\);} \
+    {\}}] \
+    "ptype U"
+
+gdb_test "ptype NS::U" [multi_line \
+    {type = union NS::U \{} \
+    {    int a;} \
+    "" \
+    {    U\(void\);} \
+    {    U\(int\);} \
+    {\}}] \
+    "ptype NS::U"
+
+gdb_test "print u0" { = \{x = 0\}}
+gdb_test "print u1" { = \{x = 42\}}
+gdb_test "print uv0" { = \{a = 0\}}
+gdb_test "print uv1" { = \{a = 7\}}
+gdb_test "print U()" { = \{x = 0\}} "construct U() via inferior function call"
+gdb_test "print U(99)" { = \{x = 99\}} "construct U(99) via inferior function call"
+gdb_test "print U(99).x" " = 99" "construct U(99) and access .x"
+gdb_test "print NS::U()" { = \{a = 0\}} \
+    "construct NS::U() via inferior function call"
+gdb_test "print NS::U(13)" { = \{a = 13\}} \
+    "construct NS::U(13) via inferior function call"
+gdb_test "print NS::U(13).a" " = 13" \
+    "construct NS::U(13) and access .a"
+
+set u_re [multi_line \
+    {type = union U \{} \
+    {    int x;} \
+    "" \
+    {    U\(void\);} \
+    {    U\(int\);} \
+    {\}}]
+set ns_u_re [multi_line \
+    {type = union NS::U \{} \
+    {    int a;} \
+    "" \
+    {    U\(void\);} \
+    {    U\(int\);} \
+    {\}}]
+gdb_test "ptype U()" $u_re "ptype of U temporary"
+gdb_test "ptype NS::U(99)" $ns_u_re "ptype of NS::U temporary"
+
+gdb_test "p plus_one(U(42))" "= 43" "temporary in function call"
+gdb_test "p add(S(1), S(20))" "= 21" "add two temporaries of S"
+gdb_test "p plus_one(U(add (S(4), S(6))))" "= 11" \
+    "nested function call using temporaries"
