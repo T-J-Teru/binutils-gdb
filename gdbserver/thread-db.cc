@@ -178,14 +178,20 @@ find_one_thread (ptid_t ptid)
   td_err_e err = thread_db->td_ta_map_lwp2thr_p (thread_db->thread_agent, lwpid,
 						 &th);
   if (err != TD_OK)
-    error ("Cannot get thread handle for LWP %d: %s",
-	   lwpid, thread_db_err_str (err));
+    {
+      warning ("Cannot get thread handle for LWP %d: %s",
+	       lwpid, thread_db_err_str (err));
+      return 0;
+    }
 
   td_thrinfo_t ti;
   err = thread_db->td_thr_get_info_p (&th, &ti);
   if (err != TD_OK)
-    error ("Cannot get thread info for LWP %d: %s",
-	   lwpid, thread_db_err_str (err));
+    {
+      warning ("Cannot get thread info for LWP %d: %s",
+	       lwpid, thread_db_err_str (err));
+      return 0;
+    }
 
   threads_debug_printf ("Found thread %ld (LWP %d)",
 			(unsigned long) ti.ti_tid, ti.ti_lid);

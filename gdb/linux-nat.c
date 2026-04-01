@@ -1969,15 +1969,22 @@ linux_nat_target::follow_clone (ptid_t child_ptid)
   lwp_info *new_lp = add_lwp (child_ptid);
   new_lp->stopped = 1;
 
-  /* If the thread_db layer is active, let it record the user
-     level thread id and status, and add the thread to GDB's
-     list.  */
-  if (!thread_db_notice_clone (inferior_ptid, new_lp->ptid))
-    {
-      /* The process is not using thread_db.  Add the LWP to
-	 GDB's list.  */
-      add_thread (linux_target, new_lp->ptid);
-    }
+  /* If the thread_db layer is active, let it record the user level thread
+     id and status, and add the thread to GDB's list.  */
+  {
+    /* If the thread_db layer fails to record the thread, including if it
+       throws an error, then we should make sure GDB always adds the thread
+       to its data structures otherwise lots of things can go wrong.  For
+       example, GDB will not resume the thread, or if/when the thread
+       exits, GDB will be surprised and raise an assertion.  */
+    using scoped_add_thread = FORWARD_SCOPE_EXIT (add_thread);
+    scoped_add_thread add_thread_fallback (linux_target, new_lp->ptid);
+
+    /* If the thread_db layer successfully adopts the thread then we no
+       longer need our fallback to add the thread for us.  */
+    if (thread_db_notice_clone (inferior_ptid, new_lp->ptid))
+      add_thread_fallback.release ();
+  }
 
   /* We just created NEW_LP so it cannot yet contain STATUS.  */
   gdb_assert (new_lp->status == 0);

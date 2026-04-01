@@ -413,13 +413,19 @@ thread_from_lwp (thread_info *stopped, ptid_t ptid)
   err = info->td_ta_map_lwp2thr_p (info->thread_agent, ptid.lwp (),
 				   &th);
   if (err != TD_OK)
-    error (_("Cannot find user-level thread for LWP %ld: %s"),
-	   ptid.lwp (), thread_db_err_str (err));
+    {
+      warning (_("Cannot find user-level thread for LWP %ld: %s"),
+	       ptid.lwp (), thread_db_err_str (err));
+      return nullptr;
+    }
 
   err = info->td_thr_get_info_p (&th, &ti);
   if (err != TD_OK)
-    error (_("thread_get_info_callback: cannot get thread info: %s"),
-	   thread_db_err_str (err));
+    {
+      warning (_("thread_get_info_callback: cannot get thread info: %s"),
+	       thread_db_err_str (err));
+      return nullptr;
+    }
 
   /* Fill the cache.  */
   tp = stopped->inf->process_target ()->find_thread (ptid);
@@ -450,8 +456,8 @@ thread_db_notice_clone (ptid_t parent, ptid_t child)
   thread_info *parent_info = thread_from_lwp (stopped, parent);
   gdb_assert (parent_info == stopped);
 
-  thread_from_lwp (stopped, child);
-  return true;
+  thread_info *child_info = thread_from_lwp (stopped, child);
+  return child_info != nullptr;
 }
 
 static void *

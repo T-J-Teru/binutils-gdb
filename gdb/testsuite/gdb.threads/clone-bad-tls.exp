@@ -1,0 +1,326 @@
+# This testcase is part of GDB, the GNU debugger.
+
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This test creates a raw thread using a clone() call without going
+# through the pthread library.  Further, the thread that is created
+# deliberately sets its TLS pointer to NULL.  This used to cause
+# problems for GDB as GDB would fail to recognize the new thread,
+# which means no thread_info would be created, which would lead to
+# segfaults and assertion failures.
+#
+# When running this test on a remote target we do see some warnings
+# from gdbserver about failure to find the raw thread.  This is
+# because the thread is never owned by thread-db.  In a GDB only world
+# we don't warn about such threads, we just silently handle them.
+# Maybe we should do the same in gdbserver?  For now though, we just
+# ignore the warnings.  Functionally, gdbserver handles the raw thread
+# just fine, it just gives a warning each time we try to look it up in
+# thread-db (and fail).
+
+# This only works on targets with the Linux kernel, and the source
+# makes use of the clone call, which has a different API on IA64.
+require {!istarget "ia64-*-*"}
+require {istarget "*-*-linux*"}
+
+# The test executable will be compiled for the target, but we need to
+# test run it on the host.
+require {isnative}
+require {!is_remote host}
+
+standard_testfile
+
+# When debugging on a remote target GDB sees the thread as a full
+# thread, so we get the 'Thread ...' type message.  When using the
+# native linux target within GDB, as this thread is not owned by
+# thread-db we get a 'LWP ...' type message.  Setup a global to be
+# used in the test patterns below.
+if {[gdb_protocol_is_remote]} {
+    set raw_thread_re "Thread $::decimal\\.$::decimal"
+} else {
+    set raw_thread_re "LWP $::decimal"
+}
+
+# Restart GDB using TESTFILE, the basename of an executable.  Run to
+# the function 'do_raw_clone', which is where we start all the tests.
+# Then use BREAK_LINE_PATTERN to create a breakpoint on the matching
+# line.
+proc setup_for_test { testfile break_line_pattern } {
+    clean_restart $testfile
+
+    # Run until the do_raw_clone function.  By this point the pthread
+    # will have been created.
+    if {![runto do_raw_clone]} {
+	return
+    }
+
+    gdb_breakpoint [gdb_get_line_number $break_line_pattern]
+}
+
+# Use TESTFILE as the basename of the executable to run.  Place a
+# breakpoint after the creation of a raw thread, in the parent thread,
+# not the raw thread.  Run until the breakpoint is hit, check we see
+# the raw thread announced, and that the thread shows up in the 'info
+# threads' output.
+proc_with_prefix stop_after_creating_raw_thread { testfile } {
+    # Start GDB.  Run to do_raw_clone.  Place a breakpoint after the
+    # raw thread has been created.
+    setup_for_test $testfile "Break after raw thread created."
+
+    # Continue until the raw thread has been created.  Check we see
+    # the raw thread announced, and that we hit the expected breakpoint.
+    set saw_breakpoint_line false
+    set saw_source_line false
+    set saw_new_thread_line false
+    gdb_test_multiple "continue" "" {
+	-re "^\\\[New $::raw_thread_re \\(id 3\\)\\\]\r\n" {
+	    set saw_new_thread_line true
+	    exp_continue
+	}
+
+	-re "^Thread 1 \[^\r\n\]+ hit Breakpoint $::decimal, do_raw_clone \\(\\)\[^\r\n\]+\r\n" {
+	    set saw_breakpoint_line true
+	    exp_continue
+	}
+
+	-re "^$::decimal\\s+\[^\r\n\]+Break after raw thread created\\.\[^\r\n\]+\r\n" {
+	    set saw_source_line true
+	    exp_continue
+	}
+
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { $saw_breakpoint_line && $saw_source_line \
+			     && $saw_new_thread_line }  $gdb_test_name
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Ensure the raw thread shows up in the 'info threads' output.
+    gdb_test "info threads" \
+	"\r\n\\s+3\\s+$::raw_thread_re \[^\r\n\]+ clone_fn \\(arg=$::hex\\) \[^\r\n\]+"
+
+    gdb_test "thread 3"
+    gdb_test "bt"
+}
+
+# Use TESTFILE as the basename of the executable to run.  Place a
+# breakpoint within the raw thread function.  Run until the breakpoint
+# is hit, check we see the raw thread announced, the switch to the raw
+# thread, and that the thread shows up in the 'info threads' output.
+proc_with_prefix stop_in_raw_thread { testfile } {
+    setup_for_test $testfile "Break inside raw thread."
+
+    # Continue until the raw thread has been created.  Check we see
+    # the raw thread announced, and that we hit the expected breakpoint.
+    set saw_breakpoint_line false
+    set saw_source_line false
+    set saw_new_thread_line false
+    set saw_thread_switch false
+    gdb_test_multiple "continue" "" {
+	-re "^\\\[New $::raw_thread_re \\(id 3\\)\\\]\r\n" {
+	    set saw_new_thread_line true
+	    exp_continue
+	}
+
+	-re "^\\\[Switching to $::raw_thread_re\\\]\r\n" {
+	    set saw_thread_switch true
+	    exp_continue
+	}
+
+	-re "^Thread 3 \[^\r\n\]+ hit Breakpoint $::decimal, clone_fn \\(arg=$::hex\\)\[^\r\n\]+\r\n" {
+	    set saw_breakpoint_line true
+	    exp_continue
+	}
+
+	-re "^$::decimal\\s+\[^\r\n\]+Break inside raw thread\\.\[^\r\n\]+\r\n" {
+	    set saw_source_line true
+	    exp_continue
+	}
+
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { $saw_breakpoint_line && $saw_source_line \
+			     && $saw_thread_switch && $saw_new_thread_line } \
+		$gdb_test_name
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Ensure the raw thread shows up in the 'info threads' output.
+    gdb_test "info threads" \
+	"\r\n\\*\\s+3\\s+$::raw_thread_re \[^\r\n\]+ clone_fn \\(arg=$::hex\\) \[^\r\n\]+"
+}
+
+# Use TESTFILE as the basename of the executable to run.  Break before
+# the raw thread is created, set scheduler-locking mode on to stop GDB
+# setting the raw thread running, then step (using 'next') over the
+# creation of the raw thread.  Once we have stepped past the clone
+# turn scheduler-locking off again and run until the inferior exits,
+# we expect to see both the pthread and the raw thread exit.
+#
+# In broken GDB, in the delay build (no futex) when the inferior
+# exits, the raw thread will also exit.  GDB knows nothing about the
+# raw thread, and an assertion is triggered.
+#
+# In broken GDB, in futex mode the inferior will deadlock waiting on
+# the futex, this is because GDB doesn't know about the raw thread,
+# and never set it running again.  As such the futex condition
+# variable is never cleared, and so the inferior never exits.
+#
+# This should all now be fixed, GDB should see the raw thread
+# correctly, and the inferior should exit in both modes.
+proc_with_prefix next_over_raw_thread_creation { testfile } {
+    setup_for_test $testfile "Break before raw thread created."
+
+    gdb_continue_to_breakpoint "before raw thread created"
+
+    gdb_test_no_output "set scheduler-locking on"
+
+    set saw_thread_announced false
+    set reached_line_after_clone false
+    for { set i 0 } { $i < 10 } { incr i } {
+	gdb_test_multiple "next" "next, $i" {
+	    -re "^\\\[New $::raw_thread_re \\(id 3\\)\\\]\r\n" {
+		set saw_thread_announced true
+		exp_continue
+	    }
+
+	    -re "^$::decimal\\s+\[^\r\n\]+Immediately after the clone\\.\[^\r\n\]+\r\n" {
+		set reached_line_after_clone true
+		exp_continue
+	    }
+
+	    -re "^$::gdb_prompt " {
+		# Nothing.
+	    }
+
+	    -re "^\[^\r\n\]*\r\n" {
+		exp_continue
+	    }
+	}
+
+	if { $reached_line_after_clone } {
+	    break
+	}
+    }
+
+    gdb_assert { $reached_line_after_clone && $saw_thread_announced } \
+	"have passed clone and seen raw thread"
+
+    # Ensure the raw thread shows up in the 'info threads' output.
+    # Due to scheduler-locking the new thread will not have made any
+    # progress yet.  Having 'clone ()' in the expected output might be
+    # risky; on some targets it's possible this could show up as some
+    # other function name.
+    gdb_test "info threads" \
+	"\r\n\\s+3\\s+$::raw_thread_re \[^\r\n\]+ clone \\(\\) \[^\r\n\]+"
+
+    gdb_test_no_output "set scheduler-locking off"
+
+    # Run until the inferior exits.  We want to do this because if GDB
+    # failed to track the raw thread, then when the inferior exits the
+    # raw thread will also exit, and this thread exit event used to
+    # trigger an assertion in GDB.
+    set saw_raw_thread_exit false
+    set saw_pthread_exit false
+    set saw_inferior_exit false
+    gdb_test_multiple "continue" "continue to exit" {
+	-re "^\\\[$::raw_thread_re \\(id 3\\) exited\\\]\r\n" {
+	    set saw_raw_thread_exit true
+	    exp_continue
+	}
+
+	-re "^\\\[Thread \[^\r\n\]+ \\(id 2\\) exited\\\]\r\n" {
+	    set saw_pthread_exit true
+	    exp_continue
+	}
+
+	-re "^\\\[Inferior 1 \[^\r\n\]+ exited normally\\\]\r\n" {
+	    set saw_inferior_exit true
+	    exp_continue
+	}
+
+	-re "^$::gdb_prompt " {
+	    # Remote targets don't send thread exit events for every
+	    # thread when the entire inferior exits.  Maybe GDB itself
+	    # should synthesize these events?  For now though just
+	    # invert the state of the thread exit flags when testing
+	    # with a remote protocol.
+	    if {[gdb_protocol_is_remote]} {
+		set saw_raw_thread_exit [expr {!$saw_raw_thread_exit}]
+		set saw_pthread_exit [expr {!$saw_pthread_exit}]
+	    }
+
+	    gdb_assert { $saw_raw_thread_exit && $saw_pthread_exit \
+			     && $saw_inferior_exit } $gdb_test_name
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+}
+
+
+# Run the tests.
+foreach_with_prefix mode { delay futex } {
+    set the_testfile $testfile-$mode
+
+    set flags {debug pthreads}
+    if { $mode eq "futex" } {
+	lappend flags "additional_flags=-DUSE_FUTEX"
+    }
+
+    if {[build_executable "failed to build" $the_testfile $srcfile $flags]} {
+	return
+    }
+
+    # The test relies on setting the TLS pointer to NULL.  This is
+    # done to exercise error paths within GDB, not because this is
+    # something that users would normally be doing.
+    #
+    # For many targets, at least when this test was written, setting
+    # the TLS point to NULL is handled just fine (so long as not TLS
+    # data is accessed).  For example, on GNU/Linux for x86-64 this
+    # seems to work fine.  But on x86-64 when compiling with the
+    # '-m32' flag the clone syscall fails (with a NULL TLS pointer),
+    # and so the test will fail.
+    #
+    # Having compiled the test executable, run it, this should be
+    # pretty quick, and should exit with a zero exit code if the test
+    # runs successfully.  On targets where this doesn't run, skip the
+    # rest of this test.
+    #
+    # The only problem here is that when the test fails we don't want
+    # it to dump core, hence why we run with 'ulimit -c 0' in place.
+    set the_exec [standard_output_file $the_testfile]
+    set result [catch {exec /bin/sh -c "ulimit -c 0 && exec $the_exec"} output]
+    verbose -log "result is $result"
+    verbose -log "output is $output"
+    if {$result != 0} {
+	unresolved "test binary exited with non-zero exit code"
+	continue
+    }
+
+    stop_after_creating_raw_thread $the_testfile
+    stop_in_raw_thread $the_testfile
+    next_over_raw_thread_creation $the_testfile
+}
