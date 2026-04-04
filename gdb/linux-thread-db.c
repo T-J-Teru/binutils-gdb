@@ -440,12 +440,17 @@ thread_db_notice_clone (ptid_t parent, ptid_t child)
     return false;
 
   thread_info *stopped = linux_target->find_thread (parent);
-
-  thread_from_lwp (stopped, child);
+  gdb_assert (stopped != nullptr);
 
   /* If we do not know about the main thread's pthread info yet, this
-     would be a good time to find it.  */
-  thread_from_lwp (stopped, parent);
+     would be a good time to find it.  This should return the same
+     thread_info as STOPPED, but a side effect of this call is that the
+     pthread/thread-db information might have been filled in if it was not
+     already known.  */
+  thread_info *parent_info = thread_from_lwp (stopped, parent);
+  gdb_assert (parent_info == stopped);
+
+  thread_from_lwp (stopped, child);
   return true;
 }
 
