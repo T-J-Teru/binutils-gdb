@@ -891,6 +891,11 @@ extern void print_selected_inferior (struct ui_out *uiout);
 extern void switch_to_inferior_and_push_target
   (inferior *new_inf, bool no_connection, inferior *org_inf);
 
+/* A string like 'Switching to inferior ...' for use when switching
+   inferiors.  */
+
+extern std::string switching_inferior_message (inferior *inf);
+
 /* Return true if ID is a valid global inferior number.  */
 
 inline bool

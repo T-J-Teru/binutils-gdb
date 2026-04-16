@@ -9654,7 +9654,16 @@ normal_stop ()
 	  SWITCH_THRU_ALL_UIS ()
 	    {
 	      target_terminal::ours_for_output ();
-	      gdb_printf (_("[Switching to %s]\n"),
+	      if (previous_thread->ptid.pid ()
+		  != inferior_thread ()->ptid.pid ())
+		{
+		  std::string msg
+		    = switching_inferior_message (inferior_thread ()->inf);
+		  gdb_printf ("%s\n", msg.c_str ());
+		}
+
+	      gdb_printf (_("[Switching to thread %s (%s)]\n"),
+			  print_thread_id (inferior_thread ()),
 			  target_pid_to_str (inferior_ptid).c_str ());
 	      annotate_thread_changed ();
 	    }

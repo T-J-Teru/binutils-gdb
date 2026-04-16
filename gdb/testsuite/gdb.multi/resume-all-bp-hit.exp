@@ -1,0 +1,175 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Create two multi-threaded inferiors.  Create a breakpoint that
+# inferior 2 will hit, then select a thread in the first inferior.
+# Resume all inferiors and wait for the breakpoint to be hit.
+#
+# When GDB hits the breakpoint, GDB will switch to the inferior and
+# thread in which the breakpoint was hit.  Make sure that GDB actually
+# announces switchin inferior.
+
+require allow_multi_inferior_tests
+
+if {![gdb_protocol_is_native]} {
+    untested "the test is aimed at a native target"
+    return 0
+}
+
+standard_testfile
+
+set exec1 "${testfile}-1"
+set exec2 "${testfile}-2"
+set binfile1 [standard_output_file ${exec1}]
+set binfile2 [standard_output_file ${exec2}]
+
+# Build two executables from the same source.  The second is built
+# with -DIS_INFERIOR_2 so its secondary thread calls breakpt_func.
+with_test_prefix "inferior 1" {
+    if { [build_executable "failed to prepare" ${exec1} ${srcfile} \
+	      [list debug pthreads]] } {
+	return
+    }
+}
+
+with_test_prefix "inferior 2" {
+    if { [build_executable "failed to prepare" ${exec2} ${srcfile} \
+	      [list debug pthreads additional_flags=-DIS_INFERIOR_2]] } {
+	return
+    }
+}
+
+# ...
+proc run_test { test_thread } {
+    # Start inferior 1.
+    clean_restart $::exec1
+
+    if {![runto_main]} {
+	return
+    }
+
+    # Add and start inferior 2.
+    gdb_test "add-inferior" "Added inferior 2.*" "add inferior 2"
+    gdb_test "inferior 2" "Switching to inferior 2.*" "switch to inferior 2"
+    gdb_test "file $::binfile2" ".*" "load binary for inferior 2"
+
+    if {![runto_main]} {
+	return
+    }
+
+    # Both inferiors are now at main.  Set a breakpoint on
+    # all_threads_started and continue each inferior to that point,
+    # ensuring each inferior has two threads.
+    gdb_breakpoint "all_threads_started"
+
+    # Continue inferior 2 (the current inferior) to all_threads_started.
+    gdb_continue_to_breakpoint "inf 2 all threads started"
+
+    # Switch to inferior 1 and continue it to the same point.
+    gdb_test "inferior 1" "Switching to inferior 1.*" \
+	"switch to inferior 1"
+    gdb_continue_to_breakpoint "inf 1 all threads started"
+
+    # Verify we have four threads: two per inferior.
+    gdb_test "info threads" \
+	[multi_line \
+	     ".*1\\.1.*" \
+	     ".*1\\.2.*" \
+	     ".*2\\.1.*" \
+	     ".*2\\.2.*"] \
+	"four threads across two inferiors"
+
+    # Remove the synchronization breakpoint and set a breakpoint on
+    # breakpt_func.  This function only exists in inferior 2's binary
+    # and is only called by the secondary thread, so the breakpoint
+    # will only be hit in inferior 2's secondary thread.
+    delete_breakpoints
+    gdb_breakpoint "breakpt_func"
+
+    # Select a thread in inferior 1.
+    gdb_test "thread ${test_thread}" "Switching to thread [string_to_regexp $test_thread].*" \
+	"select thread $test_thread"
+
+    # Enable schedule-multiple so that continue resumes all inferiors.
+    gdb_test_no_output "set schedule-multiple on"
+
+    # When we hit the breakpoint in thread 2.2 we might see some
+    # "Switching to ..." messages from GDB.  Which messages we see
+    # depends on which thread is currently selected.
+    if { [string range $test_thread 0 0] eq "1" } {
+	# We start with inferior 1 selected.
+	set expect_switch_inferior true
+    } else {
+	# We start with inferior 2 selected.
+	set expect_switch_inferior false
+    }
+
+    if { [string range $test_thread 2 2] eq "1" } {
+	# We start with inferior 1 selected.  No matter which inferior
+	# we are in, we should see a "Switching to thread ..." message.
+	set expect_switch_thread true
+    } else {
+	# We start with thread 2 selected.  If we have inferior 1
+	# selected then we are switching 1.2 to 2.2, so we should see
+	# a "Switching to thread ..." message.  However, if we have
+	# 2.2 selected then there should be no such message.
+	set expect_switch_thread $expect_switch_inferior
+    }
+
+    # Resume all inferiors.  The secondary thread of inferior 2 should
+    # hit the breakpoint in breakpt_func.
+    set saw_switch_inferior false
+    set saw_switch_thread false
+    set saw_breakpoint_hit false
+    gdb_test_multiple "continue" "" {
+
+	-re "^\\\[Switching to inferior 2 \[^\r\n\]*\r\n" {
+	    set saw_switch_inferior true
+	    exp_continue
+	}
+
+	-re "^\\\[Switching to thread 2\\.2 \[^\r\n\]*\r\n" {
+	    set saw_switch_thread true
+	    exp_continue
+	}
+
+	-re "^Thread 2\\.2 \[^\r\n\]*hit Breakpoint $::decimal, breakpt_func \\(\\) at \[^\r\n\]*" {
+	    set saw_breakpoint_hit true
+	    exp_continue
+	}
+
+	-re "^$::gdb_prompt $" {
+	    gdb_assert { $expect_switch_inferior == $saw_switch_inferior } \
+		"$gdb_test_name, check inferior switch message"
+	    gdb_assert { $expect_switch_thread == $saw_switch_thread } \
+		"$gdb_test_name, check thread switch message"
+	    gdb_assert { $saw_breakpoint_hit } \
+		"$gdb_test_name, check hit breakpoint message"
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Verify GDB switched to the correct thread.
+    gdb_test "thread" \
+	"Current thread is 2\\.2 .*" \
+	"current thread is inferior 2 secondary thread"
+}
+
+foreach_with_prefix thr { 1.1 1.2 2.1 2.2 } {
+    run_test $thr
+}

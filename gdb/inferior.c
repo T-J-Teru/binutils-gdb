@@ -508,17 +508,27 @@ inferior_pid_to_str (int pid)
 
 /* See inferior.h.  */
 
+std::string
+switching_inferior_message (inferior *inf)
+{
+  const char *filename = inf->pspace->exec_filename ();
+
+  if (filename == nullptr)
+    filename = _("<noexec>");
+
+  return string_printf (_("[Switching to inferior %d [%s] (%s)]"),
+			inf->num, inferior_pid_to_str (inf->pid).c_str (),
+			filename);
+}
+
+/* See inferior.h.  */
+
 void
 print_selected_inferior (struct ui_out *uiout)
 {
   struct inferior *inf = current_inferior ();
-  const char *filename = inf->pspace->exec_filename ();
-
-  if (filename == NULL)
-    filename = _("<noexec>");
-
-  uiout->message (_("[Switching to inferior %d [%s] (%s)]\n"),
-		  inf->num, inferior_pid_to_str (inf->pid).c_str (), filename);
+  uiout->text (switching_inferior_message (inf));
+  uiout->text ("\n");
 }
 
 /* Helper for print_inferior.  Returns the 'connection-id' string for
