@@ -785,11 +785,17 @@ prune_threads (process_stratum_target *target)
 /* See gdbthreads.h.  */
 
 void
-delete_exited_threads (void)
+delete_exited_threads (process_stratum_target *target)
 {
   for (thread_info &tp : all_threads_safe ())
-    if (tp.state () == THREAD_EXITED)
-      delete_thread (&tp);
+    {
+      if (target != nullptr
+	  && tp.inf->process_target () != target)
+	continue;
+
+      if (tp.state () == THREAD_EXITED)
+	delete_thread (&tp);
+    }
 }
 
 /* Return true value if stack temporaries are enabled for the thread
@@ -2118,7 +2124,7 @@ thread_select (const char *tidstr, thread_info *tp)
 
   /* Since the current thread may have changed, see if there is any
      exited thread we can now delete.  */
-  delete_exited_threads ();
+  delete_exited_threads (nullptr);
 }
 
 /* Print thread and frame switch command response.  */
