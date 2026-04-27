@@ -1871,6 +1871,66 @@ type_operation::evaluate (struct type *expect_type, struct expression *exp,
     error (_("Attempt to use a type name as an expression"));
 }
 
+value *
+type_operation::evaluate_funcall (struct type *expect_type,
+				  struct expression *exp,
+				  enum noside noside,
+				  const std::vector<operation_up> &args)
+{
+  struct type *type = std::get<0> (m_storage);
+  type = check_typedef (type);
+
+  /* Constructor-style call Type(args) is only for C++ aggregate types.  */
+  gdb_assert (exp->language_defn->la_language == language_cplus);
+
+  const char *name = type->name ();
+  if (name == nullptr)
+    error (_("Cannot call constructor of unnamed type"));
+
+  /* Get the constructor name from the type name.  */
+  gdb::unique_xmalloc_ptr<char> ctor_name_ptr = cp_func_name (name);
+  const char *ctor_name =
+    (ctor_name_ptr != nullptr) ? ctor_name_ptr.get () : name;
+
+  if (!overload_resolution)
+    error (_("Constructor calls require 'overload-resolution' to be on"));
+
+  std::vector<value *> argvec (1 + args.size ());
+  value *this_ptr;
+  if (noside == EVAL_AVOID_SIDE_EFFECTS)
+    this_ptr = value::zero (lookup_pointer_type (type), lval_memory);
+  else
+    {
+      value *alloc_val = value_allocate_space_in_inferior (type->length ());
+      this_ptr = value_from_pointer (lookup_pointer_type (type),
+				     value_as_long (alloc_val));
+    }
+  argvec[0] = this_ptr;
+  for (size_t i = 0; i < args.size (); ++i)
+    argvec[i + 1] = args[i]->evaluate_with_coercion (exp, noside);
+  gdb::array_view<value *> arg_view = argvec;
+
+  value *callee = nullptr;
+  int static_memfuncp;
+  find_overload_match (arg_view, ctor_name, METHOD,
+		       &argvec[0], nullptr, &callee, nullptr,
+		       &static_memfuncp, 0, noside);
+  /* If find_overload_match fails, it will have already thrown an error.  */
+  gdb_assert (callee != nullptr);
+
+  /* C++ constructors are methods. If the found method is marked static,
+     treat it as an explicit failure until we have a real case.  */
+  if (static_memfuncp)
+    error (_("Constructor %s is unexpectedly marked static"), name);
+
+  if (noside == EVAL_AVOID_SIDE_EFFECTS)
+    return value::zero (type, not_lval);
+
+  evaluate_subexp_do_call (exp, noside, callee, arg_view,
+			   nullptr, expect_type);
+  return value_ind (this_ptr);
+}
+
 }
 
 /* A helper function for BINOP_ASSIGN_MODIFY.  */

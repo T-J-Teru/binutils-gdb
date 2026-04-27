@@ -1,0 +1,87 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Exercise the "Constructor %s is unexpectedly marked static" error in
+# type_operation::evaluate_funcall.
+
+load_lib dwarf.exp
+
+require dwarf2_support
+require allow_cplus_tests
+
+standard_testfile .c -dw.S
+
+set asm_file [standard_output_file $srcfile2]
+Dwarf::assemble $asm_file {
+    declare_labels int_label struct_label ptr_label ctor_subr_label
+
+    get_func_info dwarf_static_ctor_stub {nodebug c++}
+
+    cu {} {
+	compile_unit {
+	    DW_AT_language @DW_LANG_C_plus_plus
+	    DW_AT_name dw2-static-ctor-infcall.cc
+	    DW_AT_comp_dir /tmp
+	} {
+	    int_label: base_type {
+		DW_AT_name int
+		DW_AT_encoding @DW_ATE_signed
+		DW_AT_byte_size 4 DW_FORM_sdata
+	    }
+
+	    struct_label: structure_type {
+		DW_AT_name dwarf_static_ctor
+		DW_AT_byte_size 4 DW_FORM_sdata
+	    } {
+		member {
+		    DW_AT_name x
+		    DW_AT_type :$int_label
+		    DW_AT_data_member_location 0 data1
+		}
+		ptr_label: pointer_type {
+		    DW_AT_type :$struct_label
+		}
+		ctor_subr_label: subroutine_type {
+		    DW_AT_type :$int_label
+		} {
+		    formal_parameter {
+			DW_AT_type :$ptr_label
+		    }
+		}
+		subprogram {
+		    DW_AT_name dwarf_static_ctor
+		    DW_AT_external 1 flag
+		    DW_AT_low_pc $dwarf_static_ctor_stub_start addr
+		    DW_AT_high_pc $dwarf_static_ctor_stub_end addr
+		    DW_AT_type :$ctor_subr_label
+		}
+	    }
+	}
+    }
+}
+
+if {[prepare_for_testing "failed to prepare" ${testfile} \
+	 [list $srcfile $asm_file] {nodebug c++}]} {
+    return
+}
+
+if {![runto_main]} {
+    return
+}
+
+gdb_test_no_output "set language c++"
+
+gdb_test "print dwarf_static_ctor()" \
+    "Constructor dwarf_static_ctor is unexpectedly marked static"
