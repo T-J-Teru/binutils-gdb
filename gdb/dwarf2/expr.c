@@ -492,7 +492,8 @@ check_pieced_synthetic_pointer (const value *value, LONGEST bit_offset,
   piece_closure *c = (piece_closure *) value->computed_closure ();
   int i;
 
-  bit_offset += 8 * value->offset ();
+  bit_offset += (TARGET_CHAR_BIT
+		 * (value->offset () + value->embedded_offset ()));
   if (value->bitsize ())
     bit_offset += value->bitpos ();
 
@@ -537,8 +538,9 @@ indirect_pieced_value (value *value)
   if (type->code () != TYPE_CODE_PTR)
     return NULL;
 
-  int bit_length = 8 * type->length ();
-  LONGEST bit_offset = 8 * value->offset ();
+  int bit_length = TARGET_CHAR_BIT * type->length ();
+  LONGEST bit_offset
+    = (TARGET_CHAR_BIT * (value->offset () + value->embedded_offset ()));
   if (value->bitsize ())
     bit_offset += value->bitpos ();
 
@@ -602,22 +604,62 @@ coerce_pieced_ref (const value *value)
 {
   struct type *type = check_typedef (value->type ());
 
-  if (value->bits_synthetic_pointer (value->embedded_offset (),
-				     TARGET_CHAR_BIT * type->length ()))
+  if (value->bits_synthetic_pointer (0, TARGET_CHAR_BIT * type->length ()))
     {
       const piece_closure *closure
 	= (piece_closure *) value->computed_closure ();
       frame_info_ptr frame
 	= get_selected_frame (_("No frame selected."));
 
-      /* gdb represents synthetic pointers as pieced values with a single
-	 piece.  */
-      gdb_assert (closure != NULL);
-      gdb_assert (closure->pieces.size () == 1);
+      gdb_assert (closure != nullptr);
+
+      /* The value::bits_synthetic_pointer will return true if multiple
+	 pieces are used to cover VALUE, so long as each piece is
+	 DWARF_VALUE_IMPLICIT_POINTER.  I guess maybe this is possible, but
+	 we've not seen such a case in the wild yet.  For now then we look
+	 in CLOSURE for a single DWARF_VALUE_IMPLICIT_POINTER piece that
+	 covers VALUE.  */
+      LONGEST bit_offset = TARGET_CHAR_BIT * (value->embedded_offset ()
+					      + value->offset ());
+      if (value->bitsize ())
+	bit_offset += value->bitpos ();
+      int bit_length = TARGET_CHAR_BIT * type->length ();
+
+      const dwarf_expr_piece *piece = nullptr;
+      for (size_t i = 0; i < closure->pieces.size (); i++)
+	{
+	  const dwarf_expr_piece *p = &closure->pieces[i];
+	  size_t this_size_bits = p->size;
+
+	  if (bit_offset >= this_size_bits)
+	    {
+	      bit_offset -= this_size_bits;
+	      continue;
+	    }
+
+	  /* value::bits_synthetic_pointer does allow for multiple
+	     pieces to describe the location of a single synthetic
+	     pointer, or for a synthetic pointer to not start at the
+	     exact start of a piece, however, we don't currently
+	     support this case.  */
+	  if (bit_offset != 0 || bit_length != this_size_bits)
+	    error (_("unsupported value-piece configuration "
+		     "bit_offset = %s, bit_length = %d, this_size_bits = %s"),
+		   plongest (bit_offset), bit_length,
+		   pulongest (this_size_bits));
+
+	  piece = p;
+	  break;
+	}
+
+      /* If value::bits_synthetic_pointer returned true then we should have
+	 found a suitable piece.  */
+      gdb_assert (piece != nullptr);
+      gdb_assert (piece->location == DWARF_VALUE_IMPLICIT_POINTER);
 
       return indirect_synthetic_pointer
-	(closure->pieces[0].v.ptr.die_sect_off,
-	 closure->pieces[0].v.ptr.offset,
+	(piece->v.ptr.die_sect_off,
+	 piece->v.ptr.offset,
 	 closure->per_cu, closure->per_objfile, frame, type);
     }
   else
