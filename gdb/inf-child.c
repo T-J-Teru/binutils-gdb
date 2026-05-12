@@ -191,17 +191,21 @@ inf_child_target::close ()
 void
 inf_child_target::mourn_inferior ()
 {
+  /* Capture the inferior before calling generic_mourn_inferior, as
+     generic_mourn_inferior can trigger a change of the current inferior
+     via an extension language inferior exited event hook.  */
+  inferior *inf = current_inferior ();
   generic_mourn_inferior ();
-  maybe_unpush_target ();
+  maybe_unpush_target (inf);
 }
 
 /* See inf-child.h.  */
 
 void
-inf_child_target::maybe_unpush_target ()
+inf_child_target::maybe_unpush_target (inferior *inf)
 {
   if (!inf_child_explicitly_opened)
-    current_inferior ()->unpush_target (this);
+    inf->unpush_target (this);
 }
 
 bool
@@ -420,13 +424,7 @@ inf_child_target::follow_exec (inferior *follow_inf, ptid_t ptid,
   process_stratum_target::follow_exec (follow_inf, ptid, execd_pathname);
 
   if (orig_inf != follow_inf)
-    {
-      /* If the target was implicitly push in the original inferior, unpush
-	 it.  */
-      scoped_restore_current_thread restore_thread;
-      switch_to_inferior_no_thread (orig_inf);
-      maybe_unpush_target ();
-    }
+    maybe_unpush_target (orig_inf);
 }
 
 /* See inf-child.h.  */

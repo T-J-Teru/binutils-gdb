@@ -213,7 +213,7 @@ inf_ptrace_target::detach_success (inferior *inf)
   switch_to_no_thread ();
   detach_inferior (inf);
 
-  maybe_unpush_target ();
+  maybe_unpush_target (inf);
 }
 
 /* Kill the inferior.  */

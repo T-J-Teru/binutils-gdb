@@ -1,0 +1,195 @@
+# Copyright (C) 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test for PR gdb/29944.  In GDB set 'non-stop on', set
+# 'detach-on-fork off', and set 'schedule-multiple on'.
+#
+# Register a Python event handler for the exit event, when an exit
+# event arrives, switch to inferior 1.
+#
+# Run an inferior which forks, the child process exits, and then
+# parent process exits some time later.
+#
+# The bug was that GDB would unpush the target from inferior 1 instead
+# of inferior 2 (the one that actually exited).  When inferior 1 exits
+# later it has no process stratum target, and this triggers an
+# assertion.
+
+require allow_fork_tests
+require allow_python_tests
+
+load_lib gdb-python.exp
+
+standard_testfile
+
+if { [build_executable "build executable" ${testfile} ${srcfile}] } {
+    return
+}
+
+foreach_with_prefix non_stop { on off } {
+    save_vars { GDBFLAGS } {
+	append GDBFLAGS " -ex \"set detach-on-fork off\""
+	append GDBFLAGS " -ex \"set schedule-multiple on\""
+	append GDBFLAGS " -ex \"set non-stop $non_stop\""
+	clean_restart $testfile
+    }
+
+    if {![runto_main]} {
+	return
+    }
+
+    set before_output [capture_command_output "info inferiors" ""]
+
+    gdb_test_multiline "add exited listener" \
+	"python" "" \
+	"handler_ran = False" "" \
+	"def exit_handler(_):" "" \
+	"  global handler_ran" "" \
+	"  handler_ran = True" "" \
+	"  gdb.execute('inferior 1')" "" \
+	"gdb.events.exited.connect(exit_handler)" "" \
+	"end" ""
+
+    set lineno [gdb_get_line_number "/* Break here.  */"]
+    gdb_breakpoint $lineno
+
+    # Initial part of the test.  Resume inferior 1, this will fork a child
+    # process, which immediately exits.  The Python exit event will trigger,
+    # and GDB will switch back to inferior 1.  At this point we land back at
+    # a GDB prompt.
+    set saw_inferior_created false
+    set saw_inferior_exited false
+    set saw_inferior_selected false
+    set saw_thread_selected false
+    gdb_test_multiple "continue" "continue to inferior exit event" {
+	-re "^\\\[New inferior 2\[^\r\n\]*\\\]\r\n" {
+	    set saw_inferior_created true
+	    exp_continue
+	}
+
+	-re "^\\\[Inferior 2 \[^\r\n\]+exited normally\\\]\r\n" {
+	    set saw_inferior_exited true
+	    exp_continue
+	}
+
+	-re "^\\\[Switching to inferior 1\[^\r\n\]*\\\]\r\n" {
+	    set saw_inferior_selected true
+	    exp_continue
+	}
+
+	-re "^\\\[Switching to thread 1\\.1\[^\r\n\]*\\\]\\(running\\)\r\n" {
+	    # In all-stop (non-stop off) mode, this line is possibly a
+	    # little confusing; the inferior is marked as '(running)', but
+	    # by the time the prompt is displayed, the inferior will be
+	    # stopped.  This is a consequence of when the exit observer for
+	    # inferior 2 triggers.  If this is ever changed / fixed then the
+	    # above regexp will need changing, at least for all-stop mode.
+	    set saw_thread_selected true
+	    exp_continue
+	}
+
+	-re "^$gdb_prompt $" {
+	    gdb_assert { $saw_inferior_created && $saw_inferior_exited \
+			     && $saw_inferior_selected && $saw_thread_selected } \
+		$gdb_test_name
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Confirm the event handler ran.
+    gdb_test "python print(handler_ran)" "^True"
+
+    if { $non_stop eq "on" } {
+	set resume_cmd "set global_var = 1"
+	set re "\r\n\\*\\s+1\\s+\[^\r\n\]+\\(running\\)"
+    } else {
+	gdb_test_no_output "set global_var = 1"
+	set resume_cmd "continue"
+	set re "\r\n\\*\\s+1\\s+\[^\r\n\]+$hex in \[^\r\n\]+"
+    }
+
+    # This validates that the expected thread is selected.  In non-stop mode
+    # this also checks that the thread is still running.
+    gdb_test "info threads" $re
+
+    # Check that 'info inferiors' output is unchanged.  We are mostly
+    # checking that the 'connection' is unchanged.
+    set midway_output [capture_command_output "info inferiors" ""]
+    gdb_assert {$before_output eq $midway_output} \
+	"info inferiors output is unchanged at midway point"
+
+    # The second part of the test.  Send RESUME_CMD which will allow
+    # inferior 1 to progress to the 'breakpt' function, where a breakpoint
+    # will be hit and the inferior will stop again.
+    set saw_breakpoint_hit false
+    set saw_source_line false
+    set saw_prompt false
+    gdb_test_multiple $resume_cmd "continue to breakpoint" {
+	-re "^Thread $::decimal \[^\r\n\]*hit Breakpoint $::decimal, breakpt \\(\\) at \[^\r\n\]+\r\n" {
+	    set saw_breakpoint_hit true
+	    exp_continue
+	}
+
+	-re "^$lineno\\s+\[^\r\n\]+Break here\\.  \\*/\r\n" {
+	    set saw_source_line true
+
+	    if { $non_stop eq "on" } {
+		gdb_assert { $saw_inferior_created && $saw_inferior_exited \
+				 && $saw_inferior_selected && $saw_thread_selected \
+				 && $saw_breakpoint_hit && $saw_source_line } \
+		    $gdb_test_name
+	    } else {
+		exp_continue
+	    }
+	}
+
+	-re "^$gdb_prompt $" {
+	    set saw_prompt true
+	    # In all-stop (non-stop off) mode we expect to see a prompt
+	    # after hitting the breakpoint.
+	    #
+	    # In non-stop mode, the prompt is displayed immediately after
+	    # sending the RESUME_CMD (above).  Hitting the breakpoint is an
+	    # async background event, which is announced to the console.
+	    # The prompt is not redisplayed afterwards, that's why for
+	    # non-stop mode the test's exit point is after seeing the source
+	    # line.
+	    if { $non_stop eq "off" } {
+		gdb_assert { $saw_breakpoint_hit && $saw_source_line \
+				 && $saw_prompt } \
+		    $gdb_test_name
+	    } else {
+		exp_continue
+	    }
+	}
+
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Check GDB is still alive, plus in non-stop mode, get us back to a GDB
+    # prompt.
+    gdb_test "print 1" " = 1"
+
+    # Check that 'info inferiors' output is unchanged.  We are mostly
+    # checking that the 'connection' is unchanged.
+    set after_output [capture_command_output "info inferiors" ""]
+    gdb_assert {$before_output eq $after_output} \
+	"info inferiors output is unchanged at end of test"
+}

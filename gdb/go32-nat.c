@@ -773,8 +773,12 @@ go32_nat_target::mourn_inferior ()
 
   prog_has_started = 0;
 
+  /* Capture the inferior before calling generic_mourn_inferior, as
+     generic_mourn_inferior can trigger a change of the current inferior
+     via an extension language inferior exited event hook.  */
+  inferior *inf = current_inferior ();
   generic_mourn_inferior ();
-  maybe_unpush_target ();
+  maybe_unpush_target (inf);
 }
 
 /* Hardware watchpoint support.  */

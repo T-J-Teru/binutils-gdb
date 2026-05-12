@@ -2226,7 +2226,7 @@ gnu_nat_target::detach (inferior *inf, int from_tty)
   switch_to_no_thread ();
   detach_inferior (inf);
 
-  maybe_unpush_target ();
+  maybe_unpush_target (inf);
 }
 
 

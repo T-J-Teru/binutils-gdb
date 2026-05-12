@@ -1784,7 +1784,7 @@ procfs_target::detach (inferior *inf, int from_tty)
 
   switch_to_no_thread ();
   detach_inferior (inf);
-  maybe_unpush_target ();
+  maybe_unpush_target (inf);
 }
 
 static void
@@ -2594,9 +2594,12 @@ procfs_target::mourn_inferior ()
 	destroy_procinfo (pi);
     }
 
+  /* Capture the inferior before calling generic_mourn_inferior, as
+     generic_mourn_inferior can trigger a change of the current inferior
+     via an extension language inferior exited event hook.  */
+  inferior *inf = current_inferior ();
   generic_mourn_inferior ();
-
-  maybe_unpush_target ();
+  maybe_unpush_target (inf);
 }
 
 /* When GDB forks to create a runnable inferior process, this function

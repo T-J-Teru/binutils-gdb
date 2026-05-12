@@ -95,13 +95,14 @@ public:
   bool can_use_agent () override;
 
 protected:
-  /* Unpush the target if it wasn't explicitly open with "target native"
-     and there are no live inferiors left.  Note: if calling this as a
-     result of a mourn or detach, the current inferior shall already
-     have its PID cleared, so it isn't counted as live.  That's usually
-     done by calling either generic_mourn_inferior or
+  /* Unpush the target from inferior INF if it wasn't explicitly open with
+     "target native" and there are no live inferiors left.
+
+     Note: if calling this as a result of a mourn or detach, INF shall
+     already have its PID cleared, so it isn't counted as live.
+     That's usually done by calling either generic_mourn_inferior or
      detach_inferior.  */
-  void maybe_unpush_target ();
+  void maybe_unpush_target (inferior *inf);
 };
 
 /* Convert the host wait(2) status to a target_waitstatus.  */

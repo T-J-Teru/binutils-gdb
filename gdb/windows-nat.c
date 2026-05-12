@@ -2427,7 +2427,7 @@ windows_nat_target::detach (inferior *inf, int from_tty)
 
   windows_process->process_id = 0;
 
-  maybe_unpush_target ();
+  maybe_unpush_target (inf);
 }
 
 /* The pid_to_exec_file target_ops method for this platform.  */
