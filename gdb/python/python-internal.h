@@ -1385,5 +1385,6 @@ py_notimplemented ()
 #undef Py_RETURN_NOTIMPLEMENTED
 
 #include "py-wrappers.h"
+#include "py-safety.h"
 
 #endif /* GDB_PYTHON_PYTHON_INTERNAL_H */
