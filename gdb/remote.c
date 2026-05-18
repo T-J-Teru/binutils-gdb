@@ -5165,6 +5165,7 @@ remote_target::print_one_stopped_thread (thread_info *thread)
 
   /* For "info program".  */
   set_last_target_status (this, thread->ptid, ws);
+  update_previous_thread ();
 
   if (ws.kind () == TARGET_WAITKIND_STOPPED)
     {
