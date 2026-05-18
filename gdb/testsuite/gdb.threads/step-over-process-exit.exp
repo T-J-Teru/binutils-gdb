@@ -35,6 +35,11 @@ if { [prepare_for_testing "failed to prepare" $testfile $srcfile {debug pthread}
 # thread, or "other" for the non-main thread.
 
 proc test {which} {
+    if {$which == "other"} {
+	# The failure from the first iteration prevents
+	# the second iteration to run.
+	setup_kfail "gdb/34142" "*-*-*"
+    }
     if {![runto_main]} {
 	return -1
     }
@@ -48,6 +53,7 @@ proc test {which} {
 
     set target_non_stop [is_target_non_stop]
 
+    setup_kfail "gdb/34142" "*-*-*"
     gdb_test_multiple "next" "" {
 	-re -wrap "$::inferior_exited_re normally\\\]" {
 	    pass $gdb_test_name
