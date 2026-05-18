@@ -8363,6 +8363,20 @@ remote_target::remote_notif_remove_queued_reply (ptid_t ptid)
 			    {
 			      return event->ptid.matches (ptid);
 			    });
+
+  /* Match process events if PTID is a thread and there is no matching event
+     queued.  Prioritize thread events to preserve the existing behavior.  */
+  if (iter == rs->stop_reply_queue.end ()
+      && ptid != minus_one_ptid
+      && !ptid.is_pid ())
+    iter = std::find_if (rs->stop_reply_queue.begin (),
+			 rs->stop_reply_queue.end (),
+			 [=] (const stop_reply_up &event)
+			 {
+			   return (event->ptid.is_pid ()
+			     && event->ptid.pid () == ptid.pid ());
+			 });
+
   stop_reply_up result;
   if (iter != rs->stop_reply_queue.end ())
     {
