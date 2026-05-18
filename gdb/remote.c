@@ -5237,12 +5237,13 @@ remote_target::process_initial_stop_replies (int from_tty)
 	  ws.set_stopped (sig);
 	}
 
+      set_internal_state (this, event_ptid, THREAD_INT_STOPPED);
+      set_state (this, event_ptid, THREAD_STOPPED);
+
       if (ws.kind () != TARGET_WAITKIND_STOPPED
 	  || ws.sig () != GDB_SIGNAL_0)
 	evthread->set_pending_waitstatus (ws);
 
-      set_internal_state (this, event_ptid, THREAD_INT_STOPPED);
-      set_state (this, event_ptid, THREAD_STOPPED);
       get_remote_thread_info (evthread)->set_not_resumed ();
     }
 
