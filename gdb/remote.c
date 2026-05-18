@@ -1442,6 +1442,8 @@ public: /* Remote specific methods.  */
 
   void check_binary_download (CORE_ADDR addr);
 
+  bool always_non_stop_p () override;
+
   target_xfer_status remote_write_bytes_aux (const char *header,
 					     CORE_ADDR memaddr,
 					     const gdb_byte *myaddr,
@@ -9875,6 +9877,16 @@ remote_target::check_binary_download (CORE_ADDR addr)
 	break;
       }
     }
+}
+
+/* Determine whether the remote target natively operates in non-stop mode.
+   Returns true if the target announced QNonStop support for asynchronous
+   execution and stop notifications.  */
+
+bool
+remote_target::always_non_stop_p ()
+{
+  return m_features.packet_support (PACKET_QNonStop) == PACKET_ENABLE;
 }
 
 /* Helper function to resize the payload in order to try to get a good
