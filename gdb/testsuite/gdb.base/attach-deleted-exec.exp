@@ -45,26 +45,29 @@ clean_restart
 
 # Attach.  GDB should spot that the executable is gone and fallback to
 # use /proc/PID/exe.
-set test "attach to process with deleted executable"
-set re \
-    [multi_line \
-	 "Attaching to process $decimal" \
-	 "Reading symbols from (\[^\r\n\]+)[string_to_regexp ...]" \
-	 ".*"]
-set filename ""
-gdb_test_multiple "attach $testpid" $test {
-    -re -wrap $re {
-	set filename $expect_out(1,string)
-	pass $gdb_test_name
+set attached_pid "no pid"
+gdb_test_multiple "attach $testpid" "attach to process with deleted executable" {
+    -re "Attaching to process $decimal\r\n" {
+	exp_continue
     }
-}
-
-set test "filename /proc/PID/exe"
-set re_nfs \[^\r\n\]+[string_to_regexp /.nfs]\[^\r\n\]+
-if { [regexp $re_nfs $filename] } {
-    unsupported $test
-} else {
-    gdb_assert { [string equal $filename /proc/${testpid}/exe] } $test
+    -re "\\\[New Thread \[^\r\n\]+\\\]\r\n" {
+	# Non-stop targets may emit async thread notifications.
+	exp_continue
+    }
+    -re "Reading symbols from /proc/($decimal)/exe[string_to_regexp ...]" {
+	set attached_pid $expect_out(1,string)
+	exp_continue
+    }
+    -re "Reading symbols from (\[^\r\n\]+[string_to_regexp /.nfs]\[^\r\n\]*)[string_to_regexp ...]" {
+	unsupported $gdb_test_name
+	return
+    }
+    -re "Reading symbols from \[^\r\n\]+[string_to_regexp ...]\r\n" {
+	exp_continue
+    }
+    -re -wrap "" {
+	gdb_assert { $attached_pid == $testpid } $gdb_test_name
+    }
 }
 
 # Restart GDB.
@@ -99,12 +102,18 @@ if { [target_info gdb_protocol] == "extended-remote" } {
 
 verbose -log "APB: warning: No executable has been specified, and target executable $filename_re could not be found\\.  Try using the \"file\" command\\."
 
-gdb_test "attach $testpid" \
-    [multi_line \
-	 "Attaching to process $decimal" \
-	 "warning: No executable has been specified, and target executable $filename_re could not be found\\.  Try using the \"file\" command\\." \
-	 ".*"] \
-    "attach to inferior"
+gdb_test_multiple "attach $testpid" "attach to inferior" {
+    -re "Attaching to process $decimal\r\n" {
+	exp_continue
+    }
+    -re "\\\[New Thread \[^\r\n\]+\\\]\r\n" {
+	# Non-stop targets may emit async thread notifications.
+	exp_continue
+    }
+    -re -wrap "warning: No executable has been specified, and target executable $filename_re could not be found\\.  Try using the \"file\" command\\..*" {
+	pass $gdb_test_name
+    }
+}
 
 # Check GDB hasn't managed to load an executable.
 gdb_test "info inferior" \
