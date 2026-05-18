@@ -1290,7 +1290,8 @@ record_full_wait_1 (struct target_ops *ops,
 				    "Process record: record_full_wait "
 				    "issuing one more step in the "
 				    "target beneath\n");
-		      ops->beneath ()->resume (ptid, step, GDB_SIGNAL_0);
+		      ops->beneath ()->resume (inferior_ptid, step,
+					       GDB_SIGNAL_0);
 		      proc_target->commit_resumed_state = true;
 		      proc_target->commit_resumed ();
 		      proc_target->commit_resumed_state = false;
