@@ -138,10 +138,14 @@ def _cont(event):
         log("_suppress_cont case")
         _suppress_cont = False
     else:
+        thread = gdb.selected_thread()
+
+        # We may not have a selected thread if the target is running in
+        # non-stop mode.  Default to '0' in this case.
         send_event(
             "continued",
             {
-                "threadId": gdb.selected_thread().global_num,
+                "threadId": thread.global_num if thread else 0,
                 "allThreadsContinued": True,
             },
         )
@@ -213,9 +217,11 @@ def _on_stop(event):
     if hasattr(event, "details"):
         log("   details: " + repr(event.details))
     obj = {
-        "threadId": gdb.selected_thread().global_num,
         "allThreadsStopped": True,
     }
+    # The thread-id parameter is optional for stopped events.
+    if gdb.selected_thread():
+        obj["threadId"] = gdb.selected_thread().global_num
     if isinstance(event, gdb.BreakpointEvent):
         obj["hitBreakpointIds"] = [x.number for x in event.breakpoints]
     if hasattr(event, "details") and "finish-value" in event.details:
@@ -266,11 +272,14 @@ def _on_inferior_call(event):
         if not _infcall_was_running and inferior_running:
             inferior_running = False
             obj = {
-                "threadId": gdb.selected_thread().global_num,
                 "allThreadsStopped": True,
                 # DAP says any string is ok.
                 "reason": "function call",
             }
+            # The thread-id parameter is optional for stopped events.
+            if gdb.selected_thread():
+                obj["threadId"] = gdb.selected_thread().global_num
+
             global _expected_pause
             _expected_pause = False
             send_event("stopped", obj)
