@@ -8314,17 +8314,20 @@ remote_target::discard_pending_stop_replies (struct inferior *inf)
 
   /* Discard the stop replies we have already pulled with
      vStopped.  */
-  auto iter = std::remove_if (rs->stop_reply_queue.begin (),
-			      rs->stop_reply_queue.end (),
-			      [=] (const stop_reply_up &event)
-			      {
-				return event->ptid.pid () == inf->pid;
-			      });
-  for (auto it = iter; it != rs->stop_reply_queue.end (); ++it)
-    remote_debug_printf
-      ("discarding queued stop reply: ptid: %s, ws: %s\n",
-       (*it)->ptid.to_string().c_str(),
-       (*it)->ws.to_string ().c_str ());
+  auto iter
+    = std::remove_if (rs->stop_reply_queue.begin (),
+		      rs->stop_reply_queue.end (),
+		      [=] (const stop_reply_up &event)
+		      {
+			if (event->ptid.pid () != inf->pid)
+			  return false;
+
+			remote_debug_printf
+			  ("discarding queued stop reply: ptid: %s, ws: %s\n",
+			   event->ptid.to_string ().c_str (),
+			   event->ws.to_string ().c_str ());
+			return true;
+		      });
   rs->stop_reply_queue.erase (iter, rs->stop_reply_queue.end ());
 }
 
