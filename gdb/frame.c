@@ -619,7 +619,7 @@ skip_tailcall_frames (const frame_info_ptr &initial_frame)
 static void
 compute_frame_id (const frame_info_ptr &fi)
 {
-  FRAME_SCOPED_DEBUG_ENTER_EXIT;
+  FRAME_SCOPED_DEBUG_START_END ("fi=%d", fi->level);
 
   gdb_assert (fi->this_id.p == frame_id_status::NOT_COMPUTED);
 
@@ -629,8 +629,6 @@ compute_frame_id (const frame_info_ptr &fi)
     {
       /* Mark this frame's id as "being computed.  */
       fi->this_id.p = frame_id_status::COMPUTING;
-
-      frame_debug_printf ("fi=%d", fi->level);
 
       /* Find the unwinder.  */
       if (fi->unwind == NULL)
@@ -674,6 +672,8 @@ get_frame_id (const frame_info_ptr &fi)
 
   if (fi->this_id.p == frame_id_status::NOT_COMPUTED)
     {
+      FRAME_SCOPED_DEBUG_START_END ("fi=%d", fi->level);
+
       /* If we haven't computed the frame id yet, then it must be that
 	 this is the current frame.  Compute it now, and stash the
 	 result.  The IDs of other frames are computed as soon as
@@ -2349,7 +2349,7 @@ get_prev_frame_maybe_check_cycle (const frame_info_ptr &this_frame)
 static frame_info_ptr
 get_prev_frame_always_1 (const frame_info_ptr &this_frame)
 {
-  FRAME_SCOPED_DEBUG_ENTER_EXIT;
+  FRAME_SCOPED_DEBUG_START_END ("fi=%d", this_frame->level);
 
   gdb_assert (this_frame != NULL);
 
@@ -2553,6 +2553,8 @@ get_prev_frame_always_1 (const frame_info_ptr &this_frame)
 frame_info_ptr
 get_prev_frame_always (const frame_info_ptr &this_frame)
 {
+  FRAME_SCOPED_DEBUG_START_END ("fi=%d", this_frame->level);
+
   frame_info_ptr prev_frame = NULL;
 
   try
@@ -2729,7 +2731,7 @@ inside_entry_func (const frame_info_ptr &this_frame)
 frame_info_ptr
 get_prev_frame (const frame_info_ptr &this_frame)
 {
-  FRAME_SCOPED_DEBUG_ENTER_EXIT;
+  FRAME_SCOPED_DEBUG_START_END ("fi=%d", this_frame->level);
 
   std::optional<CORE_ADDR> frame_pc;
 
