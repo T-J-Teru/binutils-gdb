@@ -1,0 +1,115 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# ....
+
+load_lib gdb-python.exp
+
+standard_testfile .c -lib1.c -lib2.c
+
+# Build the first shared library.
+set lib1_testfile "lib1-${testfile}.so"
+set lib1_srcfile $srcfile2
+set lib1_binfile [standard_output_file $lib1_testfile]
+if { [build_executable "build $lib1_testfile" $lib1_testfile $lib1_srcfile \
+	  {debug build-id shlib}] } {
+    return
+}
+
+# Build the second shared library.
+set lib2_testfile "lib2-${testfile}.so"
+set lib2_srcfile $srcfile3
+set lib2_binfile [standard_output_file $lib2_testfile]
+if { [build_executable "build $lib2_testfile" $lib2_testfile $lib2_srcfile \
+	  {debug build-id shlib}] } {
+    return
+}
+
+if { [build_executable "build executable" $testfile $srcfile \
+	  [list debug build-id shlib=$lib1_binfile \
+	       shlib=$lib2_binfile]] != 0 } {
+    return
+}
+
+set remote_python_file [gdb_remote_download host ${srcdir}/${subdir}/${testfile}.py]
+
+clean_restart
+
+proc test { flush_levels } {
+    clean_restart $::testfile
+
+    if {![runto_main]} {
+	return
+    }
+
+    gdb_test_no_output "source $::remote_python_file" "load python file"
+
+    set expected_failure_level -1
+    set counter 0
+    foreach lvl $flush_levels {
+	incr counter
+	with_test_prefix "setup step $counter" {
+	    gdb_test_no_output "python flush_cache_at_levels\[$lvl\] \
+				  = flush_cache_at_levels.get($lvl, 0) + 1" \
+		"setup step $counter, prepare for cache flush at level $lvl"
+	    set times [get_python_valueof "flush_cache_at_levels\[$lvl\]" \
+			   UNKNOWN "get flush count for level $lvl"]
+	    if { $times > 1 && ($lvl < $expected_failure_level \
+				    || $expected_failure_level == -1) } {
+		set expected_failure_level $lvl
+	    }
+	}
+    }
+
+    gdb_breakpoint [gdb_get_line_number "Break here." $::srcfile]
+
+    gdb_continue_to_breakpoint "breakpoint in f0"
+
+    set full_bt_regexp \
+	[list "#0  f0 \\(\\) at \[^\r\n\]+" \
+	      "#1  0x0000000000401150 in f1 \\(\\) at \[^\r\n\]+" \
+	      "#2  0x00007ffff7fc010b in library2_function \\(cb=$::hex <f1>\\) at \[^\r\n\]+" \
+	      "#3  0x0000000000401161 in f3 \\(\\) at \[^\r\n\]+" \
+	      "#4  0x00007ffff7fc510b in library1_function \\(cb=$::hex <f3>\\) at \[^\r\n\]+" \
+	      "#5  0x0000000000401172 in f5 \\(\\) at \[^\r\n\]+" \
+	      "#6  0x000000000040117e in main \\(\\) at \[^\r\n\]+"]
+
+    set lvl 0
+    set re {}
+    foreach line $full_bt_regexp {
+	if { $lvl == $expected_failure_level } {
+	    lappend re "frame cache repeatedly reinitialized"
+	    break
+	}
+
+	lappend re $line
+	incr lvl
+    }
+
+    if { [llength $re] > 1 } {
+	set re [multi_line {*}$re]
+    } else {
+	set re [lindex $re 0]
+    }
+
+    gdb_test "bt" $re "check backtrace"
+}
+
+# Each LEVEL_LIST is a list of the frame levels at which the frame
+# cache should be flushed.  The frame cache will be flush once for
+# each occurance of a frame level within a list.
+foreach_with_prefix level_list { {} {0} {1} {2} {3} {4} {5} {6} {2 4} {0 1 2 3 4 5 6} {4 4} } {
+    test $level_list
+}
