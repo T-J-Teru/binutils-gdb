@@ -104,6 +104,13 @@ using And = std::conjunction<T...>;
 /* Concepts-light-like helper to make SFINAE logic easier to read.  */
 template<typename Condition>
 using Requires = typename std::enable_if<Condition::value, void>::type;
+
+/* Type trait that can be used to ensure an argument pack contains only
+   constant arguments.  */
+template <typename... Args>
+struct all_args_are_const
+  : std::bool_constant<(std::is_const_v<std::remove_reference_t<Args>> && ...)>
+{ /* Nothing.  */ };
 }
 
 template<typename T>

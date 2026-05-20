@@ -97,6 +97,14 @@ static frame_info_ptr selected_frame;
 
 static frame_info_ptr sentinel_frame;
 
+/* When nonzero, reinit_frame_cache is deferred: frame_info objects
+   are kept alive so that mid-operation code (e.g. the DWARF unwinder
+   computing a frame ID) does not encounter freed memory.  */
+static unsigned int defer_reinit_frame_cache_depth = 0;
+
+/* Set when reinit_frame_cache was requested while deferred.  */
+static bool defer_reinit_frame_cache_pending = false;
+
 /* See frame.h.  */
 
 unsigned int
@@ -422,6 +430,100 @@ scoped_restore_selected_frame::~scoped_restore_selected_frame ()
 {
   restore_selected_frame (m_fid, m_level);
   set_language (m_lang);
+}
+
+/* RAII class to defer reinit_frame_cache calls.  While an instance of
+   this class is alive, calls to reinit_frame_cache are deferred: the
+   frame cache is not cleared and frame_info objects remain valid.
+   When the last instance goes out of scope, a single
+   reinit_frame_cache call is made if any were deferred.
+
+   This is used during deferred debuginfo downloads to prevent the
+   frame cache from being destroyed mid-operation (e.g. while the
+   DWARF unwinder is computing a frame ID).  */
+
+class scoped_defer_reinit_frame_cache
+{
+public:
+  scoped_defer_reinit_frame_cache ()
+  {
+    defer_reinit_frame_cache_depth++;
+  }
+
+  ~scoped_defer_reinit_frame_cache ()
+  {
+    gdb_assert (defer_reinit_frame_cache_depth > 0);
+    defer_reinit_frame_cache_depth--;
+
+    if (defer_reinit_frame_cache_depth == 0
+	&& defer_reinit_frame_cache_pending)
+    {
+      frame_debug_printf ("performing deferred frame cache reinit");
+      defer_reinit_frame_cache_pending = false;
+      reinit_frame_cache ();
+    }
+  }
+
+  bool will_trigger_reinit () const
+  {
+    gdb_assert (defer_reinit_frame_cache_depth > 0);
+    return this->has_pending_reinit () && defer_reinit_frame_cache_depth == 1;
+  }
+
+  bool has_pending_reinit () const
+  {
+    gdb_assert (defer_reinit_frame_cache_depth > 0);
+    return defer_reinit_frame_cache_pending;
+  }
+
+  DISABLE_COPY_AND_ASSIGN (scoped_defer_reinit_frame_cache);
+};
+
+/* Call Func passing in Args while a scoped_defer_reinit_frame_cache is in
+   effect.  Once Func completes, if the frame cache has been reinitialised
+   then try calling Func again.  If after the second call the frame cache
+   has again been initialised then raise an error.  Because Func can be
+   called multiple times, it is required that every argument in ARGS be
+   'const'.
+
+   This can be used to wrap frame unwinding related calls where an
+   extension language hook might trigger a frame cache flush.  The hope is
+   that whatever action triggers the flush will only happen the first
+   time, and that the second time through will not result in a frame cache
+   flush.  */
+
+template <typename Func, typename... Args,
+	  typename = gdb::Requires<gdb::all_args_are_const<Args...>>>
+static decltype(auto)
+with_protected_frame_cache (Func&& func, Args&&... args)
+{
+  FRAME_SCOPED_DEBUG_ENTER_EXIT;
+
+  using ReturnType = std::invoke_result_t<Func, Args...>;
+
+  for (int i = 0; i < 2; ++i)
+    {
+      scoped_defer_reinit_frame_cache defer_reinit_frame_cache;
+
+      if constexpr (std::is_void_v<ReturnType>)
+	{
+	  std::invoke (std::forward<Func> (func),
+		       std::forward<Args> (args)...);
+
+	  if (!defer_reinit_frame_cache.will_trigger_reinit ())
+	    return;
+	}
+      else
+	{
+	  decltype(auto) result = std::invoke (std::forward<Func> (func),
+					       std::forward<Args> (args)...);
+
+	  if (!defer_reinit_frame_cache.will_trigger_reinit ())
+	    return result;
+	}
+    }
+
+  error ("frame cache repeatedly reinitialized");
 }
 
 /* Flag to control debugging.  */
@@ -1985,8 +2087,8 @@ invalidate_selected_frame ()
 
 /* See frame.h.  */
 
-void
-select_frame (const frame_info_ptr &fi)
+static void
+select_frame_1 (const frame_info_ptr &fi)
 {
   gdb_assert (fi != nullptr);
 
@@ -2060,6 +2162,12 @@ select_frame (const frame_info_ptr &fi)
 	    set_language (cust->language ());
 	}
     }
+}
+
+void
+select_frame (const frame_info_ptr &fi)
+{
+  with_protected_frame_cache (select_frame_1, fi);
 }
 
 /* Create an arbitrary (i.e. address specified by user) or innermost frame.
@@ -2169,6 +2277,15 @@ frame_observer_target_changed (struct target_ops *target)
 void
 reinit_frame_cache (void)
 {
+  if (defer_reinit_frame_cache_depth > 0)
+    {
+      frame_debug_printf ("mark frame cache flush as pending");
+      defer_reinit_frame_cache_pending = true;
+      return;
+    }
+
+  frame_debug_printf ("flushing the frame cache");
+
   ++frame_cache_generation;
 
   if (!frame_stash.empty ())
@@ -2551,7 +2668,8 @@ get_prev_frame_always (const frame_info_ptr &this_frame)
 
   try
     {
-      prev_frame = get_prev_frame_always_1 (this_frame);
+      prev_frame = with_protected_frame_cache (get_prev_frame_always_1,
+					       this_frame);
     }
   catch (const gdb_exception_error &ex)
     {
