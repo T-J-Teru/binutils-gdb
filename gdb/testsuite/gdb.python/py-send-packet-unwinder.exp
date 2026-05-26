@@ -1,0 +1,74 @@
+# Copyright (C) 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test for a specific use case of RemoteTargetConnection.send_packet
+# that we'd like to support.  In general the send_packet method will
+# cause GDB to switch inferior in order to ensure that the remote
+# target connection is on the target stack of the current inferior.
+#
+# The problem is that this causes the currently selected frame to
+# change, which in turn causes the frame cache to be flushed.
+#
+# If a user wants to make send_packet calls from a custom frame
+# unwinder then this is not possible as we end up flushing the frame
+# cache while trying to build the backtrace.
+#
+# The solution is that we have a special case, if when the send_packet
+# call is made, the currently selected inferior already has the
+# required remote target connection on its target stack, then it is
+# not necessary to change the currently selected inferior or thread.
+#
+# By not switching we avoid the frame cache flush, and so calling
+# send_packet from a frame unwinder is supported, so long as we only
+# send the packet to the currently selected inferior's remote target.
+
+load_lib gdb-python.exp
+load_lib gdbserver-support.exp
+
+standard_testfile
+
+require allow_gdbserver_tests allow_python_tests
+
+if { [build_executable "failed to build" ${testfile} ${srcfile}] } {
+    return
+}
+
+set remote_python_file [gdb_remote_download host \
+			    ${srcdir}/${subdir}/${testfile}.py]
+
+clean_restart $testfile
+
+# Make sure we're disconnected, in case we're testing with an
+# extended-remote board, therefore already connected.
+gdb_test "disconnect" ".*"
+
+gdbserver_run ""
+
+gdb_breakpoint "breakpt"
+gdb_continue_to_breakpoint "breakpt"
+
+gdb_test "source $remote_python_file" "Sourcing complete\\." \
+    "source ${testfile}.py script"
+
+gdb_test "bt" \
+    [multi_line \
+	 "#0  (?:$hex in )?breakpt \\(\\) at \[^\r\n\]+" \
+	 "#1  (?:$hex in )?foo \\(\\) at \[^\r\n\]+" \
+	 "#2  (?:$hex in )?bar \\(\\) at \[^\r\n\]+" \
+	 "#3  (?:$hex in )?baz \\(\\) at \[^\r\n\]+" \
+	 "#4  (?:$hex in )?main \\(\\) at \[^\r\n\]+"]
+
+# Check that the custom unwinder was actually called.
+gdb_test "python print(TestUnwinder.call_count > 0)" "True" 

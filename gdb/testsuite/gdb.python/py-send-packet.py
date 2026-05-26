@@ -19,7 +19,7 @@ import gdb
 
 
 # Make use of gdb.RemoteTargetConnection.send_packet to fetch the
-# thread list from the remote target.
+# thread list from the remote target for inferior INF.
 #
 # Sending existing serial protocol packets like this is not a good
 # idea, there should be better ways to get this information using an
@@ -28,10 +28,10 @@ import gdb
 # Really, the send_packet API would be used to send target
 # specific packets to the target, but these are, by definition, target
 # specific, so hard to test in a general testsuite.
-def get_thread_list_str():
+def get_thread_list_str(inf):
     start_pos = 0
     thread_desc = ""
-    conn = gdb.selected_inferior().connection
+    conn = inf.connection
     if not isinstance(conn, gdb.RemoteTargetConnection):
         raise gdb.GdbError("connection is the wrong type")
     while True:
@@ -46,19 +46,19 @@ def get_thread_list_str():
 
 
 # Use gdb.RemoteTargetConnection.send_packet to manually fetch the
-# thread list, then extract the thread list using the gdb.Inferior and
-# gdb.InferiorThread API.  Compare the two results to ensure we
-# managed to successfully read the thread list from the remote.
-def run_send_packet_test():
+# thread list for inferior INF.  Then extract the thread list using
+# the gdb.Inferior and gdb.InferiorThread API.  Compare the two
+# results to ensure we managed to successfully read the thread list
+# from the remote.
+def run_send_packet_test(inf):
     # Find the IDs of all current threads.
     all_threads = {}
-    for inf in gdb.inferiors():
-        for thr in inf.threads():
-            id = "p%x.%x" % (thr.ptid[0], thr.ptid[1])
-            all_threads[id] = False
+    for thr in inf.threads():
+        id = "p%x.%x" % (thr.ptid[0], thr.ptid[1])
+        all_threads[id] = False
 
     # Now fetch the thread list from the remote, and parse the XML.
-    str = get_thread_list_str()
+    str = get_thread_list_str(inf)
     threads_xml = ET.fromstring(str)
 
     # Look over all threads in the XML list and check we expected to
@@ -66,14 +66,14 @@ def run_send_packet_test():
     for thr in threads_xml:
         id = thr.get("id")
         if id not in all_threads:
-            raise "found unexpected thread in remote thread list"
+            raise gdb.GdbError("found unexpected thread in remote thread list")
         else:
             all_threads[id] = True
 
     # Check that all the threads were found in the XML list.
     for id in all_threads:
         if not all_threads[id]:
-            raise "thread missingt from remote thread list"
+            raise gdb.GdbError("thread missing from remote thread list")
 
     # Test complete.
     print("Send packet test passed")
@@ -93,12 +93,11 @@ def bytes_to_string(byte_array):
     return res
 
 
-# A very simple test for sending the packet that reads the auxv data.
-# We convert the result to a string and expect to find some
-# hex-encoded bytes in the output.  This test will only work on
-# targets that actually supply auxv data.
-def run_auxv_send_packet_test(expected_result):
-    inf = gdb.selected_inferior()
+# A very simple test for sending the packet that reads the auxv data
+# for inferior INF.  We convert the result to a string and expect to
+# find some hex-encoded bytes in the output.  This test will only work
+# on targets that actually supply auxv data.
+def run_auxv_send_packet_test(inf, expected_result):
     conn = inf.connection
     assert isinstance(conn, gdb.RemoteTargetConnection)
     res = conn.send_packet("qXfer:auxv:read::0,1000")

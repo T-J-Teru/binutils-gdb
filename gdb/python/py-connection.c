@@ -405,7 +405,8 @@ connpy_send_packet (PyObject *self, PyObject *args, PyObject *kw)
   try
     {
       scoped_restore_current_thread restore_thread;
-      switch_to_target_no_thread (conn->target);
+      if (!current_inferior ()->target_is_pushed (conn->target))
+	switch_to_target_no_thread (conn->target);
 
       gdb::array_view<const char> view (packet_str, packet_len);
       py_send_packet_callbacks callbacks;
