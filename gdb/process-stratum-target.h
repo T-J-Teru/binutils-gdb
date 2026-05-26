@@ -178,4 +178,19 @@ extern gdb::unordered_set<process_stratum_target *>
 
 extern void switch_to_target_no_thread (process_stratum_target *target);
 
+/* If TARGET is present on the target stack of the current inferior then
+   nothing changes and an empty optional is returned.  If TARGET is not on
+   the current inferior's target stack then switch to an inferior which
+   does have TARGET on its target stack, no thread is selected.
+
+   Be careful, in the case where TARGET is already on the target stack
+   nothing changes, the current inferior and current thread are left
+   unchanged.  But if we need to switch inferior in order to ensure TARGET
+   is on the target stack, we switch inferior, but no thread is selected.
+   As a result, after calling this function, there may, or may not, be a
+   currently selected thread.  */
+
+extern std::optional<scoped_restore_current_thread>
+     maybe_switch_to_target (process_stratum_target *target);
+
 #endif /* GDB_PROCESS_STRATUM_TARGET_H */

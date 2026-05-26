@@ -404,8 +404,10 @@ connpy_send_packet (PyObject *self, PyObject *args, PyObject *kw)
 
   try
     {
-      scoped_restore_current_thread restore_thread;
-      switch_to_target_no_thread (conn->target);
+      /* If CONN->TARGET is not already present on the current inferior's
+	 target stack, the switch to an inferior were it is.  If we switch
+	 then no new thread will be selected.  */
+      auto restore_thread = maybe_switch_to_target (conn->target);
 
       gdb::array_view<const char> view (packet_str, packet_len);
       py_send_packet_callbacks callbacks;

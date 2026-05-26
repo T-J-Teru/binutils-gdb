@@ -219,3 +219,18 @@ switch_to_target_no_thread (process_stratum_target *target)
       break;
     }
 }
+
+/* See process-stratum-target.h.  */
+
+std::optional<scoped_restore_current_thread>
+maybe_switch_to_target (process_stratum_target *target)
+{
+  std::optional<scoped_restore_current_thread> maybe_restore_thread;
+  if (!current_inferior ()->target_is_pushed (target))
+    {
+      maybe_restore_thread.emplace ();
+      switch_to_target_no_thread (target);
+    }
+
+  return maybe_restore_thread;
+}
