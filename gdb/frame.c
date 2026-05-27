@@ -1665,7 +1665,7 @@ put_frame_register_bytes (const frame_info_ptr &next_frame, int regnum,
    See frame_id_build_sentinel for the description of STACK_ADDR and
    CODE_ADDR.  */
 
-static frame_info_ptr
+static frame_info *
 create_sentinel_frame (program_space *pspace, address_space *aspace,
 		       regcache *regcache, CORE_ADDR stack_addr,
 		       CORE_ADDR code_addr)
@@ -1693,7 +1693,7 @@ create_sentinel_frame (program_space *pspace, address_space *aspace,
 
   frame_debug_printf ("  -> %s", frame->to_string ().c_str ());
 
-  return frame_info_ptr (frame);
+  return frame;
 }
 
 /* Cache for frame addresses already read by gdb.  Valid only while
@@ -1738,7 +1738,7 @@ get_current_frame (void)
       create_sentinel_frame (current_program_space,
 			     current_inferior ()->aspace.get (),
 			     get_thread_regcache (inferior_thread ()),
-			     0, 0).get ();
+			     0, 0);
 
   /* Set the current frame before computing the frame id, to avoid
      recursion inside compute_frame_id, in case the frame's
@@ -2093,7 +2093,7 @@ create_new_frame (frame_id id)
   fi->next = create_sentinel_frame (current_program_space,
 				    current_inferior ()->aspace.get (),
 				    get_thread_regcache (inferior_thread ()),
-				    id.stack_addr, id.code_addr).get ();
+				    id.stack_addr, id.code_addr);
 
   /* Set/update this frame's cached PC value, found in the next frame.
      Do this before looking for this frame's unwinder.  A sniffer is
