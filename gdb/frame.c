@@ -707,6 +707,30 @@ get_stack_frame_id (const frame_info_ptr &next_frame)
 static frame_info_ptr
 frame_unwind_caller_frame (const frame_info_ptr &initial_next_frame)
 {
+  /* Unless 'backtrace past-entry' is on then there is no caller for the
+     frame at the inferior entry address.  Sometimes the register values
+     present when an inferior starts can make GDB believe that there are
+     frames before the entry frame, but trying to use that frame to
+     e.g. place a breakpoint, will fail.  */
+  if (initial_next_frame->level >= 0
+      && get_frame_type (initial_next_frame) == NORMAL_FRAME
+      && !user_set_backtrace_options.backtrace_past_entry
+      && get_frame_pc_if_available (initial_next_frame).has_value ())
+    {
+      const program_space::entry_point_info &ep_info
+	= current_program_space->get_entry_point_info ();
+
+      CORE_ADDR frame_func_addr = get_frame_func (initial_next_frame);
+
+      /* We only check the inferior entry address here, not the main
+	 executable entry address.  If there are frames between the
+	 executable entry address frame and the inferior entry address
+	 frame then these are likely valid, and can be used for placing
+	 e.g. frame exit breakpoints.  */
+      if (ep_info.inferior_entry_address () == frame_func_addr)
+	return nullptr;
+    }
+
   frame_info_ptr this_frame = get_prev_frame_always (initial_next_frame);
   if (this_frame == nullptr)
     return nullptr;
