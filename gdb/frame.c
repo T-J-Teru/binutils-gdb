@@ -734,6 +734,52 @@ get_stack_frame_id (const frame_info_ptr &next_frame)
   return get_frame_id (skip_artificial_frames (next_frame));
 }
 
+/* When checking if a frame is an entry frame, there are two different
+   entry frames to consider.  This enum is used to select which entry
+   frame(s) we wish to consider.  See the inside_entry_func function.  */
+
+enum class entry_address_type_flag
+{
+  /* The executable's entry frame.  This is the first frame within the main
+     executable.  */
+  executable = (1 << 0),
+
+  /* The inferior's entry frame.  This is the first frame within the
+     inferior, this can be outside the main executable, e.g. for a
+     dynamically linked executable, this will be the first frame in the
+     dynamic linker.  */
+  inferior = (1 << 1),
+};
+DEF_ENUM_FLAGS_TYPE (enum entry_address_type_flag, entry_address_type_flags);
+
+/* Return true if THIS_FRAME is inside the either of the possible entry
+   frames based on ENTRY_ADDR_TYPES, otherwise return false.  */
+
+static bool
+inside_entry_func (const frame_info_ptr &this_frame,
+		   entry_address_type_flags entry_addr_types)
+{
+  /* It doesn't make sense to call this with no flag bits set.  */
+  gdb_assert (entry_addr_types != (entry_address_type_flags) 0);
+
+  CORE_ADDR frame_func_addr;
+  if (!get_frame_func_if_available (this_frame, &frame_func_addr))
+    return false;
+
+  const entry_point_info &ep_info
+    = current_program_space->get_entry_point_info ();
+
+  /* For each flag set in ENTRY_ADDR_TYPES if FRAME_FUNC_ADDR matches the
+     corresponding entry address from EP_INFO then THIS_FRAME is an entry
+     frame.  */
+  return (((entry_addr_types & entry_address_type_flag::executable)
+	   == entry_address_type_flag::executable
+	   && ep_info.exec_entry_address () == frame_func_addr)
+	  || ((entry_addr_types & entry_address_type_flag::inferior)
+	      == entry_address_type_flag::inferior
+	      && ep_info.inferior_entry_address () == frame_func_addr));
+}
+
 /* Helper for the various frame_unwind_caller_* functions.  Unwind
    INITIAL_NEXT_FRAME at least one frame, but skip any artificial frames,
    that is inline or tailcall frames.
@@ -744,6 +790,15 @@ get_stack_frame_id (const frame_info_ptr &next_frame)
 static frame_info_ptr
 frame_unwind_caller_frame (const frame_info_ptr &initial_next_frame)
 {
+  /* Avoid returning a frame which is possibly before the inferior's entry
+     frame, any such frame is likely invalid.  However, if the user has
+     turned on 'backtrace past-entry' then we assume they know what they
+     are doing and allow these frames.  */
+  if (!user_set_backtrace_options.backtrace_past_entry
+      && inside_entry_func (initial_next_frame,
+			    entry_address_type_flag::inferior))
+    return nullptr;
+
   frame_info_ptr this_frame = get_prev_frame_always (initial_next_frame);
   if (this_frame == nullptr)
     return nullptr;
@@ -2698,19 +2753,6 @@ inside_main_func (const frame_info_ptr &this_frame)
   return sym_addr == get_frame_func (this_frame);
 }
 
-/* Test whether THIS_FRAME is inside the process entry point function.  */
-
-static bool
-inside_entry_func (const frame_info_ptr &this_frame)
-{
-  const entry_point_info &ep_info
-    = current_program_space->get_entry_point_info ();
-
-  CORE_ADDR frame_func_addr = get_frame_func (this_frame);
-  return (ep_info.exec_entry_address () == frame_func_addr
-	  || ep_info.inferior_entry_address () == frame_func_addr);
-}
-
 /* Return a structure containing various interesting information about
    the frame that called THIS_FRAME.  Returns NULL if there is either
    no such frame or the frame fails any of a set of target-independent
@@ -2793,7 +2835,9 @@ get_prev_frame (const frame_info_ptr &this_frame)
       && get_frame_type (this_frame) == NORMAL_FRAME
       && !user_set_backtrace_options.backtrace_past_entry
       && frame_pc.has_value ()
-      && inside_entry_func (this_frame))
+      && inside_entry_func (this_frame,
+			    (entry_address_type_flag::inferior
+			     | entry_address_type_flag::executable)))
     {
       frame_debug_got_null_frame (this_frame, "inside entry func");
       return NULL;

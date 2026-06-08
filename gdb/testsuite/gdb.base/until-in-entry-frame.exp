@@ -1,0 +1,173 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check that 'until' in the outermost frame works as expected.
+
+standard_testfile
+
+if { [build_executable "failed to build" $testfile $srcfile] } {
+    return
+}
+
+set testfile_static ${testfile}-static
+if { [build_executable "failed to build" $testfile_static $srcfile \
+	  { debug additional_flags=-static } ] } {
+    return
+}
+
+# Use 'frame' to get the name of the current function.  Returns the
+# name of the current function, or the empty string if the current
+# function name cannot be established.
+proc current_function_name { testname } {
+    set func_name ""
+    gdb_test_multiple "frame" $testname {
+	-re -wrap "#0\\s+(?:$::hex in )?(\[^( \]+) \\(.*" {
+	    set func_name $expect_out(1,string)
+	}
+
+	-re -wrap "#0\\s+\[^\r\n\]*\\s+in (\[^( \]+) \\(.*" {
+	    set func_name $expect_out(1,string)
+	}
+    }
+
+    return $func_name
+}
+
+# Start the inferior with 'starti', then use 'until' within the
+# outermost frame.  This is the real outermost frame, not 'main'.
+#
+# PAST_ENTRY should be 'on' or 'off' and is used in a 'set backtrace
+# past-entry ...' command.
+proc run_test { use_stepi past_entry testfile } {
+    clean_restart $testfile
+
+    if {$::use_gdb_stub && [target_info exists gdb,do_reload_on_run]} {
+	# This is the path taken by the 'native-gdbserver' board.
+	# Start gdbserver and connect, this should leave the inferior
+	# at the first instruction.
+	if { [gdb_reload] != 0 } {
+	    return -1
+	}
+	pass "connected to gdbserver"
+    } else {
+	# Start inferior with 'starti' and then wait for a prompt.
+	if { [gdb_starti_cmd] < 0 } {
+	    untested starti
+	    return
+	}
+	gdb_test "" "Program stopped.*" "prompt after starti"
+    }
+
+    set func_name [current_function_name \
+		       "function name for first function"]
+
+    gdb_test_no_output "set backtrace past-entry $past_entry"
+
+    # On x86-64 GDB does get a valid frame-id for the very first
+    # instruction, but from the second instruction onwards it gets
+    # outer_frame_id.  As a result an 'until' setup at the first
+    # instruction doesn't match later on within the same function as
+    # the frame-ids no longer match.
+    #
+    # Try to work around this by issuing a 'stepi' to move to the
+    # second instruction.
+    #
+    # This is only a heuristic though.  On different architectures GDB
+    # might have a valid frame-id for multiple instructions within the
+    # outer frame, or might not have outer_frame_id for all
+    # instructions.
+    #
+    # Also, we need to consider that the very first instruction might
+    # be a control flow instruction, so using stepi could send the
+    # inferior to another function.  We try to spot this case and
+    # perform an early return if that happens.
+    if { $use_stepi } {
+	gdb_test "stepi"
+	set func_name_after [current_function_name \
+				 "function name after stepi"]
+	if { $func_name ne $func_name_after } {
+	    unsupported "stepi moved to another function"
+	    return
+	}
+    }
+
+    # If the 'until' doesn't trigger then stop in 'main' as a backup.
+    gdb_breakpoint main
+
+    # Find an address to use in the 'until' command.
+    set until_address ""
+    set capture_address false
+    gdb_test_multiple "disassemble" "find address for until" -lbl {
+	-re "\r\n=> $::hex \[^\r\n\]+(?=\r\n)" {
+	    set capture_address true
+	    exp_continue
+	}
+
+	-re "\r\n\\s+($::hex) \[^\r\n\]+(?=\r\n)" {
+	    if { $capture_address } {
+		set until_address $expect_out(1,string)
+		set capture_address false
+	    }
+
+	    exp_continue
+	}
+
+	-re "\r\n$::gdb_prompt $" {
+	    set found_address [expr { $until_address ne "" }]
+	    if { !$found_address } {
+		unsupported "$gdb_test_name (no instruction found)"
+		return
+	    }
+	    pass $gdb_test_name
+	}
+    }
+
+    # Send the 'until' command and then wait for GDB to stop.  See the
+    # notes above about the 'stepi' for why we sometimes expect to see
+    # GDB reach 'main' here.
+    send_gdb "until *${until_address}\n"
+    gdb_test_multiple "" "after until" {
+	-re -wrap "Breakpoint $::decimal, (?:\[^\r\n\]+ in )?main \\(\\).*" {
+	    kfail "gdb/34245" "$gdb_test_name (skipped until breakpoint)"
+	}
+
+	-re -wrap "\r\n(?:$::hex in )?$func_name \\(\\).*" {
+	    pass $gdb_test_name
+	}
+
+	-re -wrap "Warning:\r\nCannot insert breakpoint 0\\.\r\nCannot access memory at address $::hex.*Command aborted\\." {
+	    # With PAST_ENTRY 'on', GDB discovers some invalid frames
+	    # past the entry frame based on whatever happens to be in
+	    # the registers when the entry function is called.  These
+	    # invalid frames are often non-writable, so GDB will fail
+	    # to insert the breakpoint when the inferior resumes.
+	    #
+	    # We still count this as a pass though; the user should
+	    # only turn on 'backtrace past-entry' when they know that
+	    # is needed, so failure here is totally expected.
+	    gdb_assert { $past_entry eq "on" } "$gdb_test_name (caller breakpoint failed)"
+	}
+    }
+}
+
+foreach_with_prefix past_entry { off on } {
+    foreach_with_prefix use_stepi { true false } {
+	run_test $use_stepi $past_entry $testfile
+
+	with_test_prefix "static" {
+	    run_test $use_stepi $past_entry $testfile_static
+	}
+    }
+}
