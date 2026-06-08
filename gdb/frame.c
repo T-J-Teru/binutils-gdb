@@ -74,6 +74,7 @@ set_backtrace_options user_set_backtrace_options;
 static frame_info_ptr get_prev_frame_raw (const frame_info_ptr &this_frame);
 static const char *frame_stop_reason_symbol_string (enum unwind_stop_reason reason);
 static frame_info_ptr create_new_frame (frame_id id);
+static bool inside_entry_func (const frame_info_ptr &this_frame);
 
 /* Status of some values cached in the frame_info object.  */
 
@@ -697,6 +698,21 @@ get_stack_frame_id (const frame_info_ptr &next_frame)
   return get_frame_id (skip_artificial_frames (next_frame));
 }
 
+/* If FRAME is the outermost frame, and the user has not turned on
+   'backtrace past-entry', then return true, otherwise, return false.  */
+
+static bool
+stop_unwinding_due_to_outermost_frame (const frame_info_ptr &frame)
+{
+  std::optional<CORE_ADDR> frame_pc = get_frame_pc_if_available (frame);
+
+  return (frame->level >= 0
+	  && get_frame_type (frame) == NORMAL_FRAME
+	  && !user_set_backtrace_options.backtrace_past_entry
+	  && frame_pc.has_value ()
+	  && inside_entry_func (frame));
+}
+
 /* Helper for the various frame_unwind_caller_* functions.  Unwind
    INITIAL_NEXT_FRAME at least one frame, but skip any artificial frames,
    that is inline or tailcall frames.
@@ -707,6 +723,21 @@ get_stack_frame_id (const frame_info_ptr &next_frame)
 static frame_info_ptr
 frame_unwind_caller_frame (const frame_info_ptr &initial_next_frame)
 {
+  /* The frames prior to the entry frame (not main, but the actual entry
+     frame) are usually invalid.  If INITIAL_NEXT_FRAME is the entry frame
+     then just claim that there is no caller frame.  This prevents things
+     like 'until' from trying to place breakpoints in the invalid frame
+     which GDB thinks called the entry frame.
+
+     Of course, if the user has turned on 'backtrace past-entry' then we
+     assume that the user knows best, and that those frames are valid, in
+     which case we do unwind past the entry frame.  */
+  if (stop_unwinding_due_to_outermost_frame (initial_next_frame))
+    {
+      frame_debug_printf ("inside entry func");
+      return nullptr;
+    }
+
   frame_info_ptr this_frame = get_prev_frame_always (initial_next_frame);
   if (this_frame == nullptr)
     return nullptr;
@@ -2785,11 +2816,7 @@ get_prev_frame (const frame_info_ptr &this_frame)
      from main returns directly to the caller of main.  Since we don't
      stop at main, we should at least stop at the entry point of the
      application.  */
-  if (this_frame->level >= 0
-      && get_frame_type (this_frame) == NORMAL_FRAME
-      && !user_set_backtrace_options.backtrace_past_entry
-      && frame_pc.has_value ()
-      && inside_entry_func (this_frame))
+  if (stop_unwinding_due_to_outermost_frame (this_frame))
     {
       frame_debug_got_null_frame (this_frame, "inside entry func");
       return NULL;
