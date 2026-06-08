@@ -734,6 +734,45 @@ get_stack_frame_id (const frame_info_ptr &next_frame)
   return get_frame_id (skip_artificial_frames (next_frame));
 }
 
+/* Return true if THIS_FRAME is either of the two possible entry frames;
+   the entry frame for the whole inferior, or the entry frame of just the
+   executable.  */
+
+static bool
+inside_entry_func (const frame_info_ptr &this_frame)
+{
+  CORE_ADDR frame_func_addr;
+  if (!get_frame_func_if_available (this_frame, &frame_func_addr))
+    return false;
+
+  const entry_point_info &ep_info
+    = current_program_space->get_entry_point_info ();
+
+  /* Check both entry frames.  */
+  return (ep_info.exec_entry_address () == frame_func_addr
+	  || ep_info.inferior_entry_address () == frame_func_addr);
+}
+
+/* Check if THIS_FRAME is an entry frame.  If it is, return NULL.
+   Otherwise, call get_prev_frame_always and return its result.  */
+
+static frame_info_ptr
+get_prev_frame_with_entry_frame_check (const frame_info_ptr &this_frame)
+{
+  FRAME_SCOPED_DEBUG_START_END ("fi=%d", this_frame->level);
+
+  if (this_frame->level >= 0
+      && get_frame_type (this_frame) == NORMAL_FRAME
+      && !user_set_backtrace_options.backtrace_past_entry
+      && inside_entry_func (this_frame))
+    {
+      frame_debug_printf ("is inside an entry frame");
+      return nullptr;
+    }
+
+  return get_prev_frame_always (this_frame);
+}
+
 /* Helper for the various frame_unwind_caller_* functions.  Unwind
    INITIAL_NEXT_FRAME at least one frame, but skip any artificial frames,
    that is inline or tailcall frames.
@@ -744,7 +783,8 @@ get_stack_frame_id (const frame_info_ptr &next_frame)
 static frame_info_ptr
 frame_unwind_caller_frame (const frame_info_ptr &initial_next_frame)
 {
-  frame_info_ptr this_frame = get_prev_frame_always (initial_next_frame);
+  frame_info_ptr this_frame
+    = get_prev_frame_with_entry_frame_check (initial_next_frame);
   if (this_frame == nullptr)
     return nullptr;
 
@@ -754,11 +794,8 @@ frame_unwind_caller_frame (const frame_info_ptr &initial_next_frame)
 struct frame_id
 frame_unwind_caller_id (const frame_info_ptr &initial_next_frame)
 {
-  /* Use get_prev_frame_always, and not get_prev_frame.  The latter
-     will truncate the frame chain, leading to this function
-     unintentionally returning a null_frame_id (e.g., when a caller
-     requests the frame ID of "main()"s caller.  */
-
+  /* The frame_unwind_caller_frame call can return NULL if we are
+     initially in an entry frame.  */
   frame_info_ptr this_frame = frame_unwind_caller_frame (initial_next_frame);
   if (this_frame == nullptr)
     return null_frame_id;
@@ -2698,19 +2735,6 @@ inside_main_func (const frame_info_ptr &this_frame)
   return sym_addr == get_frame_func (this_frame);
 }
 
-/* Test whether THIS_FRAME is inside the process entry point function.  */
-
-static bool
-inside_entry_func (const frame_info_ptr &this_frame)
-{
-  const entry_point_info &ep_info
-    = current_program_space->get_entry_point_info ();
-
-  CORE_ADDR frame_func_addr = get_frame_func (this_frame);
-  return (ep_info.exec_entry_address () == frame_func_addr
-	  || ep_info.inferior_entry_address () == frame_func_addr);
-}
-
 /* Return a structure containing various interesting information about
    the frame that called THIS_FRAME.  Returns NULL if there is either
    no such frame or the frame fails any of a set of target-independent
@@ -2767,38 +2791,6 @@ get_prev_frame (const frame_info_ptr &this_frame)
       return NULL;
     }
 
-  /* If we're already inside the entry function for the main objfile,
-     then it isn't valid.  Don't apply this test to a dummy frame -
-     dummy frame PCs typically land in the entry func.  Don't apply
-     this test to the sentinel frame.  Sentinel frames should always
-     be allowed to unwind.  */
-  /* NOTE: cagney/2003-07-07: Fixed a bug in inside_main_func() -
-     wasn't checking for "main" in the minimal symbols.  With that
-     fixed asm-source tests now stop in "main" instead of halting the
-     backtrace in weird and wonderful ways somewhere inside the entry
-     file.  Suspect that tests for inside the entry file/func were
-     added to work around that (now fixed) case.  */
-  /* NOTE: cagney/2003-07-15: danielj (if I'm reading it right)
-     suggested having the inside_entry_func test use the
-     inside_main_func() msymbol trick (along with exec_entry_point_address()
-     I guess) to determine the address range of the start function.
-     That should provide a far better stopper than the current
-     heuristics.  */
-  /* NOTE: tausq/2004-10-09: this is needed if, for example, the compiler
-     applied tail-call optimizations to main so that a function called
-     from main returns directly to the caller of main.  Since we don't
-     stop at main, we should at least stop at the entry point of the
-     application.  */
-  if (this_frame->level >= 0
-      && get_frame_type (this_frame) == NORMAL_FRAME
-      && !user_set_backtrace_options.backtrace_past_entry
-      && frame_pc.has_value ()
-      && inside_entry_func (this_frame))
-    {
-      frame_debug_got_null_frame (this_frame, "inside entry func");
-      return NULL;
-    }
-
   /* Assume that the only way to get a zero PC is through something
      like a SIGSEGV or a dummy frame, and hence that NORMAL frames
      will never unwind a zero PC.  */
@@ -2812,7 +2804,7 @@ get_prev_frame (const frame_info_ptr &this_frame)
       return NULL;
     }
 
-  return get_prev_frame_always (this_frame);
+  return get_prev_frame_with_entry_frame_check (this_frame);
 }
 
 CORE_ADDR
