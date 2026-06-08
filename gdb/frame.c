@@ -2232,6 +2232,63 @@ frame_register_unwind_location (const frame_info_ptr &initial_this_frame,
     }
 }
 
+/* When checking if a frame is an entry frame, there are two different
+   entry frames to consider.  This enum is used to choose between them.  */
+
+enum class entry_address_type
+{
+  /* The executable's entry frame.  This is the first frame within the main
+     executable.  */
+  executable,
+
+  /* The inferior's entry frame.  This is the first frame within the
+     inferior, this can be outside the main executable, e.g. for a
+     dynamically linked executable, this will be the first frame in the
+     dynamic linker.  */
+  inferior,
+};
+
+/* Test whether THIS_FRAME is inside the TYPE process entry point
+   function.  */
+
+static bool
+inside_entry_func (const frame_info_ptr &this_frame,
+		   entry_address_type type)
+{
+  const program_space::entry_point_info &ep_info
+    = current_program_space->get_entry_point_info ();
+
+  CORE_ADDR frame_func_addr;
+  if (!get_frame_func_if_available (this_frame, &frame_func_addr))
+    return false;
+
+  switch (type)
+    {
+    case entry_address_type::executable:
+      return ep_info.exec_entry_address () == frame_func_addr;
+
+    case entry_address_type::inferior:
+      return ep_info.inferior_entry_address () == frame_func_addr;
+    }
+
+  gdb_assert_not_reached ("unknown entry address type: %d", ((int) type));
+}
+
+/* Debug routine to print a NULL frame being returned.  */
+
+static void
+frame_debug_got_null_frame (const frame_info_ptr &this_frame,
+			    const char *reason)
+{
+  if (frame_debug)
+    {
+      if (this_frame != NULL)
+	frame_debug_printf ("this_frame=%d -> %s", this_frame->level, reason);
+      else
+	frame_debug_printf ("this_frame=nullptr -> %s", reason);
+    }
+}
+
 /* Get the previous raw frame, and check that it is not identical to
    same other frame frame already in the chain.  If it is, there is
    most likely a stack cycle, so we discard it, and mark THIS_FRAME as
@@ -2538,6 +2595,17 @@ get_prev_frame_always_1 (const frame_info_ptr &this_frame)
 frame_info_ptr
 get_prev_frame_always (const frame_info_ptr &this_frame)
 {
+  if (this_frame->level >= 0
+      && get_frame_type (this_frame) == NORMAL_FRAME
+      && !user_set_backtrace_options.backtrace_past_entry
+      && inside_entry_func (this_frame, entry_address_type::inferior))
+    {
+      this_frame->prev_p = true;
+      this_frame->stop_reason = UNWIND_OUTERMOST;
+      frame_debug_got_null_frame (this_frame, "inside inferior entry func");
+      return nullptr;
+    }
+
   frame_info_ptr prev_frame = NULL;
 
   try
@@ -2626,21 +2694,6 @@ get_prev_frame_raw (const frame_info_ptr &this_frame)
   return frame_info_ptr (prev_frame);
 }
 
-/* Debug routine to print a NULL frame being returned.  */
-
-static void
-frame_debug_got_null_frame (const frame_info_ptr &this_frame,
-			    const char *reason)
-{
-  if (frame_debug)
-    {
-      if (this_frame != NULL)
-	frame_debug_printf ("this_frame=%d -> %s", this_frame->level, reason);
-      else
-	frame_debug_printf ("this_frame=nullptr -> %s", reason);
-    }
-}
-
 /* Is this (non-sentinel) frame in the "main"() function?  */
 
 static bool
@@ -2687,19 +2740,6 @@ inside_main_func (const frame_info_ptr &this_frame)
 	       current_inferior ()->top_target ()));
 
   return sym_addr == get_frame_func (this_frame);
-}
-
-/* Test whether THIS_FRAME is inside the process entry point function.  */
-
-static bool
-inside_entry_func (const frame_info_ptr &this_frame)
-{
-  const program_space::entry_point_info &ep_info
-    = current_program_space->get_entry_point_info ();
-
-  CORE_ADDR frame_func_addr = get_frame_func (this_frame);
-  return (ep_info.exec_entry_address () == frame_func_addr
-	  || ep_info.inferior_entry_address () == frame_func_addr);
 }
 
 /* Return a structure containing various interesting information about
@@ -2783,11 +2823,10 @@ get_prev_frame (const frame_info_ptr &this_frame)
   if (this_frame->level >= 0
       && get_frame_type (this_frame) == NORMAL_FRAME
       && !user_set_backtrace_options.backtrace_past_entry
-      && frame_pc.has_value ()
-      && inside_entry_func (this_frame))
+      && inside_entry_func (this_frame, entry_address_type::executable))
     {
-      frame_debug_got_null_frame (this_frame, "inside entry func");
-      return NULL;
+      frame_debug_got_null_frame (this_frame, "inside executable entry func");
+      return nullptr;
     }
 
   /* Assume that the only way to get a zero PC is through something
