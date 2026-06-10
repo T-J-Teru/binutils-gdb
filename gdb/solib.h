@@ -288,6 +288,20 @@ struct solib_ops
     (iterate_over_objfiles_in_search_order_cb_ftype cb,
      objfile *current_objfile) const;
 
+  /* Return the inferior entry point address.  This isn't always the entry
+     point of the main executable, but will be the actual entry point where
+     the inferior starts (or started) executing.
+
+     For example on SVR4 targets, for dynamically linked executables, this
+     will be the entry address of the dynamic linker.  But for statically
+     linked executables, this will be the entry point of the main
+     executable.
+
+     If the entry address cannot be found then an empty optional is
+     returned.  */
+  virtual std::optional<CORE_ADDR> inferior_entry_point_address () const
+  { return {}; }
+
 protected:
   /* The program space for which this solib_ops was created.  */
   program_space *m_pspace;

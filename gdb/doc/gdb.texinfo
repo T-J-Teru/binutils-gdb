@@ -43212,6 +43212,20 @@ Ignoring SystemTap probe libc longjmp in /lib64/libc.so.6.^M
 Ignoring SystemTap probe libc longjmp in /lib64/libc.so.6.^M
 Ignoring SystemTap probe libc longjmp in /lib64/libc.so.6.^M
 @end smallexample
+
+@kindex maint info entry-address
+@item maint info entry-address
+Display the entry addresses for the currently selected inferior.  Two
+addresses are displayed, the first is the address of the first
+instruction in the inferior, and the second is for the first
+instruction in the main executable, see @kbd{file} in @ref{Files,
+,Commands to Specify Files}.
+
+For statically linked inferiors, these addresses will usually be the
+same, but for dynamically linked executables these addresses can be
+different, with the inferior's entry address being an address within
+the run-time linker, while the main executable's entry address will
+always be an address within the executable file.
 @end table
 
 The following command is useful for non-interactive invocations of

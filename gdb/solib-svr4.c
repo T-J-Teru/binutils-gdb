@@ -3777,6 +3777,108 @@ svr4_solib_ops::get_solibs_in_ns (int nsid) const
   return ns_solibs;
 }
 
+/* See solib.h.  */
+
+std::optional<CORE_ADDR>
+svr4_solib_ops::inferior_entry_point_address () const
+{
+  std::optional<gdb::byte_vector> interp_name_holder
+    = svr4_find_program_interpreter ();
+
+  /* No interpreter means this is a static executable.  Ask the
+     program_space for the entry address within the main executable.  */
+  if (!interp_name_holder.has_value ())
+    return m_pspace->exec_entry_point_address_if_available ();
+
+  /* If we can find a solib that matches the interpreter name then we can
+     use that to find the actual entry address of the inferior.  */
+  const solib *interp_solib = nullptr;
+  const char *interp_name = (const char *) interp_name_holder->data ();
+  for (const solib &so : m_pspace->solibs ())
+    {
+      if (svr4_same_name (interp_name, so.original_name.c_str ()))
+	{
+	  interp_solib = &so;
+
+	  const objfile *objfile = so.objfile;
+	  if (objfile != nullptr && objfile->per_bfd->ei.entry_point_p)
+	    {
+	      const entry_info &ei = objfile->per_bfd->ei;
+	      return (ei.entry_point
+		      + objfile->section_offsets[ei.the_bfd_section_index]);
+	    }
+	}
+    }
+
+  gdb_bfd_ref_ptr tmp_bfd;
+  target_ops_up tmp_bfd_target;
+  try
+    {
+      tmp_bfd = solib_bfd_open (interp_name);
+
+      /* Failed to open the interpreter BFD.  */
+      if (tmp_bfd == nullptr)
+	return {};
+
+      tmp_bfd_target = target_bfd_reopen (tmp_bfd);
+    }
+  catch (const gdb_exception &ex)
+    {
+      return {};
+    }
+
+  CORE_ADDR entry_addr
+    = exec_entry_point (tmp_bfd.get (), tmp_bfd_target.get ());
+
+  /* We found the solib for the interpreter, but we don't have a
+     corresponding objfile, or the objfile doesn't have entry point
+     information.  Maybe symbols haven't been loaded yet?  */
+  if (interp_solib != nullptr)
+    {
+      gdb_assert (interp_solib->objfile == nullptr
+		  || !interp_solib->objfile->per_bfd->ei.entry_point_p);
+
+      CORE_ADDR load_addr
+	= this->lm_addr_check (*interp_solib, tmp_bfd.get ());
+
+      return load_addr + entry_addr;
+    }
+
+  /* We could not find a solib corresponding to the interpreter, this might
+     mean that the name didn't match for some reason, or maybe GDB has
+     failed to create a solib due to some other issue reading the solib
+     list from the inferior.
+
+     If we got here we have managed to open the expected interpreter on
+     disk though, so we can try using the AT_BASE value.  */
+  CORE_ADDR load_addr;
+  if (target_auxv_search (AT_BASE, &load_addr) > 0)
+    {
+      int addr_bit = gdbarch_addr_bit (current_inferior ()->arch ());
+
+      /* Ensure LOAD_ADDR has proper sign in its possible upper bits so
+	 that `+ load_addr' will overflow CORE_ADDR width not creating
+	 invalid addresses like 0x101234567 for 32bit inferiors on 64bit
+	 GDB.  */
+      if (addr_bit < (sizeof (CORE_ADDR) * HOST_CHAR_BIT))
+	{
+	  CORE_ADDR space_size = (CORE_ADDR) 1 << addr_bit;
+
+	  gdb_assert (load_addr < space_size);
+
+	  /* ENTRY_ADDR exceeding SPACE_SIZE would be for prelinked
+	     64bit ld.so with 32bit executable, it should not happen.  */
+	  if (entry_addr < space_size
+	      && entry_addr + load_addr >= space_size)
+	    load_addr -= space_size;
+	}
+
+      return load_addr + entry_addr;
+    }
+
+  return {};
+}
+
 INIT_GDB_FILE (svr4_solib)
 {
   gdb::observers::free_objfile.attach (svr4_free_objfile_observer,

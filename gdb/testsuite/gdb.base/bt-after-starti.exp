@@ -1,0 +1,153 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check that 'bt' from the very first instruction (where 'starti'
+# stops GDB) doesn't display any unexpected frames.
+
+require !use_gdb_stub
+
+standard_testfile main.c
+
+# Build default executable, hopefully dynamically linked, but we check
+# this below.
+if { [build_executable "failed to build" $testfile $srcfile] } {
+    return
+}
+
+# Build a statically linked executable.
+set testfile_static ${testfile}-static
+if { [build_executable "failed to build" $testfile_static $srcfile \
+	  {debug additional_flags=-static}] } {
+    return
+}
+
+# Run the 'maint info entry-address' command.  Expect INF_RE to match
+# the inferior entry address and EXE_RE to match the executable entry
+# address.  TESTNAME is used as the test name.
+proc check_maint_info_entry_addr { inf_re exe_re testname } {
+    gdb_test "maint info entry-address" \
+	[multi_line \
+	     "Inferior entry address: ${inf_re}" \
+	     "Executable entry address: ${exe_re}"] \
+	$testname
+}
+
+# Use 'readelf' to extract the entry point address from TESTFILE.
+proc get_exec_entry_address { testfile } {
+    set readelf_program [gdb_find_readelf]
+    set command "exec $readelf_program -Wh [standard_output_file $testfile]"
+    verbose -log "command is $command"
+    set result [catch {{*}$command} output]
+    verbose -log "result is $result"
+    verbose -log "output is $output"
+
+    set testname "get_exec_entry_address"
+
+    if {$result != 0} {
+	fail $testname
+	return "UNKNOWN"
+    }
+
+    if {![regexp "\n +Entry point address: +($::hex)\n" $output trash addr]} {
+	fail "$testname (no entry point address header)"
+	return "UNKNOWN"
+    }
+
+    return $addr
+}
+
+# Start TESTFILE using 'starti'.  Check if the 'backtrace' command
+# prints any additional frames; we don't expect any.
+#
+# When IS_DYNAMIC is true then TESTFILE is a dynamically linked
+# executable, otherwise TESTFILE is statically linked.
+proc run_test { testfile is_dynamic } {
+    clean_restart $testfile
+
+    set exe_entry_addr [get_exec_entry_address $testfile]
+
+    # The inferior entry address is always unknown before starting the
+    # inferior as at the point GDB has no solib_ops, and it is only
+    # through that that we figure out the inferior entry address.
+    check_maint_info_entry_addr "<unknown>" $exe_entry_addr \
+	"check 'maint info entry-address' before inferior starts"
+
+    # Start inferior with 'starti' and then wait for a prompt.
+    gdb_starti_cmd
+    gdb_test "" ".*" "prompt after starti"
+
+    # Only svr4 targets currently support querying the inferior entry
+    # address.
+    if {[istarget *-linux*]} {
+	set pc [get_hexadecimal_valueof "\$pc" "UNKNOWN" \
+		    "get current program counter"]
+
+	if { !$is_dynamic } {
+	    # In static binaries, the first address should be the first
+	    # address in the executable.
+	    gdb_assert { $pc == $exe_entry_addr } \
+		"stopped at executable entry address"
+	}
+
+	set inf_entry_addr $pc
+    } else {
+	set inf_entry_addr "<unknown>"
+    }
+
+    check_maint_info_entry_addr $inf_entry_addr $exe_entry_addr \
+	"check 'maint info entry-address' after starti"
+
+    # Allow backtrace past the entry frame, count how many frames GDB
+    # finds.  If on this target there are no additional frames then
+    # the following test isn't going to tell us much, so skip it.
+    gdb_test_no_output "set backtrace past-entry on"
+    set frame_count 0
+    gdb_test_multiple "bt" "count possible frames" {
+	-re "^#($::decimal)\\s+\[^\r\n\]+\r\n" {
+	    incr frame_count
+	    exp_continue
+	}
+	-re "^$::gdb_prompt $" {
+	    if { $frame_count > 1 } {
+		pass $gdb_test_name
+	    } else {
+		unsupported "$gdb_test_name (insufficient frames)"
+		return
+	    }
+	}
+	-re "^\[^\r\n\]*\r\n" {
+	    exp_continue
+	}
+    }
+
+    # Turn off backtrace past the entry frame.  Use the 'bt' command,
+    # and check we see only a single frame.
+    gdb_test_no_output "set backtrace past-entry off"
+    gdb_test "bt" "^#0  \[^\r\n\]+" \
+	"single frame when backtrace past-entry is off"
+}
+
+with_test_prefix "dynamic" {
+    set dyln_name [section_get $binfile .interp]
+    if { $dyln_name eq "" } {
+	unsupported "couldn't find dynamic linker name"
+    } else {
+	run_test $testfile true
+    }
+}
+
+with_test_prefix "static" {
+    run_test $testfile_static false
+}
