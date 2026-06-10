@@ -1300,7 +1300,7 @@ call_function_by_hand_dummy (struct value *function,
 	CORE_ADDR dummy_addr;
 
 	real_pc = funaddr;
-	dummy_addr = current_program_space->entry_point_address ();
+	dummy_addr = current_program_space->exec_entry_point_address ();
 
 	/* A call dummy always consists of just a single breakpoint, so
 	   its address is the same as the address of the dummy.
