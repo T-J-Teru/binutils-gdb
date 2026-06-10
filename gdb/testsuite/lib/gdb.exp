@@ -4223,6 +4223,45 @@ proc is_windows_based_target {} {
     return [expr {[istarget *-*-cygwin*] || [istarget *-*-mingw*]}]
 }
 
+# Return true for svr4 targets, otherwise, return false.
+
+proc is_svr4_target {} {
+    return [expr {[istarget *-linux*] || [istarget *-freebsd*]
+		  || [istarget *-netbsd*] || [istarget *-openbsd*]
+		  || [istarget *-solaris*] || [istarget *-gnu]}]
+}
+
+# Return true for targets that support finding the whole process entry
+# address, otherwise, return false.
+
+proc supports_process_entry_point {} {
+    # SVR4 targets support finding the entry point.  This is done
+    # within GDB so will work even for remote targets.
+    if {[is_svr4_target]} {
+	return true
+    }
+
+    # Windows and Darwin don't currently support this.
+    if {[istarget *-*-mingw*]
+	|| [istarget *-*-cygwin*]
+	|| [istarget *-*-pe*]
+	|| [istarget *-*-darwin*]} {
+	return false
+    }
+
+    # For remote targets there is no RSP packet to retrieve the entry
+    # point, so this won't work unless the solib code can handle this
+    # within GDB, see the svr4 check above.
+    if {[gdb_protocol_is_remote]} {
+	return false
+    }
+
+    # Assume everything else supports this by default.  If a test
+    # fails because we get here then either fix GDB to support this
+    # feature, or add a new deny list entry above.
+    return true
+}
+
 # Return 1 if displaced stepping is supported on target, otherwise, return 0.
 proc support_displaced_stepping {} {
 
