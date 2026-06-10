@@ -689,7 +689,7 @@ enable_break (void)
     }
 
   std::optional<CORE_ADDR> entry_point
-    = current_program_space->entry_point_address_query ();
+    = current_program_space->exec_entry_point_address_if_available ();
   if (!entry_point.has_value ())
     {
       solib_debug_printf ("Symbol file has no entry point.");

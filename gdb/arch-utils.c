@@ -57,7 +57,7 @@ displaced_step_at_entry_point (struct gdbarch *gdbarch)
   CORE_ADDR addr;
   int bp_len;
 
-  addr = current_program_space->entry_point_address ();
+  addr = current_program_space->exec_entry_point_address ();
 
   /* Inferior calls also use the entry point as a breakpoint location.
      We don't want displaced stepping to interfere with those

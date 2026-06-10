@@ -2993,7 +2993,7 @@ linux_displaced_step_location (struct gdbarch *gdbarch)
 
   /* Determine entry point from target auxiliary vector.  This avoids
      the need for symbols.  Also, when debugging a stand-alone SPU
-     executable, entry_point_address () will point to an SPU
+     executable, exec_entry_point_address () will point to an SPU
      local-store address and is thus not usable as displaced stepping
      location.  The auxiliary vector gets us the PowerPC-side entry
      point address instead.  */
