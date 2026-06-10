@@ -860,7 +860,7 @@ arc_push_dummy_code (struct gdbarch *gdbarch, CORE_ADDR sp, CORE_ADDR funaddr,
 		     struct regcache *regcache)
 {
   *real_pc = funaddr;
-  *bp_addr = current_program_space->entry_point_address ();
+  *bp_addr = current_program_space->exec_entry_point_address ();
   return sp;
 }
 
