@@ -323,6 +323,54 @@ struct program_space
     return m_target_sections;
   }
 
+  /* Class for tracking two possible entry points that an inferior might
+     have, the entry point for the entire inferior, and the entry point
+     within the main executable.  */
+  struct entry_point_info
+  {
+    explicit entry_point_info (std::optional<CORE_ADDR> inferior_entry_address,
+			       std::optional<CORE_ADDR> exec_entry_address)
+      : m_inferior_entry_address (std::move (inferior_entry_address)),
+	m_exec_entry_address (std::move (exec_entry_address))
+    { /* Nothing.  */ }
+
+    DISABLE_COPY_AND_ASSIGN (entry_point_info);
+
+    /* The entry address within the inferior as a whole.  See the member
+       variable definition below for more details.  */
+    const std::optional<CORE_ADDR> &inferior_entry_address () const
+    {
+      return m_inferior_entry_address;
+    }
+
+    /* The entry address within the main executable.  See the member
+       variable definition below for more details.  */
+    const std::optional<CORE_ADDR> &exec_entry_address () const
+    {
+      return m_exec_entry_address;
+    }
+
+  private:
+    /* The entry address within the inferior.  This can be outside of the
+       main executable, e.g. for dynamically linked executables this could
+       be the entry address for the run-time linker.  For statically linked
+       executables this will be the entry address of the main executable.
+       This can be empty if GDB doesn't know how to figure out the correct
+       entry address for any reason.  */
+    std::optional<CORE_ADDR> m_inferior_entry_address;
+
+    /* The entry address within the main executable.  This can be empty if
+       the main executable is not set yet, or GDB doesn't have an objfile
+       associated with the main executable, e.g. in some attach, or remote
+       debug cases.  */
+    std::optional<CORE_ADDR> m_exec_entry_address;
+  };
+
+  /* Return information about the entry point in the main executable, and
+     the entry point for the inferior, which might be different from the
+     main executable.  */
+  entry_point_info get_entry_point_info () const;
+
   /* If there is a valid and known entry point in the main executable of
      this program space, return it.  Otherwise return an empty optional.  */
   std::optional<CORE_ADDR> exec_entry_point_address_if_available () const;

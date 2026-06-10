@@ -1,0 +1,215 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check that 'bt' from the very first instruction (where 'starti'
+# stops GDB) doesn't display any unexpected frames.
+
+require !use_gdb_stub
+
+standard_testfile main.c
+
+# Build default executable, hopefully dynamically linked, but we check
+# this below.
+foreach pie_mode { pie nopie } {
+    if { [build_executable "failed to build" $testfile-$pie_mode $srcfile \
+	      [list debug $pie_mode]] } {
+	return
+    }
+}
+
+# Build a statically linked executable.
+set testfile_static ${testfile}-static
+if { [build_executable "failed to build" $testfile_static $srcfile \
+	  {debug additional_flags=-static}] } {
+    return
+}
+
+# Run the 'maint info entry-address' command.  Expect INF_RE to match
+# the inferior entry address and EXE_RE to match the executable entry
+# address.  TESTNAME is used as the test name.
+proc check_maint_info_entry_addr { inf_re exe_re testname } {
+    gdb_test "maint info entry-address" \
+	[multi_line \
+	     "Inferior entry address: ${inf_re}" \
+	     "Executable entry address: ${exe_re}"] \
+	$testname
+}
+
+# Use 'info proc mappings' to find the address of the first mapping of
+# TESTFILE, return this address.  If the address cannot be found then
+# the empty string is returned.
+#
+# This emits a PASS or FAIL depending on whether the address is found
+# or not.
+proc get_mapped_file_base_addr { testfile } {
+    set base_addr ""
+    gdb_test_multiple "info proc mappings" "" -lbl {
+	-re "\r\n($::hex) \[^\r\n\]+/${testfile}\\s*(?=\r\n)" {
+	    if { $base_addr eq "" } {
+		set base_addr $expect_out(1,string)
+	    }
+	    exp_continue
+	}
+	-re "\r\n$::gdb_prompt $" {
+	    gdb_assert { $base_addr ne "" } \
+		"find base address of $testfile"
+	}
+    }
+    return $base_addr
+}
+
+# Use 'objdump' to extract the entry point address from TESTFILE.
+proc get_exec_entry_address { testfile } {
+    set objdump_program [gdb_find_objdump]
+    set command "exec $objdump_program -f [standard_output_file $testfile]"
+    verbose -log "command is $command"
+    set result [catch {{*}$command} output]
+    verbose -log "result is $result"
+    verbose -log "output is $output"
+
+    set testname "get_exec_entry_address"
+
+    if {$result != 0} {
+	fail $testname
+	return "UNKNOWN"
+    }
+
+    if {![regexp "\nstart address ($::hex)\n" $output trash addr]} {
+	fail "$testname (no entry point address header)"
+	return "UNKNOWN"
+    }
+
+    return 0x[format %x $addr]
+}
+
+# Start TESTFILE using 'starti'.  Check if the 'backtrace' command
+# prints any additional frames; we don't expect any.  Create a core
+# file from the running inferior.  Restart GDB and load the core file,
+# check that GDB can still figure out the entry addresses.
+#
+# When IS_DYNAMIC is true then TESTFILE is a dynamically linked
+# executable, otherwise TESTFILE is statically linked.
+proc run_test { testfile is_dynamic } {
+    clean_restart $testfile
+
+    set exe_entry_addr [get_exec_entry_address $testfile]
+
+    # The inferior entry address is always unknown before starting the
+    # inferior because GDB has no solib_ops yet, and it is only
+    # through that that we figure out the inferior entry address.
+    check_maint_info_entry_addr "<unknown>" $exe_entry_addr \
+	"check 'maint info entry-address' before inferior starts"
+
+    # Start inferior with 'starti' and then wait for a prompt.
+    gdb_starti_cmd
+    gdb_test "" ".*" "prompt after starti"
+
+    # Not every target supports finding the process entry point.
+    # Targets that don't support this report '<unknown>', we check for
+    # this too on those targets.
+    if {[supports_process_entry_point]} {
+	set pc [get_hexadecimal_valueof "\$pc" "UNKNOWN" \
+		    "get current program counter"]
+
+	if { !$is_dynamic } {
+	    # In static binaries, the first address should be the first
+	    # address in the executable.
+	    gdb_assert { $pc == $exe_entry_addr } \
+		"stopped at executable entry address"
+	}
+
+	set inf_entry_addr $pc
+    } else {
+	set inf_entry_addr "<unknown>"
+    }
+
+    # If using PIE then the executable entry address we looked up from
+    # the objfile will have been relocated.  Attempt to compute the
+    # relocated address and updated EXE_ENTRY_ADDR, otherwise set
+    # EXE_ENTRY_ADDR to a generic pattern that matches any address.
+    if {[exec_is_pie [standard_output_file $testfile]]} {
+	set base_addr [get_mapped_file_base_addr $testfile]
+	if { $base_addr ne "" } {
+	    set exe_entry_addr \
+		0x[format %x [expr {$base_addr + $exe_entry_addr}]]
+	} else {
+	    # We failed to find the base address.  The
+	    # get_mapped_file_base_addr will have already emitted a
+	    # FAIL.  Set the expected pattern to something generic and
+	    # push on, we can still test a bunch of things, we just
+	    # don't know the address is correct.
+	    set exe_entry_addr $::hex
+	}
+    }
+
+    check_maint_info_entry_addr $inf_entry_addr $exe_entry_addr \
+	"check 'maint info entry-address' after starti"
+
+    # Allow backtrace past the entry frame, count how many frames GDB
+    # finds.  If on this target there are no additional frames then
+    # the following test isn't going to tell us much, so skip it.
+    gdb_test_no_output "set backtrace past-entry on"
+    set frame_count 0
+    gdb_test_multiple "bt" "count possible frames" -lbl {
+	-re "\r\n#($::decimal)\\s+\[^\r\n\]+(?=\r\n)" {
+	    incr frame_count
+	    exp_continue
+	}
+	-re "\r\n$::gdb_prompt $" {
+	    gdb_assert { $frame_count > 0 } $gdb_test_name
+	}
+    }
+
+    if { $frame_count > 1 } {
+	# Turn off backtrace past the entry frame.  Use the 'bt' command,
+	# and check we see only a single frame.
+	gdb_test_no_output "set backtrace past-entry off"
+	gdb_test "bt" "^#0  \[^\r\n\]+" \
+	    "single frame when backtrace past-entry is off"
+    } else {
+	unsupported "no additional frames that GDB can hide"
+    }
+
+    # Create a core file.  Restart GDB.  Load the core file.  Check
+    # that 'maint info entry-address' gives the correct output.
+    set corefile [standard_output_file $testfile].core
+    if {![gdb_gcore_cmd $corefile "generate corefile"]} {
+	return
+    }
+
+    clean_restart $testfile
+
+    if {[gdb_core_cmd $corefile "load corefile"] != 1} {
+	return
+    }
+
+    check_maint_info_entry_addr $inf_entry_addr $exe_entry_addr \
+	"check 'maint info entry-address' after loading core file"
+}
+
+with_test_prefix "dynamic" {
+    foreach_with_prefix pie_mode { pie nopie } {
+	set dyln_name [section_get $binfile-$pie_mode .interp]
+	if { $dyln_name eq "" } {
+	    unsupported "couldn't find dynamic linker name"
+	} else {
+	    run_test $testfile-$pie_mode true
+	}
+    }
+}
+
+with_test_prefix "static" {
+    run_test $testfile_static false
+}

@@ -2694,12 +2694,12 @@ inside_main_func (const frame_info_ptr &this_frame)
 static bool
 inside_entry_func (const frame_info_ptr &this_frame)
 {
-  std::optional<CORE_ADDR> entry_point
-    = current_program_space->exec_entry_point_address_if_available ();
-  if (!entry_point.has_value ())
-    return false;
+  const program_space::entry_point_info &ep_info
+    = current_program_space->get_entry_point_info ();
 
-  return get_frame_func (this_frame) == *entry_point;
+  CORE_ADDR frame_func_addr = get_frame_func (this_frame);
+  return (ep_info.exec_entry_address () == frame_func_addr
+	  || ep_info.inferior_entry_address () == frame_func_addr);
 }
 
 /* Return a structure containing various interesting information about

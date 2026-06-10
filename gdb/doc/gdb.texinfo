@@ -43212,6 +43212,28 @@ Ignoring SystemTap probe libc longjmp in /lib64/libc.so.6.^M
 Ignoring SystemTap probe libc longjmp in /lib64/libc.so.6.^M
 Ignoring SystemTap probe libc longjmp in /lib64/libc.so.6.^M
 @end smallexample
+
+@kindex maint info entry-address
+@item maint info entry-address
+Display the entry addresses for the currently selected inferior.  Two
+addresses are displayed, the inferior entry address and the executable
+entry address.
+
+Neither address is the address of @code{main}.  When a program is
+started, low-level startup code (typically a function called
+@code{_start}) runs before @code{main} is called.
+
+The executable entry address is the address of this startup code
+within the main executable (@pxref{Files, ,Commands to Specify
+Files}).
+
+The inferior entry address is the address of the very first
+instruction executed when the inferior is started.  For statically
+linked programs this is the same as the executable entry address.  For
+dynamically linked programs the run-time linker must execute first in
+order to load shared libraries, so the inferior entry address will be
+an address within the run-time linker rather than within the main
+executable.
 @end table
 
 The following command is useful for non-interactive invocations of
