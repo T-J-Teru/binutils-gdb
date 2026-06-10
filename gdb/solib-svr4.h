@@ -115,6 +115,7 @@ struct svr4_solib_ops : public solib_ops
   void iterate_over_objfiles_in_search_order
     (iterate_over_objfiles_in_search_order_cb_ftype cb,
      objfile *current_objfile) const override;
+  std::optional<CORE_ADDR> inferior_entry_point_address () const override;
 
   /* Return the appropriate link map offsets table for the architecture.  */
   virtual link_map_offsets *fetch_link_map_offsets () const = 0;

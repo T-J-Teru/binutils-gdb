@@ -26,6 +26,7 @@
 #include <algorithm>
 #include "cli/cli-style.h"
 #include "observable.h"
+#include "arch-utils.h"
 
 /* The last program space number assigned.  */
 static int last_program_space_num = 0;
@@ -288,6 +289,55 @@ program_space::exec_entry_point_address () const
 
 /* See progspace.h.  */
 
+entry_point_info
+program_space::get_entry_point_info () const
+{
+  std::optional<CORE_ADDR> exec_entry_address
+    = this->exec_entry_point_address_if_available ();
+
+  std::optional<CORE_ADDR> inferior_entry_address;
+  if (m_solib_ops != nullptr)
+    inferior_entry_address = m_solib_ops->inferior_entry_point_address ();
+
+  return entry_point_info (std::move (inferior_entry_address),
+			   std::move (exec_entry_address));
+}
+
+/* Implement the 'maint info entry-address' command.  */
+
+static void
+maintenance_info_entry_address (const char *args, int from_tty)
+{
+  if (args != nullptr && *args != '\0')
+    error (_("unknown argument: %s"), args);
+
+  struct gdbarch *gdbarch = get_current_arch ();
+
+  const entry_point_info &ep_info
+    = current_program_space->get_entry_point_info ();
+
+  /* Display a single entry address ADDR with TITLE as a description.  */
+  auto display_entry_address
+    = [&gdbarch] (const char *title,
+		  const std::optional<CORE_ADDR> &addr) -> void
+  {
+    gdb_puts (title);
+    if (addr.has_value ())
+      fputs_styled (paddress (gdbarch, addr.value ()),
+		    address_style.style (), gdb_stdout);
+    else
+      fputs_styled ("<unknown>", metadata_style.style (), gdb_stdout);
+    gdb_puts ("\n");
+  };
+
+  display_entry_address (_("Inferior entry address: "),
+			 ep_info.inferior_entry_address ());
+  display_entry_address (_("Executable entry address: "),
+			 ep_info.exec_entry_address ());
+}
+
+/* See progspace.h.  */
+
 bool
 program_space::has_partial_symbols ()
 {
@@ -496,6 +546,16 @@ initialize_progspace ()
   add_cmd ("program-spaces", class_maintenance,
 	   maintenance_info_program_spaces_command,
 	   _("Info about currently known program spaces."),
+	   &maintenanceinfolist);
+
+  add_cmd ("entry-address", class_maintenance,
+	   maintenance_info_entry_address,
+	   _("Information about the current inferior's entry addresses.\n\
+Display the address of the first instruction executed within the\n\
+inferior, and the first instruction executed within the main executable.\n\
+The entry address of the whole inferior will be <unknown> prior to the\n\
+inferior starting, and either or both addresses can be <unknown> if\n\
+GDB is unable to find the required information."),
 	   &maintenanceinfolist);
 
   /* There's always one program space.  Note that this function isn't

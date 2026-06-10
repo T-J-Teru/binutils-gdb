@@ -3777,6 +3777,91 @@ svr4_solib_ops::get_solibs_in_ns (int nsid) const
   return ns_solibs;
 }
 
+/* See solib.h.  */
+
+std::optional<CORE_ADDR>
+svr4_solib_ops::inferior_entry_point_address () const
+{
+  std::optional<gdb::byte_vector> interp_name_holder
+    = svr4_find_program_interpreter ();
+
+  /* No interpreter means this is a static executable.  Ask the
+     program_space for the entry address within the main executable.  */
+  if (!interp_name_holder.has_value ())
+    return m_pspace->exec_entry_point_address_if_available ();
+
+  /* For a dynamically linked executable the inferior's true entry point
+     is the entry point of the dynamic linker.  We find this using the
+     AT_BASE auxiliary vector entry, which gives the dynamic linker's
+     load address, combined with e_entry address pulled from the
+     inferior.  We assume that the ELF header can be read from AT_BASE.  */
+  CORE_ADDR at_base_addr;
+  if (target_auxv_search (AT_BASE, &at_base_addr) <= 0)
+    return {};
+
+  /* Determine ELF architecture type.  Use the size of a program header
+     entry to determine which ELF header we can expect to find.  */
+  size_t e_entry_offset = 0;
+  size_t e_entry_size = 0;
+  CORE_ADDR at_phent;
+  if (target_auxv_search (AT_PHENT, &at_phent) <= 0)
+    return {};
+  if (at_phent == sizeof (Elf32_External_Phdr))
+    {
+      e_entry_offset = offsetof (Elf32_External_Ehdr, e_entry);
+      e_entry_size = 4;
+    }
+  else if (at_phent == sizeof (Elf64_External_Phdr))
+    {
+      e_entry_offset = offsetof (Elf64_External_Ehdr, e_entry);
+      e_entry_size = 8;
+    }
+  else
+    return {};
+
+  /* Architecture of the current inferior.  */
+  gdbarch *gdbarch = current_inferior ()->arch ();
+
+  /* Read the entry address from the ELF header at AT_BASE_ADDR.  */
+  CORE_ADDR e_entry;
+  gdb_byte buffer[sizeof (CORE_ADDR)];
+  if (target_read_memory (at_base_addr + e_entry_offset, buffer, e_entry_size))
+    return {};
+  bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+  e_entry = extract_unsigned_integer (buffer, e_entry_size, byte_order);
+
+  /* Ensure AT_BASE_ADDR has proper sign in its possible upper bits so
+     that `+ at_base_addr' will overflow CORE_ADDR width not creating
+     invalid addresses like 0x101234567 for 32bit inferiors on 64bit
+     GDB.  */
+  int addr_bit = gdbarch_addr_bit (gdbarch);
+  if (addr_bit < (sizeof (CORE_ADDR) * HOST_CHAR_BIT))
+    {
+      CORE_ADDR space_size = (CORE_ADDR) 1 << addr_bit;
+
+      gdb_assert (at_base_addr < space_size);
+
+      /* E_ENTRY exceeding SPACE_SIZE would be for prelinked
+	 64bit ld.so with 32bit executable, it should not happen.  */
+      if (e_entry < space_size
+	  && e_entry + at_base_addr >= space_size)
+	at_base_addr -= space_size;
+    }
+
+  /* Compute the entry address.  */
+  e_entry = at_base_addr + e_entry;
+
+  /* Handle the case where E_ENTRY is a function descriptor.  Also remove
+     any non-address (e.g. tag) bits from E_ENTRY.  */
+  e_entry
+    = gdbarch_convert_from_func_ptr_addr (gdbarch, e_entry,
+					  current_inferior ()->top_target ());
+  e_entry
+    = gdbarch_addr_bits_remove (gdbarch, e_entry);
+
+  return e_entry;
+}
+
 INIT_GDB_FILE (svr4_solib)
 {
   gdb::observers::free_objfile.attach (svr4_free_objfile_observer,
