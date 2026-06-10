@@ -2695,7 +2695,7 @@ static bool
 inside_entry_func (const frame_info_ptr &this_frame)
 {
   std::optional<CORE_ADDR> entry_point
-    = current_program_space->entry_point_address_query ();
+    = current_program_space->exec_entry_point_address_if_available ();
   if (!entry_point.has_value ())
     return false;
 
@@ -2771,7 +2771,7 @@ get_prev_frame (const frame_info_ptr &this_frame)
      added to work around that (now fixed) case.  */
   /* NOTE: cagney/2003-07-15: danielj (if I'm reading it right)
      suggested having the inside_entry_func test use the
-     inside_main_func() msymbol trick (along with entry_point_address()
+     inside_main_func() msymbol trick (along with exec_entry_point_address()
      I guess) to determine the address range of the start function.
      That should provide a far better stopper than the current
      heuristics.  */

@@ -263,7 +263,7 @@ program_space::empty ()
 /* See progspace.h.  */
 
 std::optional<CORE_ADDR>
-program_space::entry_point_address_query () const
+program_space::exec_entry_point_address_if_available () const
 {
   objfile *objf = symfile_object_file;
   if (objf == NULL || !objf->per_bfd->ei.entry_point_p)
@@ -276,9 +276,9 @@ program_space::entry_point_address_query () const
 /* See progspace.h.  */
 
 CORE_ADDR
-program_space::entry_point_address () const
+program_space::exec_entry_point_address () const
 {
-  std::optional<CORE_ADDR> retval = entry_point_address_query ();
+  std::optional<CORE_ADDR> retval = exec_entry_point_address_if_available ();
 
   if (!retval.has_value ())
     error (_("Entry point address is not known."));
