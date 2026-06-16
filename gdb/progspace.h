@@ -370,7 +370,11 @@ struct program_space
   /* Return information about the entry point in the main executable, and
      the entry point for the inferior, which might be different from the
      main executable.  */
-  entry_point_info get_entry_point_info () const;
+  const entry_point_info &get_entry_point_info () const;
+
+  /* Clear any cached entry point information.  */
+  void clear_cached_entry_point_info ()
+  { m_entry_point_info.reset (); }
 
   /* If there is a valid and known entry point in the main executable of
      this program space, return it.  Otherwise return an empty optional.  */
@@ -463,6 +467,9 @@ private:
 
   /* See `exec_filename`.  */
   gdb::unique_xmalloc_ptr<char> m_exec_filename;
+
+  /* Cached entry point information.  See get_entry_point_info.  */
+  mutable std::optional<entry_point_info> m_entry_point_info;
 };
 
 /* The list of all program spaces.  There's always at least one.  */
