@@ -289,9 +289,12 @@ program_space::exec_entry_point_address () const
 
 /* See progspace.h.  */
 
-entry_point_info
+const entry_point_info &
 program_space::get_entry_point_info () const
 {
+  if (m_entry_point_info.has_value ())
+    return m_entry_point_info.value ();
+
   std::optional<CORE_ADDR> exec_entry_address
     = this->exec_entry_point_address_if_available ();
 
@@ -299,8 +302,9 @@ program_space::get_entry_point_info () const
   if (m_solib_ops != nullptr)
     inferior_entry_address = m_solib_ops->inferior_entry_point_address ();
 
-  return entry_point_info (std::move (inferior_entry_address),
-			   std::move (exec_entry_address));
+  m_entry_point_info.emplace (std::move (inferior_entry_address),
+			      std::move (exec_entry_address));
+  return m_entry_point_info.value ();
 }
 
 /* Implement the 'maint info entry-address' command.  */
@@ -538,11 +542,46 @@ program_space::clear_solib_cache ()
   deleted_solibs.clear ();
 }
 
+/* Clear cached entry point information in the program space of INF.  */
+
+static void
+clear_cached_entry_point_info_for_inferior (inferior *inf)
+{
+  inf->pspace->clear_cached_entry_point_info ();
+}
+
+/* Clear cached entry point information in the program space PSPACE.  */
+
+static void
+clear_cached_entry_point_info_for_pspace (program_space *pspace,
+					  bool /* reload */)
+{
+  pspace->clear_cached_entry_point_info ();
+}
+
+/* Clear cached entry point information in the program space of EXEC_INF.  */
+
+static void
+clear_cached_entry_point_info_after_exec (inferior *exec_inf,
+					  inferior */* follow_inf */)
+{
+  exec_inf->pspace->clear_cached_entry_point_info ();
+}
+
 /* See progspace.h.  */
 
 void
 initialize_progspace ()
 {
+  gdb::observers::inferior_created.attach
+    (clear_cached_entry_point_info_for_inferior, "program-space");
+  gdb::observers::inferior_exit.attach
+    (clear_cached_entry_point_info_for_inferior, "program-space");
+  gdb::observers::executable_changed.attach
+    (clear_cached_entry_point_info_for_pspace, "program-space");
+  gdb::observers::inferior_execd.attach
+    (clear_cached_entry_point_info_after_exec, "program-space");
+
   add_cmd ("program-spaces", class_maintenance,
 	   maintenance_info_program_spaces_command,
 	   _("Info about currently known program spaces."),
