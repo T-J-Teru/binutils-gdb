@@ -72,9 +72,22 @@ mult (double v1, double v2)
   return v1 * v2;
 }
 
+long double
+mult_long_double (long double v1, long double v2)
+{
+  return v1 * v2;
+}
+
 double
 mult_noproto (v1, v2)
   double v1, v2;
+{
+  return v1 * v2;
+}
+
+long double
+mult_long_double_noproto (v1, v2)
+  long double v1, v2;
 {
   return v1 * v2;
 }
