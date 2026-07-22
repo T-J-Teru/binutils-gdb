@@ -108,6 +108,7 @@ static bool start_step_over (void);
 static bool step_over_info_valid_p (void);
 
 static bool schedlock_applies (struct thread_info *tp);
+static bool schedlock_applies (bool step, bool record_will_replay);
 
 static void handle_process_exited (struct execution_control_state *ecs);
 
@@ -2442,18 +2443,12 @@ user_visible_resume_ptid (int step)
 	 individually.  */
       resume_ptid = inferior_ptid;
     }
-  else if ((scheduler_mode == schedlock_on)
-	   || (scheduler_mode == schedlock_step && step))
+  else if (schedlock_applies (step,
+			      target_record_will_replay (inferior_ptid,
+							 execution_direction)))
     {
       /* User-settable 'scheduler' mode requires solo thread
 	 resume.  */
-      resume_ptid = inferior_ptid;
-    }
-  else if ((scheduler_mode == schedlock_replay)
-	   && target_record_will_replay (inferior_ptid, execution_direction))
-    {
-      /* User-settable 'scheduler' mode requires solo thread resume in replay
-	 mode.  */
       resume_ptid = inferior_ptid;
     }
   else if (inferior_ptid != null_ptid
@@ -3246,17 +3241,32 @@ thread_still_needs_step_over (struct thread_info *tp)
   return what;
 }
 
-/* Returns true if scheduler locking applies.  STEP indicates whether
-   we're about to do a step/next-like command to a thread.  */
+/* Returns true if scheduler locking applies to TP.  */
 
 static bool
-schedlock_applies (struct thread_info *tp)
+schedlock_applies (thread_info *tp)
+{
+  bool step = false;
+  bool record_will_replay = false;
+  if (tp != nullptr)
+    {
+      step = tp->control.stepping_command;
+      record_will_replay
+	= target_record_will_replay (tp->ptid, execution_direction);
+    }
+  return schedlock_applies (step, record_will_replay);
+}
+
+/* Returns true if scheduler locking applies.  STEP indicates whether
+   we're about to do a step/next-like command and RECORD_WILL_REPLAY
+   indicates whether we're about to replay.  */
+
+static bool
+schedlock_applies (bool step, bool record_will_replay)
 {
   return (scheduler_mode == schedlock_on
-	  || (scheduler_mode == schedlock_step
-	      && tp->control.stepping_command)
-	  || (scheduler_mode == schedlock_replay
-	      && target_record_will_replay (tp->ptid, execution_direction)));
+	  || (scheduler_mode == schedlock_step && step)
+	  || (scheduler_mode == schedlock_replay && record_will_replay));
 }
 
 /* When FORCE_P is false, set process_stratum_target::COMMIT_RESUMED_STATE
