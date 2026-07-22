@@ -83,6 +83,12 @@ public:
 						       false);
   }
 
+  /* Handle DW_LNS_set_column.  */
+  void handle_set_column (unsigned int column)
+  {
+    m_column = column;
+  }
+
   /* Handle DW_LNS_advance_pc.  */
   void handle_advance_pc (CORE_ADDR adjust);
 
@@ -169,6 +175,7 @@ private:
   /* The line table index of the current file.  */
   file_name_index m_file = 1;
   unsigned int m_line = 1;
+  unsigned int m_column = 0;
 
   /* These are initialized in the constructor.  */
 
@@ -198,6 +205,7 @@ private:
      example, when discriminators are present.  PR 17276.  */
   unsigned int m_last_line = 0;
   bool m_line_has_non_zero_discriminator = false;
+  unsigned int m_last_column = 0;
 };
 
 void
@@ -491,11 +499,15 @@ lnp_state_machine::record_line (bool end_sequence)
 	  if (m_cu->producer_is_codewarrior ())
 	    lte_flags |= LEF_IS_STMT;
 
+	  if (m_line == m_last_line && m_column > m_last_column)
+	    lte_flags &= ~LEF_IS_STMT;
+
 	  if (record_line_p ())
 	    {
 	      m_last_subfile = m_builder->get_current_subfile ();
 	      record_line_1 (m_line, lte_flags);
 	      m_last_line = m_line;
+	      m_last_column = m_column;
 	    }
 	}
     }
@@ -727,8 +739,12 @@ dwarf_decode_lines (struct dwarf2_cu *cu, unrelocated_addr lowpc)
 	      }
 	      break;
 	    case DW_LNS_set_column:
-	      (void) read_unsigned_leb128 (abfd, line_ptr, &bytes_read);
-	      line_ptr += bytes_read;
+	      {
+		unsigned int column
+		  = read_unsigned_leb128 (abfd, line_ptr, &bytes_read);
+		line_ptr += bytes_read;
+		state_machine.handle_set_column (column);
+	      }
 	      break;
 	    case DW_LNS_negate_stmt:
 	      state_machine.handle_negate_stmt ();
