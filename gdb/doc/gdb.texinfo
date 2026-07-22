@@ -7462,10 +7462,10 @@ locking the OS scheduler to allow only a single thread to run.
 @cindex lock scheduler
 Set the scheduler locking settings.  It applies to normal execution,
 record mode, and replay mode.  You can configure scheduler locking separately
-for stepping and continuing commands.  Examples of stepping commands are:
-@samp{step}, @samp{stepi}, @samp{next}.  Examples of continuing commands are
-@samp{continue}, @samp{finish}, @samp{jump}, @samp{until}, @samp{return} or
-inferior function calls.
+for continuing and stepping commands, as well as function calls.
+Examples of stepping commands are: @samp{step}, @samp{stepi}, @samp{next}.
+Examples of continuing commands are @samp{continue}, @samp{finish},
+@samp{jump}, @samp{until}, @samp{return}.
 
 The following @var{type}-settings are available.  When a setting is
 @code{on}, the scheduler is locked: other threads may not preempt the
@@ -7476,9 +7476,20 @@ current thread, so that the focus of debugging does not change unexpectedly.
 Applies to continuing commands during normal execution and record modes.
 This setting is @code{off} by default.
 
+@item eval
+When @code{on}, the scheduler is locked for function calls during normal
+execution and record modes, such that other threads may not preempt
+the current thread during the inferior call.  This setting is @code{off}
+by default.
+
 @item replay continue
 Applies to continuing commands during replay mode.  This setting is
 @code{on} by default.
+
+@item replay eval
+When @code{on}, the scheduler is locked for function calls during replay
+mode, such that other threads may not preempt the current thread during
+the inferior call.  This setting is @code{on} by default.
 
 @item replay step
 Applies to stepping commands during replay mode.  This setting is
@@ -7529,9 +7540,9 @@ are @code{off}.
 Behaves like @code{on} in replay mode, and @code{off} in either record
 mode or during normal execution.  This is the default mode.
 
-This is equivalent to set @samp{scheduler-locking replay continue} and
-@samp{scheduler-locking replay step} to @code{on}, while other settings
-are @code{off}.
+This is equivalent to set @samp{scheduler-locking replay continue},
+@samp{scheduler-locking replay eval} and @samp{scheduler-locking replay step}
+to @code{on}, while other settings are @code{off}.
 
 @end table
 
