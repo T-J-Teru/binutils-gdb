@@ -2744,6 +2744,22 @@ cutu_reader::cutu_reader (dwarf2_per_cu &this_cu,
   /* This is cheap if the section is already read in.  */
   section->read (objfile);
 
+  /* An empty section can have a NULL buffer pointer, in which case
+     later reads will almost always crash GDB.  */
+  if (section->empty ())
+    error (_(DWARF_ERROR_PREFIX "read from empty section %s [in module %s]"),
+	   section->get_name (), bfd_get_filename (abfd));
+
+  /* This check doesn't guarantee that later reads will not try to
+     read outside of the valid buffer, GDB's bounds checking in this
+     area is less than ideal.  But lets at least ensure that the start
+     address is inside the allocated buffer.  */
+  if (to_underlying (this_cu.sect_off ()) >= section->size)
+    error (_(DWARF_ERROR_PREFIX
+	     "read from invalid offset %s in section %s [in module %s]"),
+	   sect_offset_str (this_cu.sect_off ()), section->get_name (),
+	   bfd_get_filename (abfd));
+
   begin_info_ptr = m_info_ptr
     = section->buffer + to_underlying (this_cu.sect_off ());
 

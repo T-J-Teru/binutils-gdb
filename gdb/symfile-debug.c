@@ -35,6 +35,7 @@
 #include "filenames.h"
 #include "build-id.h"
 #include "debuginfod-support.h"
+#include "debuginfod-lazy-bfd.h"
 
 /* We need to save a pointer to the real symbol functions.
    Plus, the debug versions are malloc'd because we have to NULL out the
@@ -580,7 +581,27 @@ debuginfod_find_and_open_separate_symbol_file (struct objfile * objfile)
 
   if (build_id != nullptr)
     {
+      gdb::unique_xmalloc_ptr<char> skeleton_path;
+      scoped_fd fd = debuginfod_debuginfo_skeleton_query (build_id->data, build_id->size,
+							  filename, &skeleton_path);
+      if (fd.get () >= 0)
+	{
+	  /* Got a skeleton file, convert it to a BFD.  */
+	  gdb_bfd_ref_ptr debug_bfd
+	    (debuginfod_open_deferred_download_skeleton (objfile, std::move (fd),
+							 skeleton_path.get ()));
+
+	  return { debug_bfd, std::string (skeleton_path.get ()) };
+	}
+
+      /* TODO: This is the old approach, which downloads the full
+	 debuginfo.  Really I need to merge the skeleton downloading
+	 into the same client function as the full debuginfo
+	 downloading, but that can be done later, once I've shown that
+	 this can be made to work.  */
+#if 0
       gdb::unique_xmalloc_ptr<char> symfile_path;
+
       scoped_fd fd (debuginfod_debuginfo_query (build_id->data, build_id->size,
 						filename, &symfile_path));
 
@@ -595,6 +616,7 @@ debuginfod_find_and_open_separate_symbol_file (struct objfile * objfile)
 				  build_id->size, build_id->data))
 	    return { debug_bfd, std::string (symfile_path.get ()) };
 	}
+#endif
     }
 
   return {};

@@ -105,4 +105,13 @@ extern scoped_fd debuginfod_section_query (const unsigned char *build_id,
 					   const char *section_name,
 					   gdb::unique_xmalloc_ptr<char>
 					     *destname);
+
+/* ... */
+
+extern scoped_fd debuginfod_debuginfo_skeleton_query (const unsigned char *build_id,
+						      int build_id_len,
+						      const char *filename,
+						      gdb::unique_xmalloc_ptr<char>
+						      *destname);
+
 #endif /* GDB_DEBUGINFOD_SUPPORT_H */

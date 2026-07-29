@@ -1086,6 +1086,7 @@ COMMON_SFILES = \
 	d-valprint.c \
 	dcache.c \
 	debug.c \
+	debuginfod-lazy-bfd.c \
 	debuginfod-support.c \
 	dictionary.c \
 	disasm.c \
@@ -1381,6 +1382,7 @@ HFILES_NO_SRCDIR = \
 	ctfread.h \
 	darwin-nat.h \
 	dcache.h \
+	debuginfod-lazy-bfd.h \
 	debuginfod-support.h \
 	defs.h \
 	dicos-tdep.h \
