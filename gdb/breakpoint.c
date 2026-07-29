@@ -7764,7 +7764,7 @@ set_breakpoint_location_function (struct bp_location *loc)
 struct gdbarch *
 get_sal_arch (struct symtab_and_line sal)
 {
-  if (sal.section != nullptr)
+  if (sal.section != nullptr && sal.section->objfile != nullptr)
     return sal.section->objfile->arch ();
   if (sal.symtab != nullptr)
     return sal.symtab->compunit ().objfile ()->arch ();
