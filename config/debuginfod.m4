@@ -14,6 +14,12 @@ AC_DEFUN([AC_DEBUGINFOD],
 #
 # Define HAVE_LIBDEBUGINFOD_FIND_SECTION if libdebuginfod is found with
 # version >= 0.188.
+#
+# Define HAVE_LIBDEBUGINFOD_GET_SKELETON if libdebuginfod is found with
+# version >= 0.188.
+#
+# TODO: The skeleton version check will need updating once the
+# skeleton support is available upstream.
 AC_ARG_WITH([debuginfod],
   AS_HELP_STRING([--with-debuginfod], [Enable debuginfo lookups with debuginfod (auto/yes/no)]),
   [], [with_debuginfod=auto])
@@ -21,6 +27,11 @@ AC_MSG_CHECKING([whether to use debuginfod])
 AC_MSG_RESULT([$with_debuginfod])
 
 if test "x$with_debuginfod" != xno; then
+  PKG_CHECK_MODULES([DEBUGINFOD], [libdebuginfod >= 0.188],
+    [AC_DEFINE([HAVE_LIBDEBUGINFOD_GET_SKELETON], [1],
+               [Define to 1 if debuginfod skeleton downloading is supported.])],
+    [AC_MSG_WARN([libdebuginfod is missing or some features may be unavailable.])])
+
   PKG_CHECK_MODULES([DEBUGINFOD], [libdebuginfod >= 0.188],
     [AC_DEFINE([HAVE_LIBDEBUGINFOD_FIND_SECTION], [1],
                [Define to 1 if debuginfod section downloading is supported.])],
