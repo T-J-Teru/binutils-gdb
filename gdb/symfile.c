@@ -102,6 +102,8 @@ static int simple_overlay_update_1 (struct obj_section *);
 
 static void symfile_find_segment_sections (struct objfile *objfile);
 
+static int symfile_default_text_sect_index (objfile *objfile);
+
 /* Map from a BFD flavour to the corresponding sym_fns instance.  On
    gdb startup, each object file reader calls add_symtab_fns() to
    register information on each format it is prepared to read.  */
@@ -300,7 +302,7 @@ init_objfile_sect_indices (struct objfile *objfile)
   if (i == objfile->section_offsets.size ())
     {
       if (objfile->sect_index_text == -1)
-	objfile->sect_index_text = 0;
+	objfile->sect_index_text = symfile_default_text_sect_index (objfile);
       if (objfile->sect_index_data == -1)
 	objfile->sect_index_data = 0;
       if (objfile->sect_index_bss == -1)
@@ -3704,6 +3706,48 @@ symfile_find_segment_sections (struct objfile *objfile)
 	    objfile->sect_index_bss = sect->index;
 	}
     }
+}
+
+/* Return the section index of a section in OBJFILE which can act as
+   the default text section.
+
+   This returns the first allocatable and executable section, or the
+   first allocatable section if no section is marked executable.
+
+   As an absolute fallback, 0 is returned.  */
+
+static int
+symfile_default_text_sect_index (objfile *objfile)
+{
+  gdb_assert (objfile->sect_index_text == -1);
+
+  bfd *abfd = objfile->obfd.get ();
+
+  int first_allocatable_section_index = -1;
+
+  for (asection *sect = abfd->sections; sect != nullptr; sect = sect->next)
+    {
+      /* Skip non-allocatable sections.  */
+      if ((bfd_section_flags (sect) & SEC_ALLOC) == 0)
+	continue;
+
+      /* Record the first allocatable section.  */
+      if (first_allocatable_section_index == -1)
+	first_allocatable_section_index = sect->index;
+
+      /* Return the first allocatable code section found.  */
+      if ((bfd_section_flags (sect) & SEC_CODE) == SEC_CODE)
+	return sect->index;
+    }
+
+  /* We didn't even find an allocatable section.  Return 0, but this
+     is likely going to cause issues if (somehow) there are any debug
+     symbols in OBJFILE as those symbols will end up with a NULL
+     objfile pointer.  */
+  if (first_allocatable_section_index == -1)
+    return 0;
+
+  return first_allocatable_section_index;
 }
 
 /* Listen for free_objfile events.  */
