@@ -20,7 +20,6 @@
 #ifndef _CTF_SWAP_H
 #define _CTF_SWAP_H
 
-#include "config.h"
 #include <stdint.h>
 #include <assert.h>
 
