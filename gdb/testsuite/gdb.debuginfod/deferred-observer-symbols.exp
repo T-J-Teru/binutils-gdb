@@ -102,47 +102,52 @@ proc_with_prefix test_deferred_status { } {
 
     gdb_load $::binfile
 
-    if { ![runto_main] } {
-	return
-    }
+    gdb_breakpoint main
+    gdb_run_cmd
 
-    # Step into the library to trigger debuginfo download.
-    # The observer should see full type info.
+    # During startup GDB adds the outline file for the debug
+    # information for the shared library.  The new objfile observer
+    # then kicks in and triggers the download of the full debug info,
+    # and then prints some details relating to the newly downloaded
+    # debug info.
     set saw_void_type false
     set saw_int_type false
     set saw_error false
-    set saw_lib_func false
     set saw_dbg_dl false
-    gdb_test_multiple "step" "step into library" {
-	-re "^Python observer: found type void \\(\\)\r\n" {
-	    set saw_void_type true
-	    exp_continue
-	}
-	-re "^Python observer: found type volatile int\r\n" {
-	    set saw_int_type true
-	    exp_continue
-	}
-	-re "^Python observer: ERROR\[^\r\n\]+" {
-	    set saw_error true
-	    exp_continue
-	}
-	-re "^libdeferred1_test \\(\\) at \[^\r\n\]+\r\n" {
-	    set saw_lib_func true
-	    exp_continue
-	}
-	-re "^Downloading \[^\r\n\]*separate debug info for \[^\r\n\]+${::lib1_testfile}\\.\\.\\.\r\n" {
+    gdb_test_multiple "" "run to main" -lbl {
+	-re "\r\nDownloading \[^\r\n\]*separate debug info for \[^\r\n\]+${::lib1_testfile}\\.\\.\\.(?=\r\n)" {
 	    set saw_dbg_dl true
 	    exp_continue
 	}
-	-re "^$::gdb_prompt $" {
-	    gdb_assert { $saw_void_type && $saw_int_type && $saw_lib_func \
-			     && $saw_dbg_dl && !$saw_error } \
-		$gdb_test_name
-	}
-	-re "^\[^\r\n\]*\r\n" {
+	-re "\r\nPython observer: found type void \\(\\)(?=\r\n)" {
+	    set saw_void_type true
 	    exp_continue
 	}
+	-re "\r\nPython observer: found type volatile int(?=\r\n)" {
+	    set saw_int_type true
+	    exp_continue
+	}
+	-re "\r\nPython observer: ERROR\[^\r\n\]+(?=\r\n)" {
+	    set saw_error true
+	    exp_continue
+	}
+	-re "\r\n$::gdb_prompt $" {
+	    gdb_assert { $saw_dbg_dl && $saw_void_type && $saw_int_type \
+			     && !$saw_error } $gdb_test_name
+	}
     }
+
+    # Step into the library.  Due to the new objfile observer
+    # triggering the full debug info download earlier there should be
+    # no additional debuginfod activity at this point.
+    #
+    # TODO: Maybe improve the pattern for the second line, we should
+    # know the exact line we are stepping to at this point.
+    gdb_test "step" \
+	[multi_line \
+	     "^libdeferred1_test \\(\\) at \[^\r\n\]+" \
+	     "$::decimal\\s+\[^\r\n\]+"] \
+	"step into library"
 }
 
 prepare_for_debuginfod cache db

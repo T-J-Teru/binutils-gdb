@@ -93,7 +93,7 @@ file rename -force $debuginfo $debugdir
 # we don't check if the file actually exists in the cache.
 proc debuginfod_cache_file { cache filename } {
     set buildid [get_build_id $filename]
-    return [file join $cache $buildid debuginfo]
+    return [file join $cache $buildid skeleton]
 }
 
 # Test that the auto-loaded script from .debug_gdb_scripts in the
@@ -134,22 +134,27 @@ proc_with_prefix test_auto_load_script { cache } {
 	return
     }
 
-    # At this point the .gdb_index should have been downloaded for the
-    # shared library, but its full debuginfo should still be deferred,
-    # so the auto-load script within the library should not have been
-    # loaded yet.
+    # At this point we will have downloaded the skeleton outline for
+    # the shared library, and this will have allowed GDB to load both
+    # the .gdb_index (or DWARF 5 equivalent) as well as the embedded
+    # auto-load script section.
     #
-    # However, the auto-load script for the main executable should
-    # have been loaded as the main executable's full debuginfo will
-    # have been downloaded by now.
+    # The auto-load script for the main executable will also have been
+    # loaded as the main executable's full debuginfo will have been
+    # downloaded by now.
     gdb_test "info auto-load python-scripts" \
-	"Yes\\s+gdb\\.inlined-script\\.main\\s*" \
+	[multi_line \
+	     "Yes\\s+gdb\\.inlined-script\\.lib\\s*" \
+	     "Yes\\s+gdb\\.inlined-script\\.main\\s*"] \
 	"check auto-loaded python scripts before download"
     set cache_file [debuginfod_cache_file $cache $::binfile]
     gdb_test_no_output "python assert(global_auto_load_tracker\[\"$cache_file\"\] == 1)" \
 	"check executable script was loaded once before library has loaded"
-    gdb_test_no_output "python assert(len(global_auto_load_tracker.keys()) == 1)" \
-	"script from just one source has been loaded"
+    set cache_file [debuginfod_cache_file $cache $::lib_binfile]
+    gdb_test_no_output "python assert(global_auto_load_tracker\[\"$cache_file\"\] == 1)" \
+	"check shared library script was loaded once before library has loaded"
+    gdb_test "python print(len(global_auto_load_tracker.keys()))" "2" \
+	"scripts from just two sources have been loaded"
 
     set lineno [gdb_get_line_number "lib_func breakpoint" $::srcfile2]
 
@@ -158,15 +163,11 @@ proc_with_prefix test_auto_load_script { cache } {
     set saw_script_loaded false
     set saw_download false
     set saw_breakpoint false
-    gdb_test_multiple "break lib_func" "break lib_func" {
+    gdb_test_multiple "break lib_func" "" {
 	-re "^break lib_func\r\n" {
 	    exp_continue
 	}
 
-	-re "^deferred-auto-load: script loaded: lib\r\n" {
-	    set saw_script_loaded true
-	    exp_continue
-	}
 	-re "^Downloading \[^\r\n\]*separate debug info\[^\r\n\]*\r\n" {
 	    set saw_download true
 	    exp_continue
@@ -176,7 +177,7 @@ proc_with_prefix test_auto_load_script { cache } {
 	    exp_continue
 	}
 	-re "^$::gdb_prompt $" {
-	    gdb_assert { $saw_download && $saw_script_loaded && $saw_breakpoint } \
+	    gdb_assert { $saw_download && $saw_breakpoint } \
 		$gdb_test_name
 	}
 	-re "^\[^\r\n\]*\r\n" {

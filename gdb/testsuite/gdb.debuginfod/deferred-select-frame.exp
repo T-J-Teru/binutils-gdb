@@ -152,7 +152,10 @@ proc test_select_frame { } {
 	    exp_continue
 	}
 	-re "^$::gdb_prompt $" {
-	    gdb_assert { $invalidate_count == 1 && $saw_selected } \
+	    # TODO: The invalidation will now occur earlier, when the
+	    # outline debug info file is added to GDB, not when the
+	    # full file is downloaded.
+	    gdb_assert { $invalidate_count == 0 && $saw_selected } \
 		$gdb_test_name
 	}
 	-re "^\[^\r\n\]*\r\n" {
@@ -203,7 +206,12 @@ proc test_backtrace { } {
 	}
 
 	-re "^$::gdb_prompt $" {
-	    gdb_assert { $saw_invalidate } "frame cache was invalidated"
+	    # The new objfile observer now triggers earlier, and so
+	    # the invalidation occurs earlier.
+	    #
+	    # TODO: Maybe we should check for the 'frame cache
+	    # invalidated' message after the initial 'run' command?
+	    gdb_assert { !$saw_invalidate } "frame cache was not invalidated"
 	    gdb_assert { $bt_line_count == 7 } "saw expected number of bt lines"
 	}
 

@@ -158,7 +158,14 @@ proc_with_prefix test_observer_symtab_expansion { } {
 	    exp_continue
 	}
 	-re "^$::gdb_prompt $" {
-	    gdb_assert { !$saw_error && $saw_observer && $saw_download && $saw_location_line && $found_symbol } \
+	    # TODO: With the skeleton debug info download technique
+	    # the new objfile observer will trigger much earlier, and
+	    # this in turn will trigger the full debug info download
+	    # earlier.  As such we don't expect to see these
+	    # activities here.  We _should_ update the test to check
+	    # for these things immediately after the first 'run'
+	    # command though.
+	    gdb_assert { !$saw_error && !$saw_observer && !$saw_download && $saw_location_line && !$found_symbol } \
 		$gdb_test_name
 	}
 	-re "^\[^\r\n\]*\r\n" {
