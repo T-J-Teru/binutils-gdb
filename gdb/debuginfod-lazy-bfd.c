@@ -596,7 +596,8 @@ file_ptr gdb_debuginfod_deferred_download::read (bfd *abfd, void *buffer,
 	 .debug_abbrev, .debug_str, and .debug_line_str, before
 	 reading the .debug_line section.  */
       if ((in_section->name () == ".gdb_index"
-	   || in_section->name () == ".debug_gdb_scripts")
+	   || in_section->name () == ".debug_gdb_scripts"
+	   || in_section->name () == ".gnu_debugaltlink")
 	  && offset == in_section->offset ()
 	  && nbytes == in_section->length ())
 	{
@@ -623,13 +624,16 @@ file_ptr gdb_debuginfod_deferred_download::read (bfd *abfd, void *buffer,
 	  if (statbuf.st_size != nbytes)
 	    error (_("return section file is not the required size"));
 
+	  if (::lseek (section_fd.get (), 0, SEEK_SET) != (off_t) 0)
+	    error (_("failed to seek in downloaded section"));
+
 	  /* Copy content from SECTION_FD into the outbound BUFFER.  */
 	  if (::read (section_fd.get (), buffer, nbytes) != nbytes)
 	    error (_("failed to read from section file into read buffer"));
 	  return nbytes;
 	}
 
-      if (startswith (in_section->name (), ".debug_"))
+      if (startswith (in_section->name (), ".debug_") || true)
 	{
 	  apb_debug ("!!!! Downloading the full debug information");
 
@@ -641,7 +645,7 @@ file_ptr gdb_debuginfod_deferred_download::read (bfd *abfd, void *buffer,
 						     filename,
 						     &destname);
 
-	  if (::lseek (fd.get (), offset, SEEK_SET) == (off_t) -1)
+	  if (::lseek (fd.get (), offset, SEEK_SET) != (off_t) offset)
 	    error (_("failed to seek in full debuginfo file"));
 
 	  if (::read (fd.get (), buffer, nbytes) != nbytes)
