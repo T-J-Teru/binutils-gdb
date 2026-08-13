@@ -363,6 +363,11 @@ static void iterate_over_file_blocks
    domain_search_flags domain,
    for_each_symbol_callback_ftype callback);
 
+static void iterate_over_local_blocks
+  (const symtab *symtab, const language_defn *language,
+   const lookup_name_info &name, domain_search_flags domain,
+   for_each_symbol_callback_ftype callback);
+
 static void initialize_defaults (struct symtab **default_symtab,
 				 int *default_line);
 
@@ -1143,23 +1148,14 @@ iterate_over_all_matching_symtabs
 
 	      if (include_inline)
 		{
-		  const struct block *block;
-		  int i;
-		  const blockvector *bv = symtab->compunit ().blockvector ();
-
-		  for (i = FIRST_LOCAL_BLOCK; i < bv->num_blocks (); i++)
+		  auto callback_inlined = [&] (block_symbol *bsym)
 		    {
-		      block = bv->block (i);
-		      state->language->for_each_symbol
-			(block, lookup_name, domain,
-			 [&] (block_symbol *bsym)
-			 {
-			   /* Restrict calls to CALLBACK to symbols
-			      representing inline symbols only.  */
-			   if (bsym->symbol->is_inlined ())
-			     callback (bsym);
-			 });
-		    }
+		      if (bsym->symbol->is_inlined ())
+			callback (bsym);
+		    };
+		    iterate_over_local_blocks (symtab, state->language,
+					       lookup_name, domain,
+					       callback_inlined);
 		}
 
 	      return iteration_status::keep_going;
@@ -1197,6 +1193,22 @@ iterate_over_file_blocks
        block != NULL;
        block = block->superblock ())
     current_language->for_each_symbol (block, name, domain, callback);
+}
+
+/* Iterate over local blocks.  */
+
+static void
+iterate_over_local_blocks
+  (const symtab *symtab, const language_defn *language,
+   const lookup_name_info &name, domain_search_flags domain,
+   for_each_symbol_callback_ftype callback)
+{
+  const blockvector *bv = symtab->compunit ().blockvector ();
+  for (int i = FIRST_LOCAL_BLOCK; i < bv->num_blocks (); i++)
+    {
+      const struct block *block = bv->block (i);
+      language->for_each_symbol (block, name, domain, callback);
+    }
 }
 
 /* A helper for find_method.  This finds all methods in type T of
@@ -4249,6 +4261,11 @@ add_matching_symbols_to_info (const char *name,
     {
       info->add_symbol (bsym);
     };
+  auto add_inlined_symbol = [&] (block_symbol *bsym)
+    {
+      if (bsym->symbol->is_inlined ())
+	info->add_symbol (bsym);
+    };
 
   for (const auto &elt : info->file_symtabs)
     {
@@ -4271,6 +4288,8 @@ add_matching_symbols_to_info (const char *name,
 	  gdb_assert (!elt_pspace->executing_startup);
 	  set_current_program_space (elt_pspace);
 	  iterate_over_file_blocks (elt, lookup_name, SEARCH_VFT, add_symbol);
+	  iterate_over_local_blocks (elt, info->state->language, lookup_name,
+				     SEARCH_VFT, add_inlined_symbol);
 
 	  /* If no new symbols were found in this iteration and this symtab
 	     is in assembler, we might actually be looking for a label for
