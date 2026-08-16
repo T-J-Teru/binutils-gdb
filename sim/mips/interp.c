@@ -295,6 +295,58 @@ static const OPTION mips_options[] =
 
 int interrupt_pending;
 
+/* An interrupt is requested while the interrupts are enabled and a pending
+   bit of the Cause register meets its mask bit in the Status register:
+
+     Status.IE = 1, Status.EXL = 0, Status.ERL = 0, Cause.IP & Status.IM != 0
+
+   MIPS Architecture For Programmers Volume III: The MIPS Privileged Resource
+   Architecture, the Interrupts chapter.  The R3000 generation, which the
+   R3900 belongs to, has no exception level and disables the interrupts by
+   shifting the interrupt enable stack of its Status register instead, so only
+   the current enable takes part; see the IDT R30xx Family Software Reference
+   Manual, the Status register of the CPU control chapter.  */
+static int
+interrupt_requested (sim_cpu *cpu)
+{
+  if ((SR & status_IE) == 0)
+    return 0;
+
+#ifndef SUBTARGET_R3900
+  if ((SR & (status_EXL | status_ERL)) != 0)
+    return 0;
+#endif
+
+  /* Only the software interrupts.  A hardware interrupt keeps its pending bit
+     set until its device is served. The device model delivers it.  */
+  return ((CAUSE >> cause_IPSW_shift) & (SR >> status_IM_shift)
+	  & cause_IPSW_mask) != 0;
+}
+
+static void
+software_interrupt_event (SIM_DESC sd, void *data)
+{
+  sim_cpu *cpu = STATE_CPU (sd, 0);
+  address_word cia = CPU_PC_GET (cpu);
+
+  /* Recheck, because the write which scheduled this may have been undone in
+     the meantime.  */
+  if (interrupt_requested (cpu))
+    SignalExceptionInterrupt (0);
+}
+
+/* Deliver a pending interrupt at the next instruction boundary.  It cannot be
+   delivered here: signal_exception() leaves the handler address in the program
+   counter for an interrupt and the instruction which is being executed would
+   overwrite it.  This is why the hardware interrupts arrive through the event
+   queue as well.  */
+static void
+check_interrupts (SIM_DESC sd, sim_cpu *cpu)
+{
+  if (interrupt_requested (cpu))
+    sim_events_schedule (sd, 1, software_interrupt_event, NULL);
+}
+
 void
 interrupt_event (SIM_DESC sd, void *data)
 {
@@ -2269,14 +2321,20 @@ decode_coproc (SIM_DESC sd,
 		if (op == cp0_mfc0 || op == cp0_dmfc0)
 		  GPR[rt] = SR;
 		else
-		  SR = GPR[rt];
+		  {
+		    SR = GPR[rt];
+		    check_interrupts (sd, cpu);
+		  }
 		break;
 		/* 13 = Cause              R4000   VR4100  VR4300 */
 	      case 13:
 		if (op == cp0_mfc0 || op == cp0_dmfc0)
 		  GPR[rt] = CAUSE;
 		else
-		  CAUSE = GPR[rt];
+		  {
+		    CAUSE = GPR[rt];
+		    check_interrupts (sd, cpu);
+		  }
 		break;
 		/* 14 = EPC                R4000   VR4100  VR4300 */
 	      case 14:
@@ -2391,6 +2449,7 @@ decode_coproc (SIM_DESC sd,
 	      {
 		PC = EPC;
 		SR &= ~status_EXL;
+		check_interrupts (sd, cpu);
 	      }
 	  }
         else if (op == cp0_rfe && sel == 0x10)
@@ -2401,6 +2460,7 @@ decode_coproc (SIM_DESC sd,
 
 	    /* shift IE/KU history bits right */
 	    SR = LSMASKED32(SR, 31, 4) | LSINSERTED32(LSEXTRACTED32(SR, 5, 2), 3, 0);
+	    check_interrupts (sd, cpu);
 
 	    /* TODO: CACHE register */
 #endif /* SUBTARGET_R3900 */

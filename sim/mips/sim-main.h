@@ -557,6 +557,8 @@ struct mips_sim_state {
 #define cause_SW1       (1 << 9)        /* Software interrupt 1 */
 #define cause_IP_mask   (0x3f)          /* Interrupt pending field */
 #define cause_IP_shift  (10)
+#define cause_IPSW_mask (0x3)           /* Software interrupt pending, IP1:IP0 */
+#define cause_IPSW_shift (8)
 
 #define cause_set_EXC(x)  CAUSE = (CAUSE & ~cause_EXC_mask)  | ((x << cause_EXC_shift)  & cause_EXC_mask)
 #define cause_set_EXC2(x) CAUSE = (CAUSE & ~cause_EXC2_mask) | ((x << cause_EXC2_shift) & cause_EXC2_mask)
