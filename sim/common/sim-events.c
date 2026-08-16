@@ -852,7 +852,11 @@ sim_events_deschedule (SIM_DESC sd,
 		       (dead->trace != NULL) ? dead->trace : ""));
 	      sim_events_free (sd, dead);
 	      update_time_from_event (sd);
-	      SIM_ASSERT ((events->time_from_event >= 0) == (events->queue != NULL));
+	      /* sim_events_slip() advances the time past an event
+		 which is still queued. The head of the queue is then
+		 overdue rather than pending.  */
+	      SIM_ASSERT (events->queue != NULL
+			  || events->time_from_event < 0);
 	      return;
 	    }
 	}
