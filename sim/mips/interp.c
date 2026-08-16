@@ -1992,7 +1992,8 @@ signal_exception (SIM_DESC sd,
 
        case ReservedInstruction:
        case CoProcessorUnusable:
-	 PC = EPC;
+	 /* Leave PC at the exception handler address.  This allows emulating
+	    an instruction the CPU lacks.  */
 	 sim_engine_halt (SD, CPU, NULL, PC,
 			  sim_stopped, SIM_SIGILL);
 
