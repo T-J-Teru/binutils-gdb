@@ -411,12 +411,17 @@
 	    && peer->mf.timestamp < peer->mt.timestamp))
     {
       /* The peer has been written to since the last OP yet we have
-         not */
-      sim_engine_abort (SD, CPU, CIA, "HILO: %s: MF at 0x%08lx following OP at 0x%08lx corrupted by MT at 0x%08lx\n",
-			itable[MY_INDEX].name,
-			(long) CIA,
-			(long) history->op.cia,
-			(long) peer->mt.cia);
+	 not.  The ISA makes the result of this MF UNPREDICTABLE, it does not
+	 make it an error.  An operating system may save HI and LO
+	 unconditionally on interrupt entry and restores them unchanged, so it
+	 reads whatever the interrupted program left behind.  Aborting the
+	 simulation here deadlocks such a system, since the run loop resumes at
+	 the faulting instruction and the MF is executed again.  */
+      sim_io_eprintf (SD, "HILO: %s: MF at 0x%08lx following OP at 0x%08lx corrupted by MT at 0x%08lx\n",
+		      itable[MY_INDEX].name,
+		      (long) CIA,
+		      (long) history->op.cia,
+		      (long) peer->mt.cia);
       ok = 0;
     }
   history->mf.timestamp = time;
