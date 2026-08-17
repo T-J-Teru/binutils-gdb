@@ -431,19 +431,22 @@ csky_get_supported_register_by_index (int index)
     {
       case 0: /* Bank1.  */
 	{
-	  sprintf (tdesc_reg.name, "cp1cr%d", remain);
+	  xsnprintf (tdesc_reg.name, sizeof (tdesc_reg.name), "cp1cr%d",
+		     remain);
 	  tdesc_reg.num = 189 + remain;
 	}
 	break;
       case 1: /* Bank2.  */
 	{
-	  sprintf (tdesc_reg.name, "cp2cr%d", remain);
+	  xsnprintf (tdesc_reg.name, sizeof (tdesc_reg.name), "cp2cr%d",
+		     remain);
 	  tdesc_reg.num = 276 + remain;
 	}
 	break;
       case 2: /* Bank3.  */
 	{
-	  sprintf (tdesc_reg.name, "cp3cr%d", remain);
+	  xsnprintf (tdesc_reg.name, sizeof (tdesc_reg.name), "cp3cr%d",
+		     remain);
 	  tdesc_reg.num = 221 + remain;
 	}
 	break;
@@ -460,7 +463,8 @@ csky_get_supported_register_by_index (int index)
       case 13: /* Bank14.  */
 	{
 	  /* Regitsers in Bank4~14 have continuous regno with start 308.  */
-	  sprintf (tdesc_reg.name, "cp%dcr%d", (multi + 1), remain);
+	  xsnprintf (tdesc_reg.name, sizeof (tdesc_reg.name), "cp%dcr%d",
+		     (multi + 1), remain);
 	  tdesc_reg.num = 308 + ((multi - 3) * 32) + remain;
 	}
 	break;
@@ -482,7 +486,8 @@ csky_get_supported_register_by_index (int index)
       case 29: /* Bank31.  */
 	{
 	  /* Regitsers in Bank16~31 have continuous regno with start 660.  */
-	  sprintf (tdesc_reg.name, "cp%dcr%d", (multi + 2), remain);
+	  xsnprintf (tdesc_reg.name, sizeof (tdesc_reg.name), "cp%dcr%d",
+		     (multi + 2), remain);
 	  tdesc_reg.num = 660 + ((multi - 14) * 32) + remain;
 	}
 	break;
