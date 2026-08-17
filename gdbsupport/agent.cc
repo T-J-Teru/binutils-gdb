@@ -154,7 +154,7 @@ gdb_connect_sync_socket (int pid)
 
   addr.sun_family = AF_UNIX;
 
-  res = xsnprintf (addr.sun_path, UNIX_PATH_MAX, "%s", path);
+  res = xstrcpy (addr.sun_path, UNIX_PATH_MAX, path);
   if (res >= UNIX_PATH_MAX)
     {
       warning (_("string overflow allocating socket name"));

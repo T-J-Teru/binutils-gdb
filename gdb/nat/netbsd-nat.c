@@ -135,7 +135,7 @@ thread_name (ptid_t ptid)
       {
 	if (kl->l_lid == lwp)
 	  {
-	    xsnprintf (buf, sizeof buf, "%s", kl->l_name);
+	    xstrcpy (buf, sizeof buf, kl->l_name);
 	    return true;
 	  }
 	return false;

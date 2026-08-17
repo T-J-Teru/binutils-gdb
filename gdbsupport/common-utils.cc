@@ -86,6 +86,19 @@ xsnprintf (char *str, size_t size, const char *format, ...)
   return ret;
 }
 
+/* See common-utils.h.  */
+
+int
+xstrcpy (char *str, size_t size, const char *src)
+{
+  size_t len = strlen (src);
+
+  gdb_assert (len < size);
+  memcpy (str, src, len + 1);
+
+  return len;
+}
+
 /* See documentation in common-utils.h.  */
 
 std::string

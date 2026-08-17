@@ -51,6 +51,15 @@ gdb::unique_xmalloc_ptr<char> xstrvprintf (const char *format, va_list ap)
 int xsnprintf (char *str, size_t size, const char *format, ...)
      ATTRIBUTE_PRINTF (3, 4);
 
+/* Like strcpy, but takes the size of the destination buffer STR as SIZE,
+   and throws an error if SRC does not fit in it.
+
+   Return the number of characters copied, excluding the terminating null
+   character.
+
+   This is equivalent to xsnprintf when no formatting is needed.  */
+int xstrcpy (char *str, size_t size, const char *src);
+
 /* Returns a std::string built from a printf-style format string.  */
 std::string string_printf (const char* fmt, ...)
   ATTRIBUTE_PRINTF (1, 2);

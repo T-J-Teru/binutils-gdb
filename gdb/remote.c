@@ -3045,7 +3045,7 @@ remote_target::remote_query_attached (int pid)
   if (m_features.remote_multi_process_p ())
     xsnprintf (rs->buf.data (), size, "qAttached:%x", pid);
   else
-    xsnprintf (rs->buf.data (), size, "qAttached");
+    xstrcpy (rs->buf.data (), size, "qAttached");
 
   putpkt (rs->buf);
   getpkt (&rs->buf);
@@ -3509,11 +3509,11 @@ remote_target::set_thread (ptid_t ptid, int gen)
   *buf++ = 'H';
   *buf++ = gen ? 'g' : 'c';
   if (ptid == magic_null_ptid)
-    xsnprintf (buf, endbuf - buf, "0");
+    xstrcpy (buf, endbuf - buf, "0");
   else if (ptid == any_thread_ptid)
-    xsnprintf (buf, endbuf - buf, "0");
+    xstrcpy (buf, endbuf - buf, "0");
   else if (ptid == minus_one_ptid)
-    xsnprintf (buf, endbuf - buf, "-1");
+    xstrcpy (buf, endbuf - buf, "-1");
   else
     write_ptid (buf, endbuf, ptid);
   putpkt (rs->buf);
@@ -4633,8 +4633,7 @@ remote_target::extra_thread_info (thread_info *tp)
       char *b = rs->buf.data ();
       char *endb = b + get_remote_packet_size ();
 
-      xsnprintf (b, endb - b, "qThreadExtraInfo,");
-      b += strlen (b);
+      b += xstrcpy (b, endb - b, "qThreadExtraInfo,");
       write_ptid (b, endb, tp->ptid);
 
       putpkt (rs->buf);
@@ -4682,8 +4681,7 @@ remote_target::static_tracepoint_marker_at (CORE_ADDR addr,
   struct remote_state *rs = get_remote_state ();
   char *p = rs->buf.data ();
 
-  xsnprintf (p, get_remote_packet_size (), "qTSTMat:");
-  p += strlen (p);
+  p += xstrcpy (p, get_remote_packet_size (), "qTSTMat:");
   p += hexnumstr (p, addr);
   putpkt (rs->buf);
   getpkt (&rs->buf);
@@ -7215,14 +7213,14 @@ remote_target::append_resumption (char *p, char *endp,
 				   addr_size));
 	}
       else
-	p += xsnprintf (p, endp - p, ";s");
+	p += xstrcpy (p, endp - p, ";s");
     }
   else if (step)
-    p += xsnprintf (p, endp - p, ";s");
+    p += xstrcpy (p, endp - p, ";s");
   else if (siggnal != GDB_SIGNAL_0)
     p += xsnprintf (p, endp - p, ";C%02x", siggnal);
   else
-    p += xsnprintf (p, endp - p, ";c");
+    p += xstrcpy (p, endp - p, ";c");
 
   if (m_features.remote_multi_process_p () && ptid.is_pid ())
     {
@@ -7231,12 +7229,12 @@ remote_target::append_resumption (char *p, char *endp,
       /* All (-1) threads of process.  */
       nptid = ptid_t (ptid.pid (), -1);
 
-      p += xsnprintf (p, endp - p, ":");
+      p += xstrcpy (p, endp - p, ":");
       p = write_ptid (p, endp, nptid);
     }
   else if (ptid != minus_one_ptid)
     {
-      p += xsnprintf (p, endp - p, ":");
+      p += xstrcpy (p, endp - p, ":");
       p = write_ptid (p, endp, ptid);
     }
 
@@ -7357,7 +7355,7 @@ remote_target::remote_resume_with_vcont (ptid_t scope_ptid, int step,
      about overflowing BUF.  Should there be a generic
      "multi-part-packet" packet?  */
 
-  p += xsnprintf (p, endp - p, "vCont");
+  p += xstrcpy (p, endp - p, "vCont");
 
   if (scope_ptid == magic_null_ptid)
     {
@@ -7535,7 +7533,7 @@ vcont_builder::restart ()
 
   m_p = rs->buf.data ();
   m_endp = m_p + m_remote->get_remote_packet_size ();
-  m_p += xsnprintf (m_p, m_endp - m_p, "vCont");
+  m_p += xstrcpy (m_p, m_endp - m_p, "vCont");
   m_first_action = m_p;
 }
 
@@ -7889,12 +7887,12 @@ remote_target::remote_stop_ns (ptid_t ptid)
 
   if (ptid == minus_one_ptid
       || (!m_features.remote_multi_process_p () && ptid.is_pid ()))
-    p += xsnprintf (p, endp - p, "vCont;t");
+    p += xstrcpy (p, endp - p, "vCont;t");
   else
     {
       ptid_t nptid;
 
-      p += xsnprintf (p, endp - p, "vCont;t:");
+      p += xstrcpy (p, endp - p, "vCont;t:");
 
       if (ptid.is_pid ())
 	  /* All (-1) threads of process.  */
@@ -7955,7 +7953,7 @@ remote_target::remote_interrupt_ns ()
   char *p = rs->buf.data ();
   char *endp = p + get_remote_packet_size ();
 
-  xsnprintf (p, endp - p, "vCtrlC");
+  xstrcpy (p, endp - p, "vCtrlC");
 
   /* In non-stop, we get an immediate OK reply.  The stop reply will
      come in asynchronously by notification.  */
@@ -9313,7 +9311,7 @@ remote_target::send_g_packet ()
   struct remote_state *rs = get_remote_state ();
   int buf_len;
 
-  xsnprintf (rs->buf.data (), get_remote_packet_size (), "g");
+  xstrcpy (rs->buf.data (), get_remote_packet_size (), "g");
   putpkt (rs->buf);
   getpkt (&rs->buf);
   packet_result result = packet_check_result (rs->buf);
@@ -11342,8 +11340,8 @@ remote_target::extended_remote_set_inferior_cwd ()
 	{
 	  /* An empty inferior_cwd means that the user wants us to
 	     reset the remote server's inferior's cwd.  */
-	  xsnprintf (rs->buf.data (), get_remote_packet_size (),
-		     "QSetWorkingDir:");
+	  xstrcpy (rs->buf.data (), get_remote_packet_size (),
+		   "QSetWorkingDir:");
 	}
 
       putpkt (rs->buf);
@@ -11529,8 +11527,7 @@ remote_add_target_side_condition (struct gdbarch *gdbarch,
     return 0;
 
   buf += strlen (buf);
-  xsnprintf (buf, buf_end - buf, "%s", ";");
-  buf++;
+  buf += xstrcpy (buf, buf_end - buf, ";");
 
   /* Send conditions to the target.  */
   for (agent_expr *aexpr : bp_tgt->conditions)
@@ -14990,7 +14987,7 @@ remote_target::get_min_fast_tracepoint_insn_len ()
   /* Make sure the remote is pointing at the right process.  */
   set_general_process ();
 
-  xsnprintf (rs->buf.data (), get_remote_packet_size (), "qTMinFTPILen");
+  xstrcpy (rs->buf.data (), get_remote_packet_size (), "qTMinFTPILen");
   putpkt (rs->buf);
   reply = remote_get_noisy_reply ();
   if (*reply == '\0')
@@ -15015,7 +15012,7 @@ remote_target::set_trace_buffer_size (LONGEST val)
       char *endbuf = buf + get_remote_packet_size ();
 
       gdb_assert (val >= 0 || val == -1);
-      buf += xsnprintf (buf, endbuf - buf, "QTBuffer:size:");
+      buf += xstrcpy (buf, endbuf - buf, "QTBuffer:size:");
       /* Send -1 as literal "-1" to avoid host size dependency.  */
       if (val < 0)
 	{
@@ -15049,24 +15046,24 @@ remote_target::set_trace_notes (const char *user, const char *notes,
   char *endbuf = buf + get_remote_packet_size ();
   int nbytes;
 
-  buf += xsnprintf (buf, endbuf - buf, "QTNotes:");
+  buf += xstrcpy (buf, endbuf - buf, "QTNotes:");
   if (user)
     {
-      buf += xsnprintf (buf, endbuf - buf, "user:");
+      buf += xstrcpy (buf, endbuf - buf, "user:");
       nbytes = bin2hex ((gdb_byte *) user, buf, strlen (user));
       buf += 2 * nbytes;
       *buf++ = ';';
     }
   if (notes)
     {
-      buf += xsnprintf (buf, endbuf - buf, "notes:");
+      buf += xstrcpy (buf, endbuf - buf, "notes:");
       nbytes = bin2hex ((gdb_byte *) notes, buf, strlen (notes));
       buf += 2 * nbytes;
       *buf++ = ';';
     }
   if (stop_notes)
     {
-      buf += xsnprintf (buf, endbuf - buf, "tstop:");
+      buf += xstrcpy (buf, endbuf - buf, "tstop:");
       nbytes = bin2hex ((gdb_byte *) stop_notes, buf, strlen (stop_notes));
       buf += 2 * nbytes;
       *buf++ = ';';
@@ -15661,8 +15658,8 @@ remote_target::enable_btrace (thread_info *tp,
   ptid_t ptid = tp->ptid;
   set_general_thread (ptid);
 
-  buf += xsnprintf (buf, endbuf - buf, "%s",
-		    packets_descriptions[which_packet].name);
+  buf += xstrcpy (buf, endbuf - buf,
+		  packets_descriptions[which_packet].name);
   putpkt (rs->buf);
   getpkt (&rs->buf);
 
@@ -15702,8 +15699,8 @@ remote_target::disable_btrace (struct btrace_target_info *tinfo)
 
   set_general_thread (tinfo->ptid);
 
-  buf += xsnprintf (buf, endbuf - buf, "%s",
-		    packets_descriptions[PACKET_Qbtrace_off].name);
+  buf += xstrcpy (buf, endbuf - buf,
+		  packets_descriptions[PACKET_Qbtrace_off].name);
   putpkt (rs->buf);
   getpkt (&rs->buf);
 
@@ -16074,8 +16071,8 @@ remote_target::commit_requested_thread_options ()
       char *obuf_endp = obuf + max_options_size;
 
       *obuf_p++ = ';';
-      obuf_p += xsnprintf (obuf_p, obuf_endp - obuf_p, "%s",
-			   phex_nz (options));
+      obuf_p += xstrcpy (obuf_p, obuf_endp - obuf_p,
+			 phex_nz (options));
       if (tp.ptid != magic_null_ptid)
 	{
 	  *obuf_p++ = ':';

@@ -38,12 +38,12 @@ ptid_t::to_rsp_string (bool multi) const
   if (multi)
     {
       if (m_pid == -1)
-	buf += xsnprintf (buf, endbuf - buf, "p-1.");
+	buf += xstrcpy (buf, endbuf - buf, "p-1.");
       else
 	buf += xsnprintf (buf, endbuf - buf, "p%x.", (unsigned) m_pid);
     }
   if (m_lwp == -1)
-    xsnprintf (buf, endbuf - buf, "-1");
+    xstrcpy (buf, endbuf - buf, "-1");
   else
     xsnprintf (buf, endbuf - buf, "%lx", (unsigned long) m_lwp);
 

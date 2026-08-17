@@ -125,6 +125,34 @@ string_vappendf_tests ()
   test_appendf_func (string_vappendf_wrapper);
 }
 
+static void
+xstrcpy_tests ()
+{
+  char buf[8];
+  char *p;
+  char *end = buf + sizeof (buf);
+
+  memset (buf, 'x', sizeof (buf));
+  p = buf;
+  p += xstrcpy (p, end - p, "ab");
+  SELF_CHECK (p == buf + 2);
+  p += xstrcpy (p, end - p, "cd");
+  SELF_CHECK (p == buf + 4);
+  SELF_CHECK (strcmp (buf, "abcd") == 0);
+
+  /* A string of exactly SIZE - 1 characters fits.  */
+  memset (buf, 'x', sizeof (buf));
+  p = buf;
+  SELF_CHECK (xstrcpy (p, end - p, "1234567") == 7);
+  SELF_CHECK (strcmp (buf, "1234567") == 0);
+
+  /* An empty string is fine, even in a buffer of size 1.  */
+  memset (buf, 'x', sizeof (buf));
+  p = buf;
+  SELF_CHECK (xstrcpy (p, 1, "") == 0);
+  SELF_CHECK (strcmp (p, "") == 0);
+}
+
 } /* namespace selftests */
 
 INIT_GDB_FILE (common_utils_selftests)
@@ -134,4 +162,5 @@ INIT_GDB_FILE (common_utils_selftests)
   selftests::register_test ("string_appendf", selftests::string_appendf_tests);
   selftests::register_test ("string_vappendf",
 			    selftests::string_vappendf_tests);
+  selftests::register_test ("xstrcpy", selftests::xstrcpy_tests);
 }
