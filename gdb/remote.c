@@ -11513,10 +11513,11 @@ Remote replied unexpectedly while setting startup-with-shell: %s"),
 }
 
 
-/* Given a location's target info BP_TGT and the packet buffer BUF,  output
-   the list of conditions (in agent expression bytecode format), if any, the
-   target needs to evaluate.  The output is placed into the packet buffer
-   started from BUF and ended at BUF_END.  */
+/* Given a location's target info BP_TGT and the packet buffer BUF,  output the
+   list of conditions (in agent expression bytecode format), if any, the
+   target needs to evaluate.
+
+   The output is appended to the existing content of BUF.  */
 
 static int
 remote_add_target_side_condition (struct gdbarch *gdbarch,
@@ -11532,35 +11533,42 @@ remote_add_target_side_condition (struct gdbarch *gdbarch,
   /* Send conditions to the target.  */
   for (agent_expr *aexpr : bp_tgt->conditions)
     {
-      xsnprintf (buf, buf_end - buf, "X%x,", (int) aexpr->buf.size ());
-      buf += strlen (buf);
+      buf += xsnprintf (buf, buf_end - buf, "X%x,", (int) aexpr->buf.size ());
+
       for (int i = 0; i < aexpr->buf.size (); ++i)
 	buf = pack_hex_byte (buf, aexpr->buf[i]);
+
       *buf = '\0';
     }
   return 0;
 }
 
+/* Given a location's target info BP_TGT and the packet buffer BUF, output the
+   list of commands (in agent expression bytecode format), if any, the target
+   needs to run when the breakpoint is hit.
+
+   The output is appended to the existing content of BUF.  */
+
 static void
 remote_add_target_side_commands (struct gdbarch *gdbarch,
-				 struct bp_target_info *bp_tgt, char *buf)
+				 struct bp_target_info *bp_tgt, char *buf,
+				 char *buf_end)
 {
   if (bp_tgt->tcommands.empty ())
     return;
 
   buf += strlen (buf);
-
-  sprintf (buf, ";cmds:%x,", bp_tgt->persist);
-  buf += strlen (buf);
+  buf += xsnprintf (buf, buf_end - buf, ";cmds:%x,", bp_tgt->persist);
 
   /* Concatenate all the agent expressions that are commands into the
      cmds parameter.  */
   for (agent_expr *aexpr : bp_tgt->tcommands)
     {
-      sprintf (buf, "X%x,", (int) aexpr->buf.size ());
-      buf += strlen (buf);
+      buf += xsnprintf (buf, buf_end - buf, "X%x,", (int) aexpr->buf.size ());
+
       for (int i = 0; i < aexpr->buf.size (); ++i)
 	buf = pack_hex_byte (buf, aexpr->buf[i]);
+
       *buf = '\0';
     }
 }
@@ -11604,7 +11612,7 @@ remote_target::insert_breakpoint (struct gdbarch *gdbarch,
 	remote_add_target_side_condition (gdbarch, bp_tgt, p, endbuf);
 
       if (can_run_breakpoint_commands ())
-	remote_add_target_side_commands (gdbarch, bp_tgt, p);
+	remote_add_target_side_commands (gdbarch, bp_tgt, p, endbuf);
 
       putpkt (rs->buf);
       getpkt (&rs->buf);
@@ -11912,7 +11920,7 @@ remote_target::insert_hw_breakpoint (struct gdbarch *gdbarch,
     remote_add_target_side_condition (gdbarch, bp_tgt, p, endbuf);
 
   if (can_run_breakpoint_commands ())
-    remote_add_target_side_commands (gdbarch, bp_tgt, p);
+    remote_add_target_side_commands (gdbarch, bp_tgt, p, endbuf);
 
   putpkt (rs->buf);
   getpkt (&rs->buf);
