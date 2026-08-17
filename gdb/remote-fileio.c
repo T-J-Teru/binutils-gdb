@@ -253,28 +253,37 @@ static void
 remote_fileio_reply (remote_target *remote, int retcode, int error)
 {
   char buf[32];
+  char *p = buf;
+  char *const end = buf + sizeof (buf);
   bool ctrl_c = check_quit_flag ();
 
-  strcpy (buf, "F");
+  p += xstrcpy (p, end - p, "F");
+
   if (retcode < 0)
     {
-      strcat (buf, "-");
+      p += xstrcpy (p, end - p, "-");
       retcode = -retcode;
     }
-  sprintf (buf + strlen (buf), "%x", retcode);
+
+  p += xsnprintf (p, end - p, "%x", retcode);
+
   if (error || ctrl_c)
     {
       if (error && ctrl_c)
 	error = FILEIO_EINTR;
+
       if (error < 0)
 	{
-	  strcat (buf, "-");
+	  p += xstrcpy (p, end - p, "-");
 	  error = -error;
 	}
-      sprintf (buf + strlen (buf), ",%x", error);
+
+      p += xsnprintf (p, end - p, ",%x", error);
+
       if (ctrl_c)
-	strcat (buf, ",C");
+	p += xstrcpy (p, end - p, ",C");
     }
+
   quit_handler = remote_fileio_o_quit_handler;
   putpkt (remote, buf);
 }
