@@ -20,6 +20,8 @@
 #include "dwarf2/cooked-index-shard.h"
 #include "dwarf2/tag.h"
 #include "dwarf2/index-common.h"
+#include "dwarf2/read.h"
+#include "dwarf2/error.h"
 #include "cp-support.h"
 #include "c-lang.h"
 #include "ada-lang.h"
@@ -104,6 +106,7 @@ cooked_index_shard::add (sect_offset die_offset, enum dwarf_tag tag,
 	   && parent_entry.resolved == nullptr
 	   && m_main == nullptr
 	   && language_may_use_plain_main (lang)
+	   && name != nullptr
 	   && streq (name, "main"))
     m_main = result;
 
@@ -190,6 +193,52 @@ struct cooked_index_entry_name_ptr_eq
 /* See cooked-index-shard.h.  */
 
 void
+cooked_index_shard::resolve_deferred_names
+	(const signature_to_name_map &sig_names)
+{
+  bool need_to_cleanup_entries = false;
+  for (const auto &[entry, signature] : m_deferred_names)
+    {
+      if (const auto it = sig_names.find (signature);
+	  it != sig_names.end ())
+	{
+	  /* Each entry should only occur once in M_DEFERRED_NAMES,
+	     and the entry should only be added when it has no name.  */
+	  gdb_assert (entry->name == nullptr);
+
+	  /* Patch the name.  */
+	  entry->name = it->second;
+	}
+      else
+	{
+	  need_to_cleanup_entries = true;
+	  complaint (_(DWARF_ERROR_PREFIX
+		       "Cannot find signatured DIE %s referenced from DIE "
+		       "at %s [in module %s]"),
+		     hex_string (signature),
+		     sect_offset_str (entry->die_offset),
+		     entry->per_cu->per_bfd ()->filename ());
+	}
+    }
+
+  /* If we failed to resolve the name of an entry via its signature
+     then remove the entry from the m_entries vector.  This should be
+     rare, and should only happen when we have corrupted DWARF.  The
+     entries still live on the obstack, so parent points are still
+     valid, but removing entries from the index means we don't try to
+     search them when looking for index hits.  */
+  if (need_to_cleanup_entries)
+    m_entries.erase (std::remove_if (m_entries.begin (), m_entries.end (),
+				     [] (const cooked_index_entry *e)
+				     {
+				       return e->name == nullptr;
+				     }),
+		     m_entries.end ());
+}
+
+/* See cooked-index-shard.h.  */
+
+void
 cooked_index_shard::finalize (const parent_map_map *parent_maps)
 {
   gdb::unordered_set<const cooked_index_entry *,
@@ -216,12 +265,24 @@ cooked_index_shard::finalize (const parent_map_map *parent_maps)
 
   for (cooked_index_entry *entry : m_entries)
     {
+      gdb_assert (entry->name != nullptr && *entry->name != '\0');
+
       if ((entry->flags & IS_PARENT_DEFERRED) != 0)
 	{
 	  const cooked_index_entry *new_parent
 	    = parent_maps->find (entry->get_deferred_parent ());
 	  entry->resolve_parent (new_parent);
 	}
+
+      /* Remove a parent reference if the parent has no name.  This
+	 leaves ENTRY as an orphan, but this only happens if the DWARF
+	 is corrupted and we failed to find a name for the parent.  We
+	 can safely check the parent's name at this point because all
+	 deferred names will have been resolved in all shards before
+	 finalize is called on any shard.  */
+      if (const cooked_index_entry *parent = entry->get_parent ();
+	  parent != nullptr && parent->name == nullptr)
+	entry->set_parent (nullptr);
 
       /* Note that this code must be kept in sync with
 	 cooked_index::get_main -- if canonicalization is required

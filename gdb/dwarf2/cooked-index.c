@@ -58,7 +58,23 @@ cooked_index::wait (cooked_state desired_state, bool allow_quit)
   if (m_state == nullptr)
     return;
 
-  if (m_state->wait (desired_state, allow_quit))
+  bool done = m_state->wait (desired_state, allow_quit);
+
+  /* Emit any cached complaints if we have finalized and we are on the
+     main thread.  Check for the requested state or the DONE flag
+     here, we might have only asked for MAIN_AVAILABLE, but if the
+     workers are quick then they might be done, in which case we
+     should emit the complaints now.  */
+  if (!m_finalize_complaints_emitted
+      && is_main_thread ()
+      && (desired_state >= cooked_state::FINALIZED || done))
+    {
+      m_finalize_complaints_emitted = true;
+      for (auto &shard : m_shards)
+	re_emit_complaints (shard->release_finalize_complaints ());
+    }
+
+  if (done)
     {
       /* Only the main thread can modify this.  */
       gdb_assert (is_main_thread ());
@@ -74,31 +90,64 @@ cooked_index::set_contents ()
 
   m_state->set (cooked_state::MAIN_AVAILABLE);
 
-  /* This is run after finalization is done -- but not before.  If
-     this task were submitted earlier, it would have to wait for
-     finalization.  However, that would take a slot in the global
-     thread pool, and if enough such tasks were submitted at once, it
-     would cause a livelock.  */
-  gdb::task_group finalizers ([this] ()
-  {
-    m_state->set (cooked_state::FINALIZED);
-    m_state->write_to_cache (index_for_writing ());
-    m_state->set (cooked_state::CACHE_DONE);
-  });
-
-  for (auto &shard : m_shards)
+  /* Finalization is done in two phases, which we build up in reverse order.
+     During the second phase we call finalize on each shard then update the
+     state to FINALIZED then CACHE_DONE.  */
+  std::shared_ptr<gdb::task_group> phase2
+    = std::make_shared<gdb::task_group> ([this] ()
     {
-      auto this_shard = shard.get ();
+      /* This is run after finalization is done -- but not before.  If this
+	 task were submitted earlier, it would have to wait for finalization.
+	 However, that would take a slot in the global thread pool, and if
+	 enough such tasks were submitted at once, it would cause a
+	 livelock.  */
+      m_state->set (cooked_state::FINALIZED);
+      m_state->write_to_cache (index_for_writing ());
+      m_state->set (cooked_state::CACHE_DONE);
+    });
+
+  /* Arrange to call finalize on each shard.  */
+  for (cooked_index_shard_up &shard : m_shards)
+    {
+      cooked_index_shard *this_shard = shard.get ();
       const parent_map_map *parent_maps = m_state->get_parent_map_map ();
-      finalizers.add_task ([this, this_shard, parent_maps] ()
-	{
-	  scoped_time_it time_it ("DWARF finalize worker",
-				  m_state->m_per_command_time);
-	  this_shard->finalize (parent_maps);
-	});
+      phase2->add_task ([this, this_shard, parent_maps] ()
+      {
+	complaint_interceptor complaint_handler;
+
+	this_shard->finalize (parent_maps);
+
+	this_shard->merge_finalize_complaints (complaint_handler.release ());
+      });
     }
 
-  finalizers.start ();
+  /* In the first phase we resolve any deferred cooked_index_entry names.
+     These names are needed in the second phase, but due to cross shard child
+     to parent references, we trying to resolve deferred names in the same
+     phase as the names are used would lead to data races.  */
+  gdb::task_group phase1 ([phase2] ()
+  {
+    /* This is run once after all the other phase1 tasks are done.  */
+    phase2->start ();
+  });
+
+  /* Arrange to call resolve_deferred_names on each shard.  */
+  for (cooked_index_shard_up &shard : m_shards)
+    {
+      cooked_index_shard *this_shard = shard.get ();
+      const signature_to_name_map *sig_name_map
+	= &m_state->get_sig_name_map ();
+      phase1.add_task ([this_shard, sig_name_map] ()
+      {
+	complaint_interceptor complaint_handler;
+
+	this_shard->resolve_deferred_names (*sig_name_map);
+
+	this_shard->merge_finalize_complaints (complaint_handler.release ());
+      });
+    }
+
+  phase1.start ();
 }
 
 cooked_index::~cooked_index ()
