@@ -79,6 +79,11 @@ union cooked_index_entry_ref
   parent_map::addr_type deferred;
 };
 
+/* Type that maps DW_AT_signature values for a TU to the name of the
+   primary type within the TU.  */
+
+using signature_to_name_map = gdb::unordered_map<ULONGEST, const char *>;
+
 /* Return a string representation of FLAGS.  */
 
 std::string to_string (cooked_index_flag flags);
@@ -252,10 +257,22 @@ struct cooked_index_entry : public allocate_on_obstack<cooked_index_entry>
      defined in some CU that is included by many other CUs.  */
   iteration_status visit_defining_cus (per_cu_callback callback) const;
 
-  /* The name as it appears in DWARF.  This always points into one of
-     the mapped DWARF sections.  Note that this may be the name or the
-     linkage name -- two entries are created for DIEs which have both
-     attributes.  */
+  /* The entry's name.  If not NULL then this must point to a string
+     which will outlive this entry.  This usually means that NAME
+     points either into the mapped DWARF, or into storage within the
+     owning cooked_index_shard.
+
+     This may be the name or the linkage name -- two entries are
+     created for DIEs which have both attributes.
+
+     The NAME can be NULL.  When a DIE lacks a name but has a
+     signature we create an entry with a NULL name and then try to
+     lookup the name via the signature during finalization.  If the
+     name via signature lookup fails then the entry continues to exist
+     with a NULL name, however, the entry should be removed from the
+     entries vector, and should be removed as a parent, so entries
+     with a NULL name should not be discovered during normal
+     processing.  */
   const char *name;
   /* The canonical name.  This may be equal to NAME.  */
   const char *canonical = nullptr;

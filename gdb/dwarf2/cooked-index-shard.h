@@ -26,6 +26,7 @@
 #include "addrmap.h"
 #include "gdbsupport/iterator-range.h"
 #include "gdbsupport/string-set.h"
+#include "complaints.h"
 
 /* An index of interesting DIEs.  This is "cooked", in contrast to a
    mapped .debug_names or .gdb_index, which are "raw".  An entry in
@@ -79,6 +80,16 @@ public:
      for completion, will be returned.  */
   range find (const std::string &name, bool completing) const;
 
+  /* Record that ENTRY didn't have a name attribute, but did have a
+     DW_AT_signature attribute, SIGNATURE.  ENTRY will have a NULL
+     name string pointer.  We will patch the name of ENTRY during
+     finalization once the TUs have been parsed, the correct TU will
+     be found using SIGNATURE.  */
+  void add_deferred_name (cooked_index_entry *entry, ULONGEST signature)
+  {
+    m_deferred_names.push_back ({entry, signature});
+  }
+
 private:
 
   /* Return the entry that is believed to represent the program's
@@ -124,6 +135,38 @@ private:
      This may be invoked in a worker thread.  */
   void finalize (const parent_map_map *parent_maps);
 
+  /* Use SIG_NAMES to look up the name of any entry in
+     m_deferred_names.  This should be called a single time, and must
+     be called before finalize is called.  Every shard must have its
+     deferred names resolved before finalize can be called on any
+     shard as finalize can lookup cross-shard entries, and we need to
+     ensure that those entries have their name.  */
+  void resolve_deferred_names (const signature_to_name_map &sig_names);
+
+  /* Called after each phase of the finalization process.  Store
+     COMPLAINTS so they can be reported later on the main thread.  */
+  void merge_finalize_complaints (complaint_collection &&complaints)
+  {
+    if (m_finalize_complaints.empty ())
+      m_finalize_complaints = std::move (complaints);
+    else
+      {
+	/* The current version of gdb::unordered_set doesn't support
+	   the merge method that std::unordered_set supports.  If we
+	   update gdb::unordered_set then we could switch this to use
+	   merge().  */
+	m_finalize_complaints.insert (complaints.begin (), complaints.end ());
+      }
+  }
+
+  /* Return the set of complaints emitted during the finalization
+     process.  We move these complaints out of the shard as these are
+     only emitted once, and don't need to be stored beyond that.  */
+  complaint_collection release_finalize_complaints ()
+  {
+    return std::move (m_finalize_complaints);
+  }
+
   /* Storage for the entries.  */
   auto_obstack m_storage;
   /* List of all entries.  */
@@ -134,6 +177,20 @@ private:
   addrmap_fixed *m_addrmap = nullptr;
   /* Storage for canonical names.  */
   gdb::string_set m_names;
+
+  /* Entries without a name, but with a signature.  These entries will
+     have a NULL name, but we need to patch these up with a real name
+     during finalization.  */
+  struct deferred_name
+  {
+    cooked_index_entry *entry;
+    ULONGEST signature;
+  };
+  std::vector<deferred_name> m_deferred_names;
+
+  /* Any complaints emitted during the call to finalize are stored
+     here until they can be emitted on the main thread.  */
+  complaint_collection m_finalize_complaints;
 };
 
 using cooked_index_shard_up = std::unique_ptr<cooked_index_shard>;

@@ -233,6 +233,12 @@ cooked_index_entry::write_scope (struct obstack *storage,
 {
   if (get_parent () != nullptr)
     get_parent ()->write_scope (storage, sep, flags);
+
+  /* Any entry without a name, or with an empty name, will have been
+     filtered out while the entries were being created, or during
+     finalization.  */
+  gdb_assert (name != nullptr && *name != '\0');
+
   /* When computing the Ada linkage name, the entry might not have
      been canonicalized yet, so use the 'name'.  */
   const char *local_name = ((flags & (FOR_MAIN | FOR_ADA_LINKAGE_NAME)) != 0
