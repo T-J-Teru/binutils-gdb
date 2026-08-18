@@ -80,6 +80,16 @@ public:
      for completion, will be returned.  */
   range find (const std::string &name, bool completing) const;
 
+  /* Record that ENTRY didn't have a name attribute, but did have a
+     DW_AT_signature attribute, SIGNATURE.  ENTRY will have a NULL
+     name string pointer.  We will patch the name of ENTRY during
+     finalization once the TUs have been parsed, the correct TU will
+     be found using SIGNATURE.  */
+  void add_deferred_name (cooked_index_entry *entry, ULONGEST signature)
+  {
+    m_deferred_names.push_back ({entry, signature});
+  }
+
 private:
 
   /* Return the entry that is believed to represent the program's
@@ -131,6 +141,14 @@ private:
      PARENT_MAPS, updating the entry's parent link.  */
   void resolve_deferred_parents (const parent_map_map *parent_maps);
 
+  /* Use SIG_NAMES to look up the name of any entry in
+     m_deferred_names.  This should be called a single time, and must
+     be called before finalize is called.  Every shard must have its
+     deferred names resolved before finalize can be called on any
+     shard as finalize can lookup cross-shard entries, and we need to
+     ensure that those entries have their name.  */
+  void resolve_deferred_names (const signature_to_name_map &sig_names);
+
   /* Called after each phase of the finalization process.  Store COMPLAINTS
      so they can be reported later on the main thread.  */
   void merge_finalize_complaints (complaint_collection &&complaints)
@@ -164,6 +182,16 @@ private:
   addrmap_fixed *m_addrmap = nullptr;
   /* Storage for canonical names.  */
   gdb::string_set m_names;
+
+  /* Entries without a name, but with a signature.  These entries will
+     have a NULL name, but we need to patch these up with a real name
+     during finalization.  */
+  struct deferred_name
+  {
+    cooked_index_entry *entry;
+    ULONGEST signature;
+  };
+  std::vector<deferred_name> m_deferred_names;
 
   /* Any complaints emitted during the finalization process are stored here
      until they can be emitted on the main thread.  */

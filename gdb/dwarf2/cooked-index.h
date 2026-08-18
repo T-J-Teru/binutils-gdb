@@ -175,6 +175,10 @@ private:
      on every cooked_index_shard in m_shards.  */
   void start_resolve_deferred_parents ();
 
+  /* Create and start a gdb::task_group to call resolve_deferred_names
+     on every cooked_index_shard in m_shards.  */
+  void start_resolve_deferred_names ();
+
   /* Create and start a gdb::task_group to call finalize on every
      cooked_index_shard in m_shards.  */
   void start_finalization ();

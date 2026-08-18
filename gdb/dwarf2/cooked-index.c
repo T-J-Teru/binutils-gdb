@@ -121,6 +121,37 @@ cooked_index::start_finalization ()
 /* See cooked-index.h.  */
 
 void
+cooked_index::start_resolve_deferred_names ()
+{
+  gdb::task_group task_group ([this] ()
+  {
+    this->start_resolve_deferred_parents ();
+  });
+
+  for (const cooked_index_shard_up &shard : m_shards)
+    {
+      auto this_shard = shard.get ();
+      const signature_to_name_map *sig_name_map
+	= &m_state->get_sig_name_map ();
+      task_group.add_task ([this, this_shard, sig_name_map] ()
+	{
+	  scoped_time_it time_it ("DWARF resolve deferred names worker",
+				  m_state->m_per_command_time);
+
+	  complaint_interceptor complaint_handler;
+
+	  this_shard->resolve_deferred_names (*sig_name_map);
+
+	  this_shard->merge_finalize_complaints (complaint_handler.release ());
+	});
+    }
+
+  task_group.start ();
+}
+
+/* See cooked-index.h.  */
+
+void
 cooked_index::start_resolve_deferred_parents ()
 {
   gdb::task_group task_group ([this] ()
@@ -160,7 +191,7 @@ cooked_index::set_contents ()
 
   /* This is the first step in the finalization process.  Later steps are
      triggered automatically when this step completes.  */
-  this->start_resolve_deferred_parents ();
+  this->start_resolve_deferred_names ();
 }
 
 cooked_index::~cooked_index ()
