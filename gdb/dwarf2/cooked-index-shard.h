@@ -79,6 +79,16 @@ public:
      for completion, will be returned.  */
   range find (const std::string &name, bool completing) const;
 
+  /* Record that ENTRY didn't have a name attribute, but did have a
+     DW_AT_signature attribute, SIGNATURE.  ENTRY will have been
+     assigned a fake, empty, name string.  We will patch the name of
+     ENTRY during finalization once the TUs have been parsed, the
+     correct TU will be found using SIGNATURE.  */
+  void add_deferred_name (cooked_index_entry *entry, ULONGEST signature)
+  {
+    m_deferred_names.emplace_back (entry, signature);
+  }
+
 private:
 
   /* Return the entry that is believed to represent the program's
@@ -122,7 +132,8 @@ private:
      the index has been fully populated.  It enters all the entries
      into the internal table and fixes up all missing parent links.
      This may be invoked in a worker thread.  */
-  void finalize (const parent_map_map *parent_maps);
+  void finalize (const parent_map_map *parent_maps,
+		 const signature_to_name_map *sig_names);
 
   /* Storage for the entries.  */
   auto_obstack m_storage;
@@ -134,6 +145,12 @@ private:
   addrmap_fixed *m_addrmap = nullptr;
   /* Storage for canonical names.  */
   gdb::string_set m_names;
+
+  /* Entries without a name, but with a signature.  These entries will
+     have been given a fake name, the empty string when they were
+     created, but we need to patch these up with a real name during
+     finalization.  */
+  std::vector<std::pair<cooked_index_entry *, ULONGEST>> m_deferred_names;
 };
 
 using cooked_index_shard_up = std::unique_ptr<cooked_index_shard>;

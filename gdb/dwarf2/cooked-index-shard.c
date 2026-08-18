@@ -20,6 +20,7 @@
 #include "dwarf2/cooked-index-shard.h"
 #include "dwarf2/tag.h"
 #include "dwarf2/index-common.h"
+#include "dwarf2/read.h"
 #include "cp-support.h"
 #include "c-lang.h"
 #include "ada-lang.h"
@@ -190,8 +191,26 @@ struct cooked_index_entry_name_ptr_eq
 /* See cooked-index-shard.h.  */
 
 void
-cooked_index_shard::finalize (const parent_map_map *parent_maps)
+cooked_index_shard::finalize (const parent_map_map *parent_maps,
+			      const signature_to_name_map *sig_names)
 {
+  for (const std::pair<cooked_index_entry *, ULONGEST> &entry : m_deferred_names)
+    {
+      ULONGEST signature = entry.second;
+      const auto it = sig_names->find (signature);
+      if (it != sig_names->end ())
+	{
+	  /* The previous name was the empty string literal, so
+	     overwriting it doesn't leak.  The new name will point
+	     into the DWARF data.  */
+	  entry.first->name = it->second;
+	}
+      else
+	complaint (_("unable to find TU with signature 0x%s [in module %s]"),
+		   phex (signature, sizeof (signature)),
+		   entry.first->per_cu->per_bfd ()->filename ());
+    }
+
   gdb::unordered_set<const cooked_index_entry *,
 		     cooked_index_entry_name_ptr_hash,
 		     cooked_index_entry_name_ptr_eq> seen_names;

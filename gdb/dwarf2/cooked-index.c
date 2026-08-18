@@ -90,11 +90,12 @@ cooked_index::set_contents ()
     {
       auto this_shard = shard.get ();
       const parent_map_map *parent_maps = m_state->get_parent_map_map ();
-      finalizers.add_task ([this, this_shard, parent_maps] ()
+      const signature_to_name_map *sig_name_map = &m_state->get_sig_name_map ();
+      finalizers.add_task ([this, this_shard, parent_maps, sig_name_map] ()
 	{
 	  scoped_time_it time_it ("DWARF finalize worker",
 				  m_state->m_per_command_time);
-	  this_shard->finalize (parent_maps);
+	  this_shard->finalize (parent_maps, sig_name_map);
 	});
     }
 

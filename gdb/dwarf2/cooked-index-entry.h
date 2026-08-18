@@ -79,6 +79,11 @@ union cooked_index_entry_ref
   parent_map::addr_type deferred;
 };
 
+/* Type that maps DW_AT_signature values for a TU to the name of the
+   primary type within the TU.  */
+
+using signature_to_name_map = std::unordered_map<ULONGEST, const char *>;
+
 /* Return a string representation of FLAGS.  */
 
 std::string to_string (cooked_index_flag flags);

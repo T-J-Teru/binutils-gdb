@@ -157,6 +157,7 @@ cooked_indexer::scan_attributes (dwarf2_per_cu *scanning_per_cu,
 				 parent_map::addr_type *maybe_defer,
 				 bool *is_enum_class,
 				 bool *is_inlined,
+				 std::optional<ULONGEST> *signature,
 				 bool for_specification)
 {
   bool is_declaration = false;
@@ -232,6 +233,16 @@ cooked_indexer::scan_attributes (dwarf2_per_cu *scanning_per_cu,
 	case DW_AT_extension:
 	  origin = { &get_section_for_ref (attr, reader->cu ()),
 		     attr.get_ref_die_offset () };
+	  break;
+
+	case DW_AT_signature:
+	  /* The DW_AT_signature could also be a direct reference to a
+	     type DIE.  We don't currently try to capture those
+	     signatures as right now we're only capturing this in
+	     order to handle the fact that some TUs are parsed after
+	     the parallel CU parsing.  */
+	  if (attr.form == DW_FORM_ref_sig8)
+	    signature->emplace (attr.as_signature ());
 	  break;
 
 	case DW_AT_external:
@@ -380,7 +391,7 @@ cooked_indexer::scan_attributes (dwarf2_per_cu *scanning_per_cu,
 	scan_attributes (scanning_per_cu, new_reader, new_info_ptr,
 			 new_info_ptr, new_abbrev, name, linkage_name,
 			 flags, nullptr, parent_entry, maybe_defer,
-			 is_enum_class, is_inlined, true);
+			 is_enum_class, is_inlined, signature, true);
     }
 
   if (!for_specification)
@@ -547,6 +558,7 @@ cooked_indexer::index_dies (cutu_reader *reader,
       const cooked_index_entry *this_parent_entry = parent_entry;
       bool is_enum_class = false;
       bool is_inlined = false;
+      std::optional<ULONGEST> signature;
 
       /* The scope of a DW_TAG_entry_point cooked_index_entry is the one of
 	 its surrounding subroutine.  */
@@ -556,7 +568,7 @@ cooked_indexer::index_dies (cutu_reader *reader,
 	= scan_attributes (reader->cu ()->per_cu, reader, info_ptr, info_ptr,
 			   abbrev, &name, &linkage_name, &flags, &sibling,
 			   &this_parent_entry, &defer, &is_enum_class,
-			   &is_inlined, false);
+			   &is_inlined, &signature, false);
       /* A DW_TAG_entry_point inherits its static/extern property from
 	 the enclosing subroutine.  */
       if (abbrev->tag == DW_TAG_entry_point)
@@ -611,6 +623,17 @@ cooked_indexer::index_dies (cutu_reader *reader,
       cooked_index_entry *this_entry = nullptr;
       /* Always use the reader's CU for the entry CU.  */
       dwarf2_per_cu *cu_for_entry = reader->cu ()->per_cu;
+
+      /* If scan_attributes failed to find a name then we might still
+	 want to create an entry if we think we might later find a
+	 name via a signature.  If this is the case then we set NAME
+	 to be the empty string to avoid having to handle NULL.  */
+      bool found_name = name != nullptr;
+      if (!found_name && signature.has_value ())
+	name = "";
+
+      /* Check NAME here, not FOUND_NAME as NAME might have been
+	 updated above.  */
       if (name != nullptr)
 	{
 	  if (defer != 0)
@@ -624,6 +647,11 @@ cooked_indexer::index_dies (cutu_reader *reader,
 	      = m_index_storage->add (this_die, abbrev->tag, flags,
 				      m_language, name,
 				      this_parent_entry, cu_for_entry);
+
+	  /* Record that this entry doesn't have a valid name and
+	     needs patching.  */
+	  if (signature.has_value () && !found_name)
+	    m_index_storage->add_deferred_name (this_entry, signature.value ());
 	}
       else if (this_parent_entry != nullptr)
 	{
@@ -635,6 +663,18 @@ cooked_indexer::index_dies (cutu_reader *reader,
 	    = parent_map::form_addr (reader->buffer ()
 				     + to_underlying (this_die));
 	  m_die_range_map->add_entry (addr, addr, this_parent_entry);
+	}
+
+      /* If THIS_DIE is the primary type within a TU, and has a valid
+	 name, then add an entry mapping the signature to the name.  */
+      if (found_name
+	  && cu_for_entry->is_debug_types ()
+	  && this_die == (reader->cu ()->header.sect_off
+			  + to_underlying (reader->cu ()->header.type_offset_in_tu)))
+	{
+	  const signatured_type *st = cu_for_entry->as_signatured_type ();
+	  if (st != nullptr)
+	    m_index_storage->add_signatured_type_name (st->signature, name);
 	}
 
       if (linkage_name != nullptr)
