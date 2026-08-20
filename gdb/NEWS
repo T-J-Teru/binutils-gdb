@@ -8,6 +8,13 @@
 * Support for the Common Trace Format (CTF) has been removed.  GDB now
   saves trace information exclusively in its own "tfile" format.
 
+* GDB now supports source-tracking breakpoints, which automatically
+  adjust their location when source code changes between rebuilds.
+  When enabled, file and line breakpoints capture the surrounding
+  source code context and use it to adjust the breakpoint line if the
+  source is modified.  Source tracking can be enabled with 'set
+  breakpoint source-tracking enabled on'.
+
 * Support for .gdb_index sections with version less than 7 has been
   removed.
 
@@ -142,6 +149,16 @@ unset local-environment
   Analogs of the existing "environment" commands that affect GDB's own
   environment.  The local environment is used by "shell", "pipe", and
   other commands that launch a subprocess other than an inferior.
+
+set breakpoint source-tracking enabled [on|off]
+show breakpoint source-tracking enabled
+  Enable or disable source-tracking for file and line breakpoints.
+  When enabled, breakpoints capture surrounding source code and
+  automatically adjust their location when the source changes between
+  recompilations.
+maintenance info source-tracking-context BPNUM
+  Displays the captured source context that GDB uses to track and
+  adjust a breakpoint when source changes.
 
 save history FILENAME
   Save the command history to the given file.
