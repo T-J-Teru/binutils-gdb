@@ -85,7 +85,7 @@ _main:
 
 ; Output "pass\n"
 	.macro pass
-	mov.w	#0, r0		; fd == stdout
+	mov.w	#1, r0		; fd == stdout
 .if (sim_cpu == h8300)
 	mov.w	#pass_str, r1	; buf == "pass\n"
 	mov.w	#5, r2		; len == 5
@@ -98,7 +98,7 @@ _main:
 
 ; Output "fail\n"
 	.macro fail
-	mov.w	#0, r0		; fd == stdout
+	mov.w	#1, r0		; fd == stdout
 .if (sim_cpu == h8300)
 	mov.w	#fail_str, r1	; buf == "fail\n"
 	mov.w	#5, r2		; len == 5
