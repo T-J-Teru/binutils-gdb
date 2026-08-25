@@ -225,6 +225,22 @@ void copy (gdb::array_view<U> src, gdb::array_view<T> dest)
     std::copy_backward (src.begin (), src.end (), dest.end ());
 }
 
+namespace ranges {
+
+/* Replace all occurrences of a value in the provided range.
+
+   Note: this helper is a reimplementation of std::ranges::replace, only
+   available from C++20 onwards, and consequently, should be replaced by
+   std::ranges::replace once GDB switches to C++20.  */
+
+template <class Range, typename T>
+void replace (Range r, const T &old_value, const T &new_value)
+{
+  std::replace (r.begin (), r.end (), old_value, new_value);
+}
+
+} /* namespace ranges */
+
 /* Compare LHS and RHS for (deep) equality.  That is, whether LHS and
    RHS have the same sizes, and whether each pair of elements of LHS
    and RHS at the same position compares equal.  */
