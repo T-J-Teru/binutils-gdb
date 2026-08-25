@@ -1793,23 +1793,21 @@ linux_find_memory_regions_full (struct gdbarch *gdbarch,
 	}
     }
 
-  std::string maps_filename = string_printf ("/proc/%d/smaps", pid);
+  std::vector<smaps_data> smaps;
 
-  gdb::unique_xmalloc_ptr<char> data
-    = target_fileio_read_stralloc (NULL, maps_filename.c_str ());
-
-  if (data == NULL)
+  file_reader_t<char> smaps_freader
+    (string_printf ("/proc/%d/smaps", pid));
+  if (smaps_freader)
+    smaps = parse_smaps_data (smaps_freader);
+  else
     {
       /* Older Linux kernels did not support /proc/PID/smaps.  */
-      maps_filename = string_printf ("/proc/%d/maps", pid);
-      data = target_fileio_read_stralloc (NULL, maps_filename.c_str ());
-
-      if (data == nullptr)
+      file_reader_t<char> maps_freader
+	(string_printf ("/proc/%d/maps", pid));
+      if (!maps_freader)
 	return false;
+      smaps = parse_smaps_data (maps_freader);
     }
-
-  /* Parse the contents of smaps into a vector.  */
-  std::vector<smaps_data> smaps = parse_smaps_data (data.get (), maps_filename);
 
   for (const smaps_data &map: smaps)
     {
