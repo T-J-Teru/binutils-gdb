@@ -1545,18 +1545,17 @@ parse_smaps_key_value (const char *keyword, const char *line,
 /* Helper function to parse the contents of /proc/<pid>/smaps into a data
    structure, for easy access.
 
-   DATA is the contents of the smaps file.  The parsed contents are stored
-   into the SMAPS vector.  */
+   FREADER is a wrapper around the contents of the smaps file.
+   The parsed contents are stored into the SMAPS vector.  */
 
 static std::vector<smaps_data>
-parse_smaps_data (const char *data,
-		  const std::string &maps_filename)
+parse_smaps_data (const file_reader_t<char> &freader)
 {
   char *line, *t;
 
-  gdb_assert (data != nullptr);
+  gdb_assert (freader);
 
-  line = strtok_r ((char *) data, "\n", &t);
+  line = strtok_r (freader.data (), "\n", &t);
 
   std::vector<smaps_data> smaps;
 
@@ -1612,8 +1611,8 @@ parse_smaps_data (const char *data,
 
 	  if (sscanf (line, "%64s", keyword) != 1)
 	    {
-	      warning (_("Error parsing {s,}maps file '%s'"),
-		       maps_filename.c_str ());
+	      warning (_("Error parsing keyword in {s,}maps file '%s'"),
+		       freader.c_filepath ());
 	      break;
 	    }
 
@@ -1627,12 +1626,12 @@ parse_smaps_data (const char *data,
 	    decode_vmflags (line, &v);
 
 	  if (parse_smaps_key_value (keyword, line, "Rss:",
-				     maps_filename,
+				     freader.filepath (),
 				     &rss))
 	    continue;
 
 	  if (parse_smaps_key_value (keyword, line, "Swap:",
-				     maps_filename,
+				     freader.filepath (),
 				     &swap))
 	    continue;
 
@@ -1643,8 +1642,9 @@ parse_smaps_data (const char *data,
 
 	      if (sscanf (line, "%*s%lu", &number) != 1)
 		{
-		  warning (_("Error parsing {s,}maps file '%s' number"),
-			   maps_filename.c_str ());
+		  warning (_("Error parsing numeric value associated with "
+			     "key '%s' in {s,}maps file '%s'"),
+			   keyword, freader.c_filepath ());
 		  break;
 		}
 	      if (number > 0)
@@ -1692,12 +1692,6 @@ parse_smaps_data (const char *data,
     }
 
   return smaps;
-}
-
-static std::vector<smaps_data>
-parse_smaps_data (const file_reader_t<char> &freader)
-{
-  return parse_smaps_data (freader.data (), freader.filepath ());
 }
 
 /* Helper that checks if an address is in a memory tag page for a live
