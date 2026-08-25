@@ -835,6 +835,39 @@ dump_note_entry_p (filter_flags filterflags, const smaps_data &map)
   return true;
 }
 
+/* Extract a string view from BUFFER starting at START and ending at the
+   first occurrence of SEPARATOR.
+   Return the extracted view together with an iterator to the beginning of
+   the next entry, skipping any successive separators.  If no separator
+   is found, return the remainder of BUFFER starting at START.  If there is
+   no following entry, the returned iterator is BUFFER.end ().  */
+
+static std::pair<gdb::array_view<char>, gdb::array_view<char>::iterator>
+extract_string_view_from_buffer (gdb::array_view<char> &buffer,
+				 gdb::array_view<char>::iterator start,
+				 char separator = '\0')
+{
+  auto next_start = buffer.end ();
+
+  /* Reject a START iterator that does not point into BUFFER.  */
+  if (start < buffer.begin () || start >= buffer.end ())
+    return {gdb::array_view<char> (), next_start};
+
+  auto it = std::find (start, buffer.end (), separator);
+
+  /* If no separator is found, the remainder of BUFFER is the final string.  */
+  if (it != buffer.end ())
+    {
+      /* Otherwise, skip successive separators so that NEXT_START points to
+	 the beginning of the next string, if any.  */
+      for (next_start = std::next (it);
+	   next_start != buffer.end () && *next_start == separator;
+	   next_start = std::next (next_start));
+    }
+
+  return {gdb::array_view<char> (start, it), next_start};
+}
+
 /* Implement the "info proc" command.  */
 
 static void
@@ -878,25 +911,23 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
   gdb_printf (_("process %ld\n"), pid);
   if (cmdline_f)
     {
-      xsnprintf (filename, sizeof filename, "/proc/%ld/cmdline", pid);
-      gdb_byte *buffer;
-      LONGEST len = target_fileio_read_alloc (nullptr, filename, &buffer);
-
-      if (len > 0)
+      file_reader_t<gdb_byte> cmdline_freader
+	(string_printf ("/proc/%ld/cmdline", pid));
+      if (cmdline_freader)
 	{
-	  gdb::unique_xmalloc_ptr<char> cmdline ((char *) buffer);
-	  ssize_t pos;
-
-	  for (pos = 0; pos < len - 1; pos++)
-	    {
-	      if (buffer[pos] == '\0')
-		buffer[pos] = ' ';
-	    }
-	  buffer[len - 1] = '\0';
-	  gdb_printf ("cmdline = '%s'\n", buffer);
+	  /* /proc/<pid>/cmdline stores the command-line arguments as a
+	     sequence of NUL-separated strings.  */
+	  gdb::array_view<char> cmdline = cmdline_freader.cast_view<char> ();
+	  gdb_assert (cmdline[cmdline.size () - 1] == '\0');
+	  /* Replace null characters splitting the arguments in the command
+	     line by spaces, except for the last one.  */
+	  gdb::ranges::replace
+	    (cmdline.slice (0, cmdline.size () - 1), '\0', ' ');
+	  gdb_printf ("cmdline = '%s'\n", cmdline.data ());
 	}
       else
-	warning (_("unable to open /proc file '%s'"), filename);
+	warning (_("unable to open /proc file '%s'"),
+		 cmdline_freader.c_filepath ());
     }
   if (cwd_f)
     {
@@ -910,27 +941,25 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
     }
   if (environ_f)
     {
-      xsnprintf (filename, sizeof filename, "/proc/%ld/environ", pid);
-      gdb_byte *buffer;
-      LONGEST len = target_fileio_read_alloc (nullptr, filename, &buffer);
-
-      if (len > 0)
+      file_reader_t<gdb_byte> environ_freader
+	(string_printf ("/proc/%ld/environ", pid));
+      if (environ_freader)
 	{
-	  gdb::unique_xmalloc_ptr<char> dealloc ((char *) buffer);
 	  gdb_printf (_("Environment variables:\n\n"));
-
+	  gdb::array_view<char> buffer = environ_freader.cast_view<char> ();
 	  /* Entries are separated by the null character.
 	     Print each environment variable, line by line.  */
-	  gdb_byte *buffer_end = buffer + len;
-	  while (buffer < buffer_end)
+	  for (auto it = buffer.begin (); it != buffer.end ();)
 	    {
-	      gdb_printf ("  %s\n", buffer);
-	      /* +1 for the null character.  */
-	      buffer += strlen ((char *) buffer) + 1;
+	      auto [ntbs, next_start]
+		= extract_string_view_from_buffer (buffer, it, '\0');
+	      gdb_printf ("  %s\n", ntbs.data ());
+	      it = next_start;
 	    }
 	}
       else
-	warning (_("unable to open /proc file '%s'"), filename);
+	warning (_("unable to open /proc file '%s'"),
+		 environ_freader.c_filepath ());
     }
   if (exe_f)
     {
@@ -944,10 +973,9 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
     }
   if (mappings_f)
     {
-      xsnprintf (filename, sizeof filename, "/proc/%ld/maps", pid);
-      gdb::unique_xmalloc_ptr<char> map
-	= target_fileio_read_stralloc (NULL, filename);
-      if (map != NULL)
+      file_reader_t<char> map_freader
+	(string_printf ("/proc/%ld/maps", pid));
+      if (map_freader)
 	{
 	  gdb_printf (_("Mapped address spaces:\n\n"));
 	  ui_out_emit_table emitter (current_uiout, 6, -1, "ProcMappings");
@@ -961,12 +989,16 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
 	  current_uiout->table_header (0, ui_left, "objfile", "File");
 	  current_uiout->table_body ();
 
-	  char *saveptr;
-	  for (const char *line = strtok_r (map.get (), "\n", &saveptr);
-	       line != nullptr;
-	       line = strtok_r (nullptr, "\n", &saveptr))
+	  auto content = map_freader.view ();
+	  for (auto it = content.begin (); it != content.end ();)
 	    {
-	      struct mapping m = read_mapping (line);
+	      auto [line, next_line_begin]
+		= extract_string_view_from_buffer (content, it, '\n');
+	      it = next_line_begin;
+
+	      /* read_mapping() expects a null-terminated string.  */
+	      *std::prev (it) = '\0';
+	      struct mapping m = read_mapping (line.data ());
 
 	      ui_out_emit_tuple tuple_emitter (current_uiout);
 	      current_uiout->field_core_addr ("start", gdbarch, m.addr);
@@ -985,26 +1017,26 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
 	    }
 	}
       else
-	warning (_("unable to open /proc file '%s'"), filename);
+	warning (_("unable to open /proc file '%s'"),
+		 map_freader.c_filepath ());
     }
   if (status_f)
     {
-      xsnprintf (filename, sizeof filename, "/proc/%ld/status", pid);
-      gdb::unique_xmalloc_ptr<char> status
-	= target_fileio_read_stralloc (NULL, filename);
-      if (status)
-	gdb_puts (status.get ());
+      file_reader_t<char> status_freader
+	(string_printf ("/proc/%ld/status", pid));
+      if (status_freader)
+	gdb_puts (status_freader.data ());
       else
-	warning (_("unable to open /proc file '%s'"), filename);
+	warning (_("unable to open /proc file '%s'"),
+		 status_freader.c_filepath ());
     }
   if (stat_f)
     {
-      xsnprintf (filename, sizeof filename, "/proc/%ld/stat", pid);
-      gdb::unique_xmalloc_ptr<char> statstr
-	= target_fileio_read_stralloc (NULL, filename);
-      if (statstr)
+      file_reader_t<char> stat_freader
+	(string_printf ("/proc/%ld/stat", pid));
+      if (stat_freader)
 	{
-	  const char *p = statstr.get ();
+	  const char *p = stat_freader.data ();
 
 	  gdb_printf (_("Process: %s\n"),
 		      pulongest (strtoulst (p, &p, 10)));
@@ -1131,7 +1163,8 @@ linux_info_proc (struct gdbarch *gdbarch, const char *args,
 #endif
 	}
       else
-	warning (_("unable to open /proc file '%s'"), filename);
+	warning (_("unable to open /proc file '%s'"),
+		 stat_freader.c_filepath ());
     }
 }
 
