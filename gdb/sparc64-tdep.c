@@ -301,18 +301,16 @@ adi_tag_fd ()
 static bool
 adi_is_addr_mapped (CORE_ADDR vaddr, size_t cnt)
 {
-  char filename[MAX_PROC_NAME_SIZE];
   size_t i = 0;
 
   pid_t pid = inferior_ptid.pid ();
-  snprintf (filename, sizeof filename, "/proc/%ld/adi/maps", (long) pid);
-  gdb::unique_xmalloc_ptr<char> data
-    = target_fileio_read_stralloc (NULL, filename);
-  if (data)
+  file_reader_t<char> adi_maps_freader
+    (string_printf ("/proc/%d/adi/maps", pid));
+  if (adi_maps_freader)
     {
       adi_stat_t adi_stat = get_adi_info (pid);
       char *saveptr;
-      for (char *line = strtok_r (data.get (), "\n", &saveptr);
+      for (char *line = strtok_r (adi_maps_freader.data (), "\n", &saveptr);
 	   line;
 	   line = strtok_r (NULL, "\n", &saveptr))
 	{
@@ -328,8 +326,9 @@ adi_is_addr_mapped (CORE_ADDR vaddr, size_t cnt)
 	    }
 	}
       }
-  else
-    warning (_("unable to open /proc file '%s'"), filename);
+  else if (adi_maps_freader.error ())
+    warning (_("unable to open /proc file '%s'"),
+	     adi_maps_freader.c_filepath ());
 
   return false;
 }

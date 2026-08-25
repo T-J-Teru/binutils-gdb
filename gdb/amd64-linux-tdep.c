@@ -1848,14 +1848,11 @@ amd64_linux_lam_untag_mask ()
   if (inf->fake_pid_p)
     return DEFAULT_TAG_MASK;
 
-  const std::string filename = string_printf ("/proc/%d/status", inf->pid);
-  gdb::unique_xmalloc_ptr<char> status_file
-    = target_fileio_read_stralloc (nullptr, filename.c_str ());
-
-  if (status_file == nullptr)
+  file_reader_t<char> proc_status (string_printf ("/proc/%d/status", inf->pid));
+  if (!proc_status)
     return DEFAULT_TAG_MASK;
 
-  std::string_view status_file_view (status_file.get ());
+  std::string_view status_file_view (proc_status.data ());
   constexpr std::string_view untag_mask_str = "untag_mask:\t";
   const size_t found = status_file_view.find (untag_mask_str);
   if (found != std::string::npos)
@@ -1867,7 +1864,8 @@ amd64_linux_lam_untag_mask ()
       unsigned long long result = std::strtoul (start, &endptr, 0);
       if (errno != 0 || endptr == start)
 	error (_("Failed to parse untag_mask from file %ps."),
-	       styled_string (file_name_style.style (), filename.c_str ()));
+	       styled_string (file_name_style.style (),
+			      proc_status.c_filepath ()));
 
       return result;
     }

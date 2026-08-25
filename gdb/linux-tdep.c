@@ -1515,7 +1515,7 @@ parse_smaps_key_value (const char *keyword, const char *line,
    DATA is the contents of the smaps file.  The parsed contents are stored
    into the SMAPS vector.  */
 
-static std::vector<struct smaps_data>
+static std::vector<smaps_data>
 parse_smaps_data (const char *data,
 		  const std::string &maps_filename)
 {
@@ -1525,7 +1525,7 @@ parse_smaps_data (const char *data,
 
   line = strtok_r ((char *) data, "\n", &t);
 
-  std::vector<struct smaps_data> smaps;
+  std::vector<smaps_data> smaps;
 
   while (line != NULL)
     {
@@ -1637,7 +1637,7 @@ parse_smaps_data (const char *data,
 	    }
 	}
       /* Save the smaps entry to the vector.  */
-	struct smaps_data map;
+	smaps_data map;
 
 	map.start_address = m.addr;
 	map.end_address = m.endaddr;
@@ -1661,6 +1661,12 @@ parse_smaps_data (const char *data,
   return smaps;
 }
 
+static std::vector<smaps_data>
+parse_smaps_data (const file_reader_t<char> &freader)
+{
+  return parse_smaps_data (freader.data (), freader.filepath ());
+}
+
 /* Helper that checks if an address is in a memory tag page for a live
    process.  */
 
@@ -1672,17 +1678,13 @@ linux_process_address_in_memtag_page (CORE_ADDR address)
 
   pid_t pid = current_inferior ()->pid;
 
-  std::string smaps_file = string_printf ("/proc/%d/smaps", pid);
-
-  gdb::unique_xmalloc_ptr<char> data
-    = target_fileio_read_stralloc (NULL, smaps_file.c_str ());
-
-  if (data == nullptr)
+  file_reader_t<char> smaps_freader
+    (string_printf ("/proc/%d/smaps", pid));
+  if (!smaps_freader)
     return false;
 
   /* Parse the contents of smaps into a vector.  */
-  std::vector<struct smaps_data> smaps
-    = parse_smaps_data (data.get (), smaps_file);
+  std::vector<smaps_data> smaps = parse_smaps_data (smaps_freader);
 
   for (const smaps_data &map : smaps)
     {
@@ -1747,17 +1749,13 @@ linux_find_memory_regions_full (struct gdbarch *gdbarch,
 
   if (use_coredump_filter)
     {
-      std::string core_dump_filter_name
-	= string_printf ("/proc/%d/coredump_filter", pid);
-
-      gdb::unique_xmalloc_ptr<char> coredumpfilterdata
-	= target_fileio_read_stralloc (NULL, core_dump_filter_name.c_str ());
-
-      if (coredumpfilterdata != NULL)
+      file_reader_t<char> coredump_filter_freader
+	(string_printf ("/proc/%d/coredump_filter", pid));
+      if (coredump_filter_freader)
 	{
 	  unsigned int flags;
 
-	  sscanf (coredumpfilterdata.get (), "%x", &flags);
+	  sscanf (coredump_filter_freader.data (), "%x", &flags);
 	  filterflags = (enum filter_flag) flags;
 	}
     }
@@ -1778,10 +1776,9 @@ linux_find_memory_regions_full (struct gdbarch *gdbarch,
     }
 
   /* Parse the contents of smaps into a vector.  */
-  std::vector<struct smaps_data> smaps
-    = parse_smaps_data (data.get (), maps_filename);
+  std::vector<smaps_data> smaps = parse_smaps_data (data.get (), maps_filename);
 
-  for (const struct smaps_data &map : smaps)
+  for (const smaps_data &map: smaps)
     {
       /* Invoke the callback function to create the corefile segment.  */
       if (should_dump_mapping_p (filterflags, map))
@@ -2260,9 +2257,6 @@ linux_corefile_parse_exec_context (struct gdbarch *gdbarch, bfd *cbfd)
 static bool
 linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
 {
-  /* The filename which we will use to obtain some info about the process.
-     We will basically use this to store the `/proc/PID/FILENAME' file.  */
-  char filename[100];
   /* The basename of the executable.  */
   const char *basename;
   /* Temporary buffer.  */
@@ -2284,25 +2278,29 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
 
   gdb_assert (p != nullptr);
 
-  /* Obtaining PID and filename.  */
   pid = inferior_ptid.pid ();
-  xsnprintf (filename, sizeof (filename), "/proc/%d/cmdline", (int) pid);
-  /* The full name of the program which generated the corefile.  */
-  gdb_byte *buf = nullptr;
-  LONGEST buf_len = target_fileio_read_alloc (nullptr, filename, &buf);
-  gdb::unique_xmalloc_ptr<char> fname ((char *)buf);
 
-  if (buf_len < 1 || fname.get () == nullptr || fname.get ()[0] == '\0')
+  file_reader_t<gdb_byte> cmdline_freader
+    (string_printf ("/proc/%d/cmdline", (int) pid));
+  if (!cmdline_freader)
+    return false;
+
+  /* /proc/<pid>/cmdline stores the command-line arguments as a sequence of
+     NUL-separated strings.  */
+  gdb::array_view<char> cmdline = cmdline_freader.cast_view<char> ();
+  /* The buffer points to the full name of the program which generated the
+     corefile.  */
+  if (cmdline.size () < 1 || cmdline[0] == '\0')
     {
       /* No program name was read, so we won't be able to retrieve more
 	 information about the process.  */
       return false;
     }
-  if (fname.get ()[buf_len - 1] != '\0')
+  if (cmdline[cmdline.size () - 1] != '\0')
     {
       warning (_("target file %s "
 		 "does not contain a trailing null character"),
-	       filename);
+	       cmdline_freader.c_filepath ());
       return false;
     }
 
@@ -2312,27 +2310,24 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
   p->pr_pid = pid;
 
   /* Copying the program name.  Only the basename matters.  */
-  basename = lbasename (fname.get ());
+  basename = lbasename (cmdline.data ());
   strncpy (p->pr_fname, basename, sizeof (p->pr_fname) - 1);
   p->pr_fname[sizeof (p->pr_fname) - 1] = '\0';
 
   const std::string &infargs = current_inferior ()->args ();
 
   /* The arguments of the program.  */
-  std::string psargs = fname.get ();
+  std::string psargs = cmdline.data ();
   if (!infargs.empty ())
     psargs += ' ' + infargs;
 
   strncpy (p->pr_psargs, psargs.c_str (), sizeof (p->pr_psargs) - 1);
   p->pr_psargs[sizeof (p->pr_psargs) - 1] = '\0';
 
-  xsnprintf (filename, sizeof (filename), "/proc/%d/stat", (int) pid);
-  /* The contents of `/proc/PID/stat'.  */
-  gdb::unique_xmalloc_ptr<char> proc_stat_contents
-    = target_fileio_read_stralloc (NULL, filename);
-  char *proc_stat = proc_stat_contents.get ();
-
-  if (proc_stat == NULL || *proc_stat == '\0')
+  file_reader_t<char> stat_freader
+    (string_printf ("/proc/%d/stat", (int) pid));
+  const char *proc_stat = stat_freader.data ();
+  if (!stat_freader || *proc_stat == '\0')
     {
       /* Despite being unable to read more information about the
 	 process, we return true here because at least we have its
@@ -2404,13 +2399,10 @@ linux_fill_prpsinfo (struct elf_internal_linux_prpsinfo *p)
 
   /* Finally, obtaining the UID and GID.  For that, we read and parse the
      contents of the `/proc/PID/status' file.  */
-  xsnprintf (filename, sizeof (filename), "/proc/%d/status", (int) pid);
-  /* The contents of `/proc/PID/status'.  */
-  gdb::unique_xmalloc_ptr<char> proc_status_contents
-    = target_fileio_read_stralloc (NULL, filename);
-  char *proc_status = proc_status_contents.get ();
-
-  if (proc_status == NULL || *proc_status == '\0')
+  file_reader_t<char> status_freader
+    (string_printf ("/proc/%d/status", (int) pid));
+  char *proc_status = status_freader.data ();
+  if (!status_freader || *proc_status == '\0')
     {
       /* Returning true since we already have a bunch of information.  */
       return true;
@@ -2803,9 +2795,6 @@ linux_gdb_signal_to_target (struct gdbarch *gdbarch,
 static bool
 linux_vsyscall_range_raw (struct gdbarch *gdbarch, struct mem_range *range)
 {
-  char filename[100];
-  long pid;
-
   if (target_auxv_search (AT_SYSINFO_EHDR, &range->start) <= 0)
     return false;
 
@@ -2843,7 +2832,7 @@ linux_vsyscall_range_raw (struct gdbarch *gdbarch, struct mem_range *range)
   if (current_inferior ()->fake_pid_p)
     return false;
 
-  pid = current_inferior ()->pid;
+  long pid = current_inferior ()->pid;
 
   /* Note that reading /proc/PID/task/PID/maps (1) is much faster than
      reading /proc/PID/maps (2).  The later identifies thread stacks
@@ -2853,15 +2842,14 @@ linux_vsyscall_range_raw (struct gdbarch *gdbarch, struct mem_range *range)
      a few thousand threads, (1) takes a few milliseconds, while (2)
      takes several seconds.  Also note that "smaps", what we read for
      determining core dump mappings, is even slower than "maps".  */
-  xsnprintf (filename, sizeof filename, "/proc/%ld/task/%ld/maps", pid, pid);
-  gdb::unique_xmalloc_ptr<char> data
-    = target_fileio_read_stralloc (NULL, filename);
-  if (data != NULL)
+  file_reader_t<char> task_maps_freader
+    (string_printf ("/proc/%ld/task/%ld/maps", pid, pid));
+  if (task_maps_freader)
     {
       char *line;
       char *saveptr = NULL;
 
-      for (line = strtok_r (data.get (), "\n", &saveptr);
+      for (line = strtok_r (task_maps_freader.data (), "\n", &saveptr);
 	   line != NULL;
 	   line = strtok_r (NULL, "\n", &saveptr))
 	{
@@ -2879,8 +2867,9 @@ linux_vsyscall_range_raw (struct gdbarch *gdbarch, struct mem_range *range)
 	    }
 	}
     }
-  else
-    warning (_("unable to open /proc file '%s'"), filename);
+  else if (task_maps_freader.error ())
+    warning (_("unable to open /proc file '%s'"),
+	     task_maps_freader.c_filepath ());
 
   return false;
 }
@@ -3207,16 +3196,12 @@ linux_address_in_shadow_stack_mem_range
 
   const int pid = current_inferior ()->pid;
 
-  std::string smaps_file = string_printf ("/proc/%d/smaps", pid);
-
-  gdb::unique_xmalloc_ptr<char> data
-    = target_fileio_read_stralloc (nullptr, smaps_file.c_str ());
-
-  if (data == nullptr)
+  file_reader_t<char> smaps_freader
+    (string_printf ("/proc/%d/smaps", pid));
+  if (!smaps_freader)
     return false;
 
-  const std::vector<smaps_data> smaps
-    = parse_smaps_data (data.get (), smaps_file);
+  const std::vector<smaps_data> smaps = parse_smaps_data (smaps_freader);
 
   auto find_addr_mem_range = [&addr] (const smaps_data &map)
     {

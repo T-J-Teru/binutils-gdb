@@ -2341,6 +2341,84 @@ extern LONGEST target_fileio_read_alloc (struct inferior *inf,
 extern gdb::unique_xmalloc_ptr<char> target_fileio_read_stralloc
     (struct inferior *inf, const char *filename, LONGEST *len = nullptr);
 
+/* Helper class for reading the content of a file on the target.  */
+template <typename T>
+class file_reader_t
+{
+  /* The filepath of the file being read.  */
+  std::string m_filepath;
+  /* Smart pointer to the data.  */
+  gdb::unique_xmalloc_ptr<T> m_data;
+  /* Number of bytes read.  */
+  LONGEST m_size;
+
+public:
+  file_reader_t (const std::string &filepath)
+    : m_filepath (filepath)
+    , m_size (0)
+  {
+    if constexpr (std::is_same_v<T, char>)
+      m_data = target_fileio_read_stralloc (nullptr, m_filepath.c_str (),
+					    &m_size);
+    else
+      {
+	gdb_byte *buf = nullptr;
+	m_size = target_fileio_read_alloc (nullptr, m_filepath.c_str (), &buf);
+	m_data = gdb::unique_xmalloc_ptr<T> (reinterpret_cast<T *>(buf));
+      }
+  }
+
+  file_reader_t (file_reader_t &&) = default;
+  file_reader_t &operator= (file_reader_t &&) = default;
+
+  DISABLE_COPY_AND_ASSIGN (file_reader_t);
+
+  /* Return true if the file was read successfully but contained no data.  */
+  bool empty () const noexcept
+  { return m_data != nullptr && m_size == 0; }
+
+  /* Return true if the file could not be read.  */
+  bool error () const noexcept
+  { return m_data == nullptr || m_size < 0; }
+
+  /* Return true if the file was read successfully and is non-empty.  */
+  explicit operator bool () const noexcept
+  { return !(error () || empty ()); }
+
+  /* Return a pointer to the data.  */
+  T *data () const noexcept
+  { return m_data.get (); }
+
+  /* Return the number of bytes read.  */
+  LONGEST size () const noexcept
+  {
+    /* For char buffers, size() corresponds to the size of the read data. Some
+       null-terminator characters are possibly scattered throughout the data.
+       Consequently, strlen() might not reflect the actual size.  */
+    return m_size;
+  }
+
+  /* Return a span of the data.  */
+  gdb::array_view<T> view () const noexcept
+  { return gdb::array_view<T> (m_data.get (), size ()); }
+
+  /* Return a span of the data, reinterpreted as U objects.  */
+  template <typename U>
+  gdb::array_view<U> cast_view () const noexcept
+  {
+    return gdb::array_view<U> (reinterpret_cast<U *> (m_data.get ()),
+			       size () * sizeof (T) / sizeof (U));
+  }
+
+  /* Return the path of the file that was read.  */
+  const std::string &filepath () const noexcept
+  { return m_filepath; }
+
+  /* Return the path of the file that was read as a C string.  */
+  const char *c_filepath () const noexcept
+  { return m_filepath.c_str (); }
+};
+
 /* Invalidate the target associated with open handles that were open
    on target TARG, since we're about to close (and maybe destroy) the
    target.  The handles remain open from the client's perspective, but
