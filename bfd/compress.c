@@ -934,6 +934,13 @@ bfd_is_section_compressed_info (bfd *abfd, sec_ptr sec,
   /* Restore compress_status.  */
   sec->compress_status = saved;
   *compression_header_size_p = compression_header_size;
+
+  if (getenv ("APB_DEBUG") != NULL)
+    fprintf (stderr, "APB: In '%s', section '%s', compressed: %d\n",
+	     bfd_get_filename (abfd),
+	     bfd_section_name (sec),
+	     compressed);
+
   return compressed;
 }
 

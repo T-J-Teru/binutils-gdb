@@ -175,7 +175,7 @@ write_elf (gdb_byte *&buffer, bfd_endian byte_order, T value)
 
 struct gdb_debuginfod_deferred_download : public gdb_bfd_iovec_base
 {
-  gdb_debuginfod_deferred_download (scoped_fd &&fd,
+  gdb_debuginfod_deferred_download (scoped_fd fd,
 				    const bfd_build_id *build_id,
 				    objfile *objfile);
   
@@ -206,8 +206,9 @@ private:
 			    bfd_endian byte_order,
 			    size_t shentsize);
 
-  /* An open file descriptor for the skeleton debug information.  */
-  scoped_fd m_fd;
+  void make_section_uncompressed (gdb_byte *address,
+				  bfd_endian byte_order,
+				  size_t shentsize);
 
   /* ... */
   const bfd_build_id *m_build_id;
@@ -228,6 +229,10 @@ private:
 
   /* ... */
   std::vector<section> m_sections;
+
+  /* File descriptor for the full debug info.  TODO: This would be
+     better stored as a BFD object.  */
+  scoped_fd m_fd;
 };
 
 /* ... */
@@ -258,6 +263,31 @@ gdb_debuginfod_deferred_download::make_section_nobits (gdb_byte *address,
       /* Skip over sh_name field, write back to sh_type.  */
       gdb_byte *tmp = address + sizeof (Elf64_Word);
       write_elf<Elf64_Word> (tmp, byte_order, sh_type);
+    }
+}
+
+void
+gdb_debuginfod_deferred_download::make_section_uncompressed
+  (gdb_byte *address, bfd_endian byte_order, size_t shentsize)
+{
+  if (shentsize == sizeof (Elf32_Shdr))
+    {
+      /* Skip over sh_name and sh_type fields.  */
+      gdb_byte *tmp = address + sizeof (Elf32_Word) + sizeof (Elf32_Word);
+      Elf32_Word sh_flags = read_elf<Elf32_Word> (tmp, byte_order);
+      sh_flags &= ~SHF_COMPRESSED;
+      tmp -= sizeof (Elf32_Word);
+      write_elf<Elf32_Word> (tmp, byte_order, sh_flags);
+    }
+  else
+    {
+      gdb_assert (shentsize == sizeof (Elf64_Shdr));
+      /* Skip over sh_name and sh_type fields.  */
+      gdb_byte *tmp = address + sizeof (Elf64_Word) + sizeof (Elf64_Word);
+      Elf64_Xword sh_flags = read_elf<Elf64_Xword> (tmp, byte_order);
+      sh_flags &= ~SHF_COMPRESSED;
+      tmp -= sizeof (Elf64_Xword);
+      write_elf<Elf64_Xword> (tmp, byte_order, sh_flags);
     }
 }
 
@@ -313,16 +343,15 @@ gdb_debuginfod_deferred_download::foreach_section_header
 }
 
 gdb_debuginfod_deferred_download::gdb_debuginfod_deferred_download
-  (scoped_fd &&fd, const bfd_build_id *build_id, objfile *objfile)
-    : m_fd (std::move (fd)),
-      m_build_id (build_id),
+  (scoped_fd fd, const bfd_build_id *build_id, objfile *objfile)
+    : m_build_id (build_id),
       m_objfile (objfile)
 {
-  off_t loc = ::lseek (m_fd.get (), 0, SEEK_END);
+  off_t loc = ::lseek (fd.get (), 0, SEEK_END);
   if (loc == (off_t) -1)
     error (_("failed to seek to end of skeleton file"));
 
-  m_data = mmap (NULL, loc, PROT_READ | PROT_WRITE, MAP_PRIVATE, m_fd.get (), 0);
+  m_data = mmap (NULL, loc, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd.get (), 0);
   if (m_data == MAP_FAILED)
     error (_("failed to map skeleton into memory"));
 
@@ -522,6 +551,7 @@ gdb_debuginfod_deferred_download::gdb_debuginfod_deferred_download
       {
 	/* Need to fetch the whole debug info file.  */
 	apb_debug ("must arrange for %s to trigger full download", name.c_str ());
+	make_section_uncompressed (address, byte_order, ehdr.e_shentsize);
       }
     else if (name == ".gdb_index")
       {
@@ -550,6 +580,18 @@ file_ptr gdb_debuginfod_deferred_download::read (bfd *abfd, void *buffer,
 {
   try
   {
+    /* If we already downloaded the full file then handle the read now.  */
+    if (m_fd.get () >= 0)
+      {
+	if (::lseek (m_fd.get (), offset, SEEK_SET) != (off_t) offset)
+	  error (_("failed to seek in full debuginfo file"));
+
+	if (::read (m_fd.get (), buffer, nbytes) != nbytes)
+	  error (_("failed to read from full debuginfo file"));
+
+	return nbytes;
+      }
+
   for (const region &r : m_regions)
     {
       if (!r.in_region (offset, nbytes))
@@ -579,7 +621,7 @@ file_ptr gdb_debuginfod_deferred_download::read (bfd *abfd, void *buffer,
       apb_debug ("     section = %s", in_section->name ().c_str ());
 
       if (in_section->offset () == offset && in_section->length () >= nbytes
-	  && nbytes == 12
+	  && nbytes <= 24
 	  && startswith (in_section->name (), ".debug_"))
 	{
 	  apb_debug ("!!!! Faking debug section header.");
@@ -640,16 +682,32 @@ file_ptr gdb_debuginfod_deferred_download::read (bfd *abfd, void *buffer,
 	  /* Download the wholte file.  */
 	  const char *filename = bfd_get_filename (m_objfile->obfd.get ());
 	  gdb::unique_xmalloc_ptr<char> destname;
-	  scoped_fd fd = debuginfod_debuginfo_query (m_build_id->data,
+	  m_fd = debuginfod_debuginfo_query (m_build_id->data,
 						     m_build_id->size,
 						     filename,
 						     &destname);
 
-	  if (::lseek (fd.get (), offset, SEEK_SET) != (off_t) offset)
+	  if (::lseek (m_fd.get (), offset, SEEK_SET) != (off_t) offset)
 	    error (_("failed to seek in full debuginfo file"));
 
-	  if (::read (fd.get (), buffer, nbytes) != nbytes)
+	  if (::read (m_fd.get (), buffer, nbytes) != nbytes)
 	    error (_("failed to read from full debuginfo file"));
+
+	  /* Fixup compressed sections?  */
+	  int i;
+	  asection *sect;
+	  for (i = 0, sect = abfd->sections;
+	       sect != nullptr;
+	       i++, sect = sect->next)
+	    {
+	      if ((sect->flags & (SEC_DEBUGGING | SEC_HAS_CONTENTS))
+		  == (SEC_DEBUGGING | SEC_HAS_CONTENTS))
+		{
+		  if (!bfd_init_section_decompress_status (abfd, sect))
+		    warning ("WARNING: bfd_init_section_compress_status failed for '%s' in '%s'",
+			     bfd_section_name (sect), bfd_get_filename (abfd));
+		}
+	    }
 
 	  return nbytes;
 	}
