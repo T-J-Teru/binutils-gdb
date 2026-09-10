@@ -748,8 +748,36 @@ proc_with_prefix test_bkpt_explicit_loc {} {
 	     "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
 	"set invalid explicit breakpoint by source and invalid line"
     gdb_test "python bp1 = gdb.Breakpoint (function=\"blah\")" \
-	"Function \"blah\" not defined.*" \
+	[multi_line \
+	    "Function \"blah\" not defined.*" \
+	    "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
 	"set invalid explicit breakpoint by missing function"
+    gdb_test "python bp1 = gdb.Breakpoint (source=\"$srcfile\", line=\"900\", allow_pending=True)" \
+	[multi_line \
+	     "^No compiled code for line 900 in file \"$srcfile\"\\." \
+	     "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
+	"set invalid explicit breakpoint by source and invalid line with\
+	pending breakpoint allowed"
+    gdb_test "python bp1 = gdb.Breakpoint (function=\"blah\", allow_pending=True)" \
+	[multi_line \
+	    "Function \"blah\" not defined.*" \
+	    "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
+	"set invalid explicit breakpoint by missing function with pending\
+	breakpoint allowed"
+    gdb_test "python bp1 = gdb.Breakpoint (source=\"$srcfile\", line=\"900\", allow_pending=False)" \
+	[multi_line \
+	     "Python Exception <class 'gdb.error'>: No compiled code for line\
+	     900 in file \"$srcfile\"\\." \
+	     "Error occurred in Python: No compiled code for line 900 in file\
+	     \"$srcfile\"\\."] \
+	"set invalid explicit breakpoint by source and invalid line with\
+	pending breakpoint not allowed"
+    gdb_test "python bp1 = gdb.Breakpoint (function=\"blah\", allow_pending=False)" \
+	[multi_line \
+	    "Python Exception <class 'gdb.error'>: Function \"blah\" not defined\\." \
+	    "Error occurred in Python: Function \"blah\" not defined\\."] \
+	"set invalid explicit breakpoint by missing function with pending\
+	breakpoint not allowed"
 
     delete_breakpoints
     gdb_test "catch throw" "Catchpoint .* \\(throw\\)"

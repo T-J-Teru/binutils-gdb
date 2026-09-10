@@ -300,6 +300,9 @@ qExecAndArgs
 
 * Python API
 
+  ** New 'allow_pending' argument for gdb.Breakpoint allows preventing
+     the creation of pending breakpoints.
+
   ** New class gdb.Style for representing styles, a collection of
      foreground and background gdb.Color objects, and an intensity.
 
