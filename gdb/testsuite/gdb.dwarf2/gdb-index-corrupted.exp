@@ -1,0 +1,330 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that GDB handles a corrupt .gdb_index gracefully.  This test
+# checks a number of different scenarios, check the 'gdb_index' calls
+# within the 'run_test' proc for details.
+
+load_lib dwarf.exp
+
+require dwarf2_support
+
+# This test installs its own hand-crafted .gdb_index into the
+# executable.  The 'readnow' board forces GDB to ignore the index and
+# read the full debug info, making this test irrelevant.
+require !readnow
+
+standard_testfile
+
+if {[prepare_for_testing "failed to prepare" "${testfile}" \
+	 [list ${srcfile}] {debug ldflags=-nostartfiles}]} {
+    return
+}
+
+set index [have_index $binfile]
+if { ![string eq $index ""] } {
+    unsupported "cache created at compile time"
+    return
+}
+
+set func_info_vars \
+    [get_func_info _start [list debug ldflags=-nostartfiles]]
+
+# TESTNAME is a string that is used to identify the test to run.  This
+# string is used to control how the gdb_index is created, and then
+# what checks are performed on the executable after loading it.
+proc run_test { testname } {
+    set asm_file [standard_output_file ${testname}.S]
+    Dwarf::assemble {
+	filename $asm_file
+	add_dummy_cus 0
+    } {
+	upvar testname testname
+	global func_info_vars
+	foreach var $func_info_vars {
+	    global $var
+	}
+
+	cu { label cu_label } {
+	    compile_unit {
+		DW_AT_language @DW_LANG_C_plus_plus
+	    } {
+		subprogram {
+		    DW_AT_name _start
+		    DW_AT_low_pc $_start_start DW_FORM_addr
+		    DW_AT_high_pc $_start_end DW_FORM_addr
+		    DW_AT_external 1 DW_FORM_flag
+		}
+	    }
+	}
+
+	aranges {} cu_label {
+	    arange {} $_start_start $_start_len
+	}
+
+	if { $testname eq "empty-component" } {
+	    # GDB tries to split entries within the index based on
+	    # '::' by default.  Create an index entry with an empty
+	    # component and ensure that this doesn't trigger undefined
+	    # behaviour in GDB.
+	    gdb_index {} {
+		cu cu_label
+		name "::method" {{cu_label function global}}
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "main-name-offset-1" } {
+	    # Add main function details to a basic index, but encode
+	    # an out of range name offset using the special string
+	    # 'end'.  Ensure that GDB doesn't crash and instead just
+	    # ignores the main function details.
+	    #
+	    # Using 'end' here means that the constant pool index used
+	    # for the main entry will point at the first byte after
+	    # the constant pool.  This is the off-by-one boundary
+	    # case.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		main DW_LANG_C99 end
+	    }
+	} elseif { $testname eq "main-name-offset-2" } {
+	    # Add main function details to a basic index, but encode
+	    # an out of range name offset.  Ensure that GDB doesn't
+	    # crash and instead just ignores the main function details.
+	    #
+	    # This is very similar to the 'main-name-offset-1' test,
+	    # but here the name offset is huge, far past the end of
+	    # the constant pool.  This is far more likely to cause GDB
+	    # to crash.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		main DW_LANG_C99 0xffffff00
+	    }
+	} elseif { $testname eq "main-language" } {
+	    # Add main function details to a basic index, but encode
+	    # an invalid language number.  Ensure that GDB ignores the
+	    # main function details.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		main 0xfffff0 _start
+	    }
+	} elseif { $testname eq "no-null" } {
+	    # Create a .gdb_index without a null character at the end
+	    # of the string table.  This is invalid and GDB should just
+	    # ignore this .gdb_index.
+	    gdb_index {
+		no_null true
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "skip-constant-pool" } {
+	    # Create a .gdb_index with a non-empty symbol table but an
+	    # empty constant pool.  GDB should ignore this .gdb_index.
+	    gdb_index {
+		skip_index_part { constant_pool }
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "long-cu-vector" } {
+	    # Create a .gdb_index containing a CU vector in the
+	    # constant pool where the vector length is invalid.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		name foo {99999 {cu_label function global}}
+	    }
+	} elseif { $testname eq "name-offset-1" } {
+	    # Add a symbol to the index whose name offset in the symbol
+	    # table is out of range.  The slot still has a valid CU
+	    # vector, so GDB won't treat it as an empty slot and will
+	    # try to read the name.  Ensure GDB doesn't crash and
+	    # instead just ignores this one symbol.
+	    #
+	    # The 'end' offset is exactly the size of the constant pool,
+	    # that is, it points at the first byte after the pool.  This
+	    # is the off-by-one boundary case.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		name foo {{cu_label function global}} end
+	    }
+	} elseif { $testname eq "name-offset-2" } {
+	    # Just like 'name-offset-1', but here the name offset is
+	    # huge, far past the end of the constant pool.  This is far
+	    # more likely to cause GDB to crash.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		name foo {{cu_label function global}} 0xffffff00
+	    }
+	} elseif { $testname eq "valid-index" } {
+	    # Generate a well-formed index that includes a valid main
+	    # function (valid language, with the name pointing at the
+	    # '_start' symbol).  This is a sanity check that index
+	    # generation works, at one point this got broken and this
+	    # wasn't spotted straight away as every index was broken
+	    # in some subtle way.
+	    #
+	    # The C language is used, rather than C++, for the main
+	    # function as for C++/Ada GDB only honours an IS_MAIN entry
+	    # whose name is literally "main".
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		main DW_LANG_C99 _start
+	    }
+	} else {
+	    perror "invalid testname '$testname' during .gdb_index creation"
+	}
+    }
+
+    set testfile ${::testfile}-${testname}
+    set binfile [standard_output_file $testfile]
+    if {[build_executable "build executable" \
+	     $testfile "$asm_file $::srcfile" \
+	     [list ldflags=-nostartfiles]] == -1} {
+	return
+    }
+
+    clean_restart
+
+    gdb_test_no_output "maint set dwarf synchronous on"
+
+    # Loading the binary should not crash despite whatever weird
+    # things are in the .gdb_index.
+    gdb_load $binfile
+
+    # If we're using the cc-with-gnu-debuglink board then the debug
+    # information will have been moved to a separate file.
+    if { [section_get $binfile ".gnu_debuglink"] eq "" } {
+	set suffix ""
+    } else {
+	# If we are using a debuglink then assume the debug is moved
+	# into a file with a .debug suffix.
+	set suffix ".debug"
+    }
+
+    # Setup the expected results based on the testname.
+    if { $testname eq "empty-component" } {
+	set expect_gdb_index_ignored false
+	set expect_start true
+	set expect_method true
+	set expect_main false
+	set expect_foo false
+	set expect_name_count 2
+    } elseif { $testname eq "main-name-offset-1" \
+		   || $testname eq "main-name-offset-2" \
+		   || $testname eq "main-language" \
+		   || $testname eq "long-cu-vector" \
+		   || $testname eq "name-offset-1" \
+		   || $testname eq "name-offset-2" } {
+	set expect_gdb_index_ignored false
+	set expect_start true
+	set expect_method false
+	set expect_main false
+	set expect_foo false
+	set expect_name_count 1
+    } elseif { $testname eq "valid-index" } {
+	# This is a well-formed index, so GDB should see _start and
+	# should recognise it as the main function.
+	set expect_gdb_index_ignored false
+	set expect_start true
+	set expect_method false
+	set expect_main true
+	set expect_foo false
+	set expect_name_count 1
+    } elseif { $testname eq "no-null"
+	       || $testname eq "skip-constant-pool" } {
+	set expect_gdb_index_ignored true
+	# No need to set any of the other EXPECTED_* variables as they
+	# will never be used.
+    } else {
+	perror "invalid testname '$testname' during index check"
+    }
+
+    # Check if GDB used a .gdb_index section, or ignored it.
+    set index [get_index_type [file tail $binfile]$suffix]
+    if { $expect_gdb_index_ignored } {
+	gdb_assert { [string equal $index "cooked"] } ".gdb_index ignored"
+
+	# Ensure that an attempt to expand all symtabs doesn't crash GDB,
+	# even when the index is corrupted as it is in this test.
+	gdb_test_no_output "maint expand-symtabs" "expand all symtabs"
+
+	return
+    } else {
+	gdb_assert { [string equal $index "gdb"] } ".gdb_index used"
+    }
+
+    # Take a look at the details of the loaded .gdb_index and check
+    # that they match the expected results.
+    set saw_start false
+    set saw_method false
+    set saw_foo false
+    set saw_main ""
+    set name_count 0
+    gdb_test_multiple "maint print objfiles" "" -lbl {
+	-re "^\r\n\\s+name:\\s+(\[^\r\n\]+)(?=\r\n)" {
+	    incr name_count
+	    set name $expect_out(1,string)
+	    if { $name eq "_start" } {
+		set saw_start true
+	    } elseif { $name eq "method" } {
+		set saw_method true
+	    }
+	    exp_continue
+	}
+	-re "^\r\n\\s+main: \\(\\(cooked_index_entry \\*\\) ($::decimal|$::hex)\\)\[^\r\n\]*(?=\r\n)" {
+	    set offset $expect_out(1,string)
+	    if { $offset eq "0" } {
+		set saw_main false
+	    } else {
+		set saw_main true
+	    }
+	    exp_continue
+	}
+	-re "^\r\n$::gdb_prompt $" {
+	    gdb_assert { $saw_start == $expect_start \
+			     && $saw_method == $expect_method \
+			     && $saw_main == $expect_main \
+			     && $name_count == $expect_name_count \
+			     && $saw_foo == $expect_foo } \
+		$gdb_test_name
+	}
+    }
+
+    # Ensure that an attempt to expand all symtabs doesn't crash GDB,
+    # even when the index is corrupted as it is in this test.
+    gdb_test_no_output "maint expand-symtabs" "expand all symtabs"
+}
+
+set tests { empty-component \
+		main-name-offset-1 \
+		main-name-offset-2 \
+		main-language \
+		no-null \
+		skip-constant-pool \
+		long-cu-vector \
+		name-offset-1 \
+		name-offset-2 \
+		valid-index }
+
+foreach_with_prefix test $tests {
+    run_test $test
+}
