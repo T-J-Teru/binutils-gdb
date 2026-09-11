@@ -256,6 +256,9 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
 	  lang = (components.size () == 1) ? language_unknown : language_go;
 	}
 
+      if (components.size () == 0 || components.back ().back () != '\0')
+	continue;
+
       std::vector<cooked_index_entry *> these_entries;
       offset_view vec (constant_pool.slice (symbol_vec_index (idx)));
       offset_type vec_len = vec[0];
@@ -330,7 +333,8 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
 			components.back ().data (),
 			nullptr, per_cu);
 
-	  /* Note that this assumes the final component ends in \0.  */
+	  /* Note that this assumes the final component ends in \0.  This is
+	     checked for above.  */
 	  cooked_index_entry *entry = result.add (per_cu->sect_off (), tag,
 						  flags, this_lang,
 						  components.back ().data (),
@@ -347,9 +351,15 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
       if (components.size () > 1)
 	{
 	  std::string_view penultimate = components[components.size () - 2];
-	  std::string_view prefix (name, &penultimate.back () + 1 - name);
-
-	  need_parents.emplace_back (prefix, std::move (these_entries));
+	  /* When parsing the DIE GDB strips out entries with an empty name,
+	     so in a well formed index PENULTIMATE should never by empty.
+	     But the index is external data, so we cannot assume it is well
+	     formed, ignore any empty prefixes.  */
+	  if (penultimate.size () > 0)
+	    {
+	      std::string_view prefix (name, &penultimate.back () + 1 - name);
+	      need_parents.emplace_back (prefix, std::move (these_entries));
+	    }
 	}
     }
 
