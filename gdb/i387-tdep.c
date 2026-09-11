@@ -918,9 +918,14 @@ bool
 i387_guess_xsave_layout (uint64_t xcr0, size_t xsave_size,
 			 x86_xsave_layout &layout)
 {
-  if (HAS_PKRU (xcr0) && xsave_size == 2696)
+  if (HAS_PKRU (xcr0) && (xsave_size == 2696 || xsave_size == 11008))
     {
-      /* Intel CPUs supporting PKRU.  */
+      /* Intel CPUs supporting PKRU.
+	 In this case two possible XSAVE_SIZE values have to be handled.
+	 As GDB does not yet support Intel AMX and CPUs that support this
+	 feature will have a different XSAVE_SIZE (11008).  If we don't
+	 handle this size then we will not be able to handle any xsave
+	 registers from OS generated core files on AMX systems.  */
       layout.avx_offset = 576;
       layout.k_offset = 1088;
       layout.zmm_h_offset = 1152;
