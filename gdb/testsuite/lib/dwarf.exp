@@ -3675,6 +3675,323 @@ namespace eval Dwarf {
 	debug_names_end:
     }
 
+    # Compute the .gdb_index hash for NAME.  This must match
+    # mapped_index_string_hash (index version >= 5) from
+    # dwarf2/index-common.c.
+    proc _gdb_index_hash { name } {
+	set r 0
+	foreach c [split $name ""] {
+	    scan $c %c code
+	    if {$code >= 65 && $code <= 90} {
+		set code [expr {$code + 32}]
+	    }
+	    set r [expr {($r * 67 + $code - 113) & 0xFFFFFFFF}]
+	}
+	return $r
+    }
+
+    # Pack a CU vector entry for .gdb_index.  Returns a uint32 with
+    # the CU index in bits 0-23, symbol kind in bits 28-30, and the
+    # static/global flag in bit 31.
+    proc _gdb_index_pack_entry { cu_index kind_str scope_str } {
+	set kinds {none 0 type 1 variable 2 function 3 other 4}
+	set kind_val [dict get $kinds $kind_str]
+	set static_bit [expr {$scope_str eq "static" ? 1 : 0}]
+	return [expr {($static_bit << 31) | ($kind_val << 28)
+		      | ($cu_index & 0xFFFFFF)}]
+    }
+
+    # Emit a .gdb_index section.
+    #
+    # OPTIONS is a list with an even number of elements containing
+    # option-name and option-value pairs.
+    # Current options are:
+    #   version N - the .gdb_index version number
+    #               (default 9)
+    #   no_null true|false
+    #             - should we insert '\0' bytes after each string in
+    #               the string table.  Failing to do this results in
+    #               an invalid index.  This exists only for testing
+    #               GDB's error handling.
+    #               (default false)
+    #
+    # BODY is Tcl code that emits the parts which make up the body of
+    # the .gdb_index section.  It is evaluated in the caller's
+    # context.  The following commands are available for the BODY
+    # section:
+    #
+    #   cu <cu-label>
+    #     -- add a CU by its label.
+    #
+    #   name <name> <entries>
+    #     -- add a symbol <name> with its CU vector.  <entries> is a
+    #        list of {<cu_ref> <kind> <scope>} tuples where:
+    #          <cu_ref> is a CU label or explicit CU index,
+    #          <kind> is 'none', 'type', 'variable', 'function', or 'other', and
+    #          <scope> is 'global' or 'static'
+    #
+    # Example:
+    #   gdb_index {} {
+    #       cu cu_label
+    #       name "::method" {{cu_label function global}}
+    #   }
+    proc gdb_index { options body } {
+	global decimal
+
+	parse_options {
+	    { version 9 }
+	    { no_null false }
+	}
+
+	# Collect CUs and names from the body.
+	variable _gdb_index_cus
+	set _gdb_index_cus []
+	variable _gdb_index_names
+	set _gdb_index_names []
+
+	# Details of the main function, the language (a DW_LANG_*
+	# constant or 0) and the name (a string).
+	variable _gdb_index_main_lang
+	set _gdb_index_main_lang 0
+	variable _gdb_index_main_name
+	set _gdb_index_main_name ""
+	variable _gdb_index_main_name_idx
+	set _gdb_index_main_name_idx -1
+
+	proc _gdb_index_cu { label } {
+	    variable _gdb_index_cus
+	    lappend _gdb_index_cus $label
+	}
+
+	proc _gdb_index_name { name entries } {
+	    variable _gdb_index_names
+	    lappend _gdb_index_names [list $name $entries]
+	}
+
+	# Setup the name and language of the main function, as
+	# recorded in the .gdb_index shortcut table.  The LANG can be
+	# a DW_LANG_* constant, but can also be a raw number, this
+	# allows invalid numbers to be used for testing.
+	#
+	# The NAME should be a string and should match a name passed
+	# to _gdb_index_name, the offset of that name within the
+	# string table will then be calculated automatically.  The
+	# NAME can also be a raw number, in which case this is used as
+	# the string table offset, this allows invalid offsets to be
+	# encoded for testing purposes.
+	proc _gdb_index_main { lang name } {
+	    variable _gdb_index_main_lang
+	    variable _gdb_index_main_name
+	    variable _gdb_index_main_name_idx
+	    variable _constants
+
+	    if {[regexp -- "^($::hex|$::decimal)$" $lang]} {
+		set _gdb_index_main_lang $lang
+	    } else {
+		set _gdb_index_main_lang $_constants($lang)
+	    }
+
+	    if {[regexp -- "^($::hex|$::decimal)$" $name]} {
+		set _gdb_index_main_name_idx $name
+	    } else {
+		set _gdb_index_main_name $name
+	    }
+	}
+
+	with_override Dwarf::cu Dwarf::_gdb_index_cu {
+	with_override Dwarf::name Dwarf::_gdb_index_name {
+	with_override Dwarf::main Dwarf::_gdb_index_main {
+	    variable _level
+	    uplevel $_level $body
+	}}}
+
+	set num_names [llength $_gdb_index_names]
+
+	# Compute hash for each name and record the index of the main
+	# function if we find a matching name.
+	set name_idx 0
+	set hashes []
+	foreach entry $_gdb_index_names {
+	    lassign $entry name entries_list
+	    lappend hashes [_gdb_index_hash $name]
+	    if { $_gdb_index_main_lang != 0 } {
+		if { $_gdb_index_main_name eq $name } {
+		    set _gdb_index_main_name_idx $name_idx
+		}
+	    }
+	    incr name_idx
+	}
+
+	# If we have a main function language recorded, but no index
+	# then something has gone wrong.  Maybe the string passed to
+	# _gdb_index_main didn't match any string passed to
+	# _gdb_index_name?
+	if { $_gdb_index_main_lang != 0 && $_gdb_index_main_name_idx == -1 } {
+	    perror "failed to find main function '$_gdb_index_main_name'"
+	}
+
+	# If we have a main function defined, but the index version is
+	# less than 9, then this is a mistake, earlier index versions
+	# didn't record this information.
+	if { $_gdb_index_main_lang != 0 && $version < 9 } {
+	    perror "index version $version doesn't include main function details"
+	}
+
+	# Determine hash table size: smallest power of 2 where
+	# occupancy is below 75%.  Minimum size is 2.
+	set table_size 2
+	while {4 * $num_names >= 3 * $table_size} {
+	    set table_size [expr {$table_size * 2}]
+	}
+
+	# Assign names to hash table slots using open addressing.
+	for {set i 0} {$i < $table_size} {incr i} {
+	    set slot_occupied($i) 0
+	}
+
+	set name_idx 0
+	foreach hash_val $hashes {
+	    set index [expr {$hash_val & ($table_size - 1)}]
+	    set step [expr {(($hash_val * 17) & ($table_size - 1)) | 1}]
+	    while {$slot_occupied($index)} {
+		set index [expr {($index + $step) & ($table_size - 1)}]
+	    }
+	    set slot_occupied($index) 1
+	    set slot_name_idx($index) $name_idx
+	    incr name_idx
+	}
+
+	# Create labels for each name's CU vector and string in the
+	# constant pool.
+	set cu_vec_labels []
+	set str_labels []
+	for {set i 0} {$i < $num_names} {incr i} {
+	    lappend cu_vec_labels [new_label "gdb_index_cu_vec"]
+	    lappend str_labels [new_label "gdb_index_str"]
+	}
+
+	# Emit the section.
+	_section ".gdb_index"
+
+	declare_labels gdb_index_start gdb_index_cu_list \
+	    gdb_index_tu_list gdb_index_addr_table \
+	    gdb_index_symtab gdb_index_constant_pool
+
+	if { $version >= 9 } {
+	    declare_labels gdb_index_shortcut
+	}
+
+	gdb_index_start:
+
+	# Header.
+	_op .4byte $version "Version"
+	_op .4byte "$gdb_index_cu_list - $gdb_index_start" \
+	    "CU list offset"
+	_op .4byte "$gdb_index_tu_list - $gdb_index_start" \
+	    "TU list offset"
+	_op .4byte "$gdb_index_addr_table - $gdb_index_start" \
+	    "Address table offset"
+	_op .4byte "$gdb_index_symtab - $gdb_index_start" \
+	    "Symbol table offset"
+	if { $version >= 9 } {
+	    _op .4byte "$gdb_index_shortcut - $gdb_index_start" \
+		"Shortcut table offset"
+	}
+	_op .4byte "$gdb_index_constant_pool - $gdb_index_start" \
+	    "Constant pool offset"
+
+	# CU list.
+	gdb_index_cu_list:
+	foreach cu $_gdb_index_cus {
+	    upvar $cu tmp
+	    _op_offset 8 $tmp "CU offset"
+	    _op_offset 8 0x1f "CU length"
+	}
+
+	# TU list (empty).
+	gdb_index_tu_list:
+
+	# Address table (empty).
+	gdb_index_addr_table:
+
+	# Symbol table.
+	gdb_index_symtab:
+	for {set i 0} {$i < $table_size} {incr i} {
+	    if {$slot_occupied($i)} {
+		set idx $slot_name_idx($i)
+		set str_label [lindex $str_labels $idx]
+		set vec_label [lindex $cu_vec_labels $idx]
+		_op .4byte \
+		    "$str_label - $gdb_index_constant_pool" \
+		    "name offset"
+		_op .4byte \
+		    "$vec_label - $gdb_index_constant_pool" \
+		    "CU vector offset"
+	    } else {
+		_op .4byte 0 "empty slot"
+		_op .4byte 0 "empty slot"
+	    }
+	}
+
+	# Shortcut table (version 9 only).
+	if { $version >= 9 } {
+	    gdb_index_shortcut:
+	    _op .4byte $_gdb_index_main_lang "Language"
+	    if { $_gdb_index_main_lang == 0 } {
+		_op .4byte 0 "Name offset"
+	    } elseif { $_gdb_index_main_name ne "" } {
+		set str_label [lindex $str_labels $_gdb_index_main_name_idx]
+		_op .4byte "$str_label - $gdb_index_constant_pool" \
+		    "Name offset"
+	    } else {
+		_op .4byte "$_gdb_index_main_name_idx" \
+		    "Name offset"
+	    }
+	}
+
+	# The constant pool is CU vectors first, and then name
+	# strings.
+	gdb_index_constant_pool:
+
+	set name_idx 0
+	foreach entry $_gdb_index_names {
+	    lassign $entry name entries_list
+	    define_label [lindex $cu_vec_labels $name_idx]
+	    set num_entries [llength $entries_list]
+	    _op .4byte $num_entries "CU vector length"
+	    foreach cu_entry $entries_list {
+		lassign $cu_entry cu_ref kind scope
+		if { [regexp "^CU-($decimal)$" $cu_ref dummy cu_index] } {
+		    # Explicit CU index.
+		} else {
+		    set cu_index \
+			[lsearch -exact $_gdb_index_cus $cu_ref]
+		    if { $cu_index == -1 } {
+			error "gdb_index: unknown CU reference: $cu_ref"
+		    }
+		}
+		set packed [_gdb_index_pack_entry $cu_index $kind $scope]
+		_op .4byte $packed "CU index and attributes"
+	    }
+	    incr name_idx
+	}
+
+	set name_idx 0
+	foreach entry $_gdb_index_names {
+	    lassign $entry name entries_list
+	    define_label [lindex $str_labels $name_idx]
+	    if { $no_null } {
+		# This generates a corrupt index with no '\0' between
+		# strings or at the end of the string table.  This
+		# only exists for testing error handling in this case.
+		_op .ascii [_nz_quote $name]
+	    } else {
+		_op .ascii [_quote $name]
+	    }
+	    incr name_idx
+	}
+    }
+
     # Add the strings in ARGS to the .debug_str section, and create a
     # .debug_str_offsets section pointing to those strings.
     # Current options are:

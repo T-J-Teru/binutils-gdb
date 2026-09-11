@@ -1,0 +1,189 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that GDB handles a corrupt .gdb_index gracefully.  This test
+# checks a number of different scenarios, check the 'gdb_index' calls
+# within the 'run_test' proc for details.
+
+load_lib dwarf.exp
+
+require dwarf2_support
+
+standard_testfile _start.c
+
+set func_info_vars \
+    [get_func_info _start [list debug ldflags=-nostartfiles]]
+
+# TESTNAME is a string that is used to identify the test to run.  This
+# string is used to control how the gdb_index is created, and then
+# what checks are performed on the executable after loading it.
+proc run_test { testname } {
+    set asm_file [standard_output_file ${testname}.S]
+    Dwarf::assemble {
+	filename $asm_file
+	add_dummy_cus 0
+    } {
+	upvar testname testname
+	global func_info_vars
+	foreach var $func_info_vars {
+	    global $var
+	}
+
+	cu { label cu_label } {
+	    compile_unit {
+		DW_AT_language @DW_LANG_C_plus_plus
+	    } {
+		subprogram {
+		    DW_AT_name _start
+		    DW_AT_low_pc $_start_start DW_FORM_addr
+		    DW_AT_high_pc $_start_end DW_FORM_addr
+		    DW_AT_external 1 DW_FORM_flag
+		}
+	    }
+	}
+
+	aranges {} cu_label {
+	    arange {} $_start_start $_start_len
+	}
+
+	if { $testname eq "empty-component" } {
+	    # GDB tries to split entries within the index based on
+	    # '::' by default.  Create an index entry with an empty
+	    # component and ensure that this doesn't trigger undefined
+	    # behaviour in GDB.
+	    gdb_index {} {
+		cu cu_label
+		name "::method" {{cu_label function global}}
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "main-name-offset" } {
+	    # Add main function details to a basic index, but encode
+	    # an out of range name offset.  Ensure that GDB doesn't
+	    # crash and instead just ignores the main function details.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		main DW_LANG_C99 0xfff000
+	    }
+	} elseif { $testname eq "main-language" } {
+	    # Add main function details to a basic index, but encode
+	    # an invalid language number.  Ensure that GDB ignores the
+	    # main function details.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		main 0xfffff0 _start
+	    }
+	} elseif { $testname eq "no-null" } {
+	    # Create a .gdb_index without a null character at the end
+	    # of the string table.  This is invalid and GDB should just
+	    # ignore this .gdb_index.
+	    gdb_index {
+		no_null true
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} else {
+	    perror "invalid testname '$testname' during .gdb_index creation"
+	}
+    }
+
+    set testfile ${::testfile}-${testname}
+    set binfile [standard_output_file $testfile]
+    if {[build_executable "build executable" \
+	     $testfile "$asm_file $::srcfile" \
+	     [list ldflags=-nostartfiles]] == -1} {
+	return
+    }
+
+    clean_restart
+
+    gdb_test_no_output "maint set dwarf synchronous on"
+
+    # Loading the binary should not crash despite whatever weird
+    # things are in the .gdb_index.
+    gdb_load $binfile
+
+    # Check if GDB used a .gdb_index section, or ignored it.
+    set index [get_index_type $binfile]
+
+    if { $testname eq "no-null" } {
+	gdb_assert { [string equal $index "cooked"] } ".gdb_index ignored"
+	return
+    } else {
+	gdb_assert { [string equal $index "gdb"] } ".gdb_index used"
+    }
+
+    # Check that GDB has loaded the .gdb_index and sees the expected index
+    # details.
+    set saw_start false
+    set saw_method false
+    set saw_main ""
+    set name_count 0
+
+    if { $testname eq "empty-component" } {
+	set expect_start true
+	set expect_method true
+	set expect_main false
+	set expect_name_count 2
+    } elseif { $testname eq "main-name-offset" \
+		   || $testname eq "main-language" } {
+	set expect_start true
+	set expect_method false
+	set expect_main false
+	set expect_name_count 1
+    } else {
+	perror "invalid testname '$testname' during index check"
+    }
+
+    gdb_test_multiple "maint print objfiles" "" -lbl {
+	-re "^\r\n\\s+name:\\s+(\[^\r\n\]+)(?=\r\n)" {
+	    incr name_count
+	    set name $expect_out(1,string)
+	    if { $name eq "_start" } {
+		set saw_start true
+	    } elseif { $name eq "method" } {
+		set saw_method true
+	    }
+	    exp_continue
+	}
+	-re "^\r\n\\s+main: \\(\\(cooked_index_entry \\*\\) ($::decimal|$::hex)\\)(?=\r\n)" {
+	    set offset $expect_out(1,string)
+	    if { $offset eq "0" } {
+		set saw_main false
+	    } else {
+		set saw_main true
+	    }
+	    exp_continue
+	}
+	-re "^\r\n$::gdb_prompt $" {
+	    gdb_assert { $saw_start == $expect_start \
+			     && $saw_method == $expect_method \
+			     && $saw_main == $expect_main \
+			     && $name_count == $expect_name_count } \
+		$gdb_test_name
+	}
+    }
+}
+
+set tests { empty-component \
+		main-name-offset \
+		main-language \
+		no-null }
+
+foreach_with_prefix test $tests {
+    run_test $test
+}
