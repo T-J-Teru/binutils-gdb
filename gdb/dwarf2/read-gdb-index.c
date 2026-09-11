@@ -187,8 +187,9 @@ struct mapped_gdb_index
   const char *symbol_name_at (offset_type idx,
 			      dwarf2_per_objfile *per_objfile) const
   {
-    return (const char *) (this->constant_pool.data ()
-			   + symbol_name_index (idx));
+    offset_type name_index = symbol_name_index (idx);
+    gdb_assert (name_index < this->constant_pool.size ());
+    return (const char *) (this->constant_pool.data () + name_index);
   }
 
   size_t symbol_name_count () const
@@ -217,6 +218,17 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
     {
       if (this->symbol_name_slot_invalid (idx))
 	continue;
+
+      /* If the name offset is out of range for the constant pool then
+	 we cannot get a valid string.  We just skip this symbol.  */
+      if (this->symbol_name_index (idx) >= this->constant_pool.size ())
+	{
+	  complaint (_(".gdb_index entry %s has bad name offset %s [in module %s]"),
+		     pulongest (idx),
+		     pulongest (this->symbol_name_index (idx)),
+		     objfile_name (per_objfile->objfile));
+	  continue;
+	}
 
       const char *name = this->symbol_name_at (idx, per_objfile);
 
@@ -256,9 +268,25 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
 	  lang = (components.size () == 1) ? language_unknown : language_go;
 	}
 
+      /* Even if NAME was the empty string then COMPONENTS will contain one
+	 entry, the empty string.  */
+      gdb_assert (components.size () > 0);
+
       std::vector<cooked_index_entry *> these_entries;
       offset_view vec (constant_pool.slice (symbol_vec_index (idx)));
       offset_type vec_len = vec[0];
+
+      /* Bounds check VEC_LEN against the CONSTANT_POOL.  */
+      if (vec_len >= vec.size ())
+	{
+	  /* The vector count would exceed the available space in the
+	     constant pool.  This is a corrupt .gdb_index.  We could
+	     treat everything up to the end of the constant pool as a
+	     valid vector, but we have no reason to think that's not
+	     also wrong.  Instead just pretend this vector is empty.  */
+	  vec_len = 0;
+	}
+
       for (offset_type vec_idx = 0; vec_idx < vec_len; ++vec_idx)
 	{
 	  offset_type cu_index_and_attrs = vec[vec_idx + 1];
@@ -347,9 +375,15 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
       if (components.size () > 1)
 	{
 	  std::string_view penultimate = components[components.size () - 2];
-	  std::string_view prefix (name, &penultimate.back () + 1 - name);
-
-	  need_parents.emplace_back (prefix, std::move (these_entries));
+	  /* When parsing the DIE, GDB strips out entries with an empty name,
+	     so in a well formed index PENULTIMATE should never be empty.
+	     But the index is external data, so we cannot assume it is well
+	     formed, ignore any empty prefixes.  */
+	  if (penultimate.size () > 0)
+	    {
+	      std::string_view prefix (name, &penultimate.back () + 1 - name);
+	      need_parents.emplace_back (prefix, std::move (these_entries));
+	    }
 	}
     }
 
@@ -500,6 +534,25 @@ read_gdb_index_from_buffer (const char *filename,
       map->symbol_table
 	= offset_view (gdb::array_view<const gdb_byte> (symbol_table,
 							symbol_table));
+    }
+
+  if (!map->symbol_table.empty ())
+    {
+      gdb_assert (!map->constant_pool.empty ());
+
+      if (map->constant_pool[map->constant_pool.size () - 1] != '\0')
+	{
+	  static bool warning_printed = false;
+	  if (!warning_printed)
+	    {
+	      warning (_("skipping .gdb_index in %ps, null byte at end of "
+			 "constant pool is missing"),
+		       styled_string (file_name_style.style (),
+				      filename));
+	      warning_printed = true;
+	    }
+	  return false;
+	}
     }
 
   return true;
@@ -707,10 +760,26 @@ mapped_gdb_index::set_main_name (dwarf2_per_objfile *per_objfile)
     }
   ptr += 4;
 
+  const ULONGEST name_offset
+    = extract_unsigned_integer (ptr, sizeof (offset_type), BFD_ENDIAN_LITTLE);
+
+  if (name_offset >= this->constant_pool.size ())
+    {
+      complaint (_(".gdb_index shortcut table has invalid main name offset %s"),
+		 pulongest (name_offset));
+      return;
+    }
+
+  /* If the symbol table is empty then we ignore the .gdb_index in
+     dwarf2_read_gdb_index.  If the symbol table is not empty, and doesn't
+     end in a '\0' byte then we also ignore the .gdb_index in
+     read_gdb_index_from_buffer.  What this means is that, by the time we
+     get here, we know that the constant pool ends with '\0' and so the
+     MAIN_NAME will be a correctly terminated C style string.  */
+  gdb_assert ((this->constant_pool)[(this->constant_pool).size () - 1]
+	      == '\0');
+
   main_lang = dwarf_lang_to_enum_language (dw_lang);
-  const auto name_offset = extract_unsigned_integer (ptr,
-						     sizeof (offset_type),
-						     BFD_ENDIAN_LITTLE);
   main_name = (const char *) (this->constant_pool.data () + name_offset);
 }
 
