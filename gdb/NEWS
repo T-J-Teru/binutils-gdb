@@ -47,6 +47,25 @@ info locals
   The new "-shadowed on|off" option overrides the "set print shadowed"
   setting for a single invocation of the command.
 
+* GDB now supports source-tracking breakpoints, which automatically
+  adjust their location when source code changes between rebuilds.
+  When enabled, file and line breakpoints capture the surrounding
+  source code context and use it to adjust the breakpoint line if the
+  source is modified.  Source tracking can be enabled with 'set
+  breakpoint source-tracking enabled on'.
+
+* New commands
+
+set breakpoint source-tracking enabled [on|off]
+show breakpoint source-tracking enabled
+  Enable or disable source-tracking for file and line breakpoints.
+  When enabled, breakpoints capture surrounding source code and
+  automatically adjust their location when the source changes between
+  recompilations.
+maintenance info source-tracking-context BPNUM
+  Displays the captured source context that GDB uses to track and
+  adjust a breakpoint when source changes.
+
 *** Changes in GDB 18
 
 * Support for the Common Trace Format (CTF) has been removed.  GDB now
