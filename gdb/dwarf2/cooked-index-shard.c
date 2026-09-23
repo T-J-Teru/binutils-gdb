@@ -216,6 +216,10 @@ cooked_index_shard::finalize (const parent_map_map *parent_maps)
 
   for (cooked_index_entry *entry : m_entries)
     {
+      /* Entries without a name, or with an empty name, are filtered
+	 out during entry creation.  See cooked_indexer::index_dies.  */
+      gdb_assert (entry->name != nullptr && *entry->name != '\0');
+
       if ((entry->flags & IS_PARENT_DEFERRED) != 0)
 	{
 	  const cooked_index_entry *new_parent
