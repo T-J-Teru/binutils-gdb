@@ -58,7 +58,23 @@ cooked_index::wait (cooked_state desired_state, bool allow_quit)
   if (m_state == nullptr)
     return;
 
-  if (m_state->wait (desired_state, allow_quit))
+  bool done = m_state->wait (desired_state, allow_quit);
+
+  /* Emit any cached complaints if we have finalized and we are on the main
+     thread.  Check for the requested state or the DONE flag here, we might
+     have only asked for MAIN_AVAILABLE, but if the workers are quick then
+     they might already be done, in which case we should emit the complaints
+     now.  */
+  if (!m_finalize_complaints_emitted
+      && is_main_thread ()
+      && (desired_state >= cooked_state::FINALIZED || done))
+    {
+      m_finalize_complaints_emitted = true;
+      for (const auto &shard : m_shards)
+	re_emit_complaints (shard->release_finalize_complaints ());
+    }
+
+  if (done)
     {
       /* Only the main thread can modify this.  */
       gdb_assert (is_main_thread ());
@@ -94,7 +110,12 @@ cooked_index::set_contents ()
 	{
 	  scoped_time_it time_it ("DWARF finalize worker",
 				  m_state->m_per_command_time);
+
+	  complaint_interceptor complaint_handler;
+
 	  this_shard->finalize (parent_maps);
+
+	  this_shard->merge_finalize_complaints (complaint_handler.release ());
 	});
     }
 

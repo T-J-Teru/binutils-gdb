@@ -26,6 +26,7 @@
 #include "addrmap.h"
 #include "gdbsupport/iterator-range.h"
 #include "gdbsupport/string-set.h"
+#include "complaints.h"
 
 /* An index of interesting DIEs.  This is "cooked", in contrast to a
    mapped .debug_names or .gdb_index, which are "raw".  An entry in
@@ -124,6 +125,29 @@ private:
      This may be invoked in a worker thread.  */
   void finalize (const parent_map_map *parent_maps);
 
+  /* Called after each phase of the finalization process.  Store COMPLAINTS
+     so they can be reported later on the main thread.  */
+  void merge_finalize_complaints (complaint_collection &&complaints)
+  {
+    if (m_finalize_complaints.empty ())
+      m_finalize_complaints = std::move (complaints);
+    else
+      {
+	/* The current version of gdb::unordered_set doesn't support the
+	   merge method that std::unordered_set supports.  If we update
+	   gdb::unordered_set then we could switch this to use merge().  */
+	m_finalize_complaints.insert (complaints.begin (), complaints.end ());
+      }
+  }
+  
+  /* Return the set of complaints emitted during the finalization process.
+     We move these complaints out of the shard as these are only emitted
+     once, and don't need to be stored beyond that.  */
+  complaint_collection release_finalize_complaints ()
+  {
+    return std::move (m_finalize_complaints);
+  }  
+
   /* Storage for the entries.  */
   auto_obstack m_storage;
   /* List of all entries.  */
@@ -134,6 +158,10 @@ private:
   addrmap_fixed *m_addrmap = nullptr;
   /* Storage for canonical names.  */
   gdb::string_set m_names;
+
+  /* Any complaints emitted during the finalization process are stored here
+     until they can be emitted on the main thread.  */
+  complaint_collection m_finalize_complaints;
 };
 
 using cooked_index_shard_up = std::unique_ptr<cooked_index_shard>;

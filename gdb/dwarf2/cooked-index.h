@@ -179,6 +179,12 @@ private:
      that the state is CACHE_DONE -- it's important to note that only
      the main thread may change the value of this pointer.  */
   cooked_index_worker_up m_state;
+
+  /* Any complaints raised during finalization are held within the shards in
+     M_SHARDS.  Once the main thread has waited for finalization to be
+     complete then the cached complaints are emitted, and this flag is set
+     to true.  */
+  bool m_finalize_complaints_emitted = false;
 };
 
 /* An implementation of quick_symbol_functions for the cooked DWARF
