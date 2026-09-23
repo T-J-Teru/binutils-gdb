@@ -171,6 +171,14 @@ public:
 
 private:
 
+  /* Create and start a gdb::task_group to call resolve_deferred_parents
+     on every cooked_index_shard in m_shards.  */
+  void start_resolve_deferred_parents ();
+
+  /* Create and start a gdb::task_group to call finalize on every
+     cooked_index_shard in m_shards.  */
+  void start_finalization ();
+
   /* The vector of cooked_index objects.  This is stored because the
      entries are stored on the obstacks in those objects.  */
   std::vector<cooked_index_shard_up> m_shards;

@@ -82,14 +82,11 @@ cooked_index::wait (cooked_state desired_state, bool allow_quit)
     }
 }
 
+/* See cooked-index.h.  */
+
 void
-cooked_index::set_contents ()
+cooked_index::start_finalization ()
 {
-  gdb_assert (m_shards.empty ());
-  m_shards = m_state->release_shards ();
-
-  m_state->set (cooked_state::MAIN_AVAILABLE);
-
   /* This is run after finalization is done -- but not before.  If
      this task were submitted earlier, it would have to wait for
      finalization.  However, that would take a slot in the global
@@ -105,21 +102,65 @@ cooked_index::set_contents ()
   for (auto &shard : m_shards)
     {
       auto this_shard = shard.get ();
-      const parent_map_map *parent_maps = m_state->get_parent_map_map ();
-      finalizers.add_task ([this, this_shard, parent_maps] ()
+      finalizers.add_task ([this, this_shard] ()
 	{
 	  scoped_time_it time_it ("DWARF finalize worker",
 				  m_state->m_per_command_time);
 
 	  complaint_interceptor complaint_handler;
 
-	  this_shard->finalize (parent_maps);
+	  this_shard->finalize ();
 
 	  this_shard->merge_finalize_complaints (complaint_handler.release ());
 	});
     }
 
   finalizers.start ();
+}
+
+/* See cooked-index.h.  */
+
+void
+cooked_index::start_resolve_deferred_parents ()
+{
+  gdb::task_group task_group ([this] ()
+  {
+    this->start_finalization ();
+  });
+
+  for (const cooked_index_shard_up &shard : m_shards)
+    {
+      auto this_shard = shard.get ();
+      const parent_map_map *parent_maps = m_state->get_parent_map_map ();
+      task_group.add_task ([this, this_shard, parent_maps] ()
+	{
+	  scoped_time_it time_it ("DWARF resolve deferred parent worker",
+				  m_state->m_per_command_time);
+
+	  complaint_interceptor complaint_handler;
+
+	  this_shard->resolve_deferred_parents (parent_maps);
+
+	  this_shard->merge_finalize_complaints (complaint_handler.release ());
+	});
+    }
+
+  task_group.start ();
+}
+
+/* See cooked-index.h.  */
+
+void
+cooked_index::set_contents ()
+{
+  gdb_assert (m_shards.empty ());
+  m_shards = m_state->release_shards ();
+
+  m_state->set (cooked_state::MAIN_AVAILABLE);
+
+  /* This is the first step in the finalization process.  Later steps are
+     triggered automatically when this step completes.  */
+  this->start_resolve_deferred_parents ();
 }
 
 cooked_index::~cooked_index ()

@@ -190,7 +190,23 @@ struct cooked_index_entry_name_ptr_eq
 /* See cooked-index-shard.h.  */
 
 void
-cooked_index_shard::finalize (const parent_map_map *parent_maps)
+cooked_index_shard::resolve_deferred_parents (const parent_map_map *parent_maps)
+{
+  for (cooked_index_entry *entry : m_entries)
+    {
+      if ((entry->flags & IS_PARENT_DEFERRED) != 0)
+	{
+	  const cooked_index_entry *new_parent
+	    = parent_maps->find (entry->get_deferred_parent ());
+	  entry->resolve_parent (new_parent);
+	}
+    }
+}
+
+/* See cooked-index-shard.h.  */
+
+void
+cooked_index_shard::finalize ()
 {
   gdb::unordered_set<const cooked_index_entry *,
 		     cooked_index_entry_name_ptr_hash,
@@ -216,12 +232,9 @@ cooked_index_shard::finalize (const parent_map_map *parent_maps)
 
   for (cooked_index_entry *entry : m_entries)
     {
-      if ((entry->flags & IS_PARENT_DEFERRED) != 0)
-	{
-	  const cooked_index_entry *new_parent
-	    = parent_maps->find (entry->get_deferred_parent ());
-	  entry->resolve_parent (new_parent);
-	}
+      /* Deferred parents should all be resolved before this function
+	 is called.  */
+      gdb_assert ((entry->flags & IS_PARENT_DEFERRED) == 0);
 
       /* Note that this code must be kept in sync with
 	 cooked_index::get_main -- if canonicalization is required

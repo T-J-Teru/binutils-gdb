@@ -123,7 +123,13 @@ private:
      the index has been fully populated.  It enters all the entries
      into the internal table and fixes up all missing parent links.
      This may be invoked in a worker thread.  */
-  void finalize (const parent_map_map *parent_maps);
+  void finalize ();
+
+  /* Resolve deferred parents within the index.  This should be called a
+     single time once the index is fully populated.  It finds any entries
+     with the IS_PARENT_DEFERRED flag and looks up the parent in
+     PARENT_MAPS, updating the entry's parent link.  */
+  void resolve_deferred_parents (const parent_map_map *parent_maps);
 
   /* Called after each phase of the finalization process.  Store COMPLAINTS
      so they can be reported later on the main thread.  */
