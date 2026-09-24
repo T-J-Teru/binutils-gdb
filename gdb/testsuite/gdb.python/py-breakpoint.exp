@@ -744,12 +744,48 @@ proc_with_prefix test_bkpt_explicit_loc {} {
 	"set invalid explicit breakpoint by missing source and line"
     gdb_test "python bp1 = gdb.Breakpoint (source=\"$srcfile\", line=\"900\")" \
 	[multi_line \
-	     "^No compiled code for line 900 in file \"$srcfile\"\\." \
+	     "^No compiled code for line 900 in file \[^\r\n\]+\\." \
 	     "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
-	"set invalid explicit breakpoint by source and invalid line"
+	"set pending explicit breakpoint by source and missing line"
     gdb_test "python bp1 = gdb.Breakpoint (function=\"blah\")" \
-	"Function \"blah\" not defined.*" \
-	"set invalid explicit breakpoint by missing function"
+	[multi_line \
+	    "Function \"blah\" not defined.*" \
+	    "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
+	"set pending explicit breakpoint by missing function"
+    with_test_prefix "allow_pending=True" {
+	gdb_test "python bp1 = gdb.Breakpoint (source=\"$srcfile\",
+line=\"900\", allow_pending=True)" \
+	    [multi_line \
+		 "^No compiled code for line 900 in file \"\[^\r\n\]+\"\\." \
+		 "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
+	    "set pending explicit breakpoint by source and missing line"
+	gdb_test "python bp1 = gdb.Breakpoint (function=\"blah\",
+allow_pending=True)" \
+	    [multi_line \
+		"Function \"blah\" not defined.*" \
+		"Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
+	    "set pending explicit breakpoint by missing function"
+	gdb_test "python bp1 = gdb.Breakpoint (\"missing_function\",
+allow_pending=True)" \
+	    [multi_line \
+		 "Function \"missing_function\" not defined.*" \
+		 "Breakpoint $::decimal \[^\r\n\]+ pending\\."] \
+	    "set pending breakpoint by missing function"
+    }
+    gdb_test "python bp1 = gdb.Breakpoint (source=\"$srcfile\", line=\"900\", allow_pending=False)" \
+	[multi_line \
+	     "Python Exception <class 'gdb.error'>: No compiled code for line\
+	     900 in file \[^\r\n\]+\\." \
+	     "Error occurred in Python: No compiled code for line 900 in file\
+	     \[^\r\n\]+\\."] \
+	"set invalid explicit breakpoint by source and missing line with\
+	pending breakpoint not allowed"
+    gdb_test "python bp1 = gdb.Breakpoint (function=\"blah\", allow_pending=False)" \
+	[multi_line \
+	    "Python Exception <class 'gdb.error'>: Function \"blah\" not defined\\." \
+	    "Error occurred in Python: Function \"blah\" not defined\\."] \
+	"set invalid explicit breakpoint by missing function with pending\
+	breakpoint not allowed"
 
     delete_breakpoints
     gdb_test "catch throw" "Catchpoint .* \\(throw\\)"
