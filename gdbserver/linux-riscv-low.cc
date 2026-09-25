@@ -21,6 +21,7 @@
 #include "linux-low.h"
 #include "tdesc.h"
 #include "elf/common.h"
+#include "nat/riscv-linux-ptrace.h"
 #include "nat/riscv-linux-tdesc.h"
 #include "opcode/riscv.h"
 
@@ -102,26 +103,6 @@ riscv_target::low_get_syscall_trapinfo (regcache *regcache, int *sysno)
   *sysno = (int)l_sysno;
 }
 
-/* Implementation of linux target ops method "low_arch_setup".  */
-
-void
-riscv_target::low_arch_setup ()
-{
-  static const char *expedite_regs[] = { "sp", "pc", NULL };
-
-  const riscv_gdbarch_features features
-    = riscv_linux_read_features (current_thread->id.lwp ());
-  target_desc_up tdesc = riscv_create_target_description (features);
-
-  if (tdesc->expedite_regs.empty ())
-    {
-      init_target_desc (tdesc.get (), expedite_regs, GDB_OSABI_LINUX);
-      gdb_assert (!tdesc->expedite_regs.empty ());
-    }
-
-  current_process ()->tdesc = tdesc.release ();
-}
-
 /* Collect GPRs from REGCACHE into BUF.  */
 
 static void
@@ -185,23 +166,74 @@ riscv_store_fpregset (struct regcache *regcache, const void *buf)
   supply_register_by_name (regcache, "fcsr", regbuf);
 }
 
+/* Collect vector regs from REGCACHE into BUF.  */
+
+static void
+riscv_fill_vecregset (struct regcache *regcache, void *buf)
+{
+  const struct target_desc *tdesc = regcache->tdesc;
+
+  struct __riscv_v_regset_state *vecregs
+    = (struct __riscv_v_regset_state *) buf;
+  unsigned long vlenb = vecregs->vlenb;
+  gdb_assert (vlenb > 0);
+  int v0_regno = find_regno (tdesc, "v0");
+  gdb_byte *regbuf = (gdb_byte *) vecregs->vreg;
+
+  for (int i = 0; i < 32; i++, regbuf += vlenb)
+    collect_register (regcache, v0_regno + i, regbuf);
+
+  collect_register_by_name (regcache, "vstart", &vecregs->vstart);
+  collect_register_by_name (regcache, "vcsr", &vecregs->vcsr);
+  collect_register_by_name (regcache, "vl", &vecregs->vl);
+  collect_register_by_name (regcache, "vtype", &vecregs->vtype);
+  collect_register_by_name (regcache, "vlenb", &vecregs->vlenb);
+}
+
+/* Supply vector regs from BUF into REGCACHE.  */
+
+static void
+riscv_store_vecregset (struct regcache *regcache, const void *buf)
+{
+  const struct target_desc *tdesc = regcache->tdesc;
+
+  const struct __riscv_v_regset_state *vecregs
+    = (const struct __riscv_v_regset_state *) buf;
+  unsigned long vlenb = vecregs->vlenb;
+  gdb_assert (vlenb > 0);
+  int v0_regno = find_regno (tdesc, "v0");
+  int v0_regsize = register_size (tdesc, v0_regno);
+  gdb_assert (vlenb == v0_regsize);
+  const gdb_byte *regbuf = (const gdb_byte *) vecregs->vreg;
+
+  for (int i = 0; i < 32; i++, regbuf += vlenb)
+    supply_register (regcache, v0_regno + i, regbuf);
+
+  supply_register_by_name (regcache, "vstart", &vecregs->vstart);
+  supply_register_by_name (regcache, "vcsr", &vecregs->vcsr);
+  supply_register_by_name (regcache, "vl", &vecregs->vl);
+  supply_register_by_name (regcache, "vtype", &vecregs->vtype);
+  supply_register_by_name (regcache, "vlenb", &vecregs->vlenb);
+}
+
 /* RISC-V/Linux regsets.  FPRs are optional and come in different sizes,
    so define multiple regsets for them marking them all as OPTIONAL_REGS
    rather than FP_REGS, so that "regsets_fetch_inferior_registers" picks
    the right one according to size.  */
 static struct regset_info riscv_regsets[] = {
-  { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_PRSTATUS,
-    sizeof (elf_gregset_t), GENERAL_REGS,
-    riscv_fill_gregset, riscv_store_gregset },
+  { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_PRSTATUS, sizeof (elf_gregset_t),
+    GENERAL_REGS, riscv_fill_gregset, riscv_store_gregset },
   { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_FPREGSET,
-    sizeof (struct __riscv_mc_q_ext_state), OPTIONAL_REGS,
-    riscv_fill_fpregset, riscv_store_fpregset },
+    sizeof (struct __riscv_mc_q_ext_state), OPTIONAL_REGS, riscv_fill_fpregset,
+    riscv_store_fpregset },
   { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_FPREGSET,
-    sizeof (struct __riscv_mc_d_ext_state), OPTIONAL_REGS,
-    riscv_fill_fpregset, riscv_store_fpregset },
+    sizeof (struct __riscv_mc_d_ext_state), OPTIONAL_REGS, riscv_fill_fpregset,
+    riscv_store_fpregset },
   { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_FPREGSET,
-    sizeof (struct __riscv_mc_f_ext_state), OPTIONAL_REGS,
-    riscv_fill_fpregset, riscv_store_fpregset },
+    sizeof (struct __riscv_mc_f_ext_state), OPTIONAL_REGS, riscv_fill_fpregset,
+    riscv_store_fpregset },
+  { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_RISCV_VECTOR, 0, EXTENDED_REGS,
+    riscv_fill_vecregset, riscv_store_vecregset },
   NULL_REGSET
 };
 
@@ -227,6 +259,45 @@ const regs_info *
 riscv_target::get_regs_info ()
 {
   return &riscv_regs;
+}
+
+/* Setup Vector Regset.  */
+static void
+setup_vector_regset (struct regset_info *vector_regset_info,
+		     const riscv_gdbarch_features *features)
+{
+  vector_regset_info->size
+    = (features->vlenb
+       ? sizeof (struct __riscv_v_regset_state) + 32 * features->vlenb
+       : 0);
+}
+
+/* Implementation of linux target ops method "low_arch_setup".  */
+
+void
+riscv_target::low_arch_setup ()
+{
+  static const char *expedite_regs[] = { "sp", "pc", NULL };
+
+  const riscv_gdbarch_features features
+    = riscv_linux_read_features (current_thread->id.lwp ());
+  target_desc_up tdesc = riscv_create_target_description (features);
+
+  struct regset_info *regset;
+  for (regset = riscv_regsets; regset->size >= 0; regset++)
+    if (regset->nt_type == NT_RISCV_VECTOR)
+      {
+	setup_vector_regset (regset, &features);
+	break;
+      }
+
+  if (tdesc->expedite_regs.empty ())
+    {
+      init_target_desc (tdesc.get (), expedite_regs, GDB_OSABI_LINUX);
+      gdb_assert (!tdesc->expedite_regs.empty ());
+    }
+
+  current_process ()->tdesc = tdesc.release ();
 }
 
 /* Implementation of linux target ops method "low_fetch_register".  */

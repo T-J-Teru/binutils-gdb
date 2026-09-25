@@ -30,6 +30,27 @@
 # define NFPREG 33
 #endif
 
+/* RISC-V Hardware Probing Syscall Number.  */
+#ifndef NR_riscv_hwprobe
+#ifndef NR_arch_specific_syscall
+#define NR_arch_specific_syscall 244
+#endif
+#define NR_riscv_hwprobe (NR_arch_specific_syscall + 14)
+#endif
+
+#ifndef RISCV_HWPROBE_KEY_IMA_EXT_0
+/* A bitmask containing the supported extensions.  */
+#define RISCV_HWPROBE_KEY_IMA_EXT_0 4
+/* Bit that indicate RISC-V Vector extension support in Linux.  */
+#define RISCV_HWPROBE_EXT_ZVE32X (1ULL << 37)
+#endif
+
+struct riscv_hwprobe
+{
+  int64_t key;
+  uint64_t value;
+};
+
 /* See nat/riscv-linux-tdesc.h.  */
 
 struct riscv_gdbarch_features
@@ -76,6 +97,20 @@ riscv_linux_read_features (int tid)
       else
 	features.flen = flen;
       break;
+    }
+
+  features.vlenb = 0;
+
+  static struct riscv_hwprobe query[] = { { RISCV_HWPROBE_KEY_IMA_EXT_0, 0 } };
+
+  /* All possible vector extensions depends on Zve32x, and it's availability is
+     a minimum requirement.  */
+  if ((syscall (NR_riscv_hwprobe, query, 1, 0, NULL, 0) == 0)
+      && (query[0].value & RISCV_HWPROBE_EXT_ZVE32X))
+    {
+      int reg = 0;
+      asm volatile ("csrr %[vlenb], vlenb" : [vlenb] "=r"(reg));
+      features.vlenb = reg;
     }
 
   return features;

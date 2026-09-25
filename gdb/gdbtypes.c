@@ -1977,6 +1977,21 @@ is_dynamic_type_internal_1 (struct type *type,
 	  }
       }
       break;
+
+    case TYPE_CODE_FUNC:
+      {
+	/* If the type of value returned by function is dynamic, we should mark
+	   func as dynamic to later resolve this dynamic type */
+	if (type->target_type ()
+	    && is_dynamic_type_internal_1 (type->target_type (), false))
+	  return true;
+
+	/* Same for function arguments */
+	for (int i = 0; i < type->num_fields (); ++i)
+	  if (is_dynamic_type_internal_1 (type->field (i).type (), false))
+	    return true;
+      }
+      break;
     }
 
   return false;
@@ -2742,6 +2757,25 @@ resolve_dynamic_struct (struct type *type,
   return resolved_type;
 }
 
+/* Resolve dynamic function's arguments/returned value types */
+static struct type *
+resolve_dynamic_func (struct type *type, const property_addr_info *addr_stack,
+		      const frame_info_ptr &frame, bool top_level)
+{
+  gdb_assert (type->code () == TYPE_CODE_FUNC);
+
+  struct type *resolved_type = copy_type (type);
+
+  resolved_type->set_target_type (resolve_dynamic_type_internal (
+    type->target_type (), addr_stack, frame, top_level));
+
+  for (int i = 0; i < resolved_type->num_fields (); i++)
+    resolved_type->field (i).set_type (resolve_dynamic_type_internal (
+      resolved_type->field (i).type (), addr_stack, frame, top_level));
+
+  return resolved_type;
+}
+
 /* Worker for resolved_dynamic_type.  */
 
 static struct type *
@@ -2839,6 +2873,13 @@ resolve_dynamic_type_internal (struct type *type,
 
 	case TYPE_CODE_STRUCT:
 	  resolved_type = resolve_dynamic_struct (type, addr_stack, frame);
+	  break;
+
+	case TYPE_CODE_FUNC:
+	  /* If func was marked as dynamic, that means that it have dynamic
+	     arguments or returned value*/
+	  resolved_type = resolve_dynamic_func (type, addr_stack, frame,
+						top_level);
 	  break;
 	}
     }

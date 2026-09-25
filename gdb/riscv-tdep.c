@@ -57,6 +57,12 @@
 #include "record-full.h"
 #include "riscv-ravenscar-thread.h"
 
+#include <array>
+#include <charconv>
+#include <list>
+#include <numeric>
+#include <optional>
+#include <regex>
 #include <vector>
 
 /* The stack must be 16-byte aligned.  */
@@ -660,10 +666,16 @@ struct riscv_vector_feature : public riscv_register_feature
      RISCV_V0_REGNUM + 31.  */
   const char *register_name (int regnum) const
   {
-    gdb_assert (regnum >= RISCV_V0_REGNUM
-		&& regnum <= RISCV_V0_REGNUM + 31);
-    regnum -= RISCV_V0_REGNUM;
-    return m_registers[regnum].names[0];
+    gdb_assert (regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V0_REGNUM + 31);
+
+    const auto reg_info_it = std::find_if (m_registers.begin (),
+					   m_registers.end (),
+					   [regnum] (const auto &reg_info) {
+					     return reg_info.regnum == regnum;
+					   });
+    if (reg_info_it == m_registers.end ())
+      gdb_assert_not_reached ("Incorrect vector register number %d", regnum);
+    return reg_info_it->names.front ();
   }
 
   /* Check this feature within TDESC, record the registers from this
@@ -679,7 +691,7 @@ struct riscv_vector_feature : public riscv_register_feature
        feature set and return.  */
     if (feature_vector == nullptr)
       {
-	features->vlen = 0;
+	features->vlenb = 0;
 	return true;
       }
 
@@ -696,6 +708,9 @@ struct riscv_vector_feature : public riscv_register_feature
     int vector_bitsize = -1;
     for (const auto &reg : m_registers)
       {
+	if (reg.regnum < RISCV_V0_REGNUM || reg.regnum > RISCV_V31_REGNUM)
+	  continue;
+
 	int reg_bitsize = -1;
 	for (const char *name : reg.names)
 	  {
@@ -712,7 +727,7 @@ struct riscv_vector_feature : public riscv_register_feature
 	  return false;
       }
 
-    features->vlen = (vector_bitsize / 8);
+    features->vlenb = (vector_bitsize / 8);
     return true;
   }
 };
@@ -789,6 +804,58 @@ riscv_abi_xlen (struct gdbarch *gdbarch)
 {
   riscv_gdbarch_tdep *tdep = gdbarch_tdep<riscv_gdbarch_tdep> (gdbarch);
   return tdep->abi_features.xlen;
+}
+
+/* See riscv-tdep.h.  */
+
+int
+riscv_isa_vlenb (struct gdbarch *gdbarch)
+{
+  riscv_gdbarch_tdep *tdep = gdbarch_tdep<riscv_gdbarch_tdep> (gdbarch);
+  return tdep->isa_features.vlenb;
+}
+
+/* Return true if the target for GDBARCH has vector hardware.  */
+
+static bool
+riscv_has_vector_regs (struct gdbarch *gdbarch)
+{
+  return (riscv_isa_vlenb (gdbarch) > 0);
+}
+
+/* Return true if REGNO is a vector GPR.  */
+
+static bool
+riscv_is_vector_gpr (int regno)
+{
+  return (regno >= RISCV_V0_REGNUM && regno <= RISCV_V31_REGNUM);
+}
+
+/* Return true if REGNO is a vector CSR.  */
+
+static bool
+riscv_is_vector_rw_csr (int regno)
+{
+  return (regno == RISCV_CSR_VSTART_REGNUM || regno == RISCV_CSR_VCSR_REGNUM
+	  || regno == RISCV_CSR_VL_REGNUM || regno == RISCV_CSR_VTYPE_REGNUM);
+}
+
+/* Return true if REGNO is a vector GPR or CSR.  */
+
+static bool
+riscv_is_vector_save_restore_regno (int regno)
+{
+  return riscv_is_vector_gpr (regno) || riscv_is_vector_rw_csr (regno);
+}
+
+/* Return true if GDBARCH is using vector hardware ABI.  */
+
+static bool
+riscv_has_vector_abi (struct gdbarch *gdbarch)
+{
+  gdb_assert (gdbarch);
+  riscv_gdbarch_tdep *tdep = gdbarch_tdep<riscv_gdbarch_tdep> (gdbarch);
+  return tdep->abi_features.vlenb > 0;
 }
 
 /* See riscv-tdep.h.  */
@@ -1052,7 +1119,7 @@ riscv_pseudo_register_write (struct gdbarch *gdbarch,
 static bool
 riscv_cannot_store_register (struct gdbarch *gdbarch, int regnum)
 {
-  return regnum == RISCV_ZERO_REGNUM;
+  return regnum == RISCV_ZERO_REGNUM || regnum == RISCV_CSR_VLENB_REGNUM;
 }
 
 /* Construct a type for 64-bit FP registers.  */
@@ -1200,7 +1267,7 @@ riscv_print_one_register_info (struct gdbarch *gdbarch,
     {
       riscv_gdbarch_tdep *tdep = gdbarch_tdep<riscv_gdbarch_tdep> (gdbarch);
 
-      /* Print the register in hex.  */
+      /* Print the register in hex, exclude vector registers.  */
       value_print_options opts = get_formatted_print_options ('x');
       opts.deref_ref = true;
       common_val_print (val, file, 0, opts, current_language);
@@ -1330,17 +1397,46 @@ riscv_print_one_register_info (struct gdbarch *gdbarch,
 	      else
 		gdb_printf (file, "\tprv:%d [INVALID]", priv);
 	    }
-	  else
+	  else if (regnum == RISCV_CSR_VTYPE_REGNUM)
 	    {
-	      /* If not a vector register, print it also according to its
-		 natural format.  */
-	      if (regtype->is_vector () == 0)
-		{
-		  opts = get_user_print_options ();
-		  opts.deref_ref = true;
-		  gdb_printf (file, "\t");
-		  common_val_print (val, file, 0, opts, current_language);
-		}
+	      LONGEST d = value_as_long (val);
+	      // Values are decoded according to RISC-V Vector Specification
+	      unsigned lmul_val = d & 0x7;
+	      const char *decoded_lmul_variants[]
+		= { "1", "2", "4", "8", "Reserved", "1/8", "1/4", "1/2" };
+	      unsigned sew_val = (d >> 3) & 0x7;
+	      const char *decoded_sew_variants[] = { "e8",       "e16",
+						     "e32",      "e64",
+						     "Reserved", "Reserved",
+						     "Reserved", "Reserved" };
+	      unsigned vta = (d >> 6) & 0x1;
+	      const char *decoded_vta_variants[] = { "tu", "ta" };
+	      unsigned vma = (d >> 7) & 0x1;
+	      const char *decoded_vma_variants[] = { "mu", "ma" };
+	      int size = register_size (gdbarch, regnum);
+	      unsigned xlen = size * 8;
+	      unsigned vill = (d >> (xlen - 1)) & 0x1;
+	      gdb_printf (file,
+			  "\tLMUL:%u (%s) SEW:%u (%s) vta:%u (%s) vma:%u "
+			  "(%s) vill:%u",
+			  lmul_val, decoded_lmul_variants[lmul_val], sew_val,
+			  decoded_sew_variants[sew_val], vta,
+			  decoded_vta_variants[vta], vma,
+			  decoded_vma_variants[vma], vill);
+	    }
+	  else if (regnum == RISCV_CSR_VCSR_REGNUM)
+	    {
+	      LONGEST d = value_as_long (val);
+	      unsigned vxsat = d & 1;
+	      unsigned vxrm = (d >> 1) & 0b11;
+	      gdb_printf (file, "\tVXSAT:%u VXRM:%u", vxsat, vxrm);
+	    }
+	  else if (regtype->is_vector () == 0)
+	    {
+	      opts = get_user_print_options ();
+	      opts.deref_ref = true;
+	      gdb_printf (file, "\t");
+	      common_val_print (val, file, 0, opts, current_language);
 	    }
 	}
     }
@@ -1433,21 +1529,22 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
       return false;
     }
   else if (reggroup == float_reggroup)
-    return (riscv_is_fp_regno_p (regnum)
-	    || regnum == RISCV_CSR_FCSR_REGNUM
-	    || regnum == tdep->fflags_regnum
-	    || regnum == tdep->frm_regnum);
+    return (riscv_is_fp_regno_p (regnum) || regnum == RISCV_CSR_FCSR_REGNUM
+	    || regnum == tdep->fflags_regnum || regnum == tdep->frm_regnum);
   else if (reggroup == general_reggroup)
     return regnum < RISCV_FIRST_FP_REGNUM;
   else if (reggroup == restore_reggroup || reggroup == save_reggroup)
     {
       if (riscv_has_fp_regs (gdbarch))
-	return (regnum <= RISCV_LAST_FP_REGNUM
-		|| regnum == RISCV_CSR_FCSR_REGNUM
-		|| regnum == tdep->fflags_regnum
-		|| regnum == tdep->frm_regnum);
-      else
-	return regnum < RISCV_FIRST_FP_REGNUM;
+	if (riscv_is_fp_regno_p (regnum) || regnum == RISCV_CSR_FCSR_REGNUM
+	    || regnum == tdep->fflags_regnum || regnum == tdep->frm_regnum)
+	  return 1;
+
+      if (riscv_has_vector_regs (gdbarch)
+	  && riscv_is_vector_save_restore_regno (regnum))
+	return 1;
+
+      return regnum < RISCV_FIRST_FP_REGNUM;
     }
   else if (reggroup == system_reggroup || reggroup == csr_reggroup)
     {
@@ -1460,7 +1557,7 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
       return false;
     }
   else if (reggroup == vector_reggroup)
-    return (regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM);
+    return riscv_is_vpr_or_vcsr (regnum);
   else
     return false;
 }
@@ -2645,18 +2742,25 @@ struct riscv_arg_info
   {
     /* What type of location this is.  */
     enum location_type
-      {
-       /* Argument passed in a register.  */
-       in_reg,
+    {
+      /* Argument passed in a register.  */
+      in_reg,
 
-       /* Argument passed as an on stack argument.  */
-       on_stack,
+      /* Argument passed in several regs. (For now, used for Vector registers.)
+	 The first register in the sequence of registers (used for passing
+	 arguments) is passed through the first location (see the comment above
+	 struct location), and the last one is passed through the second
+	 location.  */
+      in_several_regs,
 
-       /* Argument passed by reference.  The second location is always
-	  valid for a BY_REF argument, and describes where the address
-	  of the BY_REF argument should be placed.  */
-       by_ref
-      } loc_type;
+      /* Argument passed as an on stack argument.  */
+      on_stack,
+
+      /* Argument passed by reference.  The second location is always
+	 valid for a BY_REF argument, and describes where the address
+	 of the BY_REF argument should be placed.  */
+      by_ref
+    } loc_type;
 
     /* Information that depends on the location type.  */
     union
@@ -2712,6 +2816,90 @@ struct riscv_arg_reg
   int last_regnum;
 };
 
+struct riscv_vector_arg_reg_interval
+{
+  int first;
+  int last;
+};
+
+struct riscv_vector_arg_reg
+{
+  riscv_vector_arg_reg (int first, int last)
+    : available_intervals { { first, last } }
+  {
+    /* Nothing. */
+  }
+
+  int get_interval_start (int count, int NFIELDS = 1)
+  {
+    gdb_assert (count % NFIELDS == 0);
+
+    int LMUL = count / NFIELDS;
+    for (auto cur_interval = available_intervals.begin ();
+	 cur_interval != available_intervals.end (); ++cur_interval)
+      {
+	int cur_first = cur_interval->first;
+	int cur_last = cur_interval->last;
+	if ((cur_first - RISCV_V0_REGNUM) % LMUL
+	    != 0) /* According to RISC-V Vector ABI,
+		     first register number should be
+		     a multiple of LMUL */
+	  {
+	    cur_first -= (cur_first - RISCV_V0_REGNUM) % LMUL;
+	    cur_first += LMUL;
+	  }
+
+	if ((cur_last - cur_first + 1) >= count)
+	  {
+	    if (cur_first > cur_interval->first)
+	      {
+		available_intervals.insert (cur_interval,
+					    { cur_interval->first,
+					      cur_first - 1 });
+	      }
+
+	    cur_interval->first = cur_first + count;
+
+	    return cur_first;
+	  }
+      }
+
+    return -1;
+  }
+
+  int try_use_v0 ()
+  {
+    if (is_v0_used)
+      return get_interval_start (1);
+    else
+      {
+	is_v0_used = true;
+	return RISCV_V0_REGNUM;
+      }
+  }
+
+  bool is_v0_used = false;
+
+  std::list<riscv_vector_arg_reg_interval> available_intervals;
+
+  /* From RISCV-ABI, Standard Vector Calling Convention Variant:
+     The rules for passing vector arguments are as follows:
+     1. For the first vector mask argument, use v0 to pass it.
+     2. For vector data arguments or rest vector mask arguments, starting
+     from the v8 register, if a vector register group between v8-v23 that has
+     not been allocated can be found and the first register number is a
+     multiple of LMUL, then allocate this vector register group to the argument
+     and mark these registers as allocated. Otherwise, pass it by reference and
+     are replaced in the 12 argument list with the address.
+     3. For tuple vector data arguments, starting from the v8 register, if
+     NFIELDS consecutive vector register groups between v8-v23 that have not
+     been allocated can be found and the first register number is a multiple of
+     LMUL, then allocate these vector register groups to the argument and mark
+     these registers as allocated. Otherwise, pass it by reference and are
+     replaced in the argument list with the address
+  */
+};
+
 /* Arguments can be passed as on stack arguments, or by reference.  The
    on stack arguments must be in a continuous region starting from $sp,
    while the by reference arguments can be anywhere, but we'll put them
@@ -2749,10 +2937,16 @@ struct riscv_call_info
 {
   riscv_call_info (struct gdbarch *gdbarch)
     : int_regs (RISCV_A0_REGNUM, RISCV_A0_REGNUM + 7),
-      float_regs (RISCV_FA0_REGNUM, RISCV_FA0_REGNUM + 7)
+      float_regs (RISCV_FA0_REGNUM, RISCV_FA0_REGNUM + 7),
+      vector_regs (RISCV_V0_REGNUM + 8, RISCV_V0_REGNUM + 23)
   {
     xlen = riscv_abi_xlen (gdbarch);
     flen = riscv_abi_flen (gdbarch);
+    /* According to the RVV specification, a binary file does not require
+       any particular vlenb value. However, a target vlenb value is
+       required to place arguments correctly. For this purpose, we save
+       the riscv_isa_vlenb value here. */
+    vlenb = riscv_isa_vlenb (gdbarch);
 
     /* Reduce the number of integer argument registers when using the
        embedded abi (i.e. rv32e).  */
@@ -2762,6 +2956,10 @@ struct riscv_call_info
     /* Disable use of floating point registers if needed.  */
     if (!riscv_has_fp_abi (gdbarch))
       float_regs.next_regnum = float_regs.last_regnum + 1;
+
+    /* Disable use of vector registers if needed.  */
+    if (!riscv_has_vector_abi (gdbarch))
+      vector_regs.available_intervals.clear ();
   }
 
   /* Track the memory areas used for holding in-memory arguments to a
@@ -2776,10 +2974,15 @@ struct riscv_call_info
      passing an argument.  */
   struct riscv_arg_reg float_regs;
 
+  /* Holds information about the next vector register to use for
+     passing an argument.  */
+  struct riscv_vector_arg_reg vector_regs;
+
   /* The XLEN and FLEN are copied in to this structure for convenience, and
      are just the results of calling RISCV_ABI_XLEN and RISCV_ABI_FLEN.  */
   int xlen;
   int flen;
+  int vlenb;
 };
 
 /* Return the number of registers available for use as parameters in the
@@ -2819,6 +3022,410 @@ riscv_assign_reg_location (struct riscv_arg_info::location *loc,
     }
 
   return false;
+}
+
+struct rvv_type_info
+{
+  /* Selected Element Width. For RVV_BOOL types, this field holds EEW/EMUL
+     value, encoded into the type.  */
+  enum class rvv_sew_t : int
+  {
+    SEW8 = 8,
+    SEW16 = 16,
+    SEW32 = 32,
+    SEW64 = 64,
+    SEW_UNKNOWN,
+  } sew = rvv_sew_t::SEW_UNKNOWN;
+
+  /* Length Multiplier, amount of registers used for this type.  */
+  enum class rvv_lmul_t : int
+  {
+    LMUL1 = 1,
+    LMUL2 = 2,
+    LMUL4 = 4,
+    LMUL8 = 8,
+    LMUL_UNKNOWN,
+  } lmul = rvv_lmul_t::LMUL_UNKNOWN;
+
+  /* For non-tuple types, nfield = 1.  */
+  enum class rvv_nfield_t : int
+  {
+    NFIELD1 = 1,
+    NFIELD2,
+    NFIELD3,
+    NFIELD4,
+    NFIELD5,
+    NFIELD6,
+    NFIELD7,
+    NFIELD8,
+    NFIELD_UNKNOWN,
+  } nfield = rvv_nfield_t::NFIELD_UNKNOWN;
+
+  enum class rvv_elem_t : char
+  {
+    RVV_INT,
+    RVV_UINT,
+    RVV_FLOAT,
+    RVV_BOOL,
+    RVV_UNKNOWN,
+  } element_type = rvv_elem_t::RVV_UNKNOWN;
+
+  /* is_fractional_lmul means, that used only part of a vector
+     register. For example, if lmul = 2 and is_fractional_lmul =
+     true it means that used a half of a register.  */
+  bool is_fractional_lmul = false;
+};
+
+struct rvv_type_name_mapping_t
+{
+  const char *name;
+  rvv_type_info::rvv_elem_t type;
+};
+
+static constexpr std::array<rvv_type_name_mapping_t, 4> rvv_type_names = {
+  rvv_type_name_mapping_t { "int", rvv_type_info::rvv_elem_t::RVV_INT },
+  rvv_type_name_mapping_t { "uint", rvv_type_info::rvv_elem_t::RVV_UINT },
+  rvv_type_name_mapping_t { "float", rvv_type_info::rvv_elem_t::RVV_FLOAT },
+  rvv_type_name_mapping_t { "bool", rvv_type_info::rvv_elem_t::RVV_BOOL }
+};
+
+static bool
+supported_fractional_sew_lmul (rvv_type_info::rvv_lmul_t lmul,
+			       rvv_type_info::rvv_sew_t sew)
+{
+  gdb_assert (lmul != rvv_type_info::rvv_lmul_t::LMUL_UNKNOWN);
+  gdb_assert (sew != rvv_type_info::rvv_sew_t::SEW_UNKNOWN);
+  /* More info in RISC-V C Intrinsic Specification Type
+   * System 7.1, 7.2, 7.3, 7.4.  */
+  return static_cast<int> (lmul) * static_cast<int> (sew) <= 64;
+}
+
+/* verify_rvv_type() verify RVV types according to specification.  */
+static bool
+verify_rvv_type (const rvv_type_info &type_info)
+{
+  if (type_info.lmul == rvv_type_info::rvv_lmul_t::LMUL1
+      && type_info.is_fractional_lmul)
+    return false;
+
+  /* Restriction from RISC-V Vector Specification: LMUL * NFIELDS <= 8.  */
+  if (!type_info.is_fractional_lmul
+      && (static_cast<int> (type_info.lmul)
+	    * static_cast<int> (type_info.nfield)
+	  > 8))
+    return false;
+
+  switch (type_info.element_type)
+    {
+    case rvv_type_info::rvv_elem_t::RVV_FLOAT:
+      /* For float types at least SEW16 is required.  */
+      if (type_info.sew != rvv_type_info::rvv_sew_t::SEW16
+	  && type_info.sew != rvv_type_info::rvv_sew_t::SEW32
+	  && type_info.sew != rvv_type_info::rvv_sew_t::SEW64)
+	return false;
+
+      /* For float types at least LMUL = 1/4 is required.  */
+      if (type_info.lmul == rvv_type_info::rvv_lmul_t::LMUL8
+	  && type_info.is_fractional_lmul)
+	return false;
+
+      /* rvv_spec_requirement condition applies only to types with fractional
+	 LMUL.  */
+      if (!type_info.is_fractional_lmul)
+	return true;
+
+      return supported_fractional_sew_lmul (type_info.lmul, type_info.sew);
+
+    case rvv_type_info::rvv_elem_t::RVV_INT:
+    case rvv_type_info::rvv_elem_t::RVV_UINT:
+      /* For int/uint types at least SEW8 is required.  */
+      if (type_info.sew != rvv_type_info::rvv_sew_t::SEW8
+	  && type_info.sew != rvv_type_info::rvv_sew_t::SEW16
+	  && type_info.sew != rvv_type_info::rvv_sew_t::SEW32
+	  && type_info.sew != rvv_type_info::rvv_sew_t::SEW64)
+	return false;
+
+      /* rvv_spec_requirement condition applies only to types with fractional
+	 LMUL.  */
+      if (!type_info.is_fractional_lmul)
+	return true;
+
+      return supported_fractional_sew_lmul (type_info.lmul, type_info.sew);
+
+    case rvv_type_info::rvv_elem_t::RVV_BOOL:
+      /* These restrictions do not follow from the specification, but from the
+	 internal constraints of the structure of rvv_type_info. */
+      return (type_info.lmul == rvv_type_info::rvv_lmul_t::LMUL1
+	      && type_info.nfield == rvv_type_info::rvv_nfield_t::NFIELD1
+	      && !type_info.is_fractional_lmul);
+
+    default:
+      return false;
+    }
+}
+
+static std::regex
+get_rvv_type_regex ()
+{
+  /* According to specification, RVV type names don't start with __rvv_ (like
+     vint64m1_t), but in GCC and Clang they are aliases (__rvv_int64m1_t).  */
+  auto pipe_fold = [] (const std::string &a,
+		       const rvv_type_name_mapping_t &b) {
+    return a + "|" + std::string (b.name);
+  };
+  std::string accumulator
+    = std::accumulate (std::next (rvv_type_names.begin ()),
+		       rvv_type_names.end (),
+		       std::string (rvv_type_names[0].name), pipe_fold);
+  return std::regex ("__rvv_(" + accumulator
+		     + ")(1|2|4|8|16|32|64)((m|mf)([1248]))?(x([2-8]))?_t");
+}
+
+struct parsed_rvv_type_t
+{
+  enum class group
+  {
+    name = 1,
+    sew,
+    lmul_str,
+    lmul_type,
+    lmul_val,
+    nfield_str,
+    nfield_val
+  };
+
+  static std::optional<parsed_rvv_type_t> parse (std::string_view name)
+  {
+    parsed_rvv_type_t res;
+    if (std::regex_search (name.begin (), name.end (), res.matches,
+			   rvv_type_regex))
+      return res;
+    return std::nullopt;
+  }
+
+  std::string_view get (group g) const
+  {
+    long unsigned index = static_cast<long unsigned> (g);
+    const auto &sm = matches[index];
+    return std::string_view (sm.first, sm.length ());
+  }
+
+private:
+  parsed_rvv_type_t () = default;
+  std::cmatch matches;
+  inline static const std::regex rvv_type_regex = get_rvv_type_regex ();
+};
+
+static std::optional<rvv_type_info>
+get_rvv_type_info_unverified (struct type *type)
+{
+  if (!type)
+    return std::nullopt;
+
+  type = check_typedef (type);
+
+  if (!type->name ())
+    {
+      riscv_infcall_debug_printf (
+	"The type name is missing, unable to get RVV type info.");
+      return std::nullopt;
+    }
+
+  if (type->code () != TYPE_CODE_ARRAY && type->code () != TYPE_CODE_STRUCT)
+    {
+      riscv_infcall_debug_printf ("Incorrect type_code: %d. Expected %d "
+				  "(TYPE_CODE_ARRAY) or %d (TYPE_CODE_STRUCT)",
+				  type->code (), TYPE_CODE_ARRAY,
+				  TYPE_CODE_STRUCT);
+      return std::nullopt;
+    }
+
+  auto parsed_rvv_type_holder = parsed_rvv_type_t::parse (type->name ());
+  if (!parsed_rvv_type_holder.has_value ())
+    {
+      riscv_infcall_debug_printf ("Failed to match RVV type name: %s",
+				  type->name ());
+      return std::nullopt;
+    }
+  parsed_rvv_type_t parsed_rvv_type = parsed_rvv_type_holder.value ();
+  rvv_type_info res;
+
+  auto it = std::find_if (
+    rvv_type_names.begin (), rvv_type_names.end (),
+    [parsed_rvv_type] (const rvv_type_name_mapping_t &type_name) {
+      return parsed_rvv_type.get (parsed_rvv_type_t::group::name)
+	       .compare (type_name.name)
+	     == 0;
+    });
+  if (it == rvv_type_names.end ())
+    {
+      riscv_infcall_debug_printf (
+	"Unable to find RVV element type in type name %s.", type->name ());
+      return std::nullopt;
+    }
+  res.element_type = it->type;
+
+  if (auto sew_val = parse_integer<unsigned> (
+	parsed_rvv_type.get (parsed_rvv_type_t::group::sew)))
+    {
+      res.sew = static_cast<rvv_type_info::rvv_sew_t> (sew_val.value ());
+    }
+  else
+    {
+      std::string_view sew_str
+	= parsed_rvv_type.get (parsed_rvv_type_t::group::sew);
+      riscv_infcall_debug_printf (
+	"Failed to convert SEW string (%.*s) to unsigned",
+	static_cast<int> (sew_str.size ()), sew_str.data ());
+      return std::nullopt;
+    }
+
+  if (!parsed_rvv_type.get (parsed_rvv_type_t::group::lmul_str).empty ())
+    {
+      if (parsed_rvv_type.get (parsed_rvv_type_t::group::lmul_type)
+	    .compare ("mf")
+	  == 0)
+	res.is_fractional_lmul = true;
+      else
+	res.is_fractional_lmul = false;
+
+      if (auto lmul_val = parse_integer<unsigned> (
+	    parsed_rvv_type.get (parsed_rvv_type_t::group::lmul_val)))
+	{
+	  res.lmul
+	    = static_cast<rvv_type_info::rvv_lmul_t> (lmul_val.value ());
+	}
+      else
+	{
+	  std::string_view lmul_str
+	    = parsed_rvv_type.get (parsed_rvv_type_t::group::lmul_val);
+	  riscv_infcall_debug_printf (
+	    "Failed to convert LMUL string (%.*s) to unsigned",
+	    static_cast<int> (lmul_str.size ()), lmul_str.data ());
+	  return std::nullopt;
+	}
+    }
+  else
+    {
+      res.lmul = rvv_type_info::rvv_lmul_t::LMUL1;
+      res.is_fractional_lmul = false;
+    }
+
+  if (!parsed_rvv_type.get (parsed_rvv_type_t::group::nfield_str).empty ())
+    {
+      if (auto nfield_val = parse_integer<unsigned> (
+	    parsed_rvv_type.get (parsed_rvv_type_t::group::nfield_val)))
+	{
+	  res.nfield
+	    = static_cast<rvv_type_info::rvv_nfield_t> (nfield_val.value ());
+	}
+      else
+	{
+	  std::string_view nfield_str
+	    = parsed_rvv_type.get (parsed_rvv_type_t::group::nfield_val);
+	  riscv_infcall_debug_printf (
+	    "Failed to convert NFIELD string (%.*s) to unsigned",
+	    static_cast<int> (nfield_str.size ()), nfield_str.data ());
+	  return std::nullopt;
+	}
+    }
+  else
+    res.nfield = rvv_type_info::rvv_nfield_t::NFIELD1;
+
+  return res;
+}
+
+static std::optional<rvv_type_info>
+get_rvv_type_info (struct type *type)
+{
+  std::optional<rvv_type_info> res = get_rvv_type_info_unverified (type);
+
+  if (res.has_value () && verify_rvv_type (res.value ()))
+    return res;
+
+  return std::nullopt;
+}
+
+static bool
+is_rvv_type (struct type *type)
+{
+  return get_rvv_type_info (type).has_value ();
+}
+
+static bool
+riscv_assign_vec_reg_location (struct riscv_arg_info *ainfo,
+			       struct riscv_vector_arg_reg *reg,
+			       struct type *func_arg_type, int vlenb)
+{
+  int data_length = vlenb; /* Amount of data that is stored on one register */
+
+  struct riscv_arg_info::location *loc0 = &ainfo->argloc[0];
+  struct riscv_arg_info::location *loc1 = &ainfo->argloc[1];
+
+  rvv_type_info arg_type_info;
+  if (std::optional<rvv_type_info> res = get_rvv_type_info (func_arg_type))
+    arg_type_info = res.value ();
+  else
+    gdb_assert_not_reached ("Incorrect type %s", func_arg_type->name ());
+
+  riscv_infcall_debug_printf (
+    "rvv_type_info of %s: element_type = %d, sew = %u, lmul = %u (%s "
+    "fractional), nfield = %u",
+    func_arg_type->name (), static_cast<int> (arg_type_info.element_type),
+    static_cast<int> (arg_type_info.sew),
+    static_cast<int> (arg_type_info.lmul),
+    (arg_type_info.is_fractional_lmul ? "is" : "is not"),
+    static_cast<int> (arg_type_info.nfield));
+
+  int num_required_regs = ((arg_type_info.is_fractional_lmul)
+			     ? 1
+			     : static_cast<int> (arg_type_info.lmul))
+			  * static_cast<int> (arg_type_info.nfield);
+
+  if (arg_type_info.is_fractional_lmul)
+    {
+      num_required_regs = static_cast<int> (arg_type_info.nfield);
+      data_length = data_length / static_cast<int> (arg_type_info.lmul);
+    }
+
+  int first_regnum = -1;
+
+  /* Representation of vector segmented types, like vint32m4x2_t,
+     is different in Clang and GCC.
+     In Clang, all types are arrays.
+     In GCC, segmented types are struct's, other vector types are arrays. */
+  if (ainfo->type->code () == TYPE_CODE_ARRAY)
+    {
+      if (ainfo->type->target_type ()->code () == TYPE_CODE_BOOL)
+	first_regnum = reg->try_use_v0 ();
+      else
+	first_regnum
+	  = reg->get_interval_start (num_required_regs,
+				     static_cast<int> (arg_type_info.nfield));
+    }
+  else if (ainfo->type->code () == TYPE_CODE_STRUCT)
+    {
+      first_regnum
+	= reg->get_interval_start (num_required_regs,
+				   static_cast<int> (arg_type_info.nfield));
+    }
+
+  if (first_regnum == -1)
+    return false;
+
+  int last_regnum = first_regnum + num_required_regs - 1;
+
+  loc0->loc_type = riscv_arg_info::location::in_several_regs;
+  loc0->loc_data.regno = first_regnum;
+  loc0->c_length = data_length;
+  loc0->c_offset = 0;
+
+  loc1->loc_type = riscv_arg_info::location::in_several_regs;
+  loc1->loc_data.regno = last_regnum;
+  loc1->c_length = 0;
+  loc1->c_offset = 0;
+
+  return true;
 }
 
 /* Assign LOC a location as the next stack parameter, and update MEMORY to
@@ -3229,21 +3836,44 @@ riscv_call_arg_struct (struct riscv_arg_info *ainfo,
   riscv_call_arg_scalar_int (ainfo, cinfo);
 }
 
+static void
+riscv_call_arg_vector (struct riscv_arg_info *ainfo,
+		       struct riscv_call_info *cinfo,
+		       struct type *func_arg_type)
+{
+  if (!riscv_assign_vec_reg_location (ainfo, &cinfo->vector_regs,
+				      func_arg_type, cinfo->vlenb))
+    {
+      // Try to pass value by reference
+      ainfo->argloc[0].loc_type = riscv_arg_info::location::by_ref;
+      cinfo->memory.ref_offset = align_up (cinfo->memory.ref_offset,
+					   ainfo->align);
+      ainfo->argloc[0].loc_data.offset = cinfo->memory.ref_offset;
+      cinfo->memory.ref_offset += ainfo->length;
+      ainfo->argloc[0].c_length = ainfo->length;
+
+      if (!riscv_assign_reg_location (&ainfo->argloc[1], &cinfo->int_regs,
+				      cinfo->xlen, 0))
+	riscv_assign_stack_location (&ainfo->argloc[1], &cinfo->memory,
+				     cinfo->xlen, cinfo->xlen);
+    }
+}
+
 /* Assign a location to call (or return) argument AINFO, the location is
    selected from CINFO which holds information about what call argument
    locations are available for use next.  The TYPE is the type of the
    argument being passed, this information is recorded into AINFO (along
    with some additional information derived from the type).  IS_UNNAMED
    is true if this is an unnamed (stdarg) argument, this info is also
-   recorded into AINFO.
+   recorded into AINFO. FUNC_ARG_TYPE is the type of the function parameter in
+   its declaration.
 
    After assigning a location to AINFO, CINFO will have been updated.  */
 
 static void
-riscv_arg_location (struct gdbarch *gdbarch,
-		    struct riscv_arg_info *ainfo,
-		    struct riscv_call_info *cinfo,
-		    struct type *type, bool is_unnamed)
+riscv_arg_location (struct gdbarch *gdbarch, struct riscv_arg_info *ainfo,
+		    struct riscv_call_info *cinfo, struct type *type,
+		    struct type *func_arg_type, bool is_unnamed)
 {
   ainfo->type = type;
   ainfo->length = ainfo->type->length ();
@@ -3252,6 +3882,12 @@ riscv_arg_location (struct gdbarch *gdbarch,
   ainfo->contents = nullptr;
   ainfo->argloc[0].c_length = 0;
   ainfo->argloc[1].c_length = 0;
+
+  if (is_rvv_type (func_arg_type)) /* for RISC_V vector registers */
+    {
+      riscv_call_arg_vector (ainfo, cinfo, func_arg_type);
+      return;
+    }
 
   switch (ainfo->type->code ())
     {
@@ -3375,6 +4011,14 @@ riscv_print_arg_location (ui_file *stream, struct gdbarch *gdbarch,
 	}
       break;
 
+    case riscv_arg_info::location::in_several_regs:
+      gdb_printf (stream, ", registers from %s to %s",
+		  gdbarch_register_name (gdbarch,
+					 info->argloc[0].loc_data.regno),
+		  gdbarch_register_name (gdbarch,
+					 info->argloc[1].loc_data.regno));
+      break;
+
     default:
       gdb_assert_not_reached ("unknown argument location type");
     }
@@ -3389,15 +4033,13 @@ static void
 riscv_regcache_cooked_write (int regnum, const gdb_byte *data, int len,
 			     struct regcache *regcache, int flen)
 {
-  gdb_byte tmp [sizeof (ULONGEST)];
-
+  int regsize = register_size (regcache->arch (), regnum);
+  std::vector<gdb_byte> tmp (regsize);
   /* FP values in FP registers must be NaN-boxed.  */
   if (riscv_is_fp_regno_p (regnum) && len < flen)
-    memset (tmp, -1, sizeof (tmp));
-  else
-    memset (tmp, 0, sizeof (tmp));
-  memcpy (tmp, data, len);
-  regcache->cooked_write (regnum, tmp);
+    memset (tmp.data (), -1, tmp.size ());
+  memcpy (tmp.data (), data, len);
+  regcache->cooked_write (regnum, tmp.data ());
 }
 
 /* Implement the push dummy call gdbarch callback.  */
@@ -3437,16 +4079,21 @@ riscv_push_dummy_call (struct gdbarch *gdbarch,
     {
       struct value *arg_value;
       struct type *arg_type;
+      struct type *func_arg_type;
       struct riscv_arg_info *info = &arg_info[i];
 
       arg_value = args[i];
       arg_type = check_typedef (arg_value->type ());
 
-      riscv_arg_location (gdbarch, info, &call_info, arg_type,
+      func_arg_type = (i < ftype->num_fields ()) ? ftype->field (i).type ()
+						 : nullptr;
+
+      riscv_arg_location (gdbarch, info, &call_info, arg_type, func_arg_type,
 			  ftype->has_varargs () && i >= ftype->num_fields ());
 
       if (info->type != arg_type)
 	arg_value = value_cast (info->type, arg_value);
+
       info->contents = arg_value->contents ().data ();
     }
 
@@ -3458,13 +4105,17 @@ riscv_push_dummy_call (struct gdbarch *gdbarch,
     {
       RISCV_INFCALL_SCOPED_DEBUG_START_END ("dummy call args");
       riscv_infcall_debug_printf ("floating point ABI %s in use",
-				  (riscv_has_fp_abi (gdbarch)
-				   ? "is" : "is not"));
+				  (riscv_has_fp_abi (gdbarch) ? "is"
+							      : "is not"));
+      riscv_infcall_debug_printf ("vector ABI %s in use",
+				  (riscv_has_vector_abi (gdbarch) ? "is"
+								  : "is not"));
       riscv_infcall_debug_printf ("xlen: %d", call_info.xlen);
       riscv_infcall_debug_printf ("flen: %d", call_info.flen);
+      riscv_infcall_debug_printf ("vlenb: %d", call_info.vlenb);
       if (return_method == return_method_struct)
-	riscv_infcall_debug_printf
-	  ("[**] struct return pointer in register $A0");
+	riscv_infcall_debug_printf (
+	  "[**] struct return pointer in register $A0");
       for (i = 0; i < nargs; ++i)
 	{
 	  struct riscv_arg_info *info = &arg_info [i];
@@ -3538,6 +4189,22 @@ riscv_push_dummy_call (struct gdbarch *gdbarch,
 	  second_arg_data = (gdb_byte *) &dst;
 	  break;
 
+	case riscv_arg_info::location::in_several_regs:
+	  {
+	    const gdb_byte *cur_contents = info->contents;
+	    int cur_c_length = info->argloc[0].c_length;
+	    for (int cur_regno = info->argloc[0].loc_data.regno;
+		 cur_regno <= info->argloc[1].loc_data.regno; cur_regno++)
+	      {
+		riscv_regcache_cooked_write (cur_regno, cur_contents,
+					     cur_c_length, regcache,
+					     call_info.flen);
+		cur_contents += cur_c_length;
+	      }
+	    second_arg_length = 0;
+	  }
+	  break;
+
 	default:
 	  gdb_assert_not_reached ("unknown argument location type");
 	}
@@ -3568,6 +4235,8 @@ riscv_push_dummy_call (struct gdbarch *gdbarch,
 	      }
 
 	    case riscv_arg_info::location::by_ref:
+	    case riscv_arg_info::location::
+	      in_several_regs: /* We shouldn't get here for this case*/
 	    default:
 	      /* The second location should never be a reference, any
 		 argument being passed by reference just places its address
@@ -3606,9 +4275,14 @@ riscv_return_value (struct gdbarch  *gdbarch,
   struct riscv_call_info call_info (gdbarch);
   struct riscv_arg_info info;
   struct type *arg_type;
+  struct type *func_retval_type;
 
   arg_type = check_typedef (type);
-  riscv_arg_location (gdbarch, &info, &call_info, arg_type, false);
+  func_retval_type = (function && function->type ())
+		       ? function->type ()->target_type ()
+		       : nullptr;
+  riscv_arg_location (gdbarch, &info, &call_info, arg_type, func_retval_type,
+		      false);
 
   if (riscv_debug_infcall)
     {
@@ -3761,6 +4435,38 @@ riscv_return_value (struct gdbarch  *gdbarch,
 	  }
 	  break;
 
+	case riscv_arg_info::location::in_several_regs:
+	  {
+	    int first_regnum = info.argloc[0].loc_data.regno;
+	    int last_regnum = info.argloc[1].loc_data.regno;
+
+	    gdb_byte *tmp_readbuf = readbuf;
+	    const gdb_byte *tmp_writebuf = writebuf;
+
+	    for (int cur_regnum = first_regnum; cur_regnum <= last_regnum;
+		 cur_regnum++)
+	      {
+		if (readbuf)
+		  {
+		    gdb_byte *ptr = tmp_readbuf + info.argloc[0].c_offset;
+		    regcache->cooked_read_part (cur_regnum, 0,
+						info.argloc[0].c_length, ptr);
+		    tmp_readbuf += info.argloc[0].c_length;
+		  }
+
+		if (writebuf)
+		  {
+		    const gdb_byte *ptr = tmp_writebuf
+					  + info.argloc[0].c_offset;
+		    riscv_regcache_cooked_write (cur_regnum, ptr,
+						 info.argloc[0].c_length,
+						 regcache, call_info.flen);
+		    tmp_writebuf += info.argloc[0].c_length;
+		  }
+	      }
+	  }
+	  break;
+
 	case riscv_arg_info::location::on_stack:
 	default:
 	  error (_("invalid argument location"));
@@ -3795,6 +4501,7 @@ riscv_return_value (struct gdbarch  *gdbarch,
   switch (info.argloc[0].loc_type)
     {
     case riscv_arg_info::location::in_reg:
+    case riscv_arg_info::location::in_several_regs:
       return RETURN_VALUE_REGISTER_CONVENTION;
     case riscv_arg_info::location::by_ref:
       return RETURN_VALUE_ABI_PRESERVES_ADDRESS;
@@ -3923,6 +4630,17 @@ static const struct frame_unwind_legacy riscv_frame_unwind (
   /*.prev_arch     =*/ NULL
 );
 
+static bool
+riscv_search_extension_in_march (std::string_view march,
+				 std::string_view extension)
+{
+  std::string regex_string = "_" + std::string (extension)
+			     + "(_|$|[1-9]?\\d+p[1-9]?\\d)";
+  std::regex regexp_for_extension (regex_string);
+  return std::regex_search (march.begin (), march.end (),
+			    regexp_for_extension);
+}
+
 /* Extract a set of required target features out of ABFD.  If ABFD is
    nullptr then a RISCV_GDBARCH_FEATURES is returned in its default state.  */
 
@@ -3963,6 +4681,31 @@ riscv_features_from_bfd (const bfd *abfd)
 	    }
 	  features.embedded = true;
 	}
+
+      obj_attribute *obj_attr = elf_known_obj_attributes_proc (abfd);
+      const char *march = obj_attr[Tag_RISCV_arch].s;
+      if (march)
+	{
+	  /* According to the RVV specification, a binary file does not require
+	     any particular vlenb value. Therefore, we used minimal vlenb value
+	     to indicate that the vector ABI is in use. Additionally, a valid
+	     vlenb value is required here, as it will be used later to create a
+	     default target description.  */
+	  std::string_view march_str (march);
+	  if (riscv_search_extension_in_march (march_str, "v"))
+	    features.vlenb = 16;
+	  else if (riscv_search_extension_in_march (march_str, "zve64x")
+		   || riscv_search_extension_in_march (march_str, "zve64f")
+		   || riscv_search_extension_in_march (march_str, "zve64d"))
+	    features.vlenb = 8;
+	  else if (riscv_search_extension_in_march (march_str, "zve32x")
+		   || riscv_search_extension_in_march (march_str, "zve32f"))
+	    features.vlenb = 4;
+	  else
+	    features.vlenb = 0;
+	}
+      else
+	features.vlenb = 0;
     }
 
   return features;
@@ -4264,6 +5007,13 @@ riscv_gdbarch_init (struct gdbarch_info info,
   if (abi_features.flen > features.flen)
     error (_("bfd requires flen %d, but target has flen %d"),
 	    abi_features.flen, features.flen);
+
+  /* Look at riscv_features_from_bfd*/
+  if ((abi_features.vlenb > 0) && (features.vlenb == 0))
+    {
+      warning (_ ("bfd requires non-zero vlenb, but target has vlenb = 0, "
+		  "vector registers unsupported"));
+    }
 
   /* Find a candidate among the list of pre-declared architectures.  */
   for (arches = gdbarch_list_lookup_by_info (arches, &info);
@@ -5467,4 +6217,14 @@ riscv_process_record (struct gdbarch *gdbarch, struct regcache *regcache,
     return res;
 
   return 0;
+}
+
+bool
+riscv_is_vpr_or_vcsr (unsigned regnum)
+{
+  return (regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V0_REGNUM + 31)
+	 || regnum == RISCV_CSR_VSTART_REGNUM
+	 || regnum == RISCV_CSR_VCSR_REGNUM || regnum == RISCV_CSR_VL_REGNUM
+	 || regnum == RISCV_CSR_VTYPE_REGNUM
+	 || regnum == RISCV_CSR_VLENB_REGNUM;
 }

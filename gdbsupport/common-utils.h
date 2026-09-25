@@ -20,12 +20,14 @@
 #ifndef GDBSUPPORT_COMMON_UTILS_H
 #define GDBSUPPORT_COMMON_UTILS_H
 
+#include <optional>
 #include <string>
 #include <vector>
 #include "gdbsupport/byte-vector.h"
 #include "gdbsupport/gdb_unique_ptr.h"
 #include "gdbsupport/array-view.h"
 #include "poison.h"
+#include <charconv>
 #include <string_view>
 
 #if defined HAVE_LIBXXHASH
@@ -278,5 +280,25 @@ struct string_view_hash
 };
 
 } /* namespace gdb */
+
+/* Parse decimal integer number from string_view.  */
+template<typename T, typename = std::enable_if_t<std::is_integral<T>::value>>
+std::optional<T>
+parse_integer (std::string_view str) noexcept
+{
+  if (str.empty ())
+    return std::nullopt;
+
+  T value {};
+  const char *first = str.data ();
+  const char *last = str.data () + str.size ();
+
+  auto [ptr, ec] = std::from_chars (first, last, value, 10);
+
+  if (ec != std::errc {} || ptr != last)
+    return std::nullopt;
+
+  return value;
+}
 
 #endif /* GDBSUPPORT_COMMON_UTILS_H */

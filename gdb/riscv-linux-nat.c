@@ -24,6 +24,7 @@
 
 #include "elf/common.h"
 
+#include "nat/riscv-linux-ptrace.h"
 #include "nat/riscv-linux-tdesc.h"
 
 #include <sys/ptrace.h>
@@ -132,6 +133,64 @@ supply_fpregset (struct regcache *regcache, const prfpregset_t *fpregs)
   supply_fpregset_regnum (regcache, fpregs, -1);
 }
 
+static void
+supply_vecregset_regnum (regcache *regcache,
+			 const __riscv_v_regset_state *vecregs, int regnum)
+{
+  gdb_assert (vecregs->vlenb > 0);
+  if ((regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM))
+    {
+      regcache->raw_supply (regnum,
+			    vecregs->vreg
+			      + vecregs->vlenb * (regnum - RISCV_V0_REGNUM));
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VSTART_REGNUM)
+    {
+      regcache->raw_supply (regnum, &vecregs->vstart);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VCSR_REGNUM)
+    {
+      regcache->raw_supply (regnum, &vecregs->vcsr);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VL_REGNUM)
+    {
+      regcache->raw_supply (regnum, &vecregs->vl);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VTYPE_REGNUM)
+    {
+      regcache->raw_supply (regnum, &vecregs->vtype);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VLENB_REGNUM)
+    {
+      regcache->raw_supply (regnum, &vecregs->vlenb);
+      return;
+    }
+
+  if (regnum == -1)
+    {
+      regcache->raw_supply (RISCV_CSR_VSTART_REGNUM, &vecregs->vstart);
+      regcache->raw_supply (RISCV_CSR_VCSR_REGNUM, &vecregs->vcsr);
+      regcache->raw_supply (RISCV_CSR_VL_REGNUM, &vecregs->vl);
+      regcache->raw_supply (RISCV_CSR_VTYPE_REGNUM, &vecregs->vtype);
+      regcache->raw_supply (RISCV_CSR_VLENB_REGNUM, &vecregs->vlenb);
+
+      for (int i = RISCV_V0_REGNUM; i <= RISCV_V31_REGNUM; i++)
+	regcache->raw_supply (i, vecregs->vreg
+				   + vecregs->vlenb * (i - RISCV_V0_REGNUM));
+      return;
+    }
+}
+
 /* Copy general purpose register REGNUM (or all gp regs if REGNUM == -1)
    from REGCACHE into regset GREGS.  */
 
@@ -192,6 +251,64 @@ fill_fpregset (const struct regcache *regcache, prfpregset_t *fpregs,
     {
       fpbuf.buf += flen * (RISCV_LAST_FP_REGNUM - RISCV_FIRST_FP_REGNUM + 1);
       regcache->raw_collect (RISCV_CSR_FCSR_REGNUM, fpbuf.buf);
+    }
+}
+
+static void
+fill_vecregset_regnum (regcache *regcache, __riscv_v_regset_state *vecregs,
+		       int regnum)
+{
+  if ((regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM))
+    {
+      regcache->raw_collect (regnum,
+			     vecregs->vreg
+			       + vecregs->vlenb * (regnum - RISCV_V0_REGNUM));
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VSTART_REGNUM)
+    {
+      regcache->raw_collect (regnum, &vecregs->vstart);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VCSR_REGNUM)
+    {
+      regcache->raw_collect (regnum, &vecregs->vcsr);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VL_REGNUM)
+    {
+      regcache->raw_collect (regnum, &vecregs->vl);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VTYPE_REGNUM)
+    {
+      regcache->raw_collect (regnum, &vecregs->vtype);
+      return;
+    }
+
+  if (regnum == RISCV_CSR_VLENB_REGNUM)
+    {
+      regcache->raw_collect (regnum, &vecregs->vlenb);
+      return;
+    }
+
+  if (regnum == -1)
+    {
+      regcache->raw_collect (RISCV_CSR_VSTART_REGNUM, &vecregs->vstart);
+      regcache->raw_collect (RISCV_CSR_VCSR_REGNUM, &vecregs->vcsr);
+      regcache->raw_collect (RISCV_CSR_VL_REGNUM, &vecregs->vl);
+      regcache->raw_collect (RISCV_CSR_VTYPE_REGNUM, &vecregs->vtype);
+      regcache->raw_collect (RISCV_CSR_VLENB_REGNUM, &vecregs->vlenb);
+
+      for (int i = RISCV_V0_REGNUM; i <= RISCV_V31_REGNUM; i++)
+	regcache->raw_collect (i, vecregs->vreg
+				    + vecregs->vlenb * (i - RISCV_V0_REGNUM));
+
+      return;
     }
 }
 
@@ -261,6 +378,29 @@ riscv_linux_nat_target::fetch_registers (struct regcache *regcache, int regnum)
       regcache->raw_supply_zeroed (RISCV_CSR_MISA_REGNUM);
     }
 
+  if (riscv_is_vpr_or_vcsr (regnum) || (regnum == -1))
+    {
+      int vecreg_size = register_size (regcache->arch (), RISCV_V0_REGNUM);
+      std::vector<char> vregs_buff (sizeof (__riscv_v_regset_state)
+				    + vecreg_size * 32);
+
+      __riscv_v_regset_state *vregs_state
+	= (__riscv_v_regset_state *) vregs_buff.data ();
+
+      iovec iov;
+      iov.iov_base = vregs_state;
+      iov.iov_len = sizeof (struct __riscv_v_regset_state) + 32 * vecreg_size;
+
+      if (ptrace (PTRACE_GETREGSET, tid, NT_RISCV_VECTOR,
+		  (PTRACE_TYPE_ARG3) &iov)
+	    == 0
+	  && vregs_state->vlenb > 0)
+	{
+	  gdb_assert (vregs_state->vlenb == vecreg_size);
+	  supply_vecregset_regnum (regcache, vregs_state, regnum);
+	}
+    }
+
   /* Access to other CSRs has potential security issues, don't support them for
      now.  */
 }
@@ -320,6 +460,30 @@ riscv_linux_nat_target::store_registers (struct regcache *regcache, int regnum)
 	  if (ptrace (PTRACE_SETREGSET, tid, NT_FPREGSET,
 		      (PTRACE_TYPE_ARG3) &iov) == -1)
 	    perror_with_name (_("Couldn't set registers"));
+	}
+    }
+
+  if (riscv_is_vpr_or_vcsr (regnum) || (regnum == -1))
+    {
+      int vecreg_size = register_size (regcache->arch (), RISCV_V0_REGNUM);
+      std::vector<char> vregs_buff (sizeof (__riscv_v_regset_state)
+				    + vecreg_size * 32);
+
+      __riscv_v_regset_state *vregs_state
+	= (__riscv_v_regset_state *) vregs_buff.data ();
+
+      iovec iov;
+      iov.iov_base = vregs_state;
+      iov.iov_len = sizeof (struct __riscv_v_regset_state) + 32 * vecreg_size;
+
+      if (ptrace (PTRACE_GETREGSET, tid, NT_RISCV_VECTOR,
+		  (PTRACE_TYPE_ARG3) &iov)
+	  == 0)
+	{
+	  fill_vecregset_regnum (regcache, vregs_state, regnum);
+
+	  ptrace (PTRACE_SETREGSET, tid, NT_RISCV_VECTOR,
+		  (PTRACE_TYPE_ARG3) &iov);
 	}
     }
 

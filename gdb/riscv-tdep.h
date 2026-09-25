@@ -23,61 +23,7 @@
 
 #include "arch/riscv.h"
 #include "gdbarch.h"
-
-/* RiscV register numbers.  */
-enum
-{
-  RISCV_ZERO_REGNUM = 0,	/* Read-only register, always 0.  */
-  RISCV_RA_REGNUM = 1,		/* Return Address.  */
-  RISCV_SP_REGNUM = 2,		/* Stack Pointer.  */
-  RISCV_GP_REGNUM = 3,		/* Global Pointer.  */
-  RISCV_TP_REGNUM = 4,		/* Thread Pointer.  */
-  RISCV_FP_REGNUM = 8,		/* Frame Pointer.  */
-  RISCV_A0_REGNUM = 10,		/* First argument.  */
-  RISCV_A1_REGNUM = 11,		/* Second argument.  */
-  RISCV_A2_REGNUM = 12,		/* Third argument.  */
-  RISCV_A3_REGNUM = 13,		/* Forth argument.  */
-  RISCV_A4_REGNUM = 14,		/* Fifth argument.  */
-  RISCV_A5_REGNUM = 15,		/* Sixth argument.  */
-  RISCV_A7_REGNUM = 17,		/* Register to pass syscall number.  */
-  RISCV_PC_REGNUM = 32,		/* Program Counter.  */
-
-  RISCV_NUM_INTEGER_REGS = 32,
-
-  RISCV_FIRST_FP_REGNUM = 33,	/* First Floating Point Register */
-  RISCV_FA0_REGNUM = 43,
-  RISCV_FA1_REGNUM = RISCV_FA0_REGNUM + 1,
-  RISCV_LAST_FP_REGNUM = 64,	/* Last Floating Point Register */
-
-  RISCV_FIRST_CSR_REGNUM = 65,  /* First CSR */
-#define DECLARE_CSR(name, num, class, define_version, abort_version) \
-  RISCV_ ## num ## _REGNUM = RISCV_FIRST_CSR_REGNUM + num,
-#include "opcode/riscv-opc.h"
-#undef DECLARE_CSR
-  RISCV_LAST_CSR_REGNUM = 4160,
-  RISCV_CSR_LEGACY_MISA_REGNUM = 0xf10 + RISCV_FIRST_CSR_REGNUM,
-
-  RISCV_PRIV_REGNUM = 4161,
-
-  RISCV_V0_REGNUM,
-
-  RISCV_V31_REGNUM = RISCV_V0_REGNUM + 31,
-
-  RISCV_LAST_REGNUM = RISCV_V31_REGNUM
-};
-
-/* RiscV DWARF register numbers.  */
-enum
-{
-  RISCV_DWARF_REGNUM_X0 = 0,
-  RISCV_DWARF_REGNUM_X31 = 31,
-  RISCV_DWARF_REGNUM_F0 = 32,
-  RISCV_DWARF_REGNUM_F31 = 63,
-  RISCV_DWARF_REGNUM_V0 = 96,
-  RISCV_DWARF_REGNUM_V31 = 127,
-  RISCV_DWARF_FIRST_CSR = 4096,
-  RISCV_DWARF_LAST_CSR = 8191,
-};
+#include "riscv-regs.h"
 
 /* RISC-V specific per-architecture information.  */
 struct riscv_gdbarch_tdep : gdbarch_tdep_base
@@ -135,6 +81,8 @@ extern int riscv_isa_xlen (struct gdbarch *gdbarch);
    single, double or quad floating point support is available.  */
 extern int riscv_isa_flen (struct gdbarch *gdbarch);
 
+extern int riscv_isa_vlenb (struct gdbarch *gdbarch);
+
 /* Return the width in bytes of the general purpose register abi for
    GDBARCH.  This can be equal to, or less than RISCV_ISA_XLEN and reflects
    how the binary was compiled rather than the hardware that is available.
@@ -157,6 +105,8 @@ extern int riscv_abi_flen (struct gdbarch *gdbarch);
    target only has 16 x-registers, which includes a reduced number of
    argument registers.  */
 extern bool riscv_abi_embedded (struct gdbarch *gdbarch);
+
+extern int riscv_abi_vlenb (struct gdbarch *gdbarch);
 
 /* Single step based on where the current instruction will take us.  */
 extern std::vector<CORE_ADDR> riscv_software_single_step
@@ -193,5 +143,8 @@ extern int riscv_process_record (struct gdbarch *gdbarch,
 
 /* The names of the RISC-V target description features.  */
 extern const char *riscv_feature_name_csr;
+
+/* Determines if regnum corresponds to vector register vX or vector CSR.  */
+extern bool riscv_is_vpr_or_vcsr (unsigned regnum);
 
 #endif /* GDB_RISCV_TDEP_H */

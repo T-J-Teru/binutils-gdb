@@ -51,7 +51,7 @@ struct riscv_gdbarch_features
      target should be 16 and 4 for an embedded subset compliant target (with
      'Zve32*' extension), but GDB doesn't currently mind, and will accept any
      vector size.  */
-  int vlen = 0;
+  int vlenb = 0;
 
   /* When true this target is RV32E.  */
   bool embedded = false;
@@ -68,9 +68,8 @@ struct riscv_gdbarch_features
   /* Equality operator.  */
   bool operator== (const struct riscv_gdbarch_features &rhs) const
   {
-    return (xlen == rhs.xlen && flen == rhs.flen
-	    && embedded == rhs.embedded && vlen == rhs.vlen
-	    && has_fflags_reg == rhs.has_fflags_reg
+    return (xlen == rhs.xlen && flen == rhs.flen && embedded == rhs.embedded
+	    && vlenb == rhs.vlenb && has_fflags_reg == rhs.has_fflags_reg
 	    && has_frm_reg == rhs.has_frm_reg
 	    && has_fcsr_reg == rhs.has_fcsr_reg);
   }
@@ -84,13 +83,10 @@ struct riscv_gdbarch_features
   /* Used by std::unordered_map to hash feature sets.  */
   std::size_t hash () const noexcept
   {
-    std::size_t val = ((embedded ? 1 : 0) << 10
-		       | (has_fflags_reg ? 1 : 0) << 11
-		       | (has_frm_reg ? 1 : 0) << 12
-		       | (has_fcsr_reg ? 1 : 0) << 13
-		       | (xlen & 0x1f) << 5
-		       | (flen & 0x1f) << 0
-		       | (vlen & 0x3fff) << 14);
+    std::size_t val
+      = ((embedded ? 1 : 0) << 10 | (has_fflags_reg ? 1 : 0) << 11
+	 | (has_frm_reg ? 1 : 0) << 12 | (has_fcsr_reg ? 1 : 0) << 13
+	 | (xlen & 0x1f) << 5 | (flen & 0x1f) << 0 | (vlenb & 0x3fff) << 14);
     return val;
   }
 };
