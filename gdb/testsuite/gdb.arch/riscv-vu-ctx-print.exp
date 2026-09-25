@@ -1,0 +1,107 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require {istarget "riscv*-*-*"}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+standard_testfile
+load_lib riscv64-rvv-lib.exp
+
+proc test_vu_ctx_printouts {VLENB} {
+  global testfile
+  global srcfile
+  global hex
+
+  array set vlmul { 0 1 1 2 2 4 3 8 7 1/2 6 1/4 5 1/8 }
+  array set vsew { 0 e8 1 e16 2 e32 3 e64 }
+  array set vta { 0 tu 1 ta }
+  array set vma { 0 mu 1 ma }
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vsetvl_done]"
+
+  foreach lmul [lsort -integer [array names vlmul]] {
+    foreach sew [lsort -integer [array names vsew]] {
+      foreach ta [lsort -integer [array names vta]] {
+	foreach ma [lsort -integer [array names vma]] {
+	  foreach vl {1 2} {
+	    set slmul $vlmul($lmul)
+	    set ssew $vsew($sew)
+	    set sta $vta($ta)
+	    set sma $vma($ma)
+	    set case_id "vlmul: $lmul, sew: $sew, ta: $ta, ma: $ma, vl: $vl"
+	    gdb_continue_to_breakpoint "vsetvl_done lmul / $case_id"
+
+	    if {![riscvlib_is_vlmul_vsew_legal $VLENB $slmul $ssew]} {
+	      set vtype_pattern "vill:1"
+	    } else {
+	      set vtype_pattern "$hex\tLMUL:$lmul \\($slmul\\) SEW:$sew \\($ssew\\) vta:$ta \\($sta\\) vma:$ma \\($sma\\) vill:0"
+	    }
+	    gdb_test "info reg vtype" "${vtype_pattern}" "info reg vtype: $case_id"
+	    set fvl [riscvlib_get_allowed_vl $VLENB $slmul $ssew $vl]
+	    gdb_test "info reg vl" "^vl\\s+[format 0x%x $fvl]\t$fvl" "info reg vl: $case_id, fvl: $fvl"
+	  }
+	}
+      }
+    }
+  }
+
+  foreach vxrm {0 1 2 3} {
+      gdb_breakpoint "$srcfile:[gdb_get_line_number vxrm_$vxrm]"
+      gdb_continue_to_breakpoint "vxrm_$vxrm"
+      set vcsr_value_hex [format 0x%x [expr { ($vxrm << 1) }]]
+      gdb_test "info reg vcsr" "^vcsr\\s+$vcsr_value_hex\tVXSAT:0 VXRM:$vxrm" "info reg vcsr: vxrm_$vxrm"
+  }
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vxrm_0_again]"
+  gdb_continue_to_breakpoint "vxrm_0_again"
+  gdb_test "info reg vcsr" "^vcsr\\s+0x7\tVXSAT:1 VXRM:3" "info reg vcsr: vxsat_1"
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vcsr_done]"
+  gdb_continue_to_breakpoint "vcsr_done"
+  gdb_test "info reg vcsr" "^vcsr\\s+0x1\tVXSAT:1 VXRM:0" "info reg vcsr: vxsat_1_vxrm0"
+}
+
+proc prepare_vu_printout_test {} {
+  global testfile
+  global srcfile
+
+  set compile_flags {}
+  lappend compile_flags debug
+  lappend compile_flags c++
+  lappend compile_flags "additional_flags=-march=rv64gc"
+
+  if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+    return -1
+  }
+
+  if {![runto_main]} {
+    return -1
+  }
+
+  return 0
+}
+
+if {[prepare_vu_printout_test]} {
+  untested "could not initialize"
+  return -1
+}
+gdb_breakpoint "$srcfile:[gdb_get_line_number rvv_initialized]"
+gdb_continue_to_breakpoint "rvv_initialized"
+set vlenb [riscvlib_rvv_get_csr vlenb "$testfile"]
+
+test_vu_ctx_printouts $vlenb

@@ -5751,6 +5751,130 @@ proc skip_inline_var_tests {} {
     return 0
 }
 
+# Run a test on the target to see if supports RISC-V Vector Extension.
+# Return 1 if so, 0 if it does not.  Note this causes a restart of GDB.
+
+gdb_caching_proc riscv_support_rvv {} {
+    global srcdir gdb_prompt inferior_exited_re
+
+    set compile_flags {"debug"}
+    lappend compile_flags "additional_flags=-march=rv64gcv"
+
+    set src {
+	int main ()
+	{
+	  __asm__ __volatile__ ("vsetvli t0, x0, e8, m1, ta, ma"
+				: : : "t0");
+	  return 0;
+	}
+    }
+
+    set bin_name "riscv_support_rvv"
+
+    if {![gdb_simple_compile $bin_name $src executable $compile_flags]} {
+	return 0
+    }
+
+    clean_restart
+    gdb_load $obj
+
+    gdb_run_cmd
+
+    gdb_expect {
+	-re ".*Illegal instruction.*${gdb_prompt} $" {
+	    set rvv_support 0
+	}
+	-re ".*$inferior_exited_re normally.*${gdb_prompt} $" {
+	    set rvv_support 1
+	}
+	default {
+	    warning "default case taken"
+	    set rvv_support 0
+	}
+    }
+
+    gdb_exit
+
+    remote_file build delete $obj
+
+    return $rvv_support
+}
+
+# Test if choosen compiler supports RISC-V Vector Intrinsic
+
+gdb_caching_proc riscv_support_rvv_intrinsic {} {
+    global srcdir gdb_prompt inferior_exited_re
+
+    set compile_flags {"debug"}
+    lappend compile_flags "additional_flags=-march=rv64gcv"
+
+    set src {
+	#include <riscv_vector.h>
+
+	int main ()
+	{
+	  const unsigned int n = 64;
+	  vint64m1_t a = __riscv_vmv_v_x_i64m1 (42, n);
+	  return 0;
+	}
+    }
+
+    set bin_name "riscv_support_rvv_intrinsic"
+
+    if {![gdb_simple_compile $bin_name $src executable $compile_flags]} {
+	return 0
+    }
+
+    return 1
+}
+
+# Return 1 if the compiler and target support the RISC-V Zvfh extension.
+
+gdb_caching_proc riscv_support_zvfh {} {
+    global gdb_prompt inferior_exited_re
+
+    set compile_flags {"debug"}
+    lappend compile_flags "additional_flags=-march=rv64gc_zve32f_zvfh"
+
+    set src {
+	int main ()
+	{
+	  __asm__ __volatile__ ("vsetivli zero, 1, e16, m1, ta, ma\n\t"
+				"vfadd.vv v0, v0, v0"
+				: : : "v0");
+	  return 0;
+	}
+    }
+
+    set bin_name "riscv_support_zvfh"
+
+    if {![gdb_simple_compile $bin_name $src executable $compile_flags]} {
+	return 0
+    }
+
+    clean_restart
+    gdb_load $obj
+    gdb_run_cmd
+
+    gdb_expect {
+	-re ".*Illegal instruction.*${gdb_prompt} $" {
+	    set zvfh_support 0
+	}
+	-re ".*$inferior_exited_re normally.*${gdb_prompt} $" {
+	    set zvfh_support 1
+	}
+	default {
+	    warning "default case taken"
+	    set zvfh_support 0
+	}
+    }
+
+    gdb_exit
+    remote_file build delete $obj
+
+    return $zvfh_support
+}
+
 # Return whether we allow running fork-related testcases.  Targets
 # that don't even have any concept of fork will just fail to compile
 # the testcases and skip the tests that way if this returns true for

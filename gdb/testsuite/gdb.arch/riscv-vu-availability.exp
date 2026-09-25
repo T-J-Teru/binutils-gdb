@@ -1,0 +1,72 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require {istarget "riscv*-*-*"}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+standard_testfile
+load_lib riscv64-rvv-lib.exp
+
+proc initialize_vu_availability_test {extra_args } {
+  global testfile
+  global srcfile
+
+  set compile_flags {}
+  lappend compile_flags debug
+  lappend compile_flags c++
+  lappend compile_flags "additional_flags=-march=rv64gc ${extra_args}"
+
+  if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+    return -1
+  }
+
+  if {![runto_main]} {
+    return -1
+  }
+}
+
+proc test_unavailable_regs { extra_args } {
+  initialize_vu_availability_test ${extra_args}
+  gdb_test "print \$vtype" "= <unavailable>" "test vtype unavailable ${extra_args}"
+  gdb_test "print \$vcsr" "= <unavailable>" "test vcsr unavailable ${extra_args}"
+  gdb_test "print \$vl" "= <unavailable>" "test vl unavailable ${extra_args}"
+  gdb_test "print \$vstart" "= <unavailable>" "test vstart unavailable ${extra_args}"
+  gdb_test "print \$vlenb" "= <unavailable>" "test vlenb unavailable ${extra_args}"
+  for {set i 0} {$i < 32} {incr i} {
+    gdb_test "print \$v${i}" "= <unavailable>" "test v${i} unavailable ${extra_args}"
+  }
+}
+
+proc test_available_regs { extra_args } {
+  global testfile
+  initialize_vu_availability_test ${extra_args}
+  set VLENB [riscvlib_rvv_get_csr vlenb "$testfile"]
+  gdb_test "print \$vtype" "= 192" "test vtype available ${extra_args}"
+  gdb_test "print \$vcsr" "= 0" "test vcsr available ${extra_args}"
+  gdb_test "print \$vl" "= $VLENB" "test vl available ${extra_args}"
+  gdb_test "print \$vstart" "= 0" "test vstart available ${extra_args}"
+  gdb_test "print \$vlenb" "= $VLENB" "test vlenb available ${extra_args}"
+  for {set i 0} {$i < 32} {incr i} {
+    gdb_test "print \$v${i}" [riscvlib_rvv_vreg_zero_pattern $VLENB] "test v${i} available ${extra_args}"
+  }
+}
+
+test_unavailable_regs "-DREAD_VLENB_BEFORE_MAIN"
+test_unavailable_regs ""
+test_available_regs "-DSET_VSETVLI_BEFORE_MAIN"

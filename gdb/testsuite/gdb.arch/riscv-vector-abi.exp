@@ -1,0 +1,247 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib riscv64-rvv-lib.exp
+
+set get_vl_called_times 0
+
+proc get_vl {} {
+  global hex
+  global decimal
+  global gdb_prompt
+  global gdb_test_name
+  global get_vl_called_times
+
+  set vl 0x0
+
+  gdb_test_multiple "info registers \$vl" "$get_vl_called_times call of get_vl()" {
+    -re "^info registers\[^\r\n\]+\r\n" {
+      exp_continue
+    }
+
+    -re "^vl\\s+(${hex})\\s+(${decimal})\r\n" {
+      set vl $expect_out(2,string)
+      exp_continue
+    }
+
+    -re "^$gdb_prompt $" {
+      pass $gdb_test_name
+    }
+  }
+
+  set get_vl_called_times [expr {$get_vl_called_times + 1}]
+
+  return $vl
+}
+
+proc generate_sequence { start step count } {
+  if {$step == 0 && $count > 8} {
+    return "$start <repeats $count times>"
+  }
+
+  set res "$start"
+  set count [expr {$count - 1}]
+
+  for {set i 0} {$i < $count} {incr i} {
+    set start [expr {$start + $step}]
+    set res "${res}, $start"
+  }
+
+  return $res
+}
+
+proc test_print_with_rvv_state_check { command regexp } {
+  set vector_state_before_call [capture_command_output "info vector" ""]
+
+  gdb_test $command $regexp
+
+  set vector_state_after_call [capture_command_output "info vector" ""]
+  if ![string compare $vector_state_before_call $vector_state_after_call]  {
+    pass "vector state was saved/restored correctly during $command"
+  } else {
+    fail "vector state wasn't saved/restored correctly durring $command"
+  }
+}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+if {![riscv_support_rvv_intrinsic]} {
+  unsupported "RVV intrinsic unsupported"
+  return
+}
+
+standard_testfile
+
+set compile_flags {"debug"}
+lappend compile_flags "additional_flags=-march=rv64gcv"
+
+# First, we figure out VLENB value to set correct vector extension to march
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+  return -1
+}
+
+if {![runto_main]} {
+  return -1
+}
+
+gdb_breakpoint "$srcfile:[gdb_get_line_number "break 2"]"
+gdb_continue_to_breakpoint "preparing stage"
+set vlenb [riscvlib_rvv_get_csr vlenb "$testfile"]
+
+set compile_flags {"debug"}
+if {$vlenb >= 16} {
+  lappend compile_flags "additional_flags=-march=rv64gcv"
+} elseif {$vlenb >= 8} {
+  lappend compile_flags "additional_flags=-march=rv64gc_zve64d"
+} else {
+  unsupported "Unsupported VLENB value: $vlenb"
+  return
+}
+
+# Here is real test started
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+  return -1
+}
+
+if {![runto_main]} {
+  return -1
+}
+
+for {set i 2} {$i <= 13} {incr i} {
+  gdb_breakpoint "$srcfile:[gdb_get_line_number "break $i"]"
+}
+
+gdb_continue_to_breakpoint "break 2"
+
+set vl [get_vl]
+
+gdb_test "print a" "\\{[generate_sequence 42 0 $vl]\\}"
+gdb_test "print b" "\\{[generate_sequence 43 0 $vl]\\}"
+gdb_test "print c" "\\{[generate_sequence 44 0 $vl]\\}"
+gdb_test "print res" "\\{[generate_sequence 129 0 $vl]\\}"
+test_print_with_rvv_state_check "print foo(a, b, c, n)" "\\{[generate_sequence 129 0 $vl]\\}"
+
+gdb_continue_to_breakpoint "break 3"
+
+set vl [get_vl]
+
+gdb_test "print g" "\\{[generate_sequence 48 0 $vl]\\}"
+gdb_test "print h" "\\{[generate_sequence 49 0 $vl]\\}"
+
+gdb_test "print res_1" "\\{[generate_sequence 97 0 $vl]\\}"
+test_print_with_rvv_state_check "print foo1(g, h, n)" "\\{[generate_sequence 97 0 $vl]\\}"
+
+gdb_test "print res_2" "\\{[generate_sequence 97 0 $vl]\\}"
+test_print_with_rvv_state_check "print foo2(h, g, n)" "\\{[generate_sequence 97 0 $vl]\\}"
+
+gdb_continue_to_breakpoint "break 4"
+
+set vl [get_vl]
+
+gdb_test "print big1" "\\{[generate_sequence 50 0 $vl]\\}"
+gdb_test "print big2" "\\{[generate_sequence 51 0 $vl]\\}"
+gdb_test "print big3" "\\{[generate_sequence 52 0 $vl]\\}"
+gdb_test "print big_res" "\\{[generate_sequence 153 0 $vl]\\}"
+test_print_with_rvv_state_check "print foo3(big1, big2, big3, n)" "\\{[generate_sequence 153 0 $vl]\\}"
+
+gdb_continue_to_breakpoint "break 5"
+
+set vl [get_vl]
+set repeat_num [expr {$vl / 8 - 1}]
+
+set pattern_part "101, -?\\d+, 101, -?\\d+, -?\\d+, 101, -?\\d+, 101"
+set pattern "\\{$pattern_part"
+for {set i 0} {$i < $repeat_num} {incr i} {
+  set pattern "$pattern, $pattern_part"
+}
+set pattern "$pattern\\}"
+
+gdb_test "print masked_sum" $pattern
+test_print_with_rvv_state_check "print foo4(big1, big2, mask, mask, n)" $pattern
+
+gdb_continue_to_breakpoint "break 6"
+
+set vl [get_vl]
+
+set pattern "\\{[generate_sequence 0 8 $vl]\\}"
+
+gdb_test "print rs2" $pattern
+
+gdb_continue_to_breakpoint "break 7"
+
+set vl [get_vl]
+
+set pattern [riscvlib_rvv_tuple_pattern [list \
+    "\\{[generate_sequence 0 2 $vl]\\}" \
+    "\\{[generate_sequence 1 2 $vl]\\}"]]
+
+gdb_test "print a_seg" $pattern
+
+gdb_continue_to_breakpoint "break 8"
+
+set vl [get_vl]
+
+set pattern "= \\{[generate_sequence 0 2 $vl].*\\}"
+
+gdb_test "print res_a_seg0" $pattern
+test_print_with_rvv_state_check "print foo5_get0(h, a_seg)" $pattern
+
+gdb_continue_to_breakpoint "break 9"
+
+set vl [get_vl]
+
+set pattern "= \\{[generate_sequence 1 2 $vl].*\\}"
+
+gdb_test "print res_a_seg1" $pattern
+test_print_with_rvv_state_check "print foo5_get1(h, a_seg)" $pattern
+
+gdb_continue_to_breakpoint "break 10"
+
+set vl [get_vl]
+
+set pattern "\\{[generate_sequence 0 8 $vl]\\}"
+
+gdb_test "print rs2_2" $pattern
+
+gdb_continue_to_breakpoint "break 11"
+
+set vl [get_vl]
+
+set pattern [riscvlib_rvv_tuple_pattern [list \
+    "\\{[generate_sequence 0 2 $vl]\\}" \
+    "\\{[generate_sequence 1 2 $vl]\\}"]]
+
+gdb_test "print b_seg" $pattern
+
+gdb_continue_to_breakpoint "break 12"
+
+set vl [get_vl]
+
+set pattern "= \\{[generate_sequence 0 2 $vl].*\\}"
+
+gdb_test "print res_b_seg0" $pattern
+test_print_with_rvv_state_check "print foo6_get0(h, b_seg)" $pattern
+
+gdb_continue_to_breakpoint "break 13"
+
+set vl [get_vl]
+
+set pattern "= \\{[generate_sequence 1 2 $vl].*\\}"
+
+gdb_test "print res_b_seg1" $pattern
+test_print_with_rvv_state_check "print foo6_get1(h, b_seg)" $pattern

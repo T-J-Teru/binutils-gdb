@@ -1,0 +1,46 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require {istarget "riscv*-*-*"}
+
+if {[riscv_support_rvv]} {
+  unsupported "need to run on targets without RVV support"
+  return
+}
+
+standard_testfile
+
+set compile_flags {"debug"}
+lappend compile_flags "additional_flags=-march=rv64gcv"
+
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+  return -1
+}
+
+if {![runto_main]} {
+  return -1
+}
+
+gdb_breakpoint "$srcfile:[gdb_get_line_number "break 2"]"
+gdb_continue_to_breakpoint "break 2"
+
+gdb_test "print a" " = 42"
+
+set a0_val 42
+set a0_hex_val 0x[format %x $a0_val]
+gdb_test_no_output "set \$a0 = $a0_val"
+gdb_test "info reg a0" "a0\[ \t\]+$a0_hex_val\[ \t\]+$a0_val"
+
+gdb_test "info reg v0" "Invalid register `v0'"

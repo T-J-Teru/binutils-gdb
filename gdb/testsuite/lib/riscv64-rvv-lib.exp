@@ -1,0 +1,347 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+proc _riscvlib_rvv_vtype_set_lmul {vtype lmul} {
+  set mask [expr {((1 << 32) - 1) ^ 7}]
+  return [expr {($vtype & $mask) | $lmul}]
+}
+
+proc _riscvlib_rvv_vtype_set_sew {vtype sew} {
+  set mask [expr {((1 << 32) - 1) ^ (7 << 3)}]
+  return [expr {($vtype & $mask) | ($sew << 3)}]
+}
+
+proc _riscvlib_rvv_vtype_set_tail_mode {vtype tail_mode} {
+  set mask [expr {((1 << 32) - 1) ^ (1 << 6)}]
+  return [expr {($vtype & $mask) | ($tail_mode << 6)}]
+}
+
+proc _riscvlib_rvv_vtype_set_mask_mode {vtype mask_mode} {
+  set mask [expr {((1 << 32) - 1) ^ (1 << 7)}]
+  return [expr {($vtype & $mask) | ($mask_mode << 7)}]
+}
+
+proc _riscvlib_rvv_vlmul_decoder {vlmul} {
+  switch $vlmul {
+    "1/8" {
+      return 5
+    }
+    "1/4" {
+      return 6
+    }
+    "1/2" {
+      return 7
+    }
+    "1" {
+      return 0
+    }
+    "2" {
+      return 1
+    }
+    "4" {
+      return 2
+    }
+    "8" {
+      return 3
+    }
+    default {
+      return -1
+    }
+  }
+  return -1
+}
+
+proc _riscvlib_rvv_vsew_decoder {vsew} {
+  switch $vsew {
+    "e8" {
+      return 0
+    }
+    "e16" {
+      return 1
+    }
+    "e32" {
+      return 2
+    }
+    "e64" {
+      return 3
+    }
+    default {
+      return -1
+    }
+  }
+  return -1
+}
+
+proc _riscvlib_rvv_tail_decoder {vtail} {
+  switch $vtail {
+    "tu" {
+      return 0
+    }
+    "ta" {
+      return 1
+    }
+    default {
+      return -1
+    }
+  }
+  return -1
+}
+
+proc _riscvlib_rvv_mask_decoder {vmask} {
+  switch $vmask {
+    "mu" {
+      return 0
+    }
+    "ma" {
+      return 1
+    }
+    default {
+      return -1
+    }
+  }
+  return -1
+}
+
+# Available parameters:
+# vlmul: 1/8, 1/4, 1/2, 1, 2, 4, 8
+# vsew: e8, e16, e32, e64
+# In case of inconsistent parameters, 0 is returned
+proc riscvlib_is_vlmul_vsew_legal {VLENB vlmul vsew} {
+  set lmul [_riscvlib_rvv_vlmul_decoder $vlmul]
+  if {$lmul == -1} {
+    return 0
+  }
+
+  set sew_encoding [_riscvlib_rvv_vsew_decoder $vsew]
+  if {$sew_encoding == -1} {
+    return 0
+  }
+  set sew [expr {1 << ($sew_encoding + 3)}]
+
+  if {$lmul > 4} {
+    set lmul_modifier [expr {1 << (8 - $lmul)}]
+    set required_vlen [expr {$sew * $lmul_modifier}]
+    set vlen [expr {$VLENB * 8}]
+    return [expr {$vlen >= $required_vlen}]
+  }
+  if {$lmul < 4} {
+    set lmul_modifier [expr {1 << $lmul}]
+    set required_vlen $sew
+    set vlen [expr {$VLENB * 8 * $lmul_modifier}]
+    return [expr {$vlen >= $required_vlen}]
+  }
+
+  return 0
+}
+
+# Available parameters:
+# vlmul: 1/8, 1/4, 1/2, 1, 2, 4, 8
+# vsew: e8, e16, e32, e64
+# In case of inconsistent parameters, 0 is returned
+proc riscvlib_get_vlmax {VLENB vlmul vsew} {
+  if {![riscvlib_is_vlmul_vsew_legal $VLENB $vlmul $vsew]} {
+    return 0
+  }
+  set lmul [_riscvlib_rvv_vlmul_decoder $vlmul]
+  set sew [expr {1 << ([_riscvlib_rvv_vsew_decoder $vsew] + 3)}]
+  set vlen [expr {$VLENB * 8}]
+  set vlmax 0
+
+  if {$lmul > 4} {
+    set lmul_modifier [expr {1 << (8 - $lmul)}]
+    return [expr {$vlen / ($lmul_modifier * $sew)}]
+  }
+
+  if {$lmul < 4} {
+    set lmul_modifier [expr {1 << $lmul}]
+    return [expr {$vlen * $lmul_modifier / $sew}]
+  }
+
+  return 0
+}
+
+# Available parameters:
+# vlmul: 1/8, 1/4, 1/2, 1, 2, 4, 8
+# vsew: e8, e16, e32, e64
+# In case of inconsistent parameters, 0 is returned
+proc riscvlib_get_allowed_vl {VLENB vlmul vsew vl} {
+  set vlmax [riscvlib_get_vlmax $VLENB $vlmul $vsew]
+
+  if {$vl > $vlmax} {
+    return $vlmax
+  }
+
+  return $vl
+}
+
+proc riscvlib_rvv_get_csr {name test_id} {
+  global hex
+  global decimal
+  global gdb_prompt
+  global gdb_test_name
+
+  gdb_test_multiple "info registers $name" "" {
+    -re "^info registers\[^\r\n\]+\r\n" {
+      exp_continue
+    }
+    -re "^$name\\s+(${hex})\\s+\[^\n]+\r\n" {
+      set value [expr {$expect_out(1,string)}]
+      exp_continue
+    }
+    -re "^$gdb_prompt $" {
+      pass "$gdb_test_name $test_id"
+    }
+  }
+  return $value
+}
+
+# Return a pattern matching an RVV tuple printed either as an array of
+# vectors or as a structure with an __val array.  FIELD_PATTERNS contains
+# one regular expression per vector, including its enclosing braces.
+proc riscvlib_rvv_tuple_pattern {field_patterns} {
+  set fields [join $field_patterns ", "]
+  return "\\{(?:__val = \\{${fields}\\}|${fields})\\}"
+}
+
+proc riscvlib_rvv_vreg_fmt8 {} {
+  return i8
+}
+proc riscvlib_rvv_vreg_fmt16 {} {
+  return i16
+}
+proc riscvlib_rvv_vreg_fmt32 {} {
+  return i32
+}
+proc riscvlib_rvv_vreg_fmt64 {} {
+  return i64
+}
+
+proc riscvlib_rvv_vreg_print_pattern { i8 i16 i32 i64 half f32 f64} {
+  set I8_FMT [riscvlib_rvv_vreg_fmt8]
+  set I16_FMT [riscvlib_rvv_vreg_fmt16]
+  set I32_FMT [riscvlib_rvv_vreg_fmt32]
+  set I64_FMT [riscvlib_rvv_vreg_fmt64]
+  set HALF_FMT half
+  set F32_FMT f32
+  set F64_FMT f64
+  return [join [list \
+    "\\\{${I8_FMT} = \\{$i8\\}" \
+    "${I16_FMT} = \\{$i16\\}" \
+    "${I32_FMT} = \\{$i32\\}" \
+    "${I64_FMT} = \\{$i64\\}" \
+    "${HALF_FMT} = \\{$half\\}" \
+    "${F32_FMT} = \\{$f32\\}" \
+    "${F64_FMT} = \\{$f64\\}\\\}" \
+  ] ", "]
+}
+
+proc riscvlib_rvv_vreg_component_pattern {repeat_count symbol {collapse_allowed 1}} {
+  if { $collapse_allowed } {
+    if { $repeat_count > 8 } {
+      return "$symbol <repeats $repeat_count times>"
+    }
+  }
+  return [join [lrepeat $repeat_count $symbol] ", "]
+}
+
+proc riscvlib_rvv_vreg_zero_pattern {vlenb} {
+  set zero_symbol 0
+  set pattern [list \
+      [riscvlib_rvv_vreg_component_pattern $vlenb $zero_symbol] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] $zero_symbol] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] $zero_symbol] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] $zero_symbol] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] $zero_symbol] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] $zero_symbol] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] $zero_symbol] \
+  ]
+  return [riscvlib_rvv_vreg_print_pattern {*}$pattern]
+}
+
+proc riscvlib_rvv_vreg_1_pattern {vlenb} {
+  set pattern [list \
+      [riscvlib_rvv_vreg_component_pattern $vlenb 1] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] 257] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] 16843009] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] 72340172838076673] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] 1.5318e-05] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] 2.36942783e-38] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] 7.7486041854893479e-304] \
+  ]
+  return [riscvlib_rvv_vreg_print_pattern {*}$pattern]
+}
+
+proc riscvlib_rvv_vreg_3_pattern {vlenb} {
+  set zero_symbol 0
+  set pattern [list \
+      [riscvlib_rvv_vreg_component_pattern $vlenb 3] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] 771] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] 50529027] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] 217020518514230019] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] 4.5955e-05] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] 3.85008973e-37] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] 3.7209743448696002e-294] \
+  ]
+  return [riscvlib_rvv_vreg_print_pattern {*}$pattern]
+}
+
+proc riscvlib_rvv_vreg_15_pattern {vlenb} {
+  set zero_symbol 0
+  set pattern [list \
+      [riscvlib_rvv_vreg_component_pattern $vlenb 15] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] 3855] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] 252645135] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] 1085102592571150095] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 2 }] 0.00043082] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 4 }] 7.05334452e-30] \
+      [riscvlib_rvv_vreg_component_pattern [expr { $vlenb / 8 }] 3.8157368271180168e-236] \
+  ]
+  return [riscvlib_rvv_vreg_print_pattern {*}$pattern]
+}
+
+# Available parameters:
+# vlmul: 1/8, 1/4, 1/2, 1, 2, 4, 8
+# vsew: e8, e16, e32, e64
+# vtail: ta, tu
+# vmask: ma, mu
+# In case of inconsistent parameters, -1 is returned
+proc riscvlib_rvv_get_vtype_val {vlmul vsew vtail vmask} {
+  set res 0
+  set lmul [_riscvlib_rvv_vlmul_decoder $vlmul]
+  if {$lmul == -1} {
+    return -1
+  }
+  set res [_riscvlib_rvv_vtype_set_lmul $res $lmul]
+
+  set sew [_riscvlib_rvv_vsew_decoder $vsew]
+  if {$sew == -1} {
+    return -1
+  }
+  set res [_riscvlib_rvv_vtype_set_sew $res $sew]
+
+  set tail [_riscvlib_rvv_tail_decoder $vtail]
+  if {$tail == -1} {
+    return -1
+  }
+  set res [_riscvlib_rvv_vtype_set_tail_mode $res $tail]
+
+  set mask [_riscvlib_rvv_mask_decoder $vmask]
+  if {$mask == -1} {
+    return -1
+  }
+  set res [_riscvlib_rvv_vtype_set_mask_mode $res $mask]
+
+  return $res
+}

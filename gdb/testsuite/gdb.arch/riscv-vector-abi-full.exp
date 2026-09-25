@@ -1,0 +1,72 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib riscv64-rvv-lib.exp
+
+if {[catch {exec python3 -c "import jinja2"} result]} {
+    unsupported "python3 with jinja2 is required"
+    return
+}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+if {![riscv_support_rvv_intrinsic]} {
+  unsupported "RVV intrinsic unsupported"
+  return
+}
+
+standard_testfile
+
+set compile_flags {"debug"}
+lappend compile_flags "additional_flags=-march=rv64gcv"
+
+# First, we figure out VLENB value to set correct vector extension to march
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+  return -1
+}
+
+if {![runto_main]} {
+  return -1
+}
+
+gdb_breakpoint "$srcfile:[gdb_get_line_number "break 2"]"
+gdb_continue_to_breakpoint "preparing stage"
+set vlenb [riscvlib_rvv_get_csr vlenb "$testfile"]
+
+set compile_flags {"debug"}
+if {$vlenb >= 16} {
+  set march rv64gcv
+} elseif {$vlenb >= 8} {
+  set march rv64gc_zve64d
+} else {
+  unsupported "Unsupported VLENB value: $vlenb"
+  return
+}
+
+set has_zvfh [riscv_support_zvfh]
+if {$has_zvfh} {
+  append march _zvfh
+}
+lappend compile_flags "additional_flags=-march=$march"
+
+set env(WORK_DIR) [standard_output_file ""]
+set env(TEST_NAME) riscv-vector-abi-full-generated
+set env(HAS_ZVFH) $has_zvfh
+exec python3 $srcdir/$subdir/riscv-vector-abi-full-generate.py
+
+source [standard_output_file riscv-vector-abi-full-generated.exp]

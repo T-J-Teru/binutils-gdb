@@ -1,0 +1,156 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require {istarget "riscv*-*-*"}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+standard_testfile
+load_lib riscv64-rvv-lib.exp
+
+proc test_vu_consistency_vl_overflow {VLENB} {
+  set the_proc [lindex [info level 0] 0]
+
+  gdb_continue_to_breakpoint "$the_proc: start"
+  set vtype_val [riscvlib_rvv_get_vtype_val 1 e8 tu mu]
+  set vl_val [riscvlib_get_vlmax $VLENB 1 e8]
+  gdb_test "print app_vtype" "= $vtype_val" "$the_proc: app vtype"
+  gdb_test "print app_vl" "= $vl_val"       "$the_proc: app vl"
+  gdb_test "print app_vlenb" "= $VLENB"     "$the_proc: app vlenb"
+  set large_vl 9999
+  gdb_test_no_output "set \$vl = $large_vl" "$the_proc: set illegal large vl"
+
+  gdb_continue_to_breakpoint "$the_proc: vl illegal value is ignored"
+  gdb_test "print app_vtype" "= $vtype_val" "$the_proc: app vtype - after vl update"
+  gdb_test "print app_vl" "= $vl_val"       "$the_proc: app vl - after vl update"
+  gdb_test "print app_vlenb" "= $VLENB"     "$the_proc: app vlenb - after vl update"
+  gdb_test "print \$vl" "= $vl_val"         "$the_proc: ptraced vl - after vl update"
+}
+
+proc test_vu_coherent_vl_lmul_downgrade {VLENB} {
+  set the_proc [lindex [info level 0] 0]
+
+  gdb_continue_to_breakpoint "$the_proc: start"
+  set vtype_val [riscvlib_rvv_get_vtype_val 8 e8 tu mu]
+  gdb_test_no_output "set \$vtype = $vtype_val" "$the_proc: set \$vtype = $vtype_val value"
+  set vl_val [riscvlib_get_vlmax $VLENB 8 e8]
+  gdb_test_no_output "set \$vl = $vl_val" "$the_proc: set \$vl = $vl_val value"
+  gdb_continue_to_breakpoint "$the_proc: run with updated vtype and vl"
+
+  gdb_test "print app_vtype" "= $vtype_val" "$the_proc: app vtype - after vtype LMUL 8 update"
+  gdb_test "print app_vl" "= $vl_val"       "$the_proc: app vl - after vl LMUL 8 update"
+  gdb_test "print app_vlenb" "= $VLENB"     "$the_proc: app vlenb - after LMUL 8 update"
+  gdb_test "print \$vl" "= $vl_val"         "$the_proc: ptraced vl - VLENB * 8"
+  gdb_test "print \$vtype" "= $vtype_val"   "$the_proc: ptraced vtype - 3"
+
+  gdb_continue_to_breakpoint "$the_proc: going to switch LMUL back to 1"
+  # We need to downgrade vl here first, because large vl + small vtype is unavailable configuration
+  set vl_val [riscvlib_get_vlmax $VLENB 1 e8]
+  gdb_test_no_output "set \$vl = $vl_val" "$the_proc: set \$vl = $vl_val value"
+  set vtype_val [riscvlib_rvv_get_vtype_val 1 e8 tu mu]
+  gdb_test_no_output "set \$vtype = $vtype_val" "$the_proc: set \$vtype = $vtype_val value"
+
+  gdb_continue_to_breakpoint "$the_proc: LMUL should be 1"
+  gdb_test "print app_vtype" "= $vtype_val" "$the_proc: app vtype - after LMUL 1 update"
+  gdb_test "print app_vl" "= $vl_val"       "$the_proc: app vl - after LMUL 1 update"
+  gdb_test "print app_vlenb" "= $VLENB"     "$the_proc: app vlenb - after LMUL 1 update"
+  gdb_test "print \$vl" "= $vl_val"         "$the_proc: ptraced vl - after LMUL 1 update"
+  gdb_test "print \$vtype" "= $vtype_val"   "$the_proc: ptraced vtype - after LMUL 1 update"
+}
+
+proc test_vu_coherent_non_zero_vstart {VLENB} {
+  set the_proc [lindex [info level 0] 0]
+  gdb_continue_to_breakpoint "$the_proc: messing up vstart"
+  gdb_test_no_output "set \$vstart = 8"
+
+  gdb_continue_to_breakpoint "$the_proc: vstart was 8"
+  gdb_test "print \$vstart" "= 0" "$the_proc: ptraced vstart - after vstart update"
+}
+
+proc test_vu_consistency_incorrect_vtype {VLENB} {
+  global srcfile
+  set the_proc [lindex [info level 0] 0]
+  if {$VLENB >= 64} {
+    untested "$the_proc: VLENB must be less than 64"
+    return
+  }
+
+  set legal_vtype [riscvlib_rvv_get_vtype_val 1 e8 tu mu]
+  set legal_vl [riscvlib_get_vlmax $VLENB 1 e8]
+  gdb_test_no_output "set \$vtype = $legal_vtype" "$the_proc: set \$vtype = $legal_vtype value"
+  gdb_test_no_output "set \$vl = $legal_vl"       "$the_proc: set \$vl = $legal_vl value"
+  gdb_continue_to_breakpoint "$the_proc: setting SEW to 8 and LMUL to 1"
+  gdb_test "print app_vtype" "= $legal_vtype" "$the_proc: app_vtype - legal"
+  gdb_test "print app_vl" "= $legal_vl"       "$the_proc: app vl - legal"
+  gdb_test "print app_vlenb" "= $VLENB"       "$the_proc: app vlenb - legal"
+  gdb_test "print \$vl" "= $legal_vl"         "$the_proc: ptraced vl - legal"
+  gdb_test "print \$vtype" "= $legal_vtype"   "$the_proc: ptraced vtype - legal"
+
+  gdb_continue_to_breakpoint "$the_proc: setting SEW to 64 and LMUL to 1/8"
+  set incorrect_vtype [riscvlib_rvv_get_vtype_val 1/8 e64 tu mu]
+  gdb_test_no_output "set \$vtype = $incorrect_vtype" "$the_proc: set \$vtype = $incorrect_vtype value"
+  gdb_test "stepi" ".*" "$the_proc: stepi after incorrect"
+  gdb_test "print \$vtype" "= $legal_vtype" "$the_proc: ptraced vtype - after setting illegal mode"
+  gdb_continue_to_breakpoint "$the_proc: after setting illegal mode"
+  gdb_test "print app_vtype" "= $legal_vtype" "$the_proc: app_vtype - still legal"
+  gdb_test "print app_vl" "= $legal_vl"       "$the_proc: app vl - still legal"
+  gdb_test "print app_vlenb" "= $VLENB"       "$the_proc: app vlenb - still legal"
+  gdb_test "print \$vl" "= $legal_vl"         "$the_proc: ptraced vl - still legal"
+  gdb_test "print \$vtype" "= $legal_vtype"   "$the_proc: ptraced vtype - still legal"
+}
+
+proc test_vu_do_consistency_test {VLENB} {
+  global srcfile
+  gdb_breakpoint "$srcfile:[gdb_get_line_number workload_end]"
+
+  gdb_continue_to_breakpoint "warm up"
+
+  test_vu_consistency_vl_overflow $VLENB
+  test_vu_coherent_vl_lmul_downgrade $VLENB
+  test_vu_coherent_non_zero_vstart $VLENB
+  test_vu_consistency_incorrect_vtype $VLENB
+}
+
+proc prepare_vu_consistency_test {} {
+  global testfile
+  global srcfile
+
+  set compile_flags {}
+  lappend compile_flags debug
+  lappend compile_flags "additional_flags=-march=rv64gc"
+
+  if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+    return -1
+  }
+
+  if {![runto_main]} {
+    return -1
+  }
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_test_start]"
+  gdb_continue_to_breakpoint "vect_test_start"
+
+  return 0
+}
+
+if {[prepare_vu_consistency_test]} {
+  untested "could not initialize"
+  return -1
+}
+set vlenb [riscvlib_rvv_get_csr vlenb "$testfile"]
+test_vu_do_consistency_test $vlenb

@@ -1,0 +1,92 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require {istarget "riscv*-*-*"}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+standard_testfile
+load_lib riscv64-rvv-lib.exp
+
+proc test_vu_printouts {VLENB} {
+  global srcfile
+
+  set vtype_pattern "0x0\tLMUL:0 \\(1\\) SEW:0 \\(e8\\) vta:0 \\(tu\\) vma:0 \\(mu\\) vill:0"
+  gdb_test "info reg vtype" "${vtype_pattern}" "printout info reg vtype"
+  gdb_test "info reg vcsr" "0x0\tVXSAT:0 VXRM:0" "printout info reg vcsr"
+  gdb_test "info reg vl" "[format 0x%x $VLENB]\t$VLENB" "printout info reg vl"
+  gdb_test "info reg vstart" "0x0\t0" "printout info reg vstart"
+  gdb_test "info reg vlenb" "[format 0x%x $VLENB]\t$VLENB" "printout info reg vlenb"
+
+  set zero_pattern [riscvlib_rvv_vreg_zero_pattern $VLENB]
+  gdb_test "print \$v0" ${zero_pattern} "printout print v0"
+  gdb_test "print \$v1" [riscvlib_rvv_vreg_1_pattern $VLENB] "printout print v1"
+  gdb_test "print \$v2" [riscvlib_rvv_vreg_3_pattern $VLENB] "printout print v2"
+  for {set i 3} {$i < 32} {incr i} {
+    gdb_test "print \$v${i}" ${zero_pattern} "printout print v${i}"
+  }
+
+  set vregs [capture_command_output "info registers vector" ""]
+  foreach {- regname} [regexp -all -inline -line {^(\w+)\s+} $vregs] {
+    incr vreg_arr($regname)
+  }
+  set expected_list { vtype vcsr vl vstart vlenb }
+  for {set i 0 } { $i < 32 } { incr i } {
+    lappend expected_list v$i
+  }
+  set s_expc_list [lsort $expected_list]
+  set s_vreg_list [lsort [array names vreg_arr]]
+  if {![string equal $s_expc_list $s_vreg_list]} {
+    fail "info registers vector (contents)"
+  }
+  foreach reg $expected_list {
+    if { $vreg_arr($reg) != 1 } {
+      fail "info registers vector has duplicated $reg"
+    } else {
+      pass "info register vector has $reg"
+    }
+  }
+}
+
+proc prepare_vu_printout_test {} {
+  global testfile
+  global srcfile
+
+  set compile_flags {}
+  lappend compile_flags debug
+  lappend compile_flags "additional_flags=-march=rv64gc"
+
+  if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+    return -1
+  }
+
+  if {![runto_main]} {
+    return -1
+  }
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number pre_vect_mem]"
+  gdb_continue_to_breakpoint "pre_vect_mem"
+  return 0
+}
+
+if {[prepare_vu_printout_test]} {
+  untested "could not initialize"
+  return -1
+}
+set vlenb [riscvlib_rvv_get_csr vlenb "$testfile"]
+test_vu_printouts $vlenb

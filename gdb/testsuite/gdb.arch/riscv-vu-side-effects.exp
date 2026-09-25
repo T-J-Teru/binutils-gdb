@@ -1,0 +1,162 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require {istarget "riscv*-*-*"}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+standard_testfile
+load_lib riscv64-rvv-lib.exp
+
+proc test_vu_controlled_add {VLENB} {
+  global srcfile
+
+  set i8_fmt [riscvlib_rvv_vreg_fmt8]
+  set zero_pattern [riscvlib_rvv_vreg_zero_pattern $VLENB]
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_control_vadd_start]"
+  gdb_continue_to_breakpoint "vect_control_vadd_start"
+
+  set the_proc [lindex [info level 0] 0]
+
+  # ensure that state is pristine
+  for { set vregn 0 } { $vregn < 32 } { incr vregn } {
+    gdb_test "print \$v${vregn}" ${zero_pattern} "$the_proc: print v${vregn} - pristine"
+  }
+
+  # update v0
+  for {set i 0} {$i < $VLENB} {incr i} {
+    set val [expr {$i % 256 - 128}]
+    gdb_test_no_output "set \$v0.${i8_fmt}\[$i\] = $val"
+    lappend v0_contents $val
+  }
+
+  # update v1
+  for {set i 0} {$i < $VLENB} {incr i} {
+    set val [expr {($i + 7) % 256 - 128}]
+    gdb_test_no_output "set \$v1.${i8_fmt}\[$i\] = $val"
+    lappend v1_contents $val
+  }
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number controlled_vadd_done]"
+  # execute addition operation, v3 register must be updated to summ of v0 and v1
+  gdb_continue_to_breakpoint "controlled_vadd_done"
+
+  set v0_pattern [join $v0_contents ", "]
+  gdb_test "print \$v0" "\\\{$i8_fmt = \\{$v0_pattern\\},.+" "$the_proc: print v0 - after add"
+
+  set v1_pattern [join $v1_contents ", "]
+  gdb_test "print \$v1" "\\\{$i8_fmt = \\{$v1_pattern\\},.+" "$the_proc: print v1 - after add"
+  for {set i 0} {$i < $VLENB} {incr i} {
+    lappend v2_contents [expr {($i + $i + 7 + 128) % 256 - 128}]
+  }
+  set v2_pattern [join $v2_contents ", "]
+  gdb_test "print \$v2" "\\\{$i8_fmt = \\{$v2_pattern\\},.+" "$the_proc: print v2 - add result"
+  for { set vregn 3 } { $vregn < 32 } { incr vregn } {
+    gdb_test "print \$v${vregn}" ${zero_pattern} "$the_proc: print v${vregn} - pristine after add"
+  }
+}
+
+proc test_vu_wide_operations {VLENB} {
+  global srcfile
+
+  set i8_fmt [riscvlib_rvv_vreg_fmt8]
+  set the_proc [lindex [info level 0] 0]
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_wide_op_start]"
+  gdb_continue_to_breakpoint "vect_wide_op_start"
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_op_v0_add1]"
+  gdb_continue_to_breakpoint "vect_op_v0_add1"
+
+  gdb_test_no_output "set \$vl = 2"
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_op_v24_v0_add2]"
+  gdb_continue_to_breakpoint "vect_op_v24_v0_add2"
+
+  for {set i 0} {$i < $VLENB} {incr i} {
+    gdb_test_no_output "set \$v8.${i8_fmt}\[$i\] = $i"
+    lappend v8_contents $i
+  }
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_op_v16_v8_add2]"
+  gdb_continue_to_breakpoint "vect_op_v16_v8_add2"
+
+  gdb_test_no_output "set \$vtype = 0"
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_wide_op_end]"
+  gdb_continue_to_breakpoint "vect_wide_op_end"
+
+  set vtype_pattern "0x0\tLMUL:0 \\(1\\) SEW:0 \\(e8\\) vta:0 \\(tu\\) vma:0 \\(mu\\) vill:0"
+  gdb_test "info reg vtype" "${vtype_pattern}" "$the_proc: info reg vtype - end state"
+  gdb_test "info reg vcsr" "0x0\tVXSAT:0 VXRM:0" "$the_proc: info reg vcsr - end state"
+  gdb_test "info reg vl" "[format 0x%x 2]\t2" "$the_proc: info reg vl - end state"
+  gdb_test "info reg vstart" "0x0\t0" "$the_proc: info reg vstart - end state"
+  gdb_test "info reg vlenb" "[format 0x%x $VLENB]\t$VLENB" "$the_proc: info reg vlenb - end state"
+
+  set zero_pattern [riscvlib_rvv_vreg_zero_pattern $VLENB]
+  set ones_pattern [riscvlib_rvv_vreg_1_pattern $VLENB]
+  foreach vregn { 0 1 2 3 4 5 6 7 } {
+    gdb_test "print \$v${vregn}" ${ones_pattern} "$the_proc: print v${vregn} - end state"
+  }
+  foreach vregn { 9 11 12 13 14 15 17 18 19 20 21 22 23 25 26 27 28 29 30 31} {
+    gdb_test "print \$v${vregn}" ${zero_pattern} "$the_proc: print v${vregn} - end state"
+  }
+  set xn_zeroes_rep [riscvlib_rvv_vreg_component_pattern [expr {$VLENB - 2}] 0]
+  # for VLENB = 16 we have:
+  # v10  \{i8 = {3, 3, 0 <repeats 14 times>} ...
+  # v16  \{i8 = {2, 3, 0 <repeats 14 times>} ...
+  # v24  \{i8 = {3, 3, 0 <repeats 14 times>} ...
+  foreach vregn { 10 24 } {
+    gdb_test "print \$v${vregn}" "\\\{$i8_fmt = \\{3, 3, ${xn_zeroes_rep}\\},.+" "$the_proc: print v${vregn} - end state"
+  }
+  gdb_test "print \$v16" "\\\{$i8_fmt = \\{2, 3, ${xn_zeroes_rep}\\},.+" "$the_proc: print v16 - end state"
+
+  # v8   \{i8 = {0, 1, 2, ...} ....
+  set v8_pattern [join $v8_contents ", "]
+  gdb_test "print \$v8" "\\\{$i8_fmt = \\{$v8_pattern\\},.+" "$the_proc: print v8 - end state"
+}
+
+proc prepare_vu_rw_test {} {
+  global testfile
+  global srcfile
+
+  set compile_flags {}
+  lappend compile_flags debug
+  lappend compile_flags "additional_flags=-march=rv64gc"
+
+  if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+    return -1
+  }
+
+  if {![runto_main]} {
+    return -1
+  }
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_test_start]"
+  gdb_continue_to_breakpoint "vect_test_start"
+
+  return 0
+}
+
+if {[prepare_vu_rw_test]} {
+  untested "could not initialize"
+  return -1
+}
+set vlenb [riscvlib_rvv_get_csr vlenb "$testfile"]
+test_vu_controlled_add $vlenb
+test_vu_wide_operations $vlenb

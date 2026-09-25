@@ -1,0 +1,173 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+require {istarget "riscv*-*-*"}
+
+if {![riscv_support_rvv]} {
+  unsupported "RVV unsupported"
+  return
+}
+
+standard_testfile
+load_lib riscv64-rvv-lib.exp
+
+proc test_vu_rwr_get_default_vtype_pattern {} {
+  return "0xc3\tLMUL:3 \\(8\\) SEW:0 \\(e8\\) vta:1 \\(ta\\) vma:1 \\(ma\\) vill:0"
+}
+proc test_vu_rwr_get_zero_vtype_pattern {} {
+  return "0x0\tLMUL:0 \\(1\\) SEW:0 \\(e8\\) vta:0 \\(tu\\) vma:0 \\(mu\\) vill:0"
+}
+proc test_vu_rwr_get_default_vl {VLENB} {
+  return [riscvlib_get_vlmax $VLENB 8 e8]
+}
+proc test_vu_rwr_get_zero_vtype_vl {VLENB} {
+  return [riscvlib_get_vlmax $VLENB 1 e8]
+}
+
+proc test_vu_rwr_is_reg_excluded {excluded reg} {
+  return [expr { [lsearch -exact $excluded $reg] != -1 }]
+}
+
+proc test_vu_rwr_csr_scan { VLENB test_info exclude } {
+  set the_proc [lindex [info level 0] 0]
+  if {![test_vu_rwr_is_reg_excluded $exclude "vtype"]} {
+    set vtype_pattern [test_vu_rwr_get_default_vtype_pattern]
+    gdb_test "info reg vtype" $vtype_pattern "$the_proc: info reg vtype - $test_info"
+  }
+  if {![test_vu_rwr_is_reg_excluded $exclude "vcsr"]} {
+    gdb_test "info reg vcsr" "0x7\tVXSAT:1 VXRM:3" "$the_proc: info reg vcsr - $test_info"
+  }
+  if {![test_vu_rwr_is_reg_excluded $exclude "vl"]} {
+    set vl [test_vu_rwr_get_default_vl $VLENB]
+    gdb_test "info reg vl" "[format 0x%x $vl]\t$vl" "$the_proc: info reg vl - $test_info"
+  }
+  if {![test_vu_rwr_is_reg_excluded $exclude "vstart"]} {
+    gdb_test "info reg vstart" "0x0\t0" "$the_proc: info reg vstart - $test_info"
+  }
+  if {![test_vu_rwr_is_reg_excluded $exclude "vlenb"]} {
+    gdb_test "info reg vlenb" "[format 0x%x $VLENB]\t$VLENB" "$the_proc: info reg vlenb - $test_info"
+  }
+}
+
+proc test_vu_rwr_scan_context {VLENB test_info exclude} {
+  test_vu_rwr_csr_scan $VLENB $test_info $exclude
+  set 15_pattern [riscvlib_rvv_vreg_15_pattern $VLENB]
+  set the_proc [lindex [info level 0] 0]
+
+  for {set i 0} {$i < 32} {incr i} {
+    if { $exclude eq "v$i" } {
+      continue
+    }
+    gdb_test "print \$v$i" ${15_pattern} "$the_proc: print v$i - $test_info"
+  }
+}
+
+proc test_vu_rwr {VLENB} {
+  global srcfile
+
+  set the_proc [lindex [info level 0] 0]
+  set i8_fmt [riscvlib_rvv_vreg_fmt8]
+  test_vu_rwr_scan_context $VLENB "initial-scan" ""
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vu_reset_end]"
+  gdb_continue_to_breakpoint "vu_reset_end"
+
+  for {set i 0} {$i < 32} {incr i} {
+    gdb_continue_to_breakpoint "vu_reset_end - v$i"
+    set vreg_contents {}
+    for { set j 0} {$j < $VLENB } { incr j } {
+      gdb_test_no_output "set \$v$i.${i8_fmt}\[$j\] = $j"
+      lappend vreg_contents $j
+    }
+    test_vu_rwr_scan_context $VLENB "v$i update-scan" "v$i"
+
+    set vreg_pattern [join $vreg_contents ", "]
+    gdb_test "print \$v$i" "\\\{$i8_fmt = \\{$vreg_pattern\\},.+" "print v$i - after modification"
+  }
+
+  gdb_continue_to_breakpoint "vu_reset_end - vtype"
+
+  set zero_vtype_vl [test_vu_rwr_get_zero_vtype_vl $VLENB]
+  gdb_test_no_output "set \$vl = $zero_vtype_vl"
+  gdb_test "info reg vl" "[format 0x%x $zero_vtype_vl]\t$zero_vtype_vl" "$the_proc: info reg vl - vl after vtype update"
+
+  set zero_vtype_pattern [test_vu_rwr_get_zero_vtype_pattern]
+  gdb_test_no_output "set \$vtype = 0"
+  gdb_test "info reg vtype" $zero_vtype_pattern "$the_proc: info reg vtype - csr update"
+
+  test_vu_rwr_scan_context $VLENB "vtype update-scan" {vtype vl}
+  gdb_test "stepi" ".*" "$the_proc: stepi after vtype update"
+  gdb_test "info reg vtype" $zero_vtype_pattern "$the_proc: info reg vtype - csr update and stepi"
+  gdb_test "info reg vl" "[format 0x%x $zero_vtype_vl]\t$zero_vtype_vl" "$the_proc: info reg vl - vl after vtype update and stepi"
+
+  gdb_continue_to_breakpoint "vu_reset_end - vcsr"
+  gdb_test_no_output "set \$vcsr = 0"
+  test_vu_rwr_scan_context $VLENB "vcsr update-scan" "vcsr"
+  gdb_test "info reg vcsr" "0x0\tVXSAT:0 VXRM:0" "$the_proc: info reg vcsr - csr update"
+  gdb_test "stepi" ".*" "$the_proc: stepi after vcsr update"
+  gdb_test "info reg vcsr" "0x0\tVXSAT:0 VXRM:0" "$the_proc: info reg vcsr - after stepi"
+
+  gdb_continue_to_breakpoint "vu_reset_end - vl"
+  gdb_test_no_output "set \$vl = 2"
+  test_vu_rwr_scan_context $VLENB "vl update-scan" "vl"
+  gdb_test "info reg vl" "[format 0x%x 2]\t2" "$the_proc: info reg vl - csr update"
+  gdb_test "stepi" ".*" "$the_proc: stepi after vl update"
+  gdb_test "info reg vl" "0x2\t2" "$the_proc: info reg vl - after stepi"
+
+  gdb_continue_to_breakpoint "vu_reset_end - vstart"
+  gdb_test_no_output "set \$vstart = 2"
+  test_vu_rwr_scan_context $VLENB "vstart update-scan" "vstart"
+  gdb_test "info reg vstart" "0x2\t2" "$the_proc: info reg vstart - vsart update"
+  gdb_test "stepi" ".*" "$the_proc: stepi after vstart update"
+  gdb_test "info reg vstart" "0x2\t2" "$the_proc: info reg vstart - after stepi"
+  gdb_continue_to_breakpoint "vu_reset_end - vstart reset"
+  gdb_test "info reg vstart" "0x0\t0" "$the_proc: info reg vstart - after reset"
+
+  gdb_continue_to_breakpoint "vu_reset_end - vlenb"
+  gdb_test_no_output "set \$vlenb = 0"
+
+  test_vu_rwr_scan_context $VLENB "$the_proc: vlenb update-scan" ""
+  gdb_test "stepi" ".*" "$the_proc: stepi after vlenb update"
+  test_vu_rwr_scan_context $VLENB "$the_proc: final scan after stepi" ""
+}
+
+proc prepare_vu_rwr_test {} {
+  global testfile
+  global srcfile
+
+  set compile_flags {}
+  lappend compile_flags debug
+  lappend compile_flags "additional_flags=-march=rv64gc"
+
+  if {[prepare_for_testing "failed to prepare" $testfile $srcfile $compile_flags]} {
+    return -1
+  }
+
+  if {![runto_main]} {
+    return -1
+  }
+
+  gdb_breakpoint "$srcfile:[gdb_get_line_number vect_test_start]"
+  gdb_continue_to_breakpoint "vect_test_start"
+
+  return 0
+}
+
+if {[prepare_vu_rwr_test]} {
+  untested "could not initialize"
+  return -1
+}
+set vlenb [riscvlib_rvv_get_csr vlenb "$testfile"]
+test_vu_rwr $vlenb
