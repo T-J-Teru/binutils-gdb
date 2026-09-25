@@ -5709,6 +5709,18 @@ class riscv_recorded_insn final
     return (ival >> OP_SH_CSR) & OP_MASK_CSR;
   }
 
+  /* Helper for decode 32-bit vector instruction VD.  */
+  static regnum_type decode_vd (ULONGEST ival) noexcept
+  {
+    return ((ival >> OP_SH_VD) & OP_MASK_VD) + RISCV_V0_REGNUM;
+  }
+
+  /* Helper for decode 32-bit instruction VS2.  */
+  static regnum_type decode_vs2 (ULONGEST ival) noexcept
+  {
+    return ((ival >> OP_SH_VS2) & OP_MASK_VS2) + RISCV_V0_REGNUM;
+  }
+
   /* Reads register.  Returns false if error happened.  */
   bool
   read_reg (regnum_type regnum, ULONGEST &addr) noexcept
@@ -5717,6 +5729,16 @@ class riscv_recorded_insn final
       return true;
 
     warning (_("Can not read at address %s"), hex_string (addr));
+    return false;
+  }
+
+  bool read_vector_reg (regnum_type regnum, gdb_byte *val) noexcept
+  {
+    gdb_assert (RISCV_V0_REGNUM <= regnum && regnum <= RISCV_V31_REGNUM);
+    if (m_regcache->raw_read (regnum, val) == register_status::REG_VALID)
+      return true;
+
+    warning (_ ("Can not read at vector reg %d"), regnum);
     return false;
   }
 
@@ -5827,7 +5849,10 @@ class riscv_recorded_insn final
 	   || is_xperm4_insn (ival) || is_xperm8_insn (ival)
 	   || is_zext_h_insn (ival)
 	   || (m_xlen == 4 && is_zext_h_rv32_insn (ival))
-	   || (m_xlen == 4 && is_zip_insn (ival)));
+	   || (m_xlen == 4 && is_zip_insn (ival))
+	   /* vector  */
+	   || is_vmv_x_s_insn (ival) || is_vcpop_m_insn (ival)
+	   || is_vfirst_m_insn (ival));
   }
 
   /* Returns true if instruction successfully saved rd.  */
@@ -5862,7 +5887,8 @@ class riscv_recorded_insn final
 	   || is_fmax_d_insn (ival) || is_fcvt_s_d_insn (ival)
 	   || is_fcvt_d_s_insn (ival) || is_fcvt_d_w_insn (ival)
 	   || is_fcvt_d_wu_insn (ival) || is_fcvt_d_l_insn (ival)
-	   || is_fcvt_d_lu_insn (ival) || is_fmv_d_x_insn (ival));
+	   || is_fcvt_d_lu_insn (ival) || is_fmv_d_x_insn (ival)
+	   || is_vfmv_f_s_insn (ival));
   }
 
   /* Returns true if instruction successfully saved floating point rd.  */
@@ -5948,6 +5974,454 @@ class riscv_recorded_insn final
 	    && save_reg (decode_rd (ival)));
   }
 
+  bool decode_width_vector (ULONGEST ival, ULONGEST &width) noexcept
+  {
+    ULONGEST val = (ival >> OP_SH_WIDTH) & OP_MASK_WIDTH;
+
+    switch (val)
+      {
+      case 0x0:
+	width = 8;
+	break;
+      case 0x5:
+	width = 16;
+	break;
+      case 0x6:
+	width = 32;
+	break;
+      case 0x7:
+	width = 64;
+	break;
+      default:
+	warning (_ ("Unexpected vector width value: %lu"), val);
+	return false;
+      }
+
+    return true;
+  }
+
+  bool decode_nfields_vector (ULONGEST ival, ULONGEST &nfields) noexcept
+  {
+    ULONGEST val = (ival >> OP_SH_NF) & OP_MASK_NF;
+
+    if (val >= 8)
+      {
+	warning (_ ("Unexpected nfields value: %lu"), val);
+	return false;
+      }
+
+    nfields = val + 1;
+    return true;
+  }
+
+  bool decode_element_width_vector (ULONGEST val, ULONGEST &elem_width)
+  {
+    ULONGEST sew = (val >> 3) & 0x7;
+    if (sew >= 4)
+      {
+	warning (_ ("Unexpected sew value: %lu"), sew);
+	return false;
+      }
+
+    elem_width = (1 << (sew + 3));
+    return true;
+  }
+
+  /* Applies LMUL, encoded in a vtype value's VLMUL[2:0] field, to the
+     NUMERATOR/DENOMINATOR ratio, returning floor(NUMERATOR / DENOMINATOR
+     * LMUL).  VLMUL encodes: 0..3 -> integer LMUL 1,2,4,8; 5..7 ->
+     fractional LMUL 1/8,1/4,1/2 (4 is reserved).  Passing DENOMINATOR = 1
+     just applies LMUL to a plain count.  */
+  static ULONGEST
+  scale_by_lmul (ULONGEST numerator, ULONGEST denominator,
+		 ULONGEST vlmul) noexcept
+  {
+    if (vlmul > 4)
+      return numerator / (denominator * (1 << (8 - vlmul)));
+    return numerator * (1 << vlmul) / denominator;
+  }
+
+  ULONGEST
+  decode_imm_vector (ULONGEST ival) noexcept
+  {
+    return (ival >> OP_SH_VIMM) & OP_MASK_VIMM;
+  }
+
+  bool is_vector_unit_stride_instr (ULONGEST ival) noexcept
+  {
+    ULONGEST mop = (ival >> OP_SH_MOP) & OP_MASK_MOP;
+    bool res = (mop == 0x0);
+    if (record_debug)
+      debug_printf ("Process record: is_vector_unit_stride_instr: %d\n", res);
+    return res;
+  }
+
+  bool is_vector_unit_stride_base_instr (ULONGEST ival) noexcept
+  {
+    ULONGEST mop = (ival >> OP_SH_MOP) & OP_MASK_MOP;
+    ULONGEST umop = (ival >> OP_SH_UMOP) & OP_MASK_UMOP;
+    bool res = (mop == 0x0) && (umop == 0x0);
+    if (record_debug)
+      debug_printf ("Process record: is_vector_unit_stride_base_instr: %d\n",
+		    res);
+    return res;
+  }
+
+  bool is_vector_unit_stride_whole_reg_instr (ULONGEST ival)
+  {
+    ULONGEST mop = (ival >> OP_SH_MOP) & OP_MASK_MOP;
+    ULONGEST umop = (ival >> OP_SH_UMOP) & OP_MASK_UMOP;
+    bool res = (mop == 0x0) && (umop == 0x8);
+    if (record_debug)
+      debug_printf (
+	"Process record: is_vector_unit_stride_whole_reg_instr: %d\n", res);
+    return res;
+  }
+
+  bool is_vector_strided_instr (ULONGEST ival) noexcept
+  {
+    ULONGEST mop = (ival >> OP_SH_MOP) & OP_MASK_MOP;
+    bool res = (mop == 0x2);
+    if (record_debug)
+      debug_printf ("Process record: is_vector_strided_instr: %d\n", res);
+    return res;
+  }
+
+  bool is_vector_indexed_instr (ULONGEST ival) noexcept
+  {
+    ULONGEST mop = (ival >> OP_SH_MOP) & OP_MASK_MOP;
+    bool res = (mop == 0x1) || (mop == 0x3);
+    if (record_debug)
+      debug_printf ("Process record: is_vector_indexed_instr: %d\n", res);
+    return res;
+  }
+
+  bool is_vector_load_insn (ULONGEST ival)
+  {
+    ULONGEST dummy;
+    return (((ival >> OP_SH_OP) & OP_MASK_OP) == MATCH_VECTOR_LOAD)
+	   && (((ival >> OP_SH_MEW) & OP_MASK_MEW) == 0)
+	   && decode_width_vector (ival, dummy);
+  }
+
+  bool is_vector_store_insn (ULONGEST ival)
+  {
+    ULONGEST dummy;
+    return (((ival >> OP_SH_OP) & OP_MASK_OP) == MATCH_VECTOR_STORE)
+	   && (((ival >> OP_SH_MEW) & OP_MASK_MEW) == 0)
+	   && decode_width_vector (ival, dummy);
+  }
+
+  bool is_vector_op_insn (ULONGEST ival)
+  {
+    return ((ival >> OP_SH_OP) & OP_MASK_OP) == MATCH_VECTOR_OP;
+  }
+
+  bool is_vector_vmv_nr_v_insn (ULONGEST ival)
+  {
+    return is_vmv1r_v_insn (ival) || is_vmv2r_v_insn (ival)
+	   || is_vmv4r_v_insn (ival) || is_vmv8r_v_insn (ival);
+  }
+
+  bool is_vector_widening_insn (ULONGEST ival)
+  {
+    return is_vwaddu_vv_insn (ival) || is_vwaddu_vx_insn (ival)
+	   || is_vwsubu_vv_insn (ival) || is_vwsubu_vx_insn (ival)
+	   || is_vwadd_vv_insn (ival) || is_vwadd_vx_insn (ival)
+	   || is_vwsub_vv_insn (ival) || is_vwsub_vx_insn (ival)
+	   || is_vwaddu_wv_insn (ival) || is_vwaddu_wx_insn (ival)
+	   || is_vwsubu_wv_insn (ival) || is_vwsubu_wx_insn (ival)
+	   || is_vwadd_wv_insn (ival) || is_vwadd_wx_insn (ival)
+	   || is_vwsub_wv_insn (ival) || is_vwsub_wx_insn (ival)
+	   || is_vwmul_vv_insn (ival) || is_vwmul_vx_insn (ival)
+	   || is_vwmulu_vv_insn (ival) || is_vwmulu_vx_insn (ival)
+	   || is_vwmulsu_vv_insn (ival) || is_vwmulsu_vx_insn (ival)
+	   || is_vwmaccu_vv_insn (ival) || is_vwmaccu_vx_insn (ival)
+	   || is_vwmacc_vv_insn (ival) || is_vwmacc_vx_insn (ival)
+	   || is_vwmaccsu_vv_insn (ival) || is_vwmaccsu_vx_insn (ival)
+	   || is_vwmaccus_vx_insn (ival) || is_vwredsum_vs_insn (ival)
+	   || is_vwredsumu_vs_insn (ival) || is_vfwadd_vv_insn (ival)
+	   || is_vfwadd_vf_insn (ival) || is_vfwadd_wv_insn (ival)
+	   || is_vfwadd_wf_insn (ival) || is_vfwsub_vv_insn (ival)
+	   || is_vfwsub_vf_insn (ival) || is_vfwsub_wv_insn (ival)
+	   || is_vfwsub_wf_insn (ival) || is_vfwmul_vv_insn (ival)
+	   || is_vfwmul_vf_insn (ival) || is_vfwmacc_vv_insn (ival)
+	   || is_vfwmacc_vf_insn (ival) || is_vfwnmacc_vv_insn (ival)
+	   || is_vfwnmacc_vf_insn (ival) || is_vfwmsac_vv_insn (ival)
+	   || is_vfwmsac_vf_insn (ival) || is_vfwnmsac_vv_insn (ival)
+	   || is_vfwnmsac_vf_insn (ival) || is_vfwcvt_xu_f_v_insn (ival)
+	   || is_vfwcvt_x_f_v_insn (ival) || is_vfwcvt_rtz_xu_f_v_insn (ival)
+	   || is_vfwcvt_rtz_x_f_v_insn (ival) || is_vfwcvt_f_xu_v_insn (ival)
+	   || is_vfwcvt_f_x_v_insn (ival) || is_vfwcvt_f_f_v_insn (ival)
+	   || is_vfwredosum_vs_insn (ival) || is_vfwredusum_vs_insn (ival);
+  }
+
+  /* Returns true if instruction needs only saving pc and vd.  */
+  bool need_save_vd (ULONGEST ival) noexcept
+  {
+    return is_vector_load_insn (ival) || is_vector_op_insn (ival);
+  }
+
+  bool try_save_n_vector_regs_from_vreg (regnum_type vreg, int n)
+  {
+    for (int i = 0; i < n; i++)
+      if (!save_reg (vreg + i))
+	return false;
+
+    if (record_debug)
+      debug_printf ("Process record: try_save_n_vector_regs_from_vreg: saving "
+		    "vregs from %d to %d\n",
+		    vreg, vreg + n - 1);
+
+    return true;
+  }
+
+  bool try_save_vd_helper (ULONGEST ival, ULONGEST nfields)
+  {
+    ULONGEST vtype = 0;
+    if (!read_reg (RISCV_CSR_VTYPE_REGNUM, vtype))
+      return false;
+
+    ULONGEST vlmul = vtype & 0x7;
+    ULONGEST selected_width = 0;
+    if (!decode_element_width_vector (vtype, selected_width))
+      return false;
+
+    ULONGEST encoded_width = 0;
+    if (!decode_width_vector (ival, encoded_width))
+      return false;
+
+    ULONGEST emul = scale_by_lmul (encoded_width, selected_width, vlmul);
+    emul = (emul > 0) ? emul : 1;
+
+    return try_save_n_vector_regs_from_vreg (decode_vd (ival), emul * nfields);
+  }
+
+  bool try_save_vd_vector_unit_stride (ULONGEST ival, ULONGEST nfields)
+  {
+    if (is_vector_unit_stride_whole_reg_instr (ival))
+      return try_save_n_vector_regs_from_vreg (decode_vd (ival), nfields);
+
+    return try_save_vd_helper (ival, nfields);
+  }
+
+  bool try_save_vd_vector_strided (ULONGEST ival, ULONGEST nfields)
+  {
+    return try_save_vd_helper (ival, nfields);
+  }
+
+  bool try_save_vd_vector_indexed (ULONGEST ival, ULONGEST nfields)
+  {
+    ULONGEST vtype = 0;
+    if (!read_reg (RISCV_CSR_VTYPE_REGNUM, vtype))
+      return false;
+
+    ULONGEST vlmul = vtype & 0x7;
+    ULONGEST vd_count = scale_by_lmul (1, 1, vlmul);
+    vd_count = (vd_count > 0) ? vd_count : 1;
+
+    return try_save_n_vector_regs_from_vreg (decode_vd (ival),
+					     vd_count * nfields);
+  }
+
+  bool try_save_vd_vmv_nr_v (ULONGEST ival)
+  {
+    ULONGEST vd_count = (decode_imm_vector (ival) & 0x7) + 1;
+    return try_save_n_vector_regs_from_vreg (decode_vd (ival), vd_count);
+  }
+
+  bool try_save_vd_widening (ULONGEST ival)
+  {
+    ULONGEST vtype = 0;
+    if (!read_reg (RISCV_CSR_VTYPE_REGNUM, vtype))
+      return false;
+
+    ULONGEST vlmul = vtype & 0x7;
+    ULONGEST vd_count = scale_by_lmul (2, 1, vlmul);
+    vd_count = (vd_count > 0) ? vd_count : 1;
+
+    return try_save_n_vector_regs_from_vreg (decode_vd (ival), vd_count);
+  }
+
+  bool try_save_vd_vector_op (ULONGEST ival)
+  {
+    if (is_vector_vmv_nr_v_insn (ival))
+      return try_save_vd_vmv_nr_v (ival);
+
+    if (is_vector_widening_insn (ival))
+      return try_save_vd_widening (ival);
+
+    ULONGEST vtype = 0;
+    if (!read_reg (RISCV_CSR_VTYPE_REGNUM, vtype))
+      return false;
+
+    ULONGEST vlmul = vtype & 0x7;
+    ULONGEST vd_count = scale_by_lmul (1, 1, vlmul);
+    vd_count = (vd_count > 0) ? vd_count : 1;
+
+    return try_save_n_vector_regs_from_vreg (decode_vd (ival), vd_count);
+  }
+
+  /* Returns true if instruction successfully saved vd.  */
+  bool try_save_vd (ULONGEST ival) noexcept
+  {
+    ULONGEST nfields = 0;
+    if (!decode_nfields_vector (ival, nfields))
+      return false;
+
+    if (is_vector_op_insn (ival))
+      return try_save_vd_vector_op (ival);
+
+    if (is_vector_unit_stride_instr (ival))
+      return try_save_vd_vector_unit_stride (ival, nfields);
+
+    if (is_vector_strided_instr (ival))
+      return try_save_vd_vector_strided (ival, nfields);
+
+    if (is_vector_indexed_instr (ival))
+      return try_save_vd_vector_indexed (ival, nfields);
+
+    warning (_ ("Unexpected vector instr: %lu"), ival);
+    return false;
+  }
+
+  bool try_save_mem_vector_unit_stride (ULONGEST ival, mem_addr addr,
+					ULONGEST nfields, ULONGEST length,
+					ULONGEST width)
+  {
+    ULONGEST vlenb_val = 0;
+    if (!read_reg (RISCV_CSR_VLENB_REGNUM, vlenb_val))
+      return false;
+
+    if (is_vector_unit_stride_whole_reg_instr (ival))
+      return save_mem (addr, nfields * vlenb_val * 8);
+
+    return save_mem (addr, nfields * length * width / 8);
+  }
+
+  bool try_save_mem_vector_strided (ULONGEST ival, mem_addr addr,
+				    ULONGEST nfields, ULONGEST length,
+				    ULONGEST width)
+  {
+    ULONGEST stride = 0;
+    if (!read_reg (decode_rs2 (ival), stride))
+      return false;
+
+    for (ULONGEST i = 0; i < length; ++i)
+      {
+	if (!save_mem (addr, nfields * width / 8))
+	  return false;
+	addr += stride;
+      }
+
+    return true;
+  }
+
+  bool try_save_mem_vector_indexed (ULONGEST ival, mem_addr addr,
+				    ULONGEST nfields, ULONGEST length,
+				    ULONGEST width)
+  {
+    ULONGEST vtype_val = 0;
+    if (!read_reg (RISCV_CSR_VTYPE_REGNUM, vtype_val))
+      return false;
+
+    ULONGEST vector_elem_size = 0;
+    if (!decode_element_width_vector (vtype_val, vector_elem_size))
+      return false;
+
+    ULONGEST segment_len = nfields * vector_elem_size / 8;
+
+    regnum_type vreg = decode_vs2 (ival);
+
+    ULONGEST vtype = 0;
+    if (!read_reg (RISCV_CSR_VTYPE_REGNUM, vtype))
+      return false;
+
+    ULONGEST vlmul = vtype & 0x7;
+    ULONGEST selected_width = 0;
+    if (!decode_element_width_vector (vtype, selected_width))
+      return false;
+
+    ULONGEST encoded_width = 0;
+    if (!decode_width_vector (ival, encoded_width))
+      return false;
+
+    ULONGEST index_emul = scale_by_lmul (encoded_width, selected_width, vlmul);
+    index_emul = (index_emul > 0) ? index_emul : 1;
+
+    int vreg_size = register_size (m_regcache->arch (), RISCV_V0_REGNUM);
+    std::vector<gdb_byte> vreg_buff (vreg_size * index_emul);
+    gdb_byte *raw_p = vreg_buff.data ();
+
+    for (int i = 0; i < index_emul; ++i)
+      if (!read_vector_reg (vreg + i, raw_p + i * vreg_size))
+	return false;
+
+    gdb_byte *cur_offset_p = raw_p;
+    /* For indexed instructions, size of index depends on `width` value, so we
+       need this mask here to crop correctly here. For width == 64, byte-shift
+       approach is not working (because ULONGEST is 64-bit width).  */
+    ULONGEST mask = (width == 64) ? (~ULONGEST { 0 })
+				  : ((ULONGEST { 1 } << width) - 1);
+    for (ULONGEST i = 0; i < length; ++i)
+      {
+	ULONGEST cur_offset = (*reinterpret_cast<ULONGEST *> (cur_offset_p))
+			      & mask;
+
+	if (!save_mem (addr + cur_offset, segment_len))
+	  return false;
+
+	cur_offset_p += width / 8;
+      }
+    return true;
+  }
+
+  bool try_save_mem_vector (ULONGEST ival) noexcept
+  {
+    mem_addr addr = 0;
+    if (!read_reg (decode_rs1 (ival), addr))
+      return false;
+
+    ULONGEST nfields = 0;
+    if (!decode_nfields_vector (ival, nfields))
+      return false;
+
+    ULONGEST length = 0;
+    if (!read_reg (RISCV_CSR_VL_REGNUM, length))
+      return false;
+
+    ULONGEST width = 0;
+    if (!decode_width_vector (ival, width))
+      return false;
+
+    if (is_vector_unit_stride_instr (ival))
+      return try_save_mem_vector_unit_stride (ival, addr, nfields, length,
+					      width);
+    if (is_vector_strided_instr (ival))
+      return try_save_mem_vector_strided (ival, addr, nfields, length, width);
+
+    if (is_vector_indexed_instr (ival))
+      return try_save_mem_vector_indexed (ival, addr, nfields, length, width);
+
+    warning (_ ("Unexpected vector instr: %lu"), ival);
+    return false;
+  }
+
+  bool try_save_all_vector_registers () noexcept
+  {
+    if (m_gdbarch->isa_features.vlenb)
+      {
+	return try_save_n_vector_regs_from_vreg (RISCV_V0_REGNUM, 32)
+	       && save_reg (RISCV_CSR_VSTART_REGNUM)
+	       && save_reg (RISCV_CSR_VCSR_REGNUM)
+	       && save_reg (RISCV_CSR_VL_REGNUM)
+	       && save_reg (RISCV_CSR_VTYPE_REGNUM)
+	       && save_reg (RISCV_CSR_VLENB_REGNUM);
+      }
+
+    return true;
+  }
+
   /* Returns true if instruction is successfully recorded.  The length of
      the instruction must be equal to 4 bytes.  Helper function for
      record_insn_len4.  */
@@ -5969,6 +6443,11 @@ class riscv_recorded_insn final
       return (save_reg (RISCV_CSR_MSTATUS_REGNUM)
 	      && save_reg (RISCV_CSR_MEPC_REGNUM));
 
+    if (is_vsetvli_insn (ival) || is_vsetvl_insn (ival)
+	|| is_vsetivli_insn (ival))
+      return (try_save_rd (ival) && save_reg (RISCV_CSR_VTYPE_REGNUM)
+	      && save_reg (RISCV_CSR_VL_REGNUM));
+
     if (need_save_only_pc (ival))
       return true;
 
@@ -5988,6 +6467,12 @@ class riscv_recorded_insn final
     len = need_save_rd_mem (ival);
     if (len > 0)
       return try_save_rd_mem (ival, len);
+
+    if (need_save_vd (ival))
+      return try_save_vd (ival);
+
+    if (is_vector_store_insn (ival))
+      return try_save_mem_vector (ival);
 
     warning (_("Currently this instruction with len 4(%s) is unsupported"),
 	     hex_string (ival));
@@ -6027,6 +6512,10 @@ class riscv_recorded_insn final
   {
     mem_addr addr = 0;
     ULONGEST offset = 0;
+
+    if (record_debug)
+      debug_printf ("Process record: record_insn_len2: record insn 0x%lx\n",
+		    ival);
 
     /* The order here is very important, because
        opcodes of some instructions may be the same.  */
