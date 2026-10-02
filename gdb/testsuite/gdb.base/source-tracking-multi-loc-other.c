@@ -15,41 +15,22 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "source-tracking-inline-hdr.h"
+extern int other_func (void);
 
-volatile int global_var = 0;
+volatile int other_var = 0;
 
-static inline void __attribute__ ((__always_inline__))
-inline_func (void)
-{
-  global_var = global_var + 1;
-  global_var = global_var + 2;		/* Breakpoint here.  */
-  global_var = global_var + 3;
-}
-
-int __attribute__ ((noinline, noclone))
-foo (int x)
-{
-  inline_func ();
-  return x + global_var;
-}
-
-int __attribute__ ((noinline, noclone))
-bar (int x)
-{
-  inline_func ();
-  return x - global_var;
-}
+/* This comment exists just to force the function below
+   into the correct location.  It has no other job.  */
 
 int
-main (void)
+other_func (void)
 {
-  ++global_var;
+  other_var = other_var + 1;
+  other_var = other_var + 1;
+  other_var = other_var + 1;	/* Breakpoint here.  */
+  other_var = other_var + 1;
+  other_var = other_var + 1;
+  other_var = other_var + 1;
 
-  int answer = foo (42) + bar (10);
-
-  ++global_var;
-
-  header_func ();
-  return answer - other_func (global_var);
+  return other_var;
 }

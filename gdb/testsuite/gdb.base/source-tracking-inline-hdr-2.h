@@ -15,41 +15,20 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "source-tracking-inline-hdr.h"
-
-volatile int global_var = 0;
+#ifndef SOURCE_TRACKING_INLINE_HDR_H
+#define SOURCE_TRACKING_INLINE_HDR_H
 
 static inline void __attribute__ ((__always_inline__))
-inline_func (void)
+header_func (void)
 {
-  global_var = global_var + 1;
-  global_var = global_var + 2;		/* Breakpoint here.  */
-  global_var = global_var + 3;
+  static int header_var = 0;
+
+  header_var = header_var + 5;
+  header_var = header_var + 1;
+  header_var = header_var + 2;		/* Header breakpoint location.  */
+  header_var = header_var + 3;
 }
 
-int __attribute__ ((noinline, noclone))
-foo (int x)
-{
-  inline_func ();
-  return x + global_var;
-}
+extern int other_func (int arg);
 
-int __attribute__ ((noinline, noclone))
-bar (int x)
-{
-  inline_func ();
-  return x - global_var;
-}
-
-int
-main (void)
-{
-  ++global_var;
-
-  int answer = foo (42) + bar (10);
-
-  ++global_var;
-
-  header_func ();
-  return answer - other_func (global_var);
-}
+#endif /* SOURCE_TRACKING_INLINE_HDR_H */

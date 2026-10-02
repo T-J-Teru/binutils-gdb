@@ -706,6 +706,66 @@ breakpoint_source_get_start_line (const breakpoint_source *src)
   return src->bp_line - src->bp_line_stored;
 }
 
+/* Are SALS suitable for breakpoint source tracking?
+
+   SALS are the locations that GDB found for the location spec the user
+   provided for the breakpoint.
+
+   If SALS is a single location which was created with an explicit line
+   number, e.g. 'break file:line' or just 'break line' then we can source
+   track this location.
+
+   If there are no locations in SALS then obviously we cannot track the
+   source.
+
+   Also if the locations were not created from an explicit line number,
+   e.g. 'break function_name' then we don't want to source track this
+   breakpoint.
+
+   If there are multiple locations in SALS, and they are all created using
+   an explicit line, then we can source track this breakpoint so long as the
+   same source file is used for each location.  This distinguishes between
+   'break foo.c:10' matching a single inline function in foo.c which is
+   inlined at multiple locations, and 'break foo.c:10' which matches
+   multiple files called 'foo.c' each of which has a line 10 that we can
+   break on.  The former case can be source tracked, while the latter can
+   not.  */
+
+static bool
+breakpoint_sals_suitable_for_tracking
+	(gdb::array_view<const symtab_and_line> sals)
+{
+  /* Easy case first.  If there is a single sal, and it uses an explicit
+     line number, then we can potentially track this breakpoint.  */
+  if (sals.size () == 1 && sals[0].explicit_line)
+    return true;
+
+  /* Cannot track this breakpoint if it has no locations.  Or if we have
+     multiple locations, but the first doesn't use an explicit line
+     number, then we cannot track this breakpoint.  */
+  if (sals.empty () || !sals[0].explicit_line)
+    return false;
+
+  /* For multiple locations, we can track the breakpoint so long as every
+     location refers to the same symtab and line as the first sal.  This
+     would correspond to a single inline function in the source code being
+     inlined at multiple locations.  */
+  for (std::size_t i = 1; i < sals.size (); ++i)
+    {
+      /* If any sal is different to the first then we cannot track this
+	 breakpoint.  */
+      if ((sals[i].symtab != sals[0].symtab
+	   && strcmp (symtab_to_fullname (sals[i].symtab),
+		      symtab_to_fullname (sals[0].symtab)) != 0)
+	  || sals[i].explicit_line != sals[0].explicit_line
+	  || sals[i].line != sals[0].line)
+	return false;
+    }
+
+  /* All sals match.  */
+  return true;
+}
+
 /* Return true if SPEC is suitable for source tracking, otherwise false.  A
    location spec is suitable for tracking if it is an explicit location
    spec, and the line offset is an absolute line number.  We also don't
@@ -9186,18 +9246,10 @@ create_breakpoint_sal (struct gdbarch *gdbarch,
 				enabled, flags,
 				display_canonical);
 
-  /* Only capture source lines for file:line breakpoints when source
-     tracking is enabled.  We check explicit_line to ensure the user
-     explicitly specified a line number (e.g., "break file.c:23" or
-     "break 23"), as opposed to "break function_name" or temporary
-     breakpoints set by commands like "start".
-
-     We also only track single-location breakpoints.  Multi-location
-     breakpoints (e.g., breakpoints on inline functions that are inlined
-     in multiple places) are too complex to track reliably as each location
-     may have moved differently.  */
-  if (source_tracking_breakpoints && sals.size () == 1
-      && sals[0].explicit_line
+  /* Are source tracking breakpoints enabled?  If they are, is this
+     breakpoint suitable for source tracking?  */
+  if (source_tracking_breakpoints
+      && breakpoint_sals_suitable_for_tracking (sals)
       && breakpoint_locspec_suitable_for_tracking (b->locspec.get ()))
     {
       /* Capture source if we have valid symtab and line info.
@@ -13541,10 +13593,10 @@ code_breakpoint::adjust_bp_for_source_tracking
     return;
 
   /* BFD changed - executable was reloaded.  */
-  if (expanded.size () != 1)
+  if (!breakpoint_sals_suitable_for_tracking (expanded))
     {
-      warning (_("Breakpoint %d now has multiple locations after reload, "
-		 "disabling source tracking."), number);
+      warning (_("Breakpoint %d is no longer suitable for source tracking "
+		 "after reload, disabling source tracking."), number);
       bp_source.reset ();
       return;
     }
