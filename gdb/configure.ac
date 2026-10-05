@@ -1915,11 +1915,6 @@ if test "${build}" = "${host}" -a "${host}" = "${target}" ; then
 	 CONFIG_SRCS="${CONFIG_SRCS} aix-thread.c"
 	 CONFIG_OBS="${CONFIG_OBS} aix-thread.o"
 	 LIBS="$LIBS -lpthdebug"
-
-	 # Older versions of AIX do not provide the declaration for
-	 # the getthrds function (it appears that it was introduced
-	 # with AIX 6.x).
-	 AC_CHECK_DECLS(getthrds, [], [], [[#include <procinfo.h>]])
       fi
       ;;
    esac

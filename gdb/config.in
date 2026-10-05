@@ -147,10 +147,6 @@
 /* Define to 1 if you have the declaration of `ffs', and to 0 if you don't. */
 #undef HAVE_DECL_FFS
 
-/* Define to 1 if you have the declaration of `getthrds', and to 0 if you
-   don't. */
-#undef HAVE_DECL_GETTHRDS
-
 /* Define to 1 if you have the declaration of `snprintf', and to 0 if you
    don't. */
 #undef HAVE_DECL_SNPRINTF
@@ -396,9 +392,6 @@
 
 /* Define to 1 if you have the `pthread_sigmask' function. */
 #undef HAVE_PTHREAD_SIGMASK
-
-/* Define to 1 if you have the `ptrace64' function. */
-#undef HAVE_PTRACE64
 
 /* Define if sys/ptrace.h defines the PTRACE_GETFPXREGS request. */
 #undef HAVE_PTRACE_GETFPXREGS

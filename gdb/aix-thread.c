@@ -1,4 +1,4 @@
-/* Low level interface for debugging AIX 4.3+ pthreads.
+/* Low level interface for debugging AIX 7.2+ pthreads.
 
    Copyright (C) 1999-2026 Free Software Foundation, Inc.
    Written by Nick Duffek <nsd@redhat.com>.
@@ -19,7 +19,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 
-/* This module uses the libpthdebug.a library provided by AIX 4.3+ for
+/* This module uses the libpthdebug.a library provided by AIX 7.2+ for
    debugging pthread applications.
 
    Some name prefix conventions:
@@ -56,17 +56,8 @@
 #include <sys/pthdebug.h>
 #include <unordered_set>
 
-#if !HAVE_DECL_GETTHRDS
-extern int getthrds (pid_t, struct thrdsinfo64 *, int, tid_t *, int);
-#endif
-
 /* Whether to emit debugging output.  */
 static bool debug_aix_thread;
-
-/* In AIX 5.1, functions use pthdb_tid_t instead of tid_t.  */
-#ifndef PTHDB_VERSION_3
-#define pthdb_tid_t	tid_t
-#endif
 
 /* Success and failure values returned by pthdb callbacks.  */
 
@@ -315,15 +306,6 @@ ptrace_check (int req, int id, int ret)
   return 0;  /* Not reached.  */
 }
 
-/* Call ptracex (REQ, ID, ADDR, DATA, BUF) or
-   ptrace64 (REQ, ID, ADDR, DATA, BUF) if HAVE_PTRACE64.
-   Return success.  */
-
-#ifdef HAVE_PTRACE64
-# define ptracex(request, pid, addr, data, buf) \
-	 ptrace64 (request, pid, addr, data, buf)
-#endif
-
 static int
 ptrace64aix (int req, int id, long long addr, int data, int *buf)
 {
@@ -331,17 +313,6 @@ ptrace64aix (int req, int id, long long addr, int data, int *buf)
   return ptrace_check (req, id, ptracex (req, id, addr, data, buf));
 }
 
-/* Call ptrace (REQ, ID, ADDR, DATA, BUF) or
-   ptrace64 (REQ, ID, ADDR, DATA, BUF) if HAVE_PTRACE64.
-   Return success.  */
-
-#ifdef HAVE_PTRACE64
-# define ptrace(request, pid, addr, data, buf) \
-	 ptrace64 (request, pid, addr, data, buf)
-# define addr_ptr long long
-#else
-# define addr_ptr int *
-#endif
 
 static int
 ptrace32 (int req, int id, addr_ptr addr, int data, int *buf)
