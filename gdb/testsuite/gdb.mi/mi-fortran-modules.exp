@@ -158,3 +158,16 @@ gdb_test_multiple $cmd $test -prompt $mi_gdb_prompt$ {
 	}
     }
 }
+
+# Check that a --module regexp matching no modules gives an empty
+# result, and no error.
+mi_gdb_test "108-symbol-info-module-functions --module nomatch" \
+    "108\\^done,symbols=\\\[\\\]" \
+    "-symbol-info-module-functions --module nomatch"
+
+# Check that it still honours Fortran's case insensitivity.
+set mod1_check_all_re \
+    "\{module=\"mod1\",files=\\\[\{filename=\"\[^\"\]+$srcfile2\",fullname=\"\[^\"\]+$srcfile2\",symbols=\\\[\{line=\"21\",name=\"mod1::check_all\",type=\"void \\(void\\)\",description=\"void mod1::check_all\\(void\\);\"\}\\\]\}\\\]\}"
+mi_gdb_test "109-symbol-info-module-functions --module mod1 --name CHECK_ALL" \
+    "109\\^done,symbols=\\\[${mod1_check_all_re}(,${mod1_check_all_re})*\\\]" \
+    "-symbol-info-module-functions --module mod1 --name CHECK_ALL"

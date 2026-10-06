@@ -30,6 +30,7 @@
 #include "gdbsupport/gdb_regex.h"
 #include "gdbsupport/enum-flags.h"
 #include "gdbsupport/function-view.h"
+#include "gdbsupport/unordered_set.h"
 #include "gdbsupport/iteration-status.h"
 #include <optional>
 #include <string_view>
@@ -2645,6 +2646,14 @@ public:
     m_max_search_results = max_search_results;
   }
 
+  /* Only consider symbols whose name is qualified by one of SCOPES, that
+     is, starts with one of them followed by "::".  SCOPES must outlive
+     the search.  */
+  void set_scope_filter (const gdb::unordered_set<std::string_view> *scopes)
+  {
+    m_scope_filter = scopes;
+  }
+
   /* Search the symbols from all objfiles in the current program space
      looking for matches as defined by the current state of this object.
 
@@ -2678,6 +2687,13 @@ private:
      of SIZE_MAX, there is no "unlimited".  */
   size_t m_max_search_results = SIZE_MAX;
 
+  /* If not nullptr, the scopes symbol names must be qualified by, see
+     set_scope_filter.  */
+  const gdb::unordered_set<std::string_view> *m_scope_filter = nullptr;
+
+  /* Return true if NAME passes M_SCOPE_FILTER.  */
+  bool scope_filter_matches (const char *name) const;
+
   /* Compile M_SYMBOL_NAME_REGEXP, if set.
 
      This function normalizes the spacing when it detects a C++ operator in the
@@ -2691,12 +2707,14 @@ private:
   bool symtab_matches_filenames (symtab *symtab) const;
 
   /* Return true if SYM is of kind M_KIND, is in a file matching
-     M_FILENAMES, and matches NAME_REGEX and TYPE_REGEX.  */
+     M_FILENAMES, passes M_SCOPE_FILTER, and matches NAME_REGEX and
+     TYPE_REGEX.  */
   bool symbol_matches (const symbol *sym,
 		       const std::optional<compiled_regex> &name_regex,
 		       const std::optional<compiled_regex> &type_regex) const;
 
-  /* Return true if MSYMBOL is of kind M_KIND and matches NAME_REGEX.
+  /* Return true if MSYMBOL is of kind M_KIND, passes M_SCOPE_FILTER, and
+     matches NAME_REGEX.
 
      This function also filters out the minimal symbols artificially created by
      GDB.  */

@@ -160,3 +160,16 @@ GDBInfoModuleSymbols::check_entry "${srcfile}" "mod1" "21" \
     "${real4} mod1::mod1_var_1;"
 GDBInfoModuleSymbols::check_no_entry "${srcfile}" ".*"
 GDBInfoModuleSymbols::check_no_entry "${srcfile2}" ".*"
+
+GDBInfoModuleSymbols::run_command "info module functions -m mod1 SUB_M1_A"
+GDBInfoModuleSymbols::check_header \
+    "All functions matching regular expression \"SUB_M1_A\", in all modules matching regular expression \"mod1\":"
+GDBInfoModuleSymbols::check_entry "${srcfile}" "mod1" "25" \
+    "void mod1::sub_m1_a\\(${integer4}\\);"
+GDBInfoModuleSymbols::check_no_entry "${srcfile}" ".*"
+GDBInfoModuleSymbols::check_no_entry "${srcfile2}" ".*"
+
+gdb_test "info module functions -m nomatch" \
+    "^All functions in all modules matching regular expression \"nomatch\":"
+gdb_test "info module variables -m nomatch" \
+    "^All variables in all modules matching regular expression \"nomatch\":"
