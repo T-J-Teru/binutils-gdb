@@ -273,7 +273,8 @@ proc share_gdb { src options } {
     set shared_gdb_options $options
 }
 
-# See above.
+# See above.  Return true on success, otherwise, emit an 'unsupported' and
+# return false.
 
 proc shared_gdb_start_use { src options } {
     set me shared_gdb_start_use
@@ -297,7 +298,10 @@ proc shared_gdb_start_use { src options } {
     if { $do_start } {
 	set exe [standard_temp_file func_addr.x]
 
-	gdb_compile $src $exe executable $options
+	if { [gdb_compile $src $exe executable $options] != "" } {
+	    unsupported "$me: compile failed"
+	    return false
+	}
 
 	gdb_exit
 	gdb_start
@@ -307,6 +311,8 @@ proc shared_gdb_start_use { src options } {
 	    share_gdb $src $options
 	}
     }
+
+    return true
 }
 
 # See above.
@@ -358,11 +364,15 @@ proc with_shared_gdb { body } {
 # asm ("func_end: .globl func_end");
 # static void func (void) {}
 #
+# If the compilation of SRC fails then this proc will emit an
+# UNSUPPORTED and return the list {0 0}.
 
 proc function_range { func src {options {debug}} } {
     global decimal gdb_prompt
 
-    shared_gdb_start_use $src $options
+    if {![shared_gdb_start_use $src $options]} {
+	return {0 0}
+    }
 
     # Compute the label offset, and we can get the function start address
     # by "${func}_label - $func_label_offset".
