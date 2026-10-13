@@ -173,6 +173,16 @@ proc run_test { testname } {
 		name _start {{cu_label function global}}
 		name foo {{cu_label function global}} 0xffffff00
 	    }
+	} elseif { $testname eq "bad-cu-length" } {
+	    # Create an otherwise valid index, but record a bogus length
+	    # for the CU in the index's CU list; one that doesn't match the
+	    # actual length of the CU in .debug_info.  GDB should handle
+	    # this gracefully rather than crashing when it later comes to
+	    # expand the CU.
+	    gdb_index {} {
+		cu cu_label 0x1f
+		name _start {{cu_label function global}}
+	    }
 	} elseif { $testname eq "valid-index" } {
 	    # Generate a well-formed index that includes a valid main
 	    # function (valid language, with the name pointing at the
@@ -236,7 +246,8 @@ proc run_test { testname } {
 		   || $testname eq "main-language" \
 		   || $testname eq "long-cu-vector" \
 		   || $testname eq "name-offset-1" \
-		   || $testname eq "name-offset-2" } {
+		   || $testname eq "name-offset-2" \
+		   || $testname eq "bad-cu-length" } {
 	set expect_gdb_index_ignored false
 	set expect_start true
 	set expect_method false
@@ -360,6 +371,7 @@ set tests { empty-component \
 		long-cu-vector \
 		name-offset-1 \
 		name-offset-2 \
+		bad-cu-length \
 		valid-index }
 
 foreach_with_prefix test $tests {
