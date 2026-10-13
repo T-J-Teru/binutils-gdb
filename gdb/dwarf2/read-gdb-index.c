@@ -102,6 +102,11 @@ public:
   /* Extract the INDEXth offset_type from the array.  */
   offset_type operator[] (size_t index) const
   {
+    /* Ensure the whole offset_type is within the underlying bytes.  If GDB
+       is compiled with libc++ assert then the access of M_BYTES will be
+       checked, but this only guarantees that the first byte is within the
+       array_view as it's a gdb_byte view.  */
+    gdb_assert (index < size ());
     const gdb_byte *bytes = &m_bytes[index * sizeof (offset_type)];
     return (offset_type) extract_unsigned_integer (bytes,
 						   sizeof (offset_type),
@@ -273,7 +278,22 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
       gdb_assert (components.size () > 0);
 
       std::vector<cooked_index_entry *> these_entries;
-      offset_view vec (constant_pool.slice (symbol_vec_index (idx)));
+
+      offset_type vec_index = symbol_vec_index (idx);
+      /* The CU vector starts with an offset_type length word.  Check that
+	 VEC_INDEX lands inside CONSTANT_POOL, and that there is at least an
+	 offset_type worth of bytes beyond this in CONSTANT_POOL to be
+	 read.  */
+      if (vec_index >= constant_pool.size ()
+	  || constant_pool.size () - vec_index < sizeof (offset_type))
+	{
+	  complaint (_(".gdb_index entry %s has bad CU vector offset %s "
+		       "[in module %s]"),
+		     pulongest (idx), pulongest (vec_index),
+		     objfile_name (per_objfile->objfile));
+	  continue;
+	}
+      offset_view vec (constant_pool.slice (vec_index));
       offset_type vec_len = vec[0];
 
       /* Bounds check VEC_LEN against the CONSTANT_POOL.  */
