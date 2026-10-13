@@ -573,11 +573,32 @@ create_cus_from_gdb_index_list (dwarf2_per_bfd *per_bfd,
 
       sect_offset sect_off
 	= (sect_offset) extract_unsigned_integer (cu_list, 8, BFD_ENDIAN_LITTLE);
-      ULONGEST length = extract_unsigned_integer (cu_list + 8, 8, BFD_ENDIAN_LITTLE);
+      /* Each entry in the CU list is a pair of (offset, length), but
+	 we deliberately ignore the length as this information is not
+	 needed.  When the real CU contents are read they also contain
+	 a length.  The length stored in the .gdb_index and the real
+	 length in the CU header should match, but both the .gdb_index
+	 and the real CU are untrusted input, so could be corrupt, in
+	 which case the lengths might not match.
+
+	 If we pre-fill the length here then the dwarf2_per_cu would
+	 need to track that the length came from the .gdb_index so
+	 that later on, when the length is read from the real CU, if
+	 the lengths don't match GDB should use the real length and
+	 warn about the mismatch.
+
+	 This feels like a lot of work just for a length field that we
+	 can safely ignore, especially when the complaint mechanism,
+	 through which we would report the length mismatch, is off
+	 by default.  Instead, pass 0 as the length to allocate_per_cu
+	 below, this indicates that the length is unknown, and can be
+	 filled in later when the real CU header is read.  The length
+	 from the .gdb_index is ignored completely.  */
       cu_list += 2 * 8;
 
-      dwarf2_per_cu_up per_cu = per_bfd->allocate_per_cu (section, sect_off,
-							  length, is_dwz);
+      /* Pass 0 for the length, see comment above.  */
+      dwarf2_per_cu_up per_cu
+	= per_bfd->allocate_per_cu (section, sect_off, 0, is_dwz);
       units.emplace_back (per_cu.get ());
       per_bfd->add_unit (std::move (per_cu));
     }
