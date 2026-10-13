@@ -173,6 +173,50 @@ proc run_test { testname } {
 		name _start {{cu_label function global}}
 		name foo {{cu_label function global}} 0xffffff00
 	    }
+	} elseif { $testname eq "cu-vector-offset-1" } {
+	    # Add a symbol whose CU vector offset in the symbol table is out
+	    # of range.  The slot has a valid name offset, so GDB won't
+	    # treat it as an empty slot and will try to read the CU vector.
+	    # Ensure GDB doesn't crash and instead just ignores this one
+	    # symbol.
+	    #
+	    # The 'end' offset is exactly the size of the constant pool,
+	    # that is, it points at the first byte after the pool.  This is
+	    # the off-by-one boundary case.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		name foo {{cu_label function global}} "" end
+	    }
+	} elseif { $testname eq "cu-vector-offset-2" } {
+	    # Just like 'cu-vector-offset-1', but here the CU vector offset
+	    # is huge, far past the end of the constant pool.  This is far
+	    # more likely to cause GDB to crash.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		name foo {{cu_label function global}} "" 0xffffff00
+	    }
+	} elseif { $testname eq "cu-vector-offset-3" } {
+	    # Like cu-vector-offset-1/-2, but aim the CU vector offset at
+	    # the last byte of the constant pool.  That byte offset is in
+	    # range, but there is no room there for the 4-byte CU vector
+	    # length word that GDB reads.  This ensures that GDB is
+	    # correctly validating the entire length of its reads.
+	    #
+	    # Work out the constant pool size from its contents.  There are
+	    # two symbols that need adding to the constant pool, '_start'
+	    # and 'foo'.  For each symbol we have a CU vector (a 4-byte
+	    # count and a 4-byte offset), then we have both symbol strings
+	    # plus their null terminating character.
+	    set pool_size \
+		[expr {2 * (4 + 4) + [string length "_start"] + 1 \
+			   + [string length "foo"] + 1}]
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		name foo {{cu_label function global}} "" [expr {$pool_size - 1}]
+	    }
 	} elseif { $testname eq "bad-cu-length" } {
 	    # Create an otherwise valid index, but record a bogus length
 	    # for the CU in the index's CU list; one that doesn't match the
@@ -244,6 +288,9 @@ proc run_test { testname } {
 		   || $testname eq "long-cu-vector" \
 		   || $testname eq "name-offset-1" \
 		   || $testname eq "name-offset-2" \
+		   || $testname eq "cu-vector-offset-1" \
+		   || $testname eq "cu-vector-offset-2" \
+		   || $testname eq "cu-vector-offset-3" \
 		   || $testname eq "bad-cu-length" } {
 	set expect_gdb_index_ignored false
 	set expect_start true
@@ -334,6 +381,9 @@ set tests { empty-component \
 		long-cu-vector \
 		name-offset-1 \
 		name-offset-2 \
+		cu-vector-offset-1 \
+		cu-vector-offset-2 \
+		cu-vector-offset-3 \
 		bad-cu-length \
 		valid-index }
 

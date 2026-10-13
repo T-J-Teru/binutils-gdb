@@ -3845,7 +3845,7 @@ namespace eval Dwarf {
     #        .debug_info; providing a (bogus) override allows GDB's
     #        handling of an inconsistent CU length to be tested.
     #
-    #   name <name> <entries> [<name_offset>]
+    #   name <name> <entries> [<name_offset> [<cuvec_offset>]]
     #     -- add symbol <name> with its CU vector to the constant pool:
     #
     #        The <entries> is a list of {<cu_ref> <kind> <scope>} tuples
@@ -3872,7 +3872,17 @@ namespace eval Dwarf {
     #        encoded for testing GDB's error handling.  The value can be a
     #        raw number, or the keyword 'end' which resolves to the exact
     #        size of the constant pool (i.e. one byte past its end).  The
-    #        string <name> is still emitted into the constant pool.
+    #        string <name> is still emitted into the constant pool.  Pass
+    #        an empty string to keep the automatically computed offset.
+    #
+    #        Similarly, the optional <cuvec_offset> overrides the CU vector
+    #        offset written into this symbol's slot in the symbol table.
+    #        Normally this offset is computed to point at this symbol's CU
+    #        vector in the constant pool but an override allows an out of
+    #        range offset to be encoded.  The value can be a raw number or
+    #        the keyword 'end' which has the same meaning as for
+    #        <name_offset> above.  The CU vector itself is still emitted
+    #        into the constant pool.
     #
     #   main <language> <name>
     #     -- add symbol <name> of <language> to the index as the entry point
@@ -3933,10 +3943,9 @@ namespace eval Dwarf {
 	set _gdb_index_cus []
 
 	# A list of lists.  Each sub-list has the form: {name entries
-	# offset}, where <name> is a string, entries is a list of CU
-	# descriptors, and <offset> is usually the empty string, but can be
-	# a number which overrides the offset from the CU vector to the
-	# <name> string.  See _gdb_index_name for more details.
+	# name_offset cuvec_offset}.  See the 'name' command (proc
+	# _gdb_index_name) in the gdb_index documentation for details of
+	# what each field means.
 	variable _gdb_index_names
 	set _gdb_index_names []
 
@@ -3979,9 +3988,11 @@ namespace eval Dwarf {
 	# offset, or it can be the string 'end', which resolves to the exact
 	# size of the constant pool (i.e. one byte past its end).  This is
 	# useful for testing for off-by-one errors in GDB.
-	proc _gdb_index_name { name entries_list {name_offset ""} } {
+	proc _gdb_index_name { name entries_list {name_offset ""} \
+			       {cuvec_offset ""} } {
 	    variable _gdb_index_names
-	    lappend _gdb_index_names [list $name $entries_list $name_offset]
+	    lappend _gdb_index_names \
+		[list $name $entries_list $name_offset $cuvec_offset]
 	}
 
 	# Setup the name and language of the main function, as recorded in
@@ -4194,9 +4205,23 @@ namespace eval Dwarf {
 		} else {
 		    _op .4byte "$name_offset" "name offset"
 		}
-		_op .4byte \
-		    "$vec_label - $gdb_index_constant_pool" \
-		    "CU vector offset"
+
+		# The CU vector offset normally points at this symbol's CU
+		# vector in the constant pool, but it too can be overridden
+		# (e.g. to an out of range value) for testing.  See the
+		# 'name' command in the gdb_index documentation for details.
+		set cuvec_offset [lindex [lindex $_gdb_index_names $idx] 3]
+		if { $cuvec_offset eq "" } {
+		    _op .4byte \
+			"$vec_label - $gdb_index_constant_pool" \
+			"CU vector offset"
+		} elseif { $cuvec_offset eq "end" } {
+		    _op .4byte \
+			"$gdb_index_constant_pool_end - $gdb_index_constant_pool" \
+			"CU vector offset"
+		} else {
+		    _op .4byte "$cuvec_offset" "CU vector offset"
+		}
 	    } else {
 		_op .4byte 0 "empty slot"
 		_op .4byte 0 "empty slot"
