@@ -733,6 +733,17 @@ create_addrmap_from_gdb_index (dwarf2_per_objfile *per_objfile,
   const gdb_byte *end = iter + index->address_table.size ();
   while (iter < end)
     {
+      /* Ensure we're not about to read outside the bounds of the address
+	 table, if we did then we'd interpret the symbol table as address
+	 map data.  */
+      if (iter + 20 > end)
+	{
+	  warning (_(".gdb_index address table has invalid size (%s bytes),"
+		     " ignoring .gdb_index"),
+		   pulongest (index->address_table.size ()));
+	  return false;
+	}
+
       ULONGEST hi, lo, cu_index;
       lo = extract_unsigned_integer (iter, 8, BFD_ENDIAN_LITTLE);
       iter += 8;

@@ -227,6 +227,55 @@ proc run_test { testname } {
 		cu cu_label 0x1f
 		name _start {{cu_label function global}}
 	    }
+	} elseif { $testname eq "addr-truncated-1" } {
+	    # Create an address table with a truncated entry (missing the
+	    # high address and CU index).  The address table size is not a
+	    # multiple of 20 bytes (the entry size), so GDB should reject
+	    # this .gdb_index.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		bad_addr $_start_start
+	    }
+	} elseif { $testname eq "addr-truncated-2" } {
+	    # Like addr-truncated-1 above, but with both low and high
+	    # addresses (missing only the CU index now).  This creates a
+	    # 16-byte entry instead of 20.  Again, GDB should reject this
+	    # .gdb_index.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		bad_addr $_start_start $_start_end
+	    }
+	} elseif { $testname eq "addr-valid" } {
+	    # Create a valid address table, just to ensure that the address
+	    # table creation mechanism within the gdb_index proc works
+	    # correctly.  GDB should accept this .gdb_index, and later on we
+	    # check that we see the expected address map entries.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		addr $_start_start $_start_end cu_label
+	    }
+	} elseif { $testname eq "addr-swapped" } {
+	    # Create an address table with the low and high addresses the
+	    # wrong way around.  GDB should reject this .gdb_index and give
+	    # an appropriate warning message.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		addr $_start_end $_start_start cu_label
+	    }
+	} elseif { $testname eq "addr-overlap" } {
+	    # Create an address table with multiple address ranges.  Two of
+	    # the address ranges overlap.  GDB should reject this index.
+	    gdb_index {} {
+		cu cu_label
+		name _start {{cu_label function global}}
+		name foo {{cu_label function global}}
+		addr $_start_start "$_start_end - 2" cu_label
+		addr "$_start_end - 4" $_start_end cu_label
+	    }
 	} elseif { $testname eq "valid-index" } {
 	    # Generate a well-formed index that includes a valid main
 	    # function (valid language, with the name pointing at the
@@ -284,6 +333,7 @@ proc run_test { testname } {
 	set expect_main false
 	set expect_foo false
 	set expect_name_count 2
+	set expect_addr_map {}
 	set expect_warning_re ""
     } elseif { $testname eq "main-name-offset-1" \
 		   || $testname eq "main-name-offset-2" \
@@ -316,6 +366,36 @@ proc run_test { testname } {
 	} else {
 	    set expect_warning_re ""
 	}
+	set expect_addr_map {}
+    } elseif { $testname eq "addr-valid" } {
+	set expect_start true
+	set expect_method false
+	set expect_main false
+	set expect_foo false
+	set expect_name_count 1
+	set start [get_hexadecimal_valueof "$::_start_start" "*default*" \
+		       "get address for start of _start"]
+	set end [get_hexadecimal_valueof "$::_start_end" "*default*" \
+		     "get address for end of _start"]
+	set expect_addr_map \
+	    [list [list [format "0x%x" $start] [format "0x%x" $end]]]
+	set expect_gdb_index_ignored false
+	set expect_warning_re ""
+    } elseif { $testname eq "addr-truncated-1" \
+		   || $testname eq "addr-truncated-2" \
+		   || $testname eq "addr-swapped" \
+		   || $testname eq "addr-overlap" } {
+	set expect_gdb_index_ignored true
+	if { $testname eq "addr-truncated-1" \
+		 || $testname eq "addr-truncated-2" } {
+	    set expect_warning_re "\r\nwarning: \\.gdb_index address table has invalid size \\($::decimal bytes\\), ignoring \\.gdb_index\r\n"
+	} elseif { $testname eq "addr-swapped" } {
+	    set expect_warning_re "\r\nwarning: \\.gdb_index address table has invalid range \\($::hex - $::hex\\), ignoring \\.gdb_index\r\n"
+	} elseif { $testname eq "addr-overlap" } {
+	    set expect_warning_re "\r\nwarning: \\.gdb_index address table has a range \\($::hex - $::hex\\) that overlaps with an earlier range, ignoring \\.gdb_index\r\n"
+	} else {
+	    perror "invalid testname '$testname' during index check"
+	}
     } elseif { $testname eq "valid-index" } {
 	# This is a well-formed index, so GDB should see _start and
 	# should recognise it as the main function.
@@ -325,6 +405,7 @@ proc run_test { testname } {
 	set expect_main true
 	set expect_foo true
 	set expect_name_count 2
+	set expect_addr_map {}
 	set expect_warning_re ""
     } elseif { $testname eq "no-null"
 	       || $testname eq "skip-constant-pool" } {
@@ -376,6 +457,9 @@ proc run_test { testname } {
     set saw_foo false
     set saw_main ""
     set name_count 0
+    set addr_map {}
+    set addr_map_entry_start ""
+    set in_address_maps false
     gdb_test_multiple "maint print objfiles" "" -lbl {
 	-re "^\r\n\\s+name:\\s+(\[^\r\n\]+)(?=\r\n)" {
 	    incr name_count
@@ -398,12 +482,35 @@ proc run_test { testname } {
 	    }
 	    exp_continue
 	}
+	-re "^\r\n\\s+address maps:(?=\r\n)" {
+	    set in_address_maps true
+	    exp_continue
+	}
+	-re "^\r\n\\s+\\\[($::hex)\\\] \\(\\(dwarf2_per_cu \\*\\) (0|$::hex)\\)(?=\r\n)" {
+	    if { $in_address_maps } {
+		set start [format "0x%x" $expect_out(1,string)]
+		set obj $expect_out(2,string)
+
+		# Finish any existing entry.
+		if { $addr_map_entry_start ne "" } {
+		    lappend addr_map [list $addr_map_entry_start $start]
+		    set addr_map_entry_start ""
+		}
+
+		# Create the start of a new entry.
+		if { $obj ne "0" } {
+		    set addr_map_entry_start $start
+		}
+	    }
+	    exp_continue
+	}
 	-re "^\r\n$::gdb_prompt $" {
 	    gdb_assert { $saw_start == $expect_start \
 			     && $saw_method == $expect_method \
 			     && $saw_main == $expect_main \
 			     && $name_count == $expect_name_count \
-			     && $saw_foo == $expect_foo } \
+			     && $saw_foo == $expect_foo \
+			     && $addr_map == $expect_addr_map } \
 		$gdb_test_name
 	}
     }
@@ -426,6 +533,11 @@ set tests { empty-component \
 		cu-vector-offset-2 \
 		cu-vector-offset-3 \
 		bad-cu-length \
+		addr-truncated-1 \
+		addr-truncated-2 \
+		addr-swapped \
+		addr-overlap \
+		addr-valid \
 		valid-index }
 
 foreach_with_prefix test $tests {
