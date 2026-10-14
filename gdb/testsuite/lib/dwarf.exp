@@ -3908,6 +3908,28 @@ namespace eval Dwarf {
     #        testing purposes, any integer, even if this is not a valid
     #        language.
     #
+    #   addr <low> <high> <cu_ref>
+    #     -- add an address table entry mapping an address range to a CU.
+    #
+    #        <low> and <high> are address expressions, usually label names
+    #        that the linker will resolve from get_func_info, but can also
+    #        be raw hex/decimal values.
+    #
+    #        <cu_ref> is a CU label, or 'CU-<index>' for a raw CU index,
+    #        just like in the 'name' command above.
+    #
+    #        Emits a 20-byte entry: 8-byte low, 8-byte high, 4-byte CU
+    #        index.
+    #
+    #   bad_addr [<low>] [<high>]
+    #     -- add a truncated address table entry for testing.
+    #
+    #        The <low> and <high> are defined as in the 'addr' command
+    #        above.  The <high> argument is optional.  Emits 8 bytes if only
+    #        <low> is provided, 16 bytes if both are provided.  In either
+    #        case the address table entry created is shorter than it should
+    #        be.
+    #
     # Example:
     #   gdb_index {} {
     #       cu cu_label
@@ -3948,6 +3970,12 @@ namespace eval Dwarf {
 	# what each field means.
 	variable _gdb_index_names
 	set _gdb_index_names []
+
+	# A list of address table entries.  Each entry is either:
+	#   {addr <low> <high> <cu_ref>} for a full 20-byte entry.
+	#   {bad_addr <low> <high>} or {bad_addr <low>} for a truncated entry.
+	variable _gdb_index_addrs
+	set _gdb_index_addrs []
 
 	# The value to encode as the main function language.  The
 	# default value 0 is what the .gdb_index uses to indicate no
@@ -3995,6 +4023,18 @@ namespace eval Dwarf {
 		[list $name $entries_list $name_offset $cuvec_offset]
 	}
 
+	# Add a full address table entry mapping an address range to a CU.
+	proc _gdb_index_addr { low high cu_ref } {
+	    variable _gdb_index_addrs
+	    lappend _gdb_index_addrs [list addr $low $high $cu_ref]
+	}
+
+	# Add a truncated address table entry for testing.
+	proc _gdb_index_bad_addr { low {high ""} } {
+	    variable _gdb_index_addrs
+	    lappend _gdb_index_addrs [list bad_addr $low $high]
+	}
+
 	# Setup the name and language of the main function, as recorded in
 	# the .gdb_index shortcut table.  The LANG can be a DW_LANG_*
 	# constant, but can also be a raw number, this allows invalid
@@ -4037,9 +4077,12 @@ namespace eval Dwarf {
 	with_override Dwarf::cu Dwarf::_gdb_index_cu {
 	with_override Dwarf::name Dwarf::_gdb_index_name {
 	with_override Dwarf::main Dwarf::_gdb_index_main {
+	with_override Dwarf::addr Dwarf::_gdb_index_addr {
+	with_override Dwarf::bad_addr Dwarf::_gdb_index_bad_addr {
 	    variable _level
 	    uplevel $_level $body
-	}}}
+	}}}}}
+
 
 	set num_names [llength $_gdb_index_names]
 
@@ -4177,8 +4220,50 @@ namespace eval Dwarf {
 	# TU list (empty for now).
 	gdb_index_tu_list:
 
-	# Address table (empty for now).
+	# Address table.
 	gdb_index_addr_table:
+	foreach addr_entry $_gdb_index_addrs {
+	    lassign $addr_entry entry_type low high
+
+	    if { $entry_type eq "addr" } {
+		set cu_ref [lindex $addr_entry 3]
+
+		# Find the CU index for cu_ref.
+		set cu_idx 0
+		set found 0
+		foreach cu_rec $_gdb_index_cus {
+		    lassign $cu_rec cu length
+		    if { $cu eq $cu_ref } {
+			set found 1
+			break
+		    }
+		    incr cu_idx
+		}
+		if { !$found } {
+		    if { [regexp {^CU-([0-9]+)$} $cu_ref _ cu_idx] } {
+			# Raw CU index.
+		    } else {
+			error "gdb_index: unknown CU reference '$cu_ref'"
+		    }
+		}
+
+		_op .8byte $low "Low address"
+		_op .8byte $high "High address"
+		_op .4byte $cu_idx "CU index"
+	    } elseif { $entry_type eq "bad_addr" } {
+		_op_offset 8 "$low" "Low address"
+		# Optionally omit high address to create a truncated entry.
+		if { $high ne "" } {
+		    _op_offset 8 "$high" "High address"
+		} else {
+		    _op "" "" "Skip high address"
+		}
+		# Always omit CU index to create a truncated entry.
+		_op "" "" "Skip CU index"
+	    } else {
+		error "gdb_index: unknown address entry type '$entry_type'"
+	    }
+	}
 
 	# Symbol table.
 	gdb_index_symtab:
