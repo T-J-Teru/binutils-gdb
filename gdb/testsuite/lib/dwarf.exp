@@ -3822,6 +3822,19 @@ namespace eval Dwarf {
     #               error handling.  The supported part names are:
     #               'constant_pool'.
     #               (default {} -- no .gdb_index parts are skipped)
+    #   header_override <dict>
+    #             - a dict specifying overrides for header fields.  Each
+    #               key is a header field name (cu_list, tu_list,
+    #               address_table, symbol_table, shortcut, constant_pool)
+    #               and the value is either:
+    #                 - a number (hex or decimal) to replace the field
+    #                 - the string 'skip' to omit the field from the header
+    #               Any field not mentioned uses its computed value.
+    #               Examples:
+    #                 {address_table 0xffffffff}
+    #                 {address_table 0x100 symbol_table 0x200}
+    #                 {shortcut skip constant_pool skip}
+    #               (default {} -- no overrides)
     #
     # BODY is Tcl code that emits the parts which make up the body of
     # the .gdb_index section.  It is evaluated in the caller's
@@ -3936,6 +3949,7 @@ namespace eval Dwarf {
 	    { version 9 }
 	    { no_null false }
 	    { skip_index_part {} }
+	    { header_override {} }
 	}
 
 	# Validate the names passed to skip_index_part to catch typos in
@@ -3943,6 +3957,16 @@ namespace eval Dwarf {
 	foreach part $skip_index_part {
 	    if { [lsearch -exact { constant_pool } $part] == -1 } {
 		error "gdb_index: unknown skip_index_part '$part'"
+	    }
+	}
+
+	# Validate the names passed to header_override to catch typos in
+	# tests.
+	foreach header [dict keys $header_override] {
+	    if { [lsearch -exact { cu_list tu_list address_table symbol_table \
+				       shortcut constant_pool } \
+		      $header] == -1 } {
+		error "gdb_index: unknown header_override '$header'"
 	    }
 	}
 
@@ -4182,22 +4206,53 @@ namespace eval Dwarf {
 
 	gdb_index_start:
 
+	# Helper proc to emit a header field with optional override.
+	proc _emit_header_field { field_name label computed_value } {
+	    upvar header_override header_override
+
+	    if { [dict exists $header_override $field_name] } {
+		set override [dict get $header_override $field_name]
+		if { $override eq "skip" } {
+		    # Don't emit this field
+		    return
+		} else {
+		    # Emit the override value
+		    _op .4byte $override "$label (override)"
+		}
+	    } else {
+		# Emit the computed value
+		_op .4byte $computed_value $label
+	    }
+	}
+
 	# Header.
 	_op .4byte $version "Version"
-	_op .4byte "$gdb_index_cu_list - $gdb_index_start" \
-	    "CU list offset"
-	_op .4byte "$gdb_index_tu_list - $gdb_index_start" \
-	    "TU list offset"
-	_op .4byte "$gdb_index_addr_table - $gdb_index_start" \
-	    "Address table offset"
-	_op .4byte "$gdb_index_symtab - $gdb_index_start" \
-	    "Symbol table offset"
+
+	# CU list offset.
+	_emit_header_field cu_list "CU list offset" \
+	    "$gdb_index_cu_list - $gdb_index_start"
+
+	# TU list offset.
+	_emit_header_field tu_list "TU list offset" \
+	    "$gdb_index_tu_list - $gdb_index_start"
+
+	# Address table offset.
+	_emit_header_field address_table "Address table offset" \
+	    "$gdb_index_addr_table - $gdb_index_start"
+
+	# Symbol table offset.
+	_emit_header_field symbol_table "Symbol table offset" \
+	    "$gdb_index_symtab - $gdb_index_start"
+
+	# Shortcut table offset (version 9+).
 	if { $version >= 9 } {
-	    _op .4byte "$gdb_index_shortcut - $gdb_index_start" \
-		"Shortcut table offset"
+	    _emit_header_field shortcut "Shortcut table offset" \
+		"$gdb_index_shortcut - $gdb_index_start"
 	}
-	_op .4byte "$gdb_index_constant_pool - $gdb_index_start" \
-	    "Constant pool offset"
+
+	# Constant pool offset.
+	_emit_header_field constant_pool "Constant pool offset" \
+	    "$gdb_index_constant_pool - $gdb_index_start"
 
 	# CU list.
 	gdb_index_cu_list:
