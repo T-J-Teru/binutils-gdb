@@ -481,6 +481,22 @@ read_gdb_index_from_buffer (const char *filename,
   const gdb_byte *addr = &buffer[0];
   offset_view metadata (buffer);
 
+  /* Emit a warning that the .gdb_index section is too small.  */
+  auto invalid_index_size_warning = [&] ()
+  {
+    warning (_(".gdb_index section in %ps is too small (%s bytes),"
+	       " ignoring .gdb_index"),
+	     styled_string (file_name_style.style (), filename),
+	     pulongest (buffer.size ()));
+    return false;
+  };
+
+  /* Ensure that there is at least a version number available for reading.
+     We cannot do a minimum buffer size check until we know what version of
+     index we have, so first just check we can read that safely.  */
+  if (buffer.size () < sizeof (offset_type))
+    return invalid_index_size_warning ();
+
   /* Version check.  */
   offset_type version = metadata[0];
   /* GDB now requires the symbol attributes, which were added in
@@ -512,6 +528,49 @@ read_gdb_index_from_buffer (const char *filename,
     return false;
 
   map->version = version;
+
+  /* The .gdb_index header is a version number followed by a series of
+     offsets into the .gdb_index section.  Each header offset points to a
+     data block, and the offset order, and the data block order are the
+     same.  This means that each offset must be greater than, or equal to
+     the previous.  The first offset should point to the first byte after
+     the .gdb_index header.  None of the header offsets should point outside
+     of the .gdb_index section.
+
+     If any of these requirements are not met then GDB can end either
+     crashing by accessing invalid memory, or trying to allocate a huge
+     amount of memory to hold an incorrectly sized data block.
+
+     So, before we make use of the header, lets sanity check it.
+
+     First, how many offsets do we expect in the header?  Version 9 added
+     the shortcut table offset.  */
+  const size_t offset_count = version >= 9 ? 6 : 5;
+
+  /* Ensure the buffer is large enough to contain the whole header (the
+     version word plus OFFSET_COUNT offset words) before reading any
+     offsets.  */
+  if (metadata.size () < offset_count + 1)
+    return invalid_index_size_warning ();
+
+  /* Each offset must not be smaller than the end of the header, no larger
+     than the whole .gdb_index section, and no smaller than the preceding
+     offset.  Initially set PREV to the header size to enforce the lower
+     bound on the first offset.  */
+  size_t prev = (offset_count + 1) * sizeof (offset_type);
+  for (size_t idx = 1; idx <= offset_count; ++idx)
+    {
+      size_t off = metadata[idx];
+      if (off < prev || off > buffer.size ())
+	{
+	  warning (_("skipping .gdb_index section in %ps, an invalid offset (%s)"
+		     " was found in the header"),
+		   styled_string (file_name_style.style (), filename),
+		   hex_string (off));
+	  return false;
+	}
+      prev = off;
+    }
 
   int i = 1;
   *cu_list = addr + metadata[i];

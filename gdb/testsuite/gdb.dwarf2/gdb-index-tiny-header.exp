@@ -1,0 +1,121 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Check that GDB gracefully handles a .gdb_index section that is too small
+# to contain a valid header.  A valid version 9 header is 28 bytes, a 4-byte
+# version word followed by six 4-byte offsets, so the section is built at
+# every size from 0 up to 28 bytes in turn.  Each of these should cause GDB
+# to ignore the index and fall back to building a cooked index from the
+# DWARF, rather than reading beyond the end of the index section.  The size
+# 28 case is interesting as this is big enough to hold a valid header, but
+# every offset in the header is 0, which is invalid, so GDB will reject the
+# index for that reason.
+#
+# The sizes split into a few interesting ranges:
+#   0 bytes       -- an empty section, silently ignored.
+#   1 to 3 bytes  -- too small even for the version word.
+#   4 to 27 bytes -- a valid version word, but a truncated set of header
+#                    offsets.
+#   28 bytes      -- a full set of header offsets, but they are all zero,
+#                    which is invalid.
+
+load_lib dwarf.exp
+
+require dwarf2_support
+
+# This test installs its own hand-crafted .gdb_index into the executable.
+# The 'readnow' board forces GDB to ignore the index and read the full debug
+# info, making this test irrelevant.
+require !readnow
+
+standard_testfile main.c gdb-index-tiny-header.S
+
+# This test relies on adding a .gdb_index.  If we are using a board that
+# adds an index at compile time then this test is not going to work.  So
+# build an executable at this point and check if it has an index already, if
+# it does, then we cannot carry on.
+if {[prepare_for_testing "failed to prepare" ${testfile} $srcfile]} {
+    return
+}
+
+set index [have_index $binfile]
+if { ![string eq $index ""] } {
+    unsupported "cache created at compile time"
+    return
+}
+
+# Build and test one variant of the tiny .gdb_index section.  SIZE is the
+# number of bytes in the generated section, it is passed to the assembler
+# source via the INDEX_SIZE macro.
+proc run_test { size } {
+    set exe "${::binfile}-${size}"
+
+    if {[build_executable "failed to build" $exe \
+	     [list $::srcfile $::srcfile2] \
+	     [list debug additional_flags=-DINDEX_SIZE=$size]] == -1} {
+	return
+    }
+
+    clean_restart
+
+    # Read the index synchronously as part of loading the file, so that any
+    # problem shows up during the 'file' command below.
+    gdb_test_no_output "maint set dwarf synchronous on"
+
+    # Loading the executable.  gdb_load returns -1 if GDB reports an
+    # internal error.
+    set res [gdb_load $exe]
+    gdb_assert { $res == 0 } "load executable"
+    if { $res != 0 } {
+	return
+    }
+
+    # A non-empty but too-small section should be rejected with a warning.
+    # A zero byte index section is empty and is silently ignored.
+    if { $size == 28 } {
+	set warning_re \
+	    [string cat \
+		 "\r\nwarning: skipping \\.gdb_index section in \[^\r\n\]+, an invalid offset \\(0x0\\) was found in the header\r\n"]
+	gdb_assert { [regexp $warning_re $::gdb_file_cmd_msg] } \
+	    "index rejected due to invalid offset"
+    } elseif { $size > 0 } {
+	set warning_re \
+	    [string cat \
+		 "\r\nwarning: \\.gdb_index section in \[^\r\n\]* is too " \
+		 "small \\($::decimal bytes\\), ignoring \\.gdb_index\r\n"]
+	gdb_assert { [regexp $warning_re $::gdb_file_cmd_msg] } \
+	    "index rejected due to header size"
+    } else {
+	# The SIZE is 0, there should be no warning in this case.
+	gdb_assert { ![regexp "warning: " $::gdb_file_cmd_msg] } \
+	    "no warning seen"
+    }	
+
+    # The tiny .gdb_index is invalid, so GDB should ignore it and use a
+    # cooked index built from the DWARF instead.
+    set index [get_index_type [file tail $exe]]
+    gdb_assert { [string equal $index "cooked"] } ".gdb_index ignored"
+
+    # Expanding all symtabs should not crash GDB.
+    gdb_test_no_output "maint expand-symtabs" "expand all symtabs"
+}
+
+# Test every size from an empty section up to exactly the length of a valid
+# version 9 header (28 bytes).
+for { set s 0 } { $s <= 28 } { incr s } {
+    with_test_prefix "size $s" {
+	run_test $s
+    }
+}
