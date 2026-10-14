@@ -276,6 +276,48 @@ proc run_test { testname } {
 		addr $_start_start "$_start_end - 2" cu_label
 		addr "$_start_end - 4" $_start_end cu_label
 	    }
+	} elseif { $testname eq "header-cu-list-invalid" } {
+	    # Create an index with an out-of-bounds CU list offset.
+	    # GDB should detect this and reject the index.
+	    gdb_index { header_override {cu_list 0xffffffff} } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "header-tu-list-invalid" } {
+	    # Create an index with an out-of-bounds TU list offset.
+	    # GDB should detect this and reject the index.
+	    gdb_index { header_override {tu_list 0xffffffff} } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "header-address-table-invalid" } {
+	    # Create an index with an out-of-bounds address table offset.
+	    # GDB should detect this and reject the index.
+	    gdb_index { header_override {address_table 0xffffffff} } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "header-symbol-table-invalid" } {
+	    # Create an index with an out-of-bounds symbol table offset.
+	    # GDB should detect this and reject the index.
+	    gdb_index { header_override {symbol_table 0xffffffff} } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "header-shortcut-invalid" } {
+	    # Create an index with an out-of-bounds shortcut table offset.
+	    # GDB should detect this and reject the index.
+	    gdb_index { header_override {shortcut 0xffffffff} } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "header-constant-pool-invalid" } {
+	    # Create an index with an out-of-bounds constant pool offset.
+	    # GDB should detect this and reject the index.
+	    gdb_index { header_override {constant_pool 0xffffffff} } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
 	} elseif { $testname eq "valid-index" } {
 	    # Generate a well-formed index that includes a valid main
 	    # function (valid language, with the name pointing at the
@@ -367,6 +409,17 @@ proc run_test { testname } {
 	    set expect_warning_re ""
 	}
 	set expect_addr_map {}
+    } elseif { $testname eq "header-cu-list-invalid" \
+		   || $testname eq "header-tu-list-invalid" \
+		   || $testname eq "header-address-table-invalid" \
+		   || $testname eq "header-symbol-table-invalid" \
+		   || $testname eq "header-shortcut-invalid" \
+		   || $testname eq "header-constant-pool-invalid" } {
+	# Each of these tests puts an out-of-range offset in one field of
+	# the index header.  GDB should detect the invalid offset, emit a
+	# warning, and reject the index.
+	set expect_gdb_index_ignored true
+	set expect_warning_re "\r\nwarning: skipping \\.gdb_index section in \[^\r\n\]*, an invalid offset \\($::hex\\) was found in the header\r\n"
     } elseif { $testname eq "addr-valid" } {
 	set expect_start true
 	set expect_method false
@@ -538,6 +591,12 @@ set tests { empty-component \
 		addr-swapped \
 		addr-overlap \
 		addr-valid \
+		header-cu-list-invalid \
+		header-tu-list-invalid \
+		header-address-table-invalid \
+		header-symbol-table-invalid \
+		header-shortcut-invalid \
+		header-constant-pool-invalid \
 		valid-index }
 
 foreach_with_prefix test $tests {
