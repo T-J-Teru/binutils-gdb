@@ -3831,7 +3831,8 @@ namespace eval Dwarf {
     #               has zero length.  This option is only useful for
     #               generating invalid .gdb_index sections for testing GDB's
     #               error handling.  The supported part names are:
-    #               'constant_pool'.
+    #               'cu_list', 'tu_list', 'address_table', 'symbol_table',
+    #               'shortcut' (version 9 only) and 'constant_pool'.
     #               (default {} -- no .gdb_index parts are skipped)
     #   header_override <dict>
     #             - a dict specifying overrides for header fields.  Each
@@ -3966,7 +3967,8 @@ namespace eval Dwarf {
 	# Validate the names passed to skip_index_part to catch typos in
 	# tests.
 	foreach part $skip_index_part {
-	    if { [lsearch -exact { constant_pool } $part] == -1 } {
+	    if { [lsearch -exact { cu_list tu_list address_table symbol_table \
+				       shortcut constant_pool } $part] == -1 } {
 		error "gdb_index: unknown skip_index_part '$part'"
 	    }
 	}
@@ -4267,31 +4269,44 @@ namespace eval Dwarf {
 
 	# CU list.
 	gdb_index_cu_list:
-	foreach cu_rec $_gdb_index_cus {
-	    lassign $cu_rec cu length
-	    upvar $cu tmp
-	    _op_offset 8 $tmp "CU offset"
-	    # Record the CU's length into the index.  In a well formed
-	    # index the length recorded here must match the actual
-	    # length of the CU in .debug_info.  We allow the length to
-	    # be overridden, for testing purposes, by passing a bogus
-	    # length to the 'cu' command.  If that was done then use
-	    # that length instead.
-	    if { $length ne "" } {
-		set cu_length $length
-	    } elseif { [info exists _cu_lengths($tmp)] } {
-		set cu_length $_cu_lengths($tmp)
-	    } else {
-		error "gdb_index: unknown length for CU '$cu'"
+	if { [lsearch -exact $skip_index_part cu_list] != -1 } {
+	    # We've been asked to not generate the CU list.  This results in
+	    # an invalid .gdb_index.  We only support this as an option for
+	    # error testing.
+	} else {
+	    foreach cu_rec $_gdb_index_cus {
+		lassign $cu_rec cu length
+		upvar $cu tmp
+		_op_offset 8 $tmp "CU offset"
+		# Record the CU's length into the index.  In a well formed
+		# index the length recorded here must match the actual
+		# length of the CU in .debug_info.  We allow the length to
+		# be overridden, for testing purposes, by passing a bogus
+		# length to the 'cu' command.  If that was done then use
+		# that length instead.
+		if { $length ne "" } {
+		    set cu_length $length
+		} elseif { [info exists _cu_lengths($tmp)] } {
+		    set cu_length $_cu_lengths($tmp)
+		} else {
+		    error "gdb_index: unknown length for CU '$cu'"
+		}
+		_op_offset 8 "$cu_length" "CU length"
 	    }
-	    _op_offset 8 "$cu_length" "CU length"
 	}
 
-	# TU list (empty for now).
+	# TU list.  This is always empty for now.  Skipping it (via
+	# SKIP_INDEX_PART) is therefore a no-op so we don't even check.
 	gdb_index_tu_list:
 
 	# Address table.
 	gdb_index_addr_table:
+	if { [lsearch -exact $skip_index_part address_table] != -1 } {
+	    # We've been asked to not generate the address table.  An empty
+	    # address table is actually valid, this exists for completeness
+	    # and for error testing.
+	    set _gdb_index_addrs {}
+	}
 	foreach addr_entry $_gdb_index_addrs {
 	    lassign $addr_entry entry_type low high
 
@@ -4320,6 +4335,12 @@ namespace eval Dwarf {
 
 	# Symbol table.
 	gdb_index_symtab:
+	if { [lsearch -exact $skip_index_part symbol_table] != -1 } {
+	    # We've been asked to not generate the symbol table.  GDB treats
+	    # an index with an empty symbol table as unusable.  This exists
+	    # for error testing.
+	    set table_size 0
+	}
 	for {set i 0} {$i < $table_size} {incr i} {
 	    if {$slot_occupied($i)} {
 		set idx $slot_name_idx($i)
@@ -4369,16 +4390,22 @@ namespace eval Dwarf {
 	# Shortcut table (version 9 only).
 	if { $version >= 9 } {
 	    gdb_index_shortcut:
-	    _op .4byte $_gdb_index_main_lang "Language"
-	    if { $_gdb_index_main_lang == 0 } {
-		_op .4byte 0 "Name offset"
-	    } elseif { $_gdb_index_main_name_idx eq "end" } {
-		_op .4byte \
-		    "$gdb_index_constant_pool_end - $gdb_index_constant_pool" \
-		    "Name offset"
+	    if { [lsearch -exact $skip_index_part shortcut] != -1 } {
+		# We've been asked to not generate the shortcut table.  GDB
+		# copes with a missing shortcut table by not recording a
+		# main function.  This exists for error testing.
 	    } else {
-		_op .4byte "$_gdb_index_main_name_idx" \
-		    "Name offset"
+		_op .4byte $_gdb_index_main_lang "Language"
+		if { $_gdb_index_main_lang == 0 } {
+		    _op .4byte 0 "Name offset"
+		} elseif { $_gdb_index_main_name_idx eq "end" } {
+		    _op .4byte \
+			"$gdb_index_constant_pool_end - $gdb_index_constant_pool" \
+			"Name offset"
+		} else {
+		    _op .4byte "$_gdb_index_main_name_idx" \
+			"Name offset"
+		}
 	    }
 	}
 

@@ -141,6 +141,55 @@ proc run_test { testname } {
 		cu cu_label
 		name _start {{cu_label function global}}
 	    }
+	} elseif { $testname eq "skip-cu-list" } {
+	    # Create a .gdb_index with an empty CU list, but with a symbol
+	    # that refers to a CU.  The CU reference is now out of range, so
+	    # GDB should ignore this .gdb_index.
+	    gdb_index {
+		skip_index_part { cu_list }
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "skip-tu-list" } {
+	    # Skip the TU list.  The TU list is always empty anyway, so this
+	    # produces a perfectly valid .gdb_index; it is a sanity check
+	    # that skipping an already-empty part changes nothing.
+	    gdb_index {
+		skip_index_part { tu_list }
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "skip-address-table" } {
+	    # Skip the address table.  An empty address table is valid, so
+	    # GDB should still use this .gdb_index.
+	    gdb_index {
+		skip_index_part { address_table }
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "skip-symbol-table" } {
+	    # Skip the symbol table.  GDB treats an index with an empty
+	    # symbol table as unusable and should ignore this .gdb_index.
+	    gdb_index {
+		skip_index_part { symbol_table }
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+	    }
+	} elseif { $testname eq "skip-shortcut" } {
+	    # Skip the shortcut table, but record a main function.  With no
+	    # shortcut table GDB cannot find the main function, but the
+	    # index is otherwise valid and should still be used.
+	    gdb_index {
+		skip_index_part { shortcut }
+	    } {
+		cu cu_label
+		name _start {{cu_label function global}}
+		main DW_LANG_C99 _start
+	    }
 	} elseif { $testname eq "long-cu-vector" } {
 	    # Create a .gdb_index containing a CU vector in the
 	    # constant pool where the vector length is invalid.
@@ -386,7 +435,14 @@ proc run_test { testname } {
 		   || $testname eq "cu-vector-offset-1" \
 		   || $testname eq "cu-vector-offset-2" \
 		   || $testname eq "cu-vector-offset-3" \
-		   || $testname eq "bad-cu-length" } {
+		   || $testname eq "bad-cu-length" \
+		   || $testname eq "skip-tu-list" \
+		   || $testname eq "skip-address-table" \
+		   || $testname eq "skip-shortcut" } {
+	# These produce an index that GDB still uses and in which the symbol
+	# _start is visible, but with no recognised main function.  For the
+	# skip-shortcut test a main function was recorded, but GDB cannot
+	# find it with the shortcut table missing.
 	set expect_gdb_index_ignored false
 	set expect_start true
 	set expect_method false
@@ -461,7 +517,21 @@ proc run_test { testname } {
 	set expect_addr_map {}
 	set expect_warning_re ""
     } elseif { $testname eq "no-null"
-	       || $testname eq "skip-constant-pool" } {
+	       || $testname eq "skip-constant-pool"
+	       || $testname eq "skip-cu-list"
+	       || $testname eq "skip-symbol-table" } {
+	# For the three skip-* cases, these parts of the .gdb_index are
+	# critical.  If the symbol table is missing (or empty) then the
+	# index contains no useful symbols, so GDB ignores the index.  If
+	# either of the constant pool or the CU list are missing (or empty)
+	# then any symbols in the symbol list cannot be instantiated, so the
+	# symbol table is effectively empty, again GDB ignores the index in
+	# these cases.
+	#
+	# The no-null case means that the constant pool is malformed
+	# (missing its trailing null byte).  GDB ignores the constant pool
+	# in this case, effectively making it empty.  This renders the
+	# symbol table useless, so GDB ignores the index.
 	set expect_gdb_index_ignored true
 	if { $testname eq "no-null" } {
 	    set expect_warning_re "\r\nwarning: skipping .gdb_index in \[^\r\n\]+, null byte at end of constant pool is missing\r\n"
@@ -579,6 +649,11 @@ set tests { empty-component \
 		main-language \
 		no-null \
 		skip-constant-pool \
+		skip-cu-list \
+		skip-tu-list \
+		skip-address-table \
+		skip-symbol-table \
+		skip-shortcut \
 		long-cu-vector \
 		name-offset-1 \
 		name-offset-2 \
