@@ -606,10 +606,12 @@ read_gdb_index_from_buffer (const char *filename,
 
   map->constant_pool = buffer.slice (metadata[i]);
 
-  if (map->constant_pool.empty () && !map->symbol_table.empty ())
+  if ((map->constant_pool.empty () || *cu_list_elements == 0)
+      && !map->symbol_table.empty ())
     {
-      /* An empty constant pool implies that all symbol table entries are
-	 empty.  Make map->symbol_table.empty () == true.  */
+      /* An empty constant pool or an empty CU list implies that all symbol
+	 table entries are empty.  Recreate the symbol table as empty so
+	 this index will be ignored.  */
       map->symbol_table
 	= offset_view (gdb::array_view<const gdb_byte> (symbol_table,
 							symbol_table));
