@@ -2824,8 +2824,7 @@ This command is available when debugging locally on most targets, excluding
 @kindex set startup-with-shell
 @anchor{set startup-with-shell}
 @item set startup-with-shell
-@itemx set startup-with-shell on
-@itemx set startup-with-shell off
+@itemx set startup-with-shell @r{[}on@r{|}off@r{]}
 @itemx show startup-with-shell
 On Unix systems, by default, if a shell is available on your target,
 @value{GDBN}) uses it to start your program.  Arguments of the
@@ -2852,8 +2851,7 @@ $@file{.zshenv} for the Z shell, or the file specified in the
 @anchor{set auto-connect-native-target}
 @kindex set auto-connect-native-target
 @item set auto-connect-native-target
-@itemx set auto-connect-native-target on
-@itemx set auto-connect-native-target off
+@itemx set auto-connect-native-target @r{[}on@r{|}off@r{]}
 @itemx show auto-connect-native-target
 
 By default, if the current inferior is not connected to any target yet
@@ -3291,7 +3289,7 @@ comparing their build IDs (@pxref{build ID}), if available.
 @table @kbd
 @kindex exec-file-mismatch
 @cindex set exec-file-mismatch
-@item set exec-file-mismatch @samp{ask|warn|off}
+@item set exec-file-mismatch @r{[}ask@r{|}warn@r{|}off@r{]}
 
 Whether to detect mismatch between the current executable file loaded
 by @value{GDBN} and the executable file used to start the process.  If
@@ -3661,8 +3659,7 @@ control use @w{@code{set print inferior-events}}:
 @kindex set print inferior-events
 @cindex print messages on inferior start and exit
 @item set print inferior-events
-@itemx set print inferior-events on
-@itemx set print inferior-events off
+@itemx set print inferior-events @r{[}on@r{|}off@r{]}
 The @code{set print inferior-events} command allows you to enable or
 disable printing of messages when @value{GDBN} notices that new
 inferiors have started or that inferiors have exited or have been
@@ -4132,7 +4129,7 @@ apply} command.  @xref{Frame Apply,,frame apply}.
 
 @kindex thread name
 @cindex name a thread
-@item thread name [@var{name}]
+@item thread name @r{[}@var{name}@r{]}
 This command assigns a name to the current thread.  If no argument is
 given, any existing user-specified name is removed.  The thread name
 appears in the @samp{info threads} display.
@@ -4165,8 +4162,7 @@ Thread 4 has target id 'Thread 0x41e02940 (LWP 26688)'
 @kindex set print thread-events
 @cindex print messages on thread start and exit
 @item set print thread-events
-@itemx set print thread-events on
-@itemx set print thread-events off
+@itemx set print thread-events @r{[}on@r{|}off@r{]}
 The @code{set print thread-events} command allows you to enable or
 disable printing of messages when @value{GDBN} notices that new threads have
 started or that threads have exited.  By default, these messages will
@@ -4279,7 +4275,7 @@ other (non-@acronym{GLIBC}) C libraries.
 @kindex maint set force-internal-tls-address-lookup
 @kindex maint show force-internal-tls-address-lookup
 @cindex internal @acronym{TLS} address lookup
-@item maint set force-internal-tls-address-lookup
+@item maint set force-internal-tls-address-lookup @r{[}on@r{|}off@r{]}
 @itemx maint show force-internal-tls-address-lookup
 Turns on or off forced use of @value{GDBN}-internal @acronym{TLS}
 address lookup code.  Use @code{on} to enable and @code{off} to
@@ -6395,8 +6391,7 @@ Note that the @code{info break} displays the dynamic printf commands
 as normal breakpoint commands; you can thus easily see the effect of
 the variable settings.
 
-@item set disconnected-dprintf on
-@itemx set disconnected-dprintf off
+@item set disconnected-dprintf @r{[}on@r{|}off@r{]}
 @kindex set disconnected-dprintf
 Choose whether @code{dprintf} commands should continue to run if
 @value{GDBN} has disconnected from the target.  This only applies
@@ -6777,7 +6772,7 @@ Contrast this with the @code{return} command (@pxref{Returning,
 
 @kindex set print finish
 @kindex show print finish
-@item set print finish @r{[}on|off@r{]}
+@item set print finish @r{[}on@r{|}off@r{]}
 @itemx show print finish
 By default the @code{finish} command will show the value that is
 returned by the function.  This can be disabled using @code{set print
@@ -7145,7 +7140,7 @@ the skips as a script that can be re-read into @value{GDBN} using the
 @code{source} command.
 
 @kindex set debug skip
-@item set debug skip @r{[}on|off@r{]}
+@item set debug skip @r{[}on@r{|}off@r{]}
 Set whether to print the debug output about skipping files and functions.
 
 @kindex show debug skip
@@ -7835,8 +7830,7 @@ stream will still not be able to be placed.
 @table @kbd
 
 @kindex observer
-@item set observer on
-@itemx set observer off
+@item set observer @r{[}on@r{|}off@r{]}
 When set to @code{on}, this disables all the permission variables
 below (except for @code{insert-fast-tracepoints}), plus enables
 non-stop debugging.  Setting this to @code{off} switches back to
@@ -7846,8 +7840,7 @@ normal debugging, though remaining in non-stop mode.
 Show whether observer mode is on or off.
 
 @kindex may-write-registers
-@item set may-write-registers on
-@itemx set may-write-registers off
+@item set may-write-registers @r{[}on@r{|}off@r{]}
 This controls whether @value{GDBN} will attempt to alter the values of
 registers, such as with assignment expressions in @code{print}, or the
 @code{jump} command.  It defaults to @code{on}.
@@ -7856,8 +7849,7 @@ registers, such as with assignment expressions in @code{print}, or the
 Show the current permission to write registers.
 
 @kindex may-write-memory
-@item set may-write-memory on
-@itemx set may-write-memory off
+@item set may-write-memory @r{[}on@r{|}off@r{]}
 This controls whether @value{GDBN} will attempt to alter the contents
 of memory, such as with assignment expressions in @code{print}.  It
 defaults to @code{on}.
@@ -7866,8 +7858,7 @@ defaults to @code{on}.
 Show the current permission to write memory.
 
 @kindex may-insert-breakpoints
-@item set may-insert-breakpoints on
-@itemx set may-insert-breakpoints off
+@item set may-insert-breakpoints @r{[}on@r{|}off@r{]}
 This controls whether @value{GDBN} will attempt to insert breakpoints.
 This affects all breakpoints, including internal breakpoints defined
 by @value{GDBN}.  It defaults to @code{on}.
@@ -7876,8 +7867,7 @@ by @value{GDBN}.  It defaults to @code{on}.
 Show the current permission to insert breakpoints.
 
 @kindex may-insert-tracepoints
-@item set may-insert-tracepoints on
-@itemx set may-insert-tracepoints off
+@item set may-insert-tracepoints @r{[}on@r{|}off@r{]}
 This controls whether @value{GDBN} will attempt to insert (regular)
 tracepoints at the beginning of a tracing experiment.  It affects only
 non-fast tracepoints, fast tracepoints being under the control of
@@ -7887,8 +7877,7 @@ non-fast tracepoints, fast tracepoints being under the control of
 Show the current permission to insert tracepoints.
 
 @kindex may-insert-fast-tracepoints
-@item set may-insert-fast-tracepoints on
-@itemx set may-insert-fast-tracepoints off
+@item set may-insert-fast-tracepoints @r{[}on@r{|}off@r{]}
 This controls whether @value{GDBN} will attempt to insert fast
 tracepoints at the beginning of a tracing experiment.  It affects only
 fast tracepoints, regular (non-fast) tracepoints being under the
@@ -7898,8 +7887,7 @@ control of @code{may-insert-tracepoints}.  It defaults to @code{on}.
 Show the current permission to insert fast tracepoints.
 
 @kindex may-interrupt
-@item set may-interrupt on
-@itemx set may-interrupt off
+@item set may-interrupt @r{[}on@r{|}off@r{]}
 This controls whether @value{GDBN} will attempt to interrupt or stop
 program execution.  When this variable is @code{off}, the
 @code{interrupt} command will have no effect, nor will
@@ -9201,7 +9189,7 @@ If both @var{regexp} and @var{type_regexp} are provided, an argument
 is printed only if its name matches @var{regexp} and its type matches
 @var{type_regexp}.
 
-@item info locals [-q] [-shadowed [on|off]]
+@item info locals [-q] [-shadowed @r{[}on@r{|}off@r{]}]
 @kindex info locals
 Print the local variables of the selected frame, each on a separate
 line.  These are all variables (declared either static or automatic)
@@ -14359,8 +14347,7 @@ dump (@pxref{set use-coredump-filter}), and by default honors the
 
 @kindex set use-coredump-filter
 @anchor{set use-coredump-filter}
-@item set use-coredump-filter on
-@itemx set use-coredump-filter off
+@item set use-coredump-filter @r{[}on@r{|}off@r{]}
 Enable or disable the use of the file
 @file{/proc/@var{pid}/coredump_filter} when generating core dump
 files.  This file is used by the Linux kernel to decide what types of
@@ -14388,8 +14375,7 @@ This will cause these memory mappings to be dumped automatically.
 
 @kindex set dump-excluded-mappings
 @anchor{set dump-excluded-mappings}
-@item set dump-excluded-mappings on
-@itemx set dump-excluded-mappings off
+@item set dump-excluded-mappings @r{[}on@r{|}off@r{]}
 If @code{on} is specified, @value{GDBN} will dump memory mappings
 marked with the @code{VM_DONTDUMP} flag.  This flag is represented in
 the file @file{/proc/@var{pid}/smaps} with the acronym @code{dd}.
@@ -14642,8 +14628,7 @@ cacheable; @pxref{Memory Region Attributes}.
 
 @table @kbd
 @kindex set remotecache
-@item set remotecache on
-@itemx set remotecache off
+@item set remotecache @r{[}on@r{|}off@r{]}
 This option no longer does anything; it exists for compatibility
 with old scripts.
 
@@ -14652,8 +14637,7 @@ with old scripts.
 Show the current state of the obsolete remotecache flag.
 
 @kindex set stack-cache
-@item set stack-cache on
-@itemx set stack-cache off
+@item set stack-cache @r{[}on@r{|}off@r{]}
 Enable or disable caching of stack accesses.  When @code{on}, use
 caching.  By default, this option is @code{on}.
 
@@ -14662,8 +14646,7 @@ caching.  By default, this option is @code{on}.
 Show the current state of data caching for memory accesses.
 
 @kindex set code-cache
-@item set code-cache on
-@itemx set code-cache off
+@item set code-cache @r{[}on@r{|}off@r{]}
 Enable or disable caching of code segment accesses.  When @code{on},
 use caching.  By default, this option is @code{on}.  This improves
 performance of disassembly in remote debugging.
@@ -16148,8 +16131,7 @@ unfortunate to lose hard-won trace data, so the variable
 continue running without @value{GDBN}.
 
 @table @kbd
-@item set disconnected-tracing on
-@itemx set disconnected-tracing off
+@item set disconnected-tracing @r{[}on@r{|}off@r{]}
 @kindex set disconnected-tracing
 Choose whether a tracing run should continue to run if @value{GDBN}
 has disconnected from the target.  Note that @code{detach} or
@@ -16193,8 +16175,7 @@ buffer handling on the fly, otherwise it will not take effect until
 the next run.
 
 @table @kbd
-@item set circular-trace-buffer on
-@itemx set circular-trace-buffer off
+@item set circular-trace-buffer @r{[}on@r{|}off@r{]}
 @kindex set circular-trace-buffer
 Choose whether a tracing run should use a linear or circular buffer
 for trace data.  A linear buffer will not lose any trace data, but may
@@ -17312,8 +17293,7 @@ little sense to evaluate anyway.
 @kindex set check type
 @kindex show check type
 @table @kbd
-@item set check type on
-@itemx set check type off
+@item set check type @r{[}on@r{|}off@r{]}
 Set strict type checking on or off.  If any type mismatches occur in
 evaluating an expression while type checking is on, @value{GDBN} prints a
 message and aborts evaluation of the expression.
@@ -17364,8 +17344,7 @@ Set range checking on or off based on the current working language.
 @xref{Supported Languages, ,Supported Languages}, for the default settings for
 each language.
 
-@item set check range on
-@itemx set check range off
+@item set check range @r{[}on@r{|}off@r{]}
 Set range checking on or off, overriding the default setting for the
 current working language.  A warning is issued if the setting does not
 match the language default.  If a range error occurs and range checking is on,
@@ -20082,9 +20061,7 @@ looks up the value of @code{x} in the scope of the file @file{foo.c}.
 @cindex case-insensitive symbol names
 @cindex case sensitivity in symbol names
 @kindex set case-sensitive
-@item set case-sensitive on
-@itemx set case-sensitive off
-@itemx set case-sensitive auto
+@item set case-sensitive @r{[}on@r{|}off@r{|}auto@r{]}
 Normally, when @value{GDBN} looks up symbols, it matches their names
 with case sensitivity determined by the current source language.
 Occasionally, you may wish to control that.  The command @code{set
@@ -20102,8 +20079,7 @@ lookups.
 
 @kindex set print type methods
 @item set print type methods
-@itemx set print type methods on
-@itemx set print type methods off
+@itemx set print type methods @r{[}on@r{|}off@r{]}
 Normally, when @value{GDBN} prints a class, it displays any methods
 declared in that class.  You can control this behavior either by
 passing the appropriate flag to @code{ptype}, or using @command{set
@@ -20131,9 +20107,7 @@ printing classes.
 
 @kindex set print type typedefs
 @item set print type typedefs
-@itemx set print type typedefs on
-@itemx set print type typedefs off
-
+@itemx set print type typedefs @r{[}on@r{|}off@r{]}
 Normally, when @value{GDBN} prints a class, it displays any typedefs
 defined in that class.  You can control this behavior either by
 passing the appropriate flag to @code{ptype}, or using @command{set
@@ -20151,9 +20125,7 @@ printing classes.
 
 @kindex set print type hex
 @item set print type hex
-@itemx set print type hex on
-@itemx set print type hex off
-
+@itemx set print type hex @r{[}on@r{|}off@r{]}
 When @value{GDBN} prints sizes and offsets of struct members, it can use
 either the decimal or hexadecimal notation.  You can select one or the
 other either by passing the appropriate flag to @code{ptype}, or by using
@@ -21635,8 +21607,7 @@ repairs.
 
 @table @kbd
 @kindex set write
-@item set write on
-@itemx set write off
+@item set write @r{[}on@r{|}off@r{]}
 If you specify @samp{set write on}, @value{GDBN} opens executable and
 core files for both reading and writing; if you specify @kbd{set write
 off} (the default), @value{GDBN} opens them read-only.
@@ -22680,7 +22651,7 @@ of shared library symbols.
 Display the current shared library search path.
 
 @cindex DOS file-name semantics of file names.
-@kindex set target-file-system-kind (unix|dos-based|auto)
+@kindex set target-file-system-kind @r{[}unix@r{|}dos-based@r{|}auto@r{]}
 @kindex show target-file-system-kind
 @item set target-file-system-kind @var{kind}
 Set assumed file system kind for target reported file names.
@@ -23267,8 +23238,7 @@ The following commands can be used to tweak the behavior of the index cache.
 @table @kbd
 
 @kindex set index-cache
-@item set index-cache enabled on
-@itemx set index-cache enabled off
+@item set index-cache enabled @r{[}on@r{|}off@r{]}
 Enable or disable the use of the symbol index cache.
 
 @item set index-cache directory @var{directory}
@@ -24551,20 +24521,17 @@ Enable some general logging from within gdbserver.  Currently this is
 equivalent to @kbd{monitor set debug threads on}, but this might
 change in future releases of gdbserver.
 
-@item monitor set debug threads off
-@itemx monitor set debug threads on
+@item monitor set debug threads @r{[}on@r{|}off@r{]}
 Disable or enable specific logging messages associated with thread
 handling in gdbserver.  Currently this category also includes
 additional output not specifically related to thread handling, this
 could change in future releases of gdbserver.
 
-@item monitor set debug remote off
-@itemx monitor set debug remote on
+@item monitor set debug remote @r{[}on@r{|}off@r{]}
 Disable or enable specific logging messages associated with the remote
 protocol (@pxref{Remote Protocol}).
 
-@item monitor set debug event-loop off
-@itemx monitor set debug event-loop on
+@item monitor set debug event-loop @r{[}on@r{|}off@r{]}
 Disable or enable specific logging messages associated with
 gdbserver's event-loop.
 
@@ -24736,8 +24703,7 @@ expect to see @samp{Ctrl-C} as the interrupt signal.
 Show whether @value{GDBN} sends @code{BREAK} or @samp{Ctrl-C} to
 interrupt the remote program.
 
-@item set remoteflow on
-@itemx set remoteflow off
+@item set remoteflow @r{[}on@r{|}off@r{]}
 @kindex set remoteflow
 Enable or disable hardware flow control (@code{RTS}/@code{CTS})
 on the serial port used to communicate to the remote target.
@@ -26401,8 +26367,7 @@ usage.
 @kindex show debug mach-o
 Show the current state of Mach-O file messages.
 
-@item set mach-exceptions on
-@itemx set mach-exceptions off
+@item set mach-exceptions @r{[}on@r{|}off@r{]}
 @kindex set mach-exceptions
 On Darwin, faults are first reported as a Mach exception and are then
 mapped to a Posix signal.  Use this command to turn on trapping of
@@ -26555,7 +26520,7 @@ This command forces @value{GDBN} to use the specified ABI.
 @item show arm abi
 Show the currently used ABI.
 
-@item set arm fallback-mode (arm|thumb|auto)
+@item set arm fallback-mode @r{[}arm@r{|}thumb@r{|}auto@r{]}
 @value{GDBN} uses the symbol table, when available, to determine
 whether instructions are ARM or Thumb.  This command controls
 @value{GDBN}'s default behavior when the symbol table is not
@@ -26566,7 +26531,7 @@ register).
 @item show arm fallback-mode
 Show the current fallback instruction mode.
 
-@item set arm force-mode (arm|thumb|auto)
+@item set arm force-mode @r{[}arm@r{|}thumb@r{|}auto@r{]}
 This command overrides use of the symbol table to determine whether
 instructions are ARM or Thumb.  The default is @samp{auto}, which
 causes @value{GDBN} to use the symbol table and then the setting
@@ -28394,8 +28359,7 @@ buffer.
 Likewise, you can specify @samp{set width unlimited} or @samp{set
 width 0} to prevent @value{GDBN} from wrapping its output.
 
-@item set pagination on
-@itemx set pagination off
+@item set pagination @r{[}on@r{|}off@r{]}
 @kindex set pagination
 Turn the output pagination on or off; the default is on.  Turning
 pagination off is the alternative to @code{set height unlimited}.  Note that
@@ -28420,7 +28384,7 @@ batch mode (@pxref{Mode Options}).  Various style settings are available;
 and styles can also be disabled entirely.
 
 @table @kbd
-@item set style enabled @samp{on|off}
+@item set style enabled @r{[}on@r{|}off@r{]}
 Enable or disable all styling.  The default is host-dependent, with
 most hosts defaulting to @samp{on}.
 
@@ -28430,7 +28394,7 @@ value, then @value{GDBN} will change this to @samp{off} at startup.
 @item show style enabled
 Show the current state of styling.
 
-@item set style emoji @samp{auto|on|off}
+@item set style emoji @r{[}auto@r{|}on@r{|}off@r{]}
 Enable or disable the use of emoji.  On most hosts, the default is
 @samp{auto}, meaning that emoji will only be used if the host
 character set is @samp{UTF-8}; however, on Windows the default is
@@ -28444,7 +28408,7 @@ a warning.
 @item show style emoji
 Show the current state of emoji output.
 
-@item set style sources @samp{on|off}
+@item set style sources @r{[}on@r{|}off@r{]}
 Enable or disable source code styling.  This affects whether source
 code, such as the output of the @code{list} command, is styled.  The
 default is @samp{on}.  Note that source styling only works if styling
@@ -28472,7 +28436,7 @@ emoji display, and so the prefixes are only displayed if emoji styling
 is enabled.  The defaults are the warning sign emoji for warnings, and
 and the cross mark emoji for errors.
 
-@item set style tui-current-position @samp{on|off}
+@item set style tui-current-position @r{[}on@r{|}off@r{]}
 Enable or disable styling of the source and assembly code highlighted
 by the TUI's current position indicator.  The default is @samp{off}.
 @xref{TUI, ,@value{GDBN} Text User Interface}.
@@ -28482,7 +28446,7 @@ Show whether the source and assembly code highlighted by the TUI's
 current position indicator is styled.
 
 @anchor{style_disassembler_enabled}
-@item set style disassembler enabled @samp{on|off}
+@item set style disassembler enabled @r{[}on@r{|}off@r{]}
 Enable or disable disassembler styling.  This affects whether
 disassembler output, such as the output of the @code{disassemble}
 command, is styled.  Disassembler styling only works if styling in
@@ -29429,7 +29393,7 @@ Displays the current state of displaying debugging messages related to
 reading of COFF/PE exported symbols.
 
 @cindex CTF debug messages
-@item set debug ctf [on | off]
+@item set debug ctf @r{[}on@r{|}off@r{]}
 Turns on or off display of debugging messages related to reading CTF
 debug info.  The default is off.
 @item show debug ctf
@@ -31809,7 +31773,7 @@ When off, mouse clicks are handled by the terminal, enabling terminal-native
 text selection.
 
 @kindex set debug tui
-@item set debug tui @r{[}on|off@r{]}
+@item set debug tui @r{[}on@r{|}off@r{]}
 Turn on or off display of @value{GDBN} internal debug messages relating
 to the TUI.
 
@@ -42380,7 +42344,7 @@ Create a core file? (y or n) @kbd{n}
 @kindex maint show debuginfod download-sections
 @cindex debuginfod, maintenance commands
 @item maint set debuginfod download-sections
-@itemx maint set debuginfod download-sections @r{[}on|off@r{]}
+@itemx maint set debuginfod download-sections @r{[}on@r{|}off@r{]}
 @itemx maint show debuginfod download-sections
 Controls whether @value{GDBN} will attempt to download individual
 ELF/DWARF sections from @code{debuginfod}.  If disabled, only
@@ -42397,11 +42361,11 @@ in @value{GDBN} downloading larger amounts of data.
 @kindex maint show internal-warning
 @kindex maint set demangler-warning
 @kindex maint show demangler-warning
-@item maint set internal-error @var{action} [ask|yes|no]
+@item maint set internal-error @var{action} @r{[}ask@r{|}yes@r{|}no@r{]}
 @itemx maint show internal-error @var{action}
-@itemx maint set internal-warning @var{action} [ask|yes|no]
+@itemx maint set internal-warning @var{action} @r{[}ask@r{|}yes@r{|}no@r{]}
 @itemx maint show internal-warning @var{action}
-@itemx maint set demangler-warning @var{action} [ask|yes|no]
+@itemx maint set demangler-warning @var{action} @r{[}ask@r{|}yes@r{|}no@r{]}
 @itemx maint show demangler-warning @var{action}
 When @value{GDBN} reports an internal problem (error or warning) it
 gives the user the opportunity to both quit @value{GDBN} and create a
@@ -42426,9 +42390,9 @@ disabled.
 @kindex maint show internal-error
 @kindex maint set internal-warning
 @kindex maint show internal-warning
-@item maint set internal-error backtrace @r{[}on|off@r{]}
+@item maint set internal-error backtrace @r{[}on@r{|}off@r{]}
 @itemx maint show internal-error backtrace
-@itemx maint set internal-warning backtrace @r{[}on|off@r{]}
+@itemx maint set internal-warning backtrace @r{[}on@r{|}off@r{]}
 @itemx maint show internal-warning backtrace
 When @value{GDBN} reports an internal problem (error or warning) it is
 possible to have a backtrace of @value{GDBN} printed to the standard
@@ -43049,7 +43013,7 @@ asynchronous mode (@pxref{Background Execution}).  Normally the
 default is asynchronous, if it is available; but this can be changed
 to more easily debug problems occurring only in synchronous mode.
 
-@kindex maint set target-non-stop @var{mode} [on|off|auto]
+@kindex maint set target-non-stop @var{mode} @r{[}on@r{|}off@r{|}auto@r{]}
 @kindex maint show target-non-stop
 @item maint set target-non-stop
 @itemx maint show target-non-stop
@@ -43195,7 +43159,7 @@ about the tests, see @ref{maint check libthread-db}.
 
 @kindex maint set gnu-source-highlight enabled
 @kindex maint show gnu-source-highlight enabled
-@item maint set gnu-source-highlight enabled @r{[}on|off@r{]}
+@item maint set gnu-source-highlight enabled @r{[}on@r{|}off@r{]}
 @itemx maint show gnu-source-highlight enabled
 Control whether @value{GDBN} should use the GNU Source Highlight
 library for applying styling to source code (@pxref{Output Styling}).
@@ -43215,7 +43179,7 @@ library.
 @anchor{maint_libopcodes_styling}
 @kindex maint set libopcodes-styling enabled
 @kindex maint show libopcodes-styling enabled
-@item maint set libopcodes-styling enabled @r{[}on|off@r{]}
+@item maint set libopcodes-styling enabled @r{[}on@r{|}off@r{]}
 @itemx maint show libopcodes-styling enabled
 Control whether @value{GDBN} should use its builtin disassembler
 (@file{libopcodes}) to style disassembler output (@pxref{Output
