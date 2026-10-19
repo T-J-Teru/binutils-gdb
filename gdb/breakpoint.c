@@ -167,6 +167,27 @@ static bool bl_address_is_meaningful (const bp_location *loc);
 
 static int find_loc_num_by_location (const bp_location *loc);
 
+/* Provide gdb::unordered_map::Hash for gdb_bfd_ref_ptr.  */
+struct gdb_bfd_ref_ptr_hash
+{
+  size_t
+  operator() (const gdb_bfd_ref_ptr &abfd) const
+  {
+    return std::hash<decltype (abfd.get ())> () (abfd.get ());
+  }
+};
+
+/* Provide gdb::unordered_map::Equal for gdb_bfd_ref_ptr.  */
+struct gdb_bfd_ref_ptr_equal_to
+{
+  bool
+  operator() (const gdb_bfd_ref_ptr &lhs,
+	      const gdb_bfd_ref_ptr &rhs) const
+  {
+    return std::equal_to<decltype (lhs.get ())> () (lhs.get (), rhs.get ());
+  }
+};
+
 /* Captured source code around a breakpoint location, used for
    source-tracking breakpoints.  When source tracking is enabled,
    this structure stores the original source lines around a breakpoint
@@ -189,6 +210,17 @@ struct breakpoint_source
 
   /* BFD when source was captured.  */
   gdb_bfd_ref_ptr source_bfd;
+
+  /* ... */
+  struct stat source_file_statbuf;
+
+  /* Name of the source file.  */
+  std::string source_filename;
+
+  /* TODO: This is incorrectly named.  It's the executable in which the
+     breakpoint was placed.  */
+  gdb::unordered_set<gdb_bfd_ref_ptr, gdb_bfd_ref_ptr_hash,
+		     gdb_bfd_ref_ptr_equal_to> source_bfds;
 };
 
 static bool breakpoint_source_is_tracked (const breakpoint_source *src);
@@ -913,6 +945,16 @@ breakpoint_source_capture (gdb::array_view<const symtab_and_line> sals,
       if (start_line + j == sals[0].line)
 	result.bp_line_stored = j;
     }
+
+  /* Record the source file, and it's stat() output.  */
+  result.source_filename = symtab_to_fullname (sals[0].symtab);
+  if (stat (result.source_filename.c_str (),
+	    &result.source_file_statbuf) != 0)
+    return {};
+
+  /* Record every BFD in which a breakpoint was placed.  */
+  for (const symtab_and_line &sal : sals)
+    result.source_bfds.insert (sal.symtab->compunit ().objfile ()->obfd);
 
   return result;
 }
@@ -13529,6 +13571,7 @@ code_breakpoint::location_spec_to_sals (location_spec *locspec,
   return sals;
 }
 
+#if 0
 /* Search for the best match of BP_SOURCE's captured context lines within
    TMP_SOURCE's larger search window.  For each candidate position where
    the breakpoint line matches, compare all BREAKPOINT_SRC_CTX_LINES
@@ -13582,6 +13625,114 @@ sliding_window_match (const breakpoint_source &bp_source,
   /* The updated breakpoint location has not been found in TMP_SOURCE.  */
   return -1;
 }
+#endif
+
+/* Helper function.  When get_source_lines goes, so will this.  */
+
+static std::vector<std::string>
+split_lines (std::string_view content)
+{
+  std::vector<std::string> lines;
+  size_t start = 0;
+  size_t end = 0;
+
+  while ((end = content.find ('\n', start)) != std::string_view::npos)
+    {
+      std::string_view line = content.substr (start, end - start + 1);
+      lines.emplace_back (line);
+      start = end + 1;
+    }
+
+  /* Capture any trailing segment without a terminating newline.  */
+  if (start < content.size ())
+    {
+      std::string_view line = content.substr (start);
+      lines.emplace_back (line);
+    }
+
+  return lines;
+}
+
+/* Read all lines from FILENAME, returning them in a vector.  TODO: This
+   is a temporary hack, we need to rework GDB's source code cache so that
+   this can get in on that action.  The problem is that GDB's current
+   caching is symtab based, what we need is filename based caching.
+
+   I wonder if we need to add more layers?  Have a symtab based cache
+   built on top of a filename based cache?  That's a problem for the
+   future.  */
+
+static std::vector<std::string>
+get_source_code_lines (const std::string &filename)
+{
+  scoped_fd desc (open (filename.c_str (), O_RDONLY));
+  if (desc.get () < 0)
+    perror_with_name (filename.c_str (), -desc.get ());
+
+  struct stat st;
+  if (fstat (desc.get (), &st) < 0)
+    perror_with_name (filename.c_str ());
+
+  std::string content;
+  content.resize (st.st_size);
+  if (myread (desc.get (), &content[0], content.size ()) < 0)
+    perror_with_name (filename.c_str ());
+
+  return split_lines (content);
+}
+
+static int
+find_updated_line (const std::vector<std::string> &lines,
+		   const breakpoint_source &bp_source)
+{
+  size_t start = bp_source.bp_line;
+
+  /* The 11 here is an arbitrary window size.  TODO: Make this a user
+     setting aybe?  Or at least a named define.  */
+  if (start > 11)
+    start -= 11;
+  else
+    start = 0;
+  size_t end = std::min (start + 24, lines.size ());
+
+  /* The index into BP_SOURCE's lines where the breakpoint was placed.  */
+  int bp_stored = (int) bp_source.bp_line_stored;
+  int bp_size = (int) bp_source.source_lines.size ();
+
+  int best_score = 0;
+  int best_pos = -1;
+
+  for (int i = start; i < end; i++)
+    {
+      /* Fast filter: breakpoint line must match.  */
+      if (bp_source.source_lines[bp_stored] != lines[i])
+	continue;
+
+      int match = 0;
+      for (int j = 0; j < bp_size; j++)
+	{
+	  int idx = i - bp_stored + j;
+	  if (idx >= 0 && idx < lines.size ()
+	      && bp_source.source_lines[j] == lines[idx])
+	    match++;
+	}
+
+      if (match > best_score)
+	{
+	  best_score = match;
+	  best_pos = i;
+	}
+    }
+
+  /* Only accept the match if a majority of the context lines matched.
+     The +1 here is because line numbers start at 1, not zero.  */
+  if (best_pos >= 0 && best_score > bp_size / 2)
+    return best_pos + 1;
+
+  /* The updated breakpoint location has not been found in TMP_SOURCE.  */
+  return -1;
+}
+
 
 /* See breakpoint.h.  */
 
@@ -13590,73 +13741,91 @@ code_breakpoint::adjust_bp_for_source_tracking
   (program_space *filter_pspace,
    std::vector<symtab_and_line> &expanded)
 {
-  if (expanded.empty () || expanded[0].symtab == nullptr
-      || !breakpoint_source_is_tracked (bp_source.get ()))
+  /* Untracked breakpoints don't need updating.  */
+  if (!breakpoint_source_is_tracked (bp_source.get ()))
     return;
 
-  struct compunit_symtab &cust = expanded[0].symtab->compunit ();
-  if (cust.objfile () == nullptr)
-    return;
-
-  bfd *current_bfd = cust.objfile ()->obfd.get ();
-  if (bp_source->source_bfd.get () == current_bfd)
-    return;
-
-  /* BFD changed - executable was reloaded.  */
-  if (!breakpoint_sals_suitable_for_tracking (expanded))
+  struct stat statbuf;
+  if (stat (bp_source->source_filename.c_str (), &statbuf) != 0)
     {
+      /* The source file is no longer readable.  */
       warning (_("Breakpoint %d is no longer suitable for source tracking "
 		 "after reload, disabling source tracking."), number);
       bp_source.reset ();
       return;
     }
 
-  /* If this fails then the location spec has changed since the
-     breakpoint's source tracking was initially set up.  */
-  gdb_assert (breakpoint_locspec_suitable_for_tracking (locspec.get ()));
+  /* If the source file has not changed then there's nothing we need to
+     do.  TODO: Actually compare the 'st_mtim' field.  */
+  if (bp_source->source_file_statbuf.st_mtime == statbuf.st_mtime)
+    return;
 
-  std::string line;
-  scoped_restore restore_styling = make_scoped_restore (&source_styling, false);
-  if (!g_source_cache.get_source_lines (expanded[0].symtab,
-					expanded[0].line,
-					expanded[0].line, &line))
+  /* The source file has changed.  But this only matters if the modified
+     source file has been compiled into a new BFD.  */
+  int modified_count = 0;
+  for (const gdb_bfd_ref_ptr &abfd : bp_source->source_bfds)
     {
-      /* Source is unreadable after reload - drop tracking.  */
-      bp_source.reset ();
-      warning (_("could not re-capture source lines, "
-		 "breakpoint %d no longer source tracked"),
-	       number);
-      return;
-    }
+      struct stat bfd_stat_buf;
 
-  if (line == bp_source->source_lines[bp_source->bp_line_stored])
-    {
-      /* Line unchanged - just refresh the capture with the new BFD.  */
-      bp_source = std::make_unique<breakpoint_source>
-	(breakpoint_source_capture (expanded, BREAKPOINT_SRC_CTX_LINES));
-      if (!breakpoint_source_is_tracked (bp_source.get ()))
+      if (bfd_stat (abfd.get (), &bfd_stat_buf) != 0)
 	{
-	  warning (_("unable to refresh source tracking for breakpoint %d, "
-		     "source tracking disabled"),
-		   number);
+	  warning (_("TODO: message about stat failing"));
 	  bp_source.reset ();
+	  return;
 	}
-      return;
+
+      if (bfd_stat_buf.st_mtime >= bp_source->source_file_statbuf.st_mtime)
+	++modified_count;
     }
 
-  breakpoint_source tmp_source
-    = breakpoint_source_capture (expanded,
-				 BREAKPOINT_SRC_CTX_LINES
-				 * BREAKPOINT_SRC_SEARCH_MULTIPLIER);
-  int new_bp_line = sliding_window_match (*bp_source.get (), tmp_source);
-  if (new_bp_line == -1)
+  /* If we have a single source file that is compiled into multiple BFDs
+     then we can still source track breakpoints in that source file.  But
+     what if the source file is changed and only some of the BFDs are
+     rebuilt?  In this case there's going to be a mismatch in the debug
+     information between the two compiled copies (in each BFD) and the
+     current source code.  GDB cannot know if the user wants to use the old
+     location in the non-rebuilt BFD, or the possibly updated location in
+     the rebuilt BFD.  */
+  if (modified_count < bp_source->source_bfds.size ())
     {
-      warning (_("Breakpoint %d source code not found "
-		 "after reload, keeping original location."), number);
+      /* TODO: The format of this warning needs improving.  Also, maybe in
+	 this case, before we alarm the user with this message, and disable
+	 source tracking, we should check to see if the location actually
+	 needs updating or not.  */
+      warning (_("Breakpoint %d is no longer suitable for source tracking "
+		 "after reload, disabling source tracking. "
+		 "(only %d BFDs rebuilt)"), number, modified_count);
       bp_source.reset ();
       return;
     }
 
+  /* Get the latest source code from the source file.  */
+  std::vector<std::string> lines
+    = get_source_code_lines (bp_source->source_filename);
+
+  /* Look for the context in the updated source file, getting back a line
+     number.  */
+  int lineno = find_updated_line (lines, *bp_source.get ());
+
+  if (lineno == -1)
+    {
+      /* Failed to find the line -- stop tracking..*/
+      fprintf (stderr, "APB: Failed to find the new breakpoint source line.\n");
+      bp_source.reset ();
+      return;
+    }
+  int new_bp_line = lineno;
+
+  /* If the line number has not changed then all we need to do is update
+     the bp_source data structure in some way TBD.  */
+  if (lineno == bp_source->bp_line)
+    {
+      fprintf (stderr, "APB: The breakpoint line is still %d\n", lineno);
+      bp_source->source_file_statbuf.st_mtime = statbuf.st_mtime;
+      return;
+    }
+
+  /* Otherwise, update the breakpoints location spec, and we're done.  */
   explicit_location_spec *explicit_loc = as_explicit_location_spec (locspec.get ());
   location_spec_up new_locspec = explicit_loc->clone ();
   explicit_location_spec *new_explicit = as_explicit_location_spec (new_locspec.get ());
@@ -13664,35 +13833,9 @@ code_breakpoint::adjust_bp_for_source_tracking
   new_explicit->line_offset.sign = LINE_OFFSET_NONE;
   /* Invalidate the cached display string.  */
   new_explicit->set_string ("");
-
-  int found;
-  std::vector<symtab_and_line> new_expanded = location_spec_to_sals (new_locspec.get (),
-								     filter_pspace, &found);
-  if (!found)
-    {
-      warning (_("Breakpoint %d adjusted to line %d but location could not "
-		"be resolved; keeping original location."), number, new_bp_line);
-      bp_source.reset ();
-      return;
-    }
-  expanded = std::move (new_expanded);
   locspec = std::move (new_locspec);
-  if (new_bp_line != bp_source->bp_line)
-    {
-      gdb_printf (_("Breakpoint %d adjusted from line %d to line %d.\n"),
-		  number, bp_source->bp_line, new_bp_line);
-      notify_breakpoint_modified (this);
-    }
 
-  bp_source = std::make_unique<breakpoint_source>
-    (breakpoint_source_capture (expanded, BREAKPOINT_SRC_CTX_LINES));
-  if (!breakpoint_source_is_tracked (bp_source.get ()))
-    {
-      warning (_("failed to capture breakpoint source context, "
-		 "disabling source tracking for breakpoint %d"),
-	       number);
-      bp_source.reset ();
-    }
+  return;
 }
 
 /* The default re_set method, for typical hardware or software
@@ -13717,6 +13860,8 @@ code_breakpoint::re_set_default (struct program_space *filter_pspace)
      running, then look for new locations for this breakpoint.  */
   if (bp_pspace == nullptr || filter_pspace == bp_pspace)
     {
+      adjust_bp_for_source_tracking (filter_pspace, expanded);
+
       int found;
       std::vector<symtab_and_line> sals
 	= location_spec_to_sals (locspec.get (), filter_pspace, &found);
@@ -13735,7 +13880,25 @@ code_breakpoint::re_set_default (struct program_space *filter_pspace)
 	    expanded_end = std::move (sals_end);
 	}
 
-      adjust_bp_for_source_tracking (filter_pspace, expanded);
+      if (source_tracking_breakpoints
+	  && breakpoint_sals_suitable_for_tracking (expanded)
+	  && breakpoint_locspec_suitable_for_tracking (locspec.get ()))
+	{
+	  /* Capture source if we have valid symtab and line info.
+	     This works for both "b file:line" and "b line" formats.
+	     We capture BREAKPOINT_SRC_CTX_LINES lines to provide
+	     context around the breakpoint location.  */
+	  bp_source = std::make_unique<breakpoint_source>
+	    (breakpoint_source_capture (expanded, BREAKPOINT_SRC_CTX_LINES));
+
+	  /* TODO: Maybe only warn if breakpoint used to be tracked?  */
+	  if (!breakpoint_source_is_tracked (bp_source.get ()))
+	    {
+	      warning (_("Source file not available; breakpoint will not be "
+			 "source-tracked."));
+	      bp_source.reset ();
+	    }
+	}
     }
 
   /* Update the locations for this breakpoint.  For thread-specific
