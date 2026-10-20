@@ -1,0 +1,128 @@
+# Copyright (C) 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test for TOCTOU vulnerability in objfile auto-load script handling.
+#
+# The vulnerability: auto_load_objfile_script_1 opens a candidate script file,
+# then validates the pathname against safe-path. An attacker can win a race by
+# retargeting a symlink between the open() and the pathname validation, causing
+# GDB to execute attacker-controlled content from an unsafely-pathed location.
+#
+# How auto-load works:
+# 1. GDB looks for scripts adjacent to the binary: <binary>-gdb.py
+# 2. GDB opens the script file
+# 3. GDB validates the script path against safe-path
+# 4. If valid, GDB executes the script
+#
+# The TOCTOU race:
+# 1. Create a symlink to a FIFO at <binary>-gdb.py
+# 2. GDB opens it and blocks waiting for data
+# 3. While GDB blocks, attacker retargets symlink to point to a safe path
+# 4. Attacker writes malicious script to the FIFO
+# 5. GDB's safe-path validation uses gdb_realpath on the retargeted path -> passes
+# 6. But GDB executes from the already-open fd -> executes attacker code
+
+# This test requires Python support
+require allow_python_tests
+
+standard_testfile
+
+if {[build_executable "failed to prepare" $testfile $srcfile] == -1} {
+    return
+}
+
+# Check if mkfifo is available.
+if {[catch {exec mkfifo --version}]} {
+    unsupported "mkfifo not available on this system"
+    return
+}
+
+# ...
+proc test_autoload_symlink_bug {} {
+    # Create test directories.
+    set tmpdir [standard_output_file "autoload"]
+    set untrusted_dir "$tmpdir/untrusted"
+    set trusted_dir "$tmpdir/trusted"
+    file mkdir $untrusted_dir
+    file mkdir $trusted_dir
+
+    # Copy binary to untrusted location.
+    set objfile "$untrusted_dir/$::testfile"
+    file copy $::binfile $objfile
+
+    # Set up FIFO path and symlink.
+    set fifo_path "$untrusted_dir/fifo"
+    set autoload_symlink "$untrusted_dir/${::testfile}-gdb.py"
+    set trusted_autoload "$trusted_dir/another-name-gdb.py"
+    set untrusted_script "$untrusted_dir/attack-script.py"
+
+    # Create a trusted placeholder script that the symlink will point
+    # to after swap.
+    set fd [open $trusted_autoload w]
+    puts $fd {import gdb}
+    puts $fd {print("The trusted script ran.")}
+    close $fd
+
+    # Create the bad "attack" script.
+    set fd [open $untrusted_script w]
+    puts $fd {import gdb}
+    puts $fd {print("The UNTRUSTED script ran.")}
+    close $fd
+
+    # Create the FIFO.
+    if {[catch {exec mkfifo $fifo_path}]} {
+        unsupported "Could not create FIFO"
+        return
+    }
+
+    # Create initial symlink pointing to the FIFO.
+    exec ln -sf $fifo_path $autoload_symlink
+
+    clean_restart
+
+    gdb_test_no_output "set auto-load safe-path $trusted_dir" \
+	"set restrictive auto-load safe-path"
+
+    set saw_message ""
+    gdb_test_multiple "file $objfile" "autoload symlink checked" {
+	-re "\r\nReading symbols from \[^\r\n\]+\\.\\.\\.(?=\r\n)" {
+	    # Small delay.  We need GDB to be blocked on opening the FIFO.
+	    # This delay doesn't guarantee that this has happened, a heavily
+	    # loaded machine might take a long time between printing the
+	    # "Reading symbols" line and actually opening the auto-load
+	    # scripts.
+	    sleep 2
+
+	    # Retarget the symlink.
+	    exec ln -sf $trusted_autoload $autoload_symlink
+
+	    # Send content to the pipe.
+	    exec cat $untrusted_script > $fifo_path
+	    exp_continue
+	}
+
+	-re "\r\nThe (UNTRUSTED|trusted) script ran\\.(?=\r\n)" {
+	    set saw_message $expect_out(1,string)
+	    exp_continue
+	}
+
+	-re "$::gdb_prompt $" {
+	    gdb_assert { $saw_message eq "" } $gdb_test_name
+	}
+    }
+}
+
+# Run the test
+test_autoload_symlink_bug
