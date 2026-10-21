@@ -298,10 +298,11 @@ auto_load_safe_path_vec_update (void)
     }
 }
 
-/* Variable gdb_datadir has been set.  Update content depending on $datadir.  */
+/* One of the variables gdb_datadir or debug_file_directory might have
+   changed.  Update content depending on $datadir and $debugdir.  */
 
 static void
-auto_load_gdb_datadir_changed (void)
+auto_load_gdb_vars_changed ()
 {
   auto_load_safe_path_vec_update ();
 }
@@ -503,6 +504,15 @@ file_is_auto_load_safe (const char *filename)
   if (filename_is_in_auto_load_safe_path_vec (filename, &filename_real))
     return true;
 
+  /* The reason for rebuilding the vector, and retrying the match at
+     this point is in case the user has updated some symlinks on their
+     file system.  Rebuilding the safe path vector calls gdb_realpath
+     on each entry and adds the result to the vector.  As a result, if
+     any symlinks change then this update will change the set of paths
+     we consider safe.
+
+     This does mean that a stale entry might trigger a match in the
+     above check, for now though we just accept this risk.  */
   auto_load_safe_path_vec_update ();
   if (filename_is_in_auto_load_safe_path_vec (filename, &filename_real))
     return true;
@@ -1677,7 +1687,9 @@ This option has security implications for untrusted inferiors."),
 				     show_auto_load_safe_path,
 				     auto_load_set_cmdlist_get (),
 				     auto_load_show_cmdlist_get ());
-  gdb::observers::gdb_datadir_changed.attach (auto_load_gdb_datadir_changed,
+  gdb::observers::gdb_datadir_changed.attach (auto_load_gdb_vars_changed,
+					      "auto-load");
+  gdb::observers::gdb_debugdir_changed.attach (auto_load_gdb_vars_changed,
 					      "auto-load");
 
   cmd = add_cmd ("add-auto-load-safe-path", class_support,

@@ -1340,6 +1340,16 @@ show_debug_file_directory (struct ui_file *file, int from_tty,
 	      value);
 }
 
+/* Implement 'set debug-file-directory' command.  */
+
+static void
+set_debug_file_directory (const char *args, int from_tty,
+			  struct cmd_list_element *e)
+{
+  /* The new value has already been installed by this point.  */
+  gdb::observers::gdb_debugdir_changed.notify ();
+}
+
 #if ! defined (DEBUG_SUBDIRECTORY)
 #define DEBUG_SUBDIRECTORY ".debug"
 #endif
@@ -3885,7 +3895,7 @@ Separate debug symbols are first searched for in the same\n\
 directory as the binary, then in the `" DEBUG_SUBDIRECTORY "' subdirectory,\n\
 and lastly at the path of the directory of the binary with\n\
 each global debug-file-directory component prepended."),
-				     NULL,
+				     set_debug_file_directory,
 				     show_debug_file_directory,
 				     &setlist, &showlist);
 

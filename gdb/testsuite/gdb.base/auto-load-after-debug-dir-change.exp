@@ -76,16 +76,37 @@ proc run_test_1 { search_num debug_num } {
 
     gdb_load ${::binfile}
 
-    gdb_test {print $script_loaded} " = ${search_num}00"
+    if { $search_num == $debug_num } {
+	set expected_num "${search_num}00"
+    } else {
+	set expected_num "0"
+    }
 
-    # Check that the expected script shows as auto-loaded in GDB's output.
-    gdb_assert {[regexp "script_${search_num}_loaded" $::gdb_file_cmd_msg]} \
-	"expected script was loaded"
+    gdb_test {print $script_loaded} " = ${expected_num}"
 
-    # The '3 - SEARCH_NUM' converts: 2 => 1 and 1 => 2.  This checks
-    # that the other script was not auto-loaded.
-    gdb_assert {![regexp "script_[expr {3 - $search_num}]_loaded" $::gdb_file_cmd_msg]} \
-	"other script was not loaded"
+    if { $search_num == $debug_num } {
+	# Check that the expected script shows as auto-loaded in GDB's output.
+	gdb_assert {[regexp "script_${search_num}_loaded" \
+			 $::gdb_file_cmd_msg]} \
+	    "expected script was loaded"
+
+	# The '3 - SEARCH_NUM' converts: 2 => 1 and 1 => 2.  This
+	# checks that the other script was not auto-loaded.
+	gdb_assert {![regexp "script_[expr {3 - $search_num}]_loaded" \
+			  $::gdb_file_cmd_msg]} \
+	    "other script was not loaded"
+    } else {
+	set re "warning: File \[^\r\n\]+/debug_dir_${search_num}/\[^\r\n\]+ auto-loading has been declined"
+	gdb_assert {[regexp $re $::gdb_file_cmd_msg]} \
+	    "saw script rejected message"
+
+	gdb_assert {![regexp "script_1_loaded" \
+			  $::gdb_file_cmd_msg]} \
+	    "script 1 was not loaded"
+	gdb_assert {![regexp "script_2_loaded" \
+			  $::gdb_file_cmd_msg]} \
+	    "script 2 was not loaded"
+    }
 }
 
 # Wrapper around run_test_1 which adds a test prefix.  See run_test_1
@@ -99,3 +120,5 @@ proc run_test { search_num debug_num } {
 # Run the tests.
 run_test 1 1
 run_test 2 2
+run_test 2 1
+run_test 1 2
