@@ -213,6 +213,10 @@ extern observable<const char */* current_prompt */> before_prompt;
    change.  */
 extern observable<> gdb_datadir_changed;
 
+/* Variable debug_file_directory has been updated.  The value may not
+   necessarily have changed.  */
+extern observable<> gdb_debugdir_changed;
+
 /* An inferior function at ADDRESS is about to be called in thread
    THREAD.  */
 extern observable<ptid_t /* thread */, CORE_ADDR /* address */>
