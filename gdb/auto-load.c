@@ -37,6 +37,8 @@
 #include "extension.h"
 #include "gdb/section-scripts.h"
 #include <algorithm>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "gdbsupport/pathstuff.h"
 #include "cli/cli-style.h"
 #include "gdbsupport/selftest.h"
@@ -517,7 +519,8 @@ filename_is_in_auto_load_safe_path_vec (const char *filename,
 
 static bool
 filename_is_auto_load_safe_quiet (const char *filename,
-				  gdb::unique_xmalloc_ptr<char> *filename_realp,
+				  gdb::unique_xmalloc_ptr<char> *filename_realp
+				    = nullptr,
 				  bool *raw_match_p = nullptr)
 {
   gdb::unique_xmalloc_ptr<char> filename_real;
@@ -626,6 +629,92 @@ file_is_auto_load_safe (const char *filename)
   gdb_assert (filename_real != nullptr);
   warn_auto_load_declined (filename_real.get ());
   return false;
+}
+
+/* See auto-load.h.  */
+
+auto_load_opened
+auto_load_safe_open (const char *filename)
+{
+  auto_load_opened result;
+  gdb::unique_xmalloc_ptr<char> filename_real;
+  bool raw_match = false;
+
+  if (!filename_is_auto_load_safe_quiet (filename, &filename_real,
+					 &raw_match))
+    {
+      /* If the file doesn't exist, or couldn't be opened for reading
+	 by this user, then just report a failed open; this matches a
+	 failed fopen so that callers keep searching, and ensures such
+	 files don't print the declined warning.  */
+      if (access (filename, R_OK) == 0)
+	{
+	  warn_auto_load_declined (filename_real.get ());
+	  result.status = auto_load_open_status::declined;
+	}
+      return result;
+    }
+
+  /* Open the file non-blocking so that, should FILENAME refer to a
+     FIFO, we don't block waiting for a writer to appear; for regular
+     files O_NONBLOCK has no effect.  */
+  int open_flags = O_RDONLY | O_BINARY;
+#ifdef O_NONBLOCK
+  open_flags |= O_NONBLOCK;
+#endif
+  scoped_fd fd = gdb_open_cloexec (filename, open_flags, 0);
+  if (fd.get () < 0)
+    return result;
+
+  gdb::unique_xmalloc_ptr<char> realname = gdb_realpath (filename);
+
+  if (!auto_load_verify_opened_script (fd.get (), realname.get (),
+					raw_match))
+    {
+      warn_auto_load_declined (realname.get ());
+      result.status = auto_load_open_status::declined;
+      return result;
+    }
+
+  result.status = auto_load_open_status::opened;
+  result.fd = std::move (fd);
+  result.full_path = std::move (realname);
+  return result;
+}
+
+/* See auto-load.h.  */
+
+bool
+auto_load_verify_opened_script (int fd, const char *realname,
+				bool raw_name_matched)
+{
+  struct stat fd_stat, name_stat;
+
+  /* Only regular files can be sourced; this also ensures that FD is
+     not a FIFO or device, reading from which could block.  */
+  if (fstat (fd, &fd_stat) != 0 || !S_ISREG (fd_stat.st_mode))
+    return false;
+
+  if (stat (realname, &name_stat) != 0)
+    return false;
+
+  /* Ensure the name used to open FD still refers to the file that was
+     opened; if the name was retargeted (e.g. a symlink was changed)
+     then FD and REALNAME will identify different files.  */
+  if (fd_stat.st_dev != name_stat.st_dev
+      || fd_stat.st_ino != name_stat.st_ino)
+    return false;
+
+  /* If the name, as given, matched a safe-path pattern then the name
+     is trusted by configuration and we are done.  Otherwise REALNAME,
+     which was resolved after the open, must still pass the safe-path
+     check; this catches a name retargeted between the check and the
+     open.  */
+  if (!raw_name_matched
+      && !filename_is_auto_load_safe_quiet (realname))
+    return false;
+
+  return true;
 }
 
 /* For scripts specified in .debug_gdb_scripts, multiple objfiles may load
@@ -852,15 +941,16 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
 
   std::string filename = std::string (realname) + suffix;
 
-  gdb_file_up input = gdb_fopen_cloexec (filename.c_str (), "r");
+  auto_load_opened opened = auto_load_safe_open (filename.c_str ());
   debugfile = filename.c_str ();
 
   auto_load_debug_printf ("Attempted file \"%ps\" %s.",
 			  styled_string (file_name_style.style (), debugfile),
-			  input != nullptr ? "exists" : "does not exist");
+			  (opened.status != auto_load_open_status::open_failed
+			   ? "exists" : "does not exist"));
 
   std::string debugfile_holder;
-  if (!input)
+  if (opened.status == auto_load_open_status::open_failed)
     {
       /* Also try the same file in a subdirectory of gdb's data
 	 directory.  */
@@ -883,21 +973,22 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
 	  debugfile_holder = dir.get () + filename;
 	  debugfile = debugfile_holder.c_str ();
 
-	  input = gdb_fopen_cloexec (debugfile, "r");
+	  opened = auto_load_safe_open (debugfile);
 
 	  auto_load_debug_printf ("Attempted file \"%ps\" %s.",
 				  styled_string (file_name_style.style (),
 						 debugfile),
-				  (input != nullptr
+				  (opened.status
+				   != auto_load_open_status::open_failed
 				   ? "exists"
 				   : "does not exist"));
 
-	  if (input != NULL)
+	  if (opened.status != auto_load_open_status::open_failed)
 	    break;
 	}
     }
 
-  if (input)
+  if (opened.status != auto_load_open_status::open_failed)
     {
       struct auto_load_pspace_info *pspace_info;
 
@@ -905,7 +996,9 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
 	("Loading %s script \"%s\" by extension for objfile \"%s\".",
 	 ext_lang_name (language), debugfile, objfile_name (objfile));
 
-      bool is_safe = file_is_auto_load_safe (debugfile);
+      /* If the script was declined then a warning has already been
+	 printed by auto_load_safe_open.  */
+      bool is_safe = opened.status == auto_load_open_status::opened;
 
       /* Add this script to the hash table too so
 	 "info auto-load ${lang}-scripts" can print it.  */
@@ -928,6 +1021,14 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
 	     compiled in.  And the extension language is required to implement
 	     this function.  */
 	  gdb_assert (sourcer != NULL);
+
+	  /* Wrap the verified file descriptor in a FILE.  For a valid,
+	     freshly opened file descriptor fdopen can only fail if out
+	     of memory; there is nothing useful we can do in that
+	     case.  */
+	  gdb_file_up input = opened.fd.to_file ("r");
+	  gdb_assert (input != nullptr);
+
 	  sourcer (language, objfile, input.get (), debugfile);
 	}
 

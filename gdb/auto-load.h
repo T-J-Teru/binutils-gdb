@@ -20,6 +20,9 @@
 #ifndef GDB_AUTO_LOAD_H
 #define GDB_AUTO_LOAD_H
 
+#include "gdbsupport/gdb_unique_ptr.h"
+#include "gdbsupport/scoped_fd.h"
+
 struct objfile;
 struct program_space;
 struct auto_load_pspace_info;
@@ -78,6 +81,66 @@ extern struct cmd_list_element **auto_load_info_cmdlist_get (void);
    directory.  */
 
 extern bool file_is_auto_load_safe (const char *filename);
+
+/* The status of an attempt to open a file for auto-loading, see
+   auto_load_safe_open.  */
+
+enum class auto_load_open_status
+{
+  /* The file was opened and passed all the auto-load safe-path
+     checks.  */
+  opened,
+
+  /* The file exists, but was declined by the auto-load safe-path
+     checks; a warning has been printed.  */
+  declined,
+
+  /* The file could not be opened (e.g. it doesn't exist); nothing has
+     been printed.  */
+  open_failed,
+};
+
+/* The result of auto_load_safe_open.  */
+
+struct auto_load_opened
+{
+  /* The status of the open attempt.  */
+  auto_load_open_status status = auto_load_open_status::open_failed;
+
+  /* The opened file descriptor, valid only when STATUS is opened.  */
+  scoped_fd fd;
+
+  /* gdb_realpath of FILENAME, computed after the file was opened,
+     valid only when STATUS is opened.  */
+  gdb::unique_xmalloc_ptr<char> full_path;
+};
+
+/* Open FILENAME for reading for auto-loading, but only after checking
+   that FILENAME is allowed by `set auto-load safe-path'.
+
+   If FILENAME is declined by the safe-path check then it is never
+   opened.  If FILENAME exists and could be opened for reading, the
+   usual declined warning is printed and 'declined' is returned;
+   otherwise (the file doesn't exist, or couldn't be opened for
+   reading) nothing is printed and 'open_failed' is returned, which
+   matches a failed fopen, so callers can keep searching.
+
+   If FILENAME passes the safe-path check then it is opened
+   (non-blocking, so that a FIFO can't stall GDB) and verified with
+   auto_load_verify_opened_script; verification failure prints the
+   declined warning and returns 'declined', success returns 'opened'
+   with FD and FULL_PATH of the result valid.  */
+
+extern auto_load_opened auto_load_safe_open (const char *filename);
+
+/* Verify that the file open on file descriptor FD is a regular file,
+   is still the file that REALNAME (gdb_realpath of the name FD was
+   opened with) refers to, and that REALNAME passes the `set auto-load
+   safe-path' check, unless RAW_NAME_MATCHED is true (the name, as
+   given, matched a safe-path pattern).  */
+
+extern bool auto_load_verify_opened_script (int fd, const char *realname,
+					    bool raw_name_matched);
 
 /* Return true if auto-loading gdb scripts is enabled.  */
 
