@@ -448,18 +448,25 @@ filename_is_in_pattern (const char *filename, const char *pattern)
 /* Return 1 if FILENAME belongs to one of directory components of
    AUTO_LOAD_SAFE_PATH_VEC.  Return 0 otherwise.
    auto_load_safe_path_vec_update is never called.
-   *FILENAME_REALP may be updated by gdb_realpath of FILENAME.  */
+   *FILENAME_REALP may be updated by gdb_realpath of FILENAME.
+
+   If RAW_MATCH_P is not NULL then *RAW_MATCH_P is set to true if FILENAME,
+   as given, matched one of the patterns, otherwise *RAW_MATCH_P is set to
+   false.  */
 
 static int
 filename_is_in_auto_load_safe_path_vec (const char *filename,
-					gdb::unique_xmalloc_ptr<char> *filename_realp)
+					gdb::unique_xmalloc_ptr<char> *filename_realp,
+					bool *raw_match_p = nullptr)
 {
   const char *pattern = NULL;
+  bool raw_match = false;
 
   for (const gdb::unique_xmalloc_ptr<char> &p : auto_load_safe_path_vec)
     if (*filename_realp == NULL && filename_is_in_pattern (filename, p.get ()))
       {
 	pattern = p.get ();
+	raw_match = true;
 	break;
       }
 
@@ -486,30 +493,78 @@ filename_is_in_auto_load_safe_path_vec (const char *filename,
     {
       auto_load_debug_printf ("File \"%s\" matches directory \"%s\".",
 			      filename, pattern);
+      if (raw_match_p != NULL)
+	*raw_match_p = raw_match;
       return 1;
     }
 
+  if (raw_match_p != NULL)
+    *raw_match_p = false;
   return 0;
 }
 
-/* See auto-load.h.  */
+/* Check if FILENAME is located in one of the directories considered safe
+   for auto-loading, but print nothing; this is the quiet core of
+   file_is_auto_load_safe.  If FILENAME is not considered safe then
+   AUTO_LOAD_SAFE_PATH_VEC is updated, and the check retried, this ensures
+   that any changes to the safe-path since the last update are taken into
+   account.
 
-bool
-file_is_auto_load_safe (const char *filename)
+   If FILENAME_REALP is not NULL, then *FILENAME_REALP is assigned
+   gdb_realpath (FILENAME).  If RAW_MATCH_P is not NULL then *RAW_MATCH_P is
+   assigned true if FILENAME, as given, matched one of the safe-path
+   patterns, and false otherwise.  */
+
+static bool
+filename_is_auto_load_safe_quiet (const char *filename,
+				  gdb::unique_xmalloc_ptr<char> *filename_realp,
+				  bool *raw_match_p = nullptr)
 {
   gdb::unique_xmalloc_ptr<char> filename_real;
+  if (filename_realp == NULL)
+    filename_realp = &filename_real;
+  bool raw_match = false;
+
+  bool safe = filename_is_in_auto_load_safe_path_vec (filename,
+						      filename_realp,
+						      &raw_match);
+  if (!safe)
+    {
+      auto_load_safe_path_vec_update ();
+      safe = filename_is_in_auto_load_safe_path_vec (filename,
+						     filename_realp,
+						     &raw_match);
+    }
+
+  if (safe)
+    {
+      /* If FILENAME, as given, matched one of the patterns, then
+	 *FILENAME_REALP might not have been assigned a value yet, ensure
+	 that it is now.  */
+      if (*filename_realp == NULL)
+	*filename_realp = gdb_realpath (filename);
+      if (raw_match_p != NULL)
+	*raw_match_p = raw_match;
+      return true;
+    }
+
+  if (raw_match_p != NULL)
+    *raw_match_p = false;
+  return false;
+}
+
+/* Print a warning that the file, whose gdb_realpath is FILENAME_REAL, was
+   declined for auto-loading.  Also print some one time advice on how to
+   allow the file to be auto-loaded.  */
+
+static void
+warn_auto_load_declined (const char *filename_real)
+{
   static bool advice_printed = false;
-
-  if (filename_is_in_auto_load_safe_path_vec (filename, &filename_real))
-    return true;
-
-  auto_load_safe_path_vec_update ();
-  if (filename_is_in_auto_load_safe_path_vec (filename, &filename_real))
-    return true;
 
   warning (_("File \"%ps\" auto-loading has been declined by your "
 	     "`auto-load safe-path' set to \"%s\"."),
-	   styled_string (file_name_style.style (), filename_real.get ()),
+	   styled_string (file_name_style.style (), filename_real),
 	   auto_load_safe_path.c_str ());
 
   if (!advice_printed)
@@ -546,7 +601,7 @@ For more information about this security protection see the\n\
 \"Auto-loading safe path\" section in the GDB manual.  E.g., run from the shell:\n\
 \tinfo \"(gdb)Auto-loading safe path\"\n"),
 		  command_style.style ().ptr (),
-		  filename_real.get (),
+		  filename_real,
 		  nullptr,
 		  styled_string (file_name_style.style (),
 				 home_config.c_str ()),
@@ -556,7 +611,20 @@ For more information about this security protection see the\n\
 				 home_config.c_str ()));
       advice_printed = true;
     }
+}
 
+/* See auto-load.h.  */
+
+bool
+file_is_auto_load_safe (const char *filename)
+{
+  gdb::unique_xmalloc_ptr<char> filename_real;
+
+  if (filename_is_auto_load_safe_quiet (filename, &filename_real))
+    return true;
+
+  gdb_assert (filename_real != nullptr);
+  warn_auto_load_declined (filename_real.get ());
   return false;
 }
 
