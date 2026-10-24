@@ -616,6 +616,48 @@ For more information about this security protection see the\n\
     }
 }
 
+/* Verify that the file open on file descriptor FD is a regular file, is
+   still the file that REALNAME (gdb_realpath of the name FD was opened
+   with) refers to, and that REALNAME passes the `set auto-load safe-path'
+   check, unless RAW_NAME_MATCHED is true (the name, as given, matched a
+   safe-path pattern).  */
+
+static bool
+auto_load_verify_opened_script (int fd, const char *realname,
+				bool raw_name_matched)
+{
+  /* Only allow regular files to be sourced.  It might be useful to allow
+     some non-regular file types (e.g. named FIFO) to be used as a script
+     source, but allowing this also means we need to be careful to prevent
+     GDB blocking if there's no writter attached to the FIFO.  Until there's
+     a compelling reason to allow this, just prevent all non-regular files.  */
+  struct stat fd_stat;
+  if (fstat (fd, &fd_stat) != 0 || !S_ISREG (fd_stat.st_mode))
+    return false;
+
+  struct stat name_stat;
+  if (stat (realname, &name_stat) != 0)
+    return false;
+
+  /* Ensure the name used to open FD still refers to the file that was
+     opened.  If the name was retargeted (e.g. a symlink was changed) then
+     FD and REALNAME will identify different files.  */
+  if (fd_stat.st_dev != name_stat.st_dev
+      || fd_stat.st_ino != name_stat.st_ino)
+    return false;
+
+  /* If the name, as given, matched a safe-path pattern then the name
+     is trusted by configuration and we are done.  Otherwise REALNAME,
+     which was resolved after the open, must still pass the safe-path
+     check; this catches a name retargeted between the check and the
+     open.  */
+  if (!raw_name_matched
+      && !filename_is_auto_load_safe_quiet (realname))
+    return false;
+
+  return true;
+}
+
 /* See auto-load.h.  */
 
 bool
@@ -680,41 +722,6 @@ auto_load_safe_open (const char *filename)
   result.fd = std::move (fd);
   result.full_path = std::move (realname);
   return result;
-}
-
-/* See auto-load.h.  */
-
-bool
-auto_load_verify_opened_script (int fd, const char *realname,
-				bool raw_name_matched)
-{
-  struct stat fd_stat, name_stat;
-
-  /* Only regular files can be sourced; this also ensures that FD is
-     not a FIFO or device, reading from which could block.  */
-  if (fstat (fd, &fd_stat) != 0 || !S_ISREG (fd_stat.st_mode))
-    return false;
-
-  if (stat (realname, &name_stat) != 0)
-    return false;
-
-  /* Ensure the name used to open FD still refers to the file that was
-     opened; if the name was retargeted (e.g. a symlink was changed)
-     then FD and REALNAME will identify different files.  */
-  if (fd_stat.st_dev != name_stat.st_dev
-      || fd_stat.st_ino != name_stat.st_ino)
-    return false;
-
-  /* If the name, as given, matched a safe-path pattern then the name
-     is trusted by configuration and we are done.  Otherwise REALNAME,
-     which was resolved after the open, must still pass the safe-path
-     check; this catches a name retargeted between the check and the
-     open.  */
-  if (!raw_name_matched
-      && !filename_is_auto_load_safe_quiet (realname))
-    return false;
-
-  return true;
 }
 
 /* For scripts specified in .debug_gdb_scripts, multiple objfiles may load
@@ -1023,10 +1030,9 @@ auto_load_objfile_script_1 (struct objfile *objfile, const char *realname,
 	  gdb_assert (sourcer != NULL);
 
 	  /* Wrap the verified file descriptor in a FILE.  For a valid,
-	     freshly opened file descriptor fdopen can only fail if out
-	     of memory; there is nothing useful we can do in that
-	     case.  */
-	  gdb_file_up input = opened.fd.to_file ("r");
+	     freshly opened file descriptor fdopen can only fail if out of
+	     memory; there is nothing useful we can do in that case.  */
+	  gdb_file_up input (opened.fd.to_file ("r"));
 	  gdb_assert (input != nullptr);
 
 	  sourcer (language, objfile, input.get (), debugfile);

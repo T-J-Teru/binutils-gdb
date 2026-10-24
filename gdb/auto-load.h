@@ -133,15 +133,6 @@ struct auto_load_opened
 
 extern auto_load_opened auto_load_safe_open (const char *filename);
 
-/* Verify that the file open on file descriptor FD is a regular file,
-   is still the file that REALNAME (gdb_realpath of the name FD was
-   opened with) refers to, and that REALNAME passes the `set auto-load
-   safe-path' check, unless RAW_NAME_MATCHED is true (the name, as
-   given, matched a safe-path pattern).  */
-
-extern bool auto_load_verify_opened_script (int fd, const char *realname,
-					    bool raw_name_matched);
-
 /* Return true if auto-loading gdb scripts is enabled.  */
 
 extern bool auto_load_gdb_scripts_enabled
