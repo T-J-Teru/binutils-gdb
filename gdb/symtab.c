@@ -4474,8 +4474,8 @@ info_sources_worker (struct ui_out *uiout,
   output_source_filename_data data (uiout, filter);
 
   ui_out_emit_list results_emitter (uiout, "files");
-  std::optional<ui_out_emit_tuple> output_tuple;
-  std::optional<ui_out_emit_list> sources_list;
+  opt_ui_out_emit_tuple output_tuple;
+  opt_ui_out_emit_list sources_list;
 
   gdb_assert (group_by_objfile || uiout->is_mi_like_p ());
 

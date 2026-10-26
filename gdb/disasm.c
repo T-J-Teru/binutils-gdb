@@ -610,8 +610,8 @@ do_mixed_source_and_assembly_deprecated
 
   ui_out_emit_list asm_insns_list (uiout, "asm_insns");
 
-  std::optional<ui_out_emit_tuple> outer_tuple_emitter;
-  std::optional<ui_out_emit_list> inner_list_emitter;
+  opt_ui_out_emit_tuple outer_tuple_emitter;
+  opt_ui_out_emit_list inner_list_emitter;
 
   for (i = 0; i < newlines; i++)
     {
@@ -767,8 +767,8 @@ do_mixed_source_and_assembly (struct gdbarch *gdbarch,
 
   ui_out_emit_list asm_insns_emitter (uiout, "asm_insns");
 
-  std::optional<ui_out_emit_tuple> tuple_emitter;
-  std::optional<ui_out_emit_list> list_emitter;
+  opt_ui_out_emit_tuple tuple_emitter;
+  opt_ui_out_emit_list list_emitter;
 
   last_symtab = NULL;
   last_line = 0;

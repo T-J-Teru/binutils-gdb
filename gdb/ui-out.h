@@ -418,25 +418,80 @@ class ui_out_emit_type
 public:
 
   ui_out_emit_type (struct ui_out *uiout, const char *id = nullptr)
-    : m_uiout (uiout)
   {
-    uiout->begin (Type, id);
+    emplace (uiout, id);
   }
 
   ~ui_out_emit_type ()
   {
-    m_uiout->end (Type);
+    reset ();
   }
 
   DISABLE_COPY_AND_ASSIGN (ui_out_emit_type);
 
-private:
+protected:
 
-  struct ui_out *m_uiout;
+  ui_out_emit_type () = default;
+
+  /* Support the std::optional interface, see opt_ui_out_emit_type.  */
+  ui_out_emit_type &emplace (struct ui_out *uiout, const char *id = nullptr)
+  {
+    reset ();
+    uiout->begin (Type, id);
+    m_uiout = uiout;
+    return *this;
+  }
+
+  /* Support the std::optional interface, see opt_ui_out_emit_type.  */
+  void reset () noexcept
+  {
+    if (!has_value ())
+      return;
+
+    m_uiout->end (Type);
+    m_uiout = nullptr;
+  }
+
+  /* Support the std::optional interface, see opt_ui_out_emit_type.  */
+  bool has_value () const noexcept
+  {
+    return m_uiout != nullptr;
+  }
+
+private:
+  struct ui_out *m_uiout = nullptr;
+};
+
+/* Stand-in for std::optional<ui_out_emit_type<Type>>.
+   Support (as needed) some of the std::optional interface, allowing it to be
+   used as if it were std::optional<ui_out_emit_type<Type>>.  There are 2
+   reasons why we don't want to use the std::optional form:
+   - Wmaybe-uninitialized false positives, and
+   - it's overkill.  With std::optional, we can have three states:
+     - !has_value ()
+     - has_value () && m_uiout == nullptr
+     - has_value () && m_uiout != nullptr
+     and we don't use the middle one.  */
+template<ui_out_type Type>
+class opt_ui_out_emit_type : ui_out_emit_type<Type>
+{
+  using base = ui_out_emit_type<Type>;
+
+public:
+  opt_ui_out_emit_type () = default;
+
+  using base::base;
+  using base::emplace;
+  using base::reset;
+  using base::has_value;
+
+  DISABLE_COPY_AND_ASSIGN (opt_ui_out_emit_type);
 };
 
 using ui_out_emit_tuple = ui_out_emit_type<ui_out_type_tuple>;
+using opt_ui_out_emit_tuple = opt_ui_out_emit_type<ui_out_type_tuple>;
 using ui_out_emit_list = ui_out_emit_type<ui_out_type_list>;
+using opt_ui_out_emit_list = opt_ui_out_emit_type<ui_out_type_list>;
 
 /* Start a new table on construction, and end the table on
    destruction.  */

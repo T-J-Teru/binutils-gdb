@@ -533,7 +533,7 @@ list_arg_or_local (const struct frame_arg *arg, enum what_to_list what,
       == lang_vars_shadowing::HIDE && shadowed && already_printed)
     return;
 
-  std::optional<ui_out_emit_tuple> tuple_emitter;
+  opt_ui_out_emit_tuple tuple_emitter;
   if (values != PRINT_NO_VALUES || what == all)
     tuple_emitter.emplace (uiout, nullptr);
 

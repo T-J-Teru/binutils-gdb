@@ -7150,8 +7150,8 @@ print_one_breakpoint_location (struct breakpoint *b,
 	(uiout->test_flags (fix_breakpoint_script_output)
 	 || fix_breakpoint_script_output_globally);
 
-      std::optional<ui_out_emit_tuple> tuple_emitter;
-      std::optional<ui_out_emit_list> list_emitter;
+      opt_ui_out_emit_tuple tuple_emitter;
+      opt_ui_out_emit_list list_emitter;
 
       if (use_fixed_output)
 	list_emitter.emplace (uiout, "script");
@@ -7224,8 +7224,7 @@ print_one_breakpoint (breakpoint *b, const bp_location **last_loc, int allflag)
     = (uiout->test_flags (fix_multi_location_breakpoint_output)
        || fix_multi_location_breakpoint_output_globally);
 
-  std::optional<ui_out_emit_tuple> bkpt_tuple_emitter (std::in_place, uiout,
-						       "bkpt");
+  opt_ui_out_emit_tuple bkpt_tuple_emitter (uiout, "bkpt");
   bool printed = print_one_breakpoint_location (b, NULL, 0, last_loc,
 						allflag, false);
 
@@ -7260,7 +7259,7 @@ print_one_breakpoint (breakpoint *b, const bp_location **last_loc, int allflag)
 		      || !b->first_loc ().enabled
 		      || b->first_loc ().disabled_by_cond))))
 	{
-	  std::optional<ui_out_emit_list> locations_list;
+	  opt_ui_out_emit_list locations_list;
 
 	  /* For MI version <= 2, keep the behavior where GDB outputs an invalid
 	     MI record.  For later versions, place breakpoint locations in a
@@ -10278,7 +10277,7 @@ watchpoint::print_it (const bpstat *bs) const
 
   string_file stb;
 
-  std::optional<ui_out_emit_tuple> tuple_emitter;
+  opt_ui_out_emit_tuple tuple_emitter;
   switch (this->type)
     {
     case bp_watchpoint:

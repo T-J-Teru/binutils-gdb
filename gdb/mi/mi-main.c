@@ -2455,7 +2455,7 @@ print_variable_or_computed (const char *expression, enum print_values values)
   else
     val = expr->evaluate ();
 
-  std::optional<ui_out_emit_tuple> tuple_emitter;
+  opt_ui_out_emit_tuple tuple_emitter;
   if (values != PRINT_NO_VALUES)
     tuple_emitter.emplace (uiout, nullptr);
   uiout->field_string ("name", expression);

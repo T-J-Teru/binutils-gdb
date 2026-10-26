@@ -1296,7 +1296,7 @@ print_thread_info_1 (struct ui_out *uiout, const char *requested_threads,
     /* For backward compatibility, we make a list for MI.  A table is
        preferable for the CLI, though, because it shows table
        headers.  */
-    std::optional<ui_out_emit_list> list_emitter;
+    opt_ui_out_emit_list list_emitter;
     std::optional<ui_out_emit_table> table_emitter;
 
     /* We'll be switching threads temporarily below.  */

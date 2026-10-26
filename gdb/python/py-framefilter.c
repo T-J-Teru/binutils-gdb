@@ -321,7 +321,7 @@ py_print_single_arg (struct ui_out *out,
   else
     val = fv;
 
-  std::optional<ui_out_emit_tuple> maybe_tuple;
+  opt_ui_out_emit_tuple maybe_tuple;
 
   /*  MI has varying rules for tuples, but generally if there is only
       one element in each item in the list, do not start a tuple.  The
@@ -557,7 +557,7 @@ enumerate_locals (PyObject *iter,
       struct symbol *sym;
       const struct block *sym_block;
       int local_indent = 8 + (8 * indent);
-      std::optional<ui_out_emit_tuple> tuple;
+      opt_ui_out_emit_tuple tuple;
 
       gdbpy_ref<> item (PyIter_Next (iter));
       if (item == NULL)
@@ -814,7 +814,7 @@ py_print_frame (PyObject *filter, frame_filter_flags flags,
       return EXT_LANG_BT_OK;
     }
 
-  std::optional<ui_out_emit_tuple> tuple;
+  opt_ui_out_emit_tuple tuple;
 
   /* -stack-list-locals does not require a
      wrapping frame attribute.  */
