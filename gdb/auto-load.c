@@ -457,7 +457,7 @@ filename_is_in_auto_load_safe_path_vec (const char *filename,
   const char *pattern = NULL;
 
   for (const gdb::unique_xmalloc_ptr<char> &p : auto_load_safe_path_vec)
-    if (*filename_realp == NULL && filename_is_in_pattern (filename, p.get ()))
+    if (filename_is_in_pattern (filename, p.get ()))
       {
 	pattern = p.get ();
 	break;

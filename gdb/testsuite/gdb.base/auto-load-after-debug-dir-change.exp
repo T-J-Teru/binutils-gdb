@@ -1,0 +1,101 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test GDB's checking of the auto-load safe path via the $debugdir
+# variable.
+#
+# The test changes the auto-load search-path and the
+# debug-file-directory, and checks that GDB can keep up with these
+# changes as the executable is repeatedly reloaded.
+
+require {!is_remote host}
+
+standard_testfile main.c -1.gdb -2.gdb
+
+if { [build_executable "build executable" ${testfile} ${srcfile}] } {
+    return
+}
+
+set binfile_dir [file dirname $binfile]
+
+array set debug_dir {}
+foreach i { 1 2 } {
+    set debug_dir($i) [file normalize [standard_output_file "debug_dir_$i"]]
+    remote_exec host "mkdir -p $debug_dir($i)"
+    remote_exec host "mkdir -p $debug_dir($i)/$binfile_dir"
+}
+
+remote_exec host "cp $srcdir/$subdir/$srcfile2 $debug_dir(1)/$binfile_dir/$testfile-gdb.gdb"
+remote_exec host "cp $srcdir/$subdir/$srcfile3 $debug_dir(2)/$binfile_dir/$testfile-gdb.gdb"
+
+clean_restart
+
+# Only load scripts from the debug file directory.
+gdb_test_no_output "set auto-load safe-path \$debugdir"
+
+# Set the auto-load search path to be exactly the SEARCH_NUM entry in
+# the global debug_dir array.
+#
+# Then set the debug file directory to the DEBUG_NUM entry in the
+# global debug_dir array.  As GDB's default auto-load search path
+# includes '$debugdir', this means GDB will accept scripts found in
+# this directory.
+#
+# Finally, load the executable, and check to see if the expected
+# auto-load script was loaded.
+#
+# Every call to run_test_1 is done in the same GDB session so that any
+# caching of the auto-load safe path will carry over between calls to
+# this proc.
+proc run_test_1 { search_num debug_num } {
+    global debug_dir
+
+    gdb_test_no_output "set variable \$script_loaded = 0" \
+	"reset script_loaded variable to a known value"
+
+    # Where GDB should look for auto-load scripts.
+    gdb_test_no_output "set auto-load scripts-directory $debug_dir($search_num)" \
+	"setup scripts directory"
+
+    # The auto-load safe path is based on the debug file directory,
+    # which we setup here.
+    gdb_test_no_output "set debug-file-directory $debug_dir($debug_num)" \
+	"set debug-file-directory"
+
+    gdb_load ${::binfile}
+
+    gdb_test {print $script_loaded} " = ${search_num}00"
+
+    # Check that the expected script shows as auto-loaded in GDB's output.
+    gdb_assert {[regexp "script_${search_num}_loaded" $::gdb_file_cmd_msg]} \
+	"expected script was loaded"
+
+    # The '3 - SEARCH_NUM' converts: 2 => 1 and 1 => 2.  This checks
+    # that the other script was not auto-loaded.
+    gdb_assert {![regexp "script_[expr {3 - $search_num}]_loaded" $::gdb_file_cmd_msg]} \
+	"other script was not loaded"
+}
+
+# Wrapper around run_test_1 which adds a test prefix.  See run_test_1
+# for details.
+proc run_test { search_num debug_num } {
+    with_test_prefix "search=$search_num, debug=$debug_num" {
+	run_test_1 $search_num $debug_num
+    }
+}
+
+# Run the tests.
+run_test 1 1
+run_test 2 2
