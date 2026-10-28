@@ -145,6 +145,105 @@ proc args_test { name arglist {re_esc_list {}} {re_no_esc_list {}} } {
     }
 }
 
+# Start gdbserver in --multi mode, connect and start an inferior.
+# Then switch off the single-inferior-argument-feature-packet and
+# reconnect to the SAME gdbserver.  Then try to start a new inferior
+# passing multiple command line arguments.
+#
+# This checks that gdbserver correctly clears the feature flag for the
+# single inferior argument feature.  If it doesn't then the second
+# connection will fail to start an inferior as there will be a
+# disagreement between GDB and gdbserver about how the argument packet
+# should be formatted.
+proc reconnection_and_single_inf_args {} {
+    global GDBFLAGS gdbserver_reconnect_p use_gdb_stub
+
+    save_vars { GDBFLAGS } {
+	# If GDB and GDBserver are both running locally, set the sysroot to avoid
+	# reading files via the remote protocol (the `is_remote target` check is
+	# already done above).
+	if { ![is_remote host] } {
+	    set GDBFLAGS "$GDBFLAGS -ex \"set sysroot\""
+	}
+	clean_restart $::testfile
+
+	# Make sure we're disconnected, in case we're testing with an
+	# extended-remote board, therefore already connected.
+	gdb_test "disconnect" ".*"
+    }
+
+    save_vars { gdbserver_reconnect_p use_gdb_stub } {
+	# Setting this flag prevents gdbserver being started with the
+	# --once option; this is required so that we can reconnect.
+	set gdbserver_reconnect_p 1
+
+	# This test always starts gdbserver in --multi mode, so clear
+	# the use_gdb_stub global to allow gdb_start_cmd to work.
+	set use_gdb_stub 0
+
+	# Start gdbserver in extended-remote mode.
+	set res [gdbserver_start "--multi" "$::binfile"]
+	set gdbserver_protocol "extended-remote"
+	set gdbserver_gdbport [lindex $res 1]
+	gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport
+
+	# Start an inferior passing multiple arguments.  By default
+	# this will make use of the single-inferior-argument remote
+	# feature, passing these arguments as a single string.
+	if { [gdb_start_cmd "a b c"] < 0 } {
+	    fail "start command"
+	    return -1
+	}
+
+	# gdb_start_cmd doesn't consume the prompt.  Collect it now.
+	gdb_test "" "" \
+	    "wait for prompt after starting the inferior"
+
+	# Check the inferior saw the correct argument count; the
+	# executable name and three arguments: 'a', 'b', and 'c'.
+	gdb_test "print argc" " = 4" \
+	    "print argc after initial start"
+
+	# Turn off the single-inferior-argument feature and reconnect.
+	# With the new connection gdbserver should reset its feature
+	# flags and renegotiate, so the new connection should end up
+	# not using this feature.
+	gdb_test "set remote single-inferior-argument-feature-packet off" \
+	    "Support for the 'single-inferior-argument-feature' packet on the current remote target is set to \"off\"\\."
+
+	gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport
+
+	# Now start a new inferior, in the newly connected session.
+	# GDB will split these arguments and send them as 3 separate
+	# strings.  If gdbserver messed up its feature flags then it
+	# will only be expecting a single string, in which case it
+	# will reject this request and not start the inferior.
+	if { [gdb_start_cmd "a b c"] < 0 } {
+	    fail "second start command"
+	    return -1
+	}
+
+	# This time we check for the 'remote target failed' message,
+	# this is the bug that was fixed when this test was added.
+	set saw_run_failure false
+	gdb_test_multiple "" "start inferior after reconnecting" -lbl {
+	    -re "\r\nRunning \"\[^\r\n\]+/$::testfile\" on the remote target failed(?=\r\n)" {
+		set saw_run_failure true
+		exp_continue
+	    }
+
+	    -re "\r\n$::gdb_prompt " {
+		gdb_assert { !$saw_run_failure } $gdb_test_name
+	    }
+	}
+
+	# Print the argc value as a double check.  This confirms that
+	# the inferior started, and saw the correct number of args.
+	gdb_test "print argc" " = 4" \
+	    "print argc after reconnecting"
+    }
+}
+
 args_test "basic" {a b c}
 args_test "one empty" {1 "" 3}
 args_test "two empty" {1 "" "" 3}
@@ -154,3 +253,5 @@ save_vars { env(TEST) } {
     set env(TEST) "ABCD"
     args_test "shell variable" {\$TEST} {\\$TEST} {ABCD}
 }
+
+reconnection_and_single_inf_args

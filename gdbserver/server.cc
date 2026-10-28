@@ -4629,6 +4629,7 @@ captured_main (int argc, char *argv[])
       cs.vCont_supported = 0;
       cs.memory_tagging_feature = false;
       cs.error_message_supported = false;
+      cs.single_inferior_argument = false;
       cs.multiple_wp_addr_feature = false;
 
       remote_open (port);
