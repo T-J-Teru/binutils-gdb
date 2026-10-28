@@ -4621,6 +4621,7 @@ captured_main (int argc, char *argv[])
       cs.report_fork_events = 0;
       cs.report_vfork_events = 0;
       cs.report_exec_events = 0;
+      cs.report_thread_events = 0;
       /* Be sure we're out of tfind mode.  */
       cs.current_traceframe = -1;
       cs.cont_thread = null_ptid;
