@@ -271,17 +271,17 @@ struct program_space
   void remove_solib_ops (const solib_ops &ops);
 
   /* Return a view of the solib providers for this program space.  */
-  std::vector<solib_ops_up> &solib_ops ()
+  const std::vector<solib_ops_up> &solib_ops () const
   { return m_solib_ops; }
 
   /* Find an solib_ops instance of type SOLIB_OPS_TYPE.
 
      Return nullptr if not found.  */
   template <typename solib_ops_type>
-  solib_ops_type *find_solib_ops ()
+  const solib_ops_type *find_solib_ops () const
   {
     for (auto &ops : this->solib_ops ())
-      if (auto ret = dynamic_cast<solib_ops_type *> (ops.get ());
+      if (auto ret = dynamic_cast<const solib_ops_type *> (ops.get ());
 	  ret != nullptr)
 	return ret;
 
