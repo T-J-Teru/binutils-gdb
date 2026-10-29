@@ -179,6 +179,11 @@ struct client_state
   /* If true, memory tagging features are supported.  */
   bool memory_tagging_feature = false;
 
+  /* True if GDB supports the wide form of struct stat in the vFile
+     fstat, stat and lstat replies.  When false, gdbserver sends the
+     narrow struct fio_stat.  */
+  bool stat64_feature = false;
+
   /* If true then E.errtext style errors are supported everywhere,
      including for the qRcmd and m packet.  When false E.errtext errors
      are not supported with qRcmd and m packets, but are still supported

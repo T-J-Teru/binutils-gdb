@@ -305,3 +305,35 @@ host_to_fileio_stat (struct stat *st, struct fio_stat *fst)
   host_to_fileio_time (st->st_mtime, fst->fst_mtime);
   host_to_fileio_time (st->st_ctime, fst->fst_ctime);
 }
+
+/* See fileio.h.  */
+
+void
+host_to_fileio_stat_wide (struct stat *st, struct fio_stat_wide *fst)
+{
+  LONGEST blksize;
+
+  host_to_fileio_ulong ((LONGEST) st->st_dev, fst->fst_dev);
+  host_to_fileio_ulong ((LONGEST) st->st_ino, fst->fst_ino);
+  host_to_fileio_mode (st->st_mode, fst->fst_mode);
+  host_to_fileio_ulong ((LONGEST) st->st_nlink, fst->fst_nlink);
+  host_to_fileio_uint ((long) st->st_uid, fst->fst_uid);
+  host_to_fileio_uint ((long) st->st_gid, fst->fst_gid);
+  host_to_fileio_ulong ((LONGEST) st->st_rdev, fst->fst_rdev);
+  host_to_fileio_ulong ((LONGEST) st->st_size, fst->fst_size);
+#ifdef HAVE_STRUCT_STAT_ST_BLKSIZE
+  blksize = st->st_blksize;
+#else
+  blksize = 512;
+#endif
+  host_to_fileio_ulong (blksize, fst->fst_blksize);
+#if HAVE_STRUCT_STAT_ST_BLOCKS
+  host_to_fileio_ulong ((LONGEST) st->st_blocks, fst->fst_blocks);
+#else
+  host_to_fileio_ulong (((LONGEST) st->st_size + blksize - 1) / blksize,
+			fst->fst_blocks);
+#endif
+  host_to_fileio_ulong ((LONGEST) st->st_atime, fst->fst_atime);
+  host_to_fileio_ulong ((LONGEST) st->st_mtime, fst->fst_mtime);
+  host_to_fileio_ulong ((LONGEST) st->st_ctime, fst->fst_ctime);
+}

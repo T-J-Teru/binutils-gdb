@@ -389,6 +389,9 @@ enum {
      packets and the tag violation stop replies.  */
   PACKET_memory_tagging_feature,
 
+  /* Support for the wide form of struct stat in vFile stat replies.  */
+  PACKET_stat64_feature,
+
   /* Support for the qIsAddressTagged packet.  */
   PACKET_qIsAddressTagged,
 
@@ -6188,6 +6191,8 @@ static const struct protocol_feature remote_protocol_features[] = {
   { "no-resumed", PACKET_DISABLE, remote_supported_packet, PACKET_no_resumed },
   { "memory-tagging", PACKET_DISABLE, remote_supported_packet,
     PACKET_memory_tagging_feature },
+  { "stat64", PACKET_DISABLE, remote_supported_packet,
+    PACKET_stat64_feature },
   { "error-message", PACKET_ENABLE, remote_supported_packet,
     PACKET_accept_error_message },
   { "binary-upload", PACKET_DISABLE, remote_supported_packet, PACKET_x },
@@ -6297,6 +6302,10 @@ remote_target::remote_query_supported ()
       if (m_features.packet_set_cmd_state (PACKET_QThreadOptions)
 	  != AUTO_BOOLEAN_FALSE)
 	remote_query_supported_append (&q, "QThreadOptions+");
+
+      if (m_features.packet_set_cmd_state (PACKET_stat64_feature)
+	  != AUTO_BOOLEAN_FALSE)
+	remote_query_supported_append (&q, "stat64+");
 
       if (m_features.packet_set_cmd_state (PACKET_no_resumed)
 	  != AUTO_BOOLEAN_FALSE)
@@ -13656,7 +13665,11 @@ remote_target::fileio_readlink (struct inferior *inf, const char *filename,
    remote syscall reply.  EXPECTED_LEN is the length returned from the
    fstat or stat call, this the length of the returned data (in ATTACHMENT)
    once it has been decoded.  The fstat/stat result (from the ATTACHMENT
-   data) is to be placed in ST.  */
+   data) is to be placed in ST.
+
+   The reply holds either a struct fio_stat or, if the stat64 feature was
+   negotiated, the wider struct fio_stat_wide; the two are distinguished
+   by their length.  */
 
 static int
 fileio_process_fstat_and_lstat_reply (const char *attachment,
@@ -13664,21 +13677,24 @@ fileio_process_fstat_and_lstat_reply (const char *attachment,
 				      int expected_len,
 				      struct stat *st)
 {
-  struct fio_stat fst;
+  gdb_byte buf[sizeof (struct fio_stat_wide)];
 
   int read_len
     = remote_unescape_input ((gdb_byte *) attachment, attachment_len,
-			     (gdb_byte *) &fst, sizeof (fst));
+			     buf, sizeof (buf));
 
   if (read_len != expected_len)
     error (_("vFile:fstat returned %d, but %d bytes."),
 	   expected_len, read_len);
 
-  if (read_len != sizeof (fst))
-    error (_("vFile:fstat returned %d bytes, but expecting %d."),
-	   read_len, (int) sizeof (fst));
-
-  remote_fileio_to_host_stat (&fst, st);
+  if (read_len == sizeof (struct fio_stat_wide))
+    remote_fileio_wide_to_host_stat ((struct fio_stat_wide *) buf, st);
+  else if (read_len == sizeof (struct fio_stat))
+    remote_fileio_to_host_stat ((struct fio_stat *) buf, st);
+  else
+    error (_("vFile:fstat returned %d bytes, but expecting %d or %d."),
+	   read_len, (int) sizeof (struct fio_stat),
+	   (int) sizeof (struct fio_stat_wide));
 
   return 0;
 }
@@ -17031,6 +17047,9 @@ Show the maximum size of the address (in bits) in a memory packet."), NULL,
 
   add_packet_config_cmd (PACKET_memory_tagging_feature,
 			 "memory-tagging-feature", "memory-tagging-feature", 0);
+
+  add_packet_config_cmd (PACKET_stat64_feature,
+			 "stat64-feature", "stat64-feature", 0);
 
   add_packet_config_cmd (PACKET_qIsAddressTagged,
 			 "qIsAddressTagged", "memory-tagging-address-check", 0);

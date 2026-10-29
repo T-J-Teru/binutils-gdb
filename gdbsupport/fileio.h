@@ -120,9 +120,11 @@ using fio_time_t = char[FIO_TIME_LEN];
 using fio_long_t = char[FIO_LONG_LEN];
 using fio_ulong_t = char[FIO_ULONG_LEN];
 
-/* Struct stat as used in protocol.  For complete independence
-   of host/target systems, it's defined as an array with offsets
-   to the members. */
+/* Struct stat as used in the protocol.  This is the format used by the
+   F-packet file-i/o protocol, and by the vFile stat packets when the
+   stat64 feature has not been negotiated.  Several fields are too narrow
+   to hold the corresponding struct stat member on a 64-bit host; see
+   struct fio_stat_wide.  */
 
 struct fio_stat
 {
@@ -139,6 +141,29 @@ struct fio_stat
   fio_time_t  fst_atime;
   fio_time_t  fst_mtime;
   fio_time_t  fst_ctime;
+};
+
+/* Struct stat as used in the wide form of the protocol.  The fields
+   which cannot hold the corresponding struct stat member on a 64-bit
+   host are widened to 8 bytes.  This layout is only used by the vFile
+   stat packets, and only when the stat64 feature has been negotiated
+   with the peer.  */
+
+struct fio_stat_wide
+{
+  fio_ulong_t fst_dev;
+  fio_ulong_t fst_ino;
+  fio_mode_t  fst_mode;
+  fio_ulong_t fst_nlink;
+  fio_uint_t  fst_uid;
+  fio_uint_t  fst_gid;
+  fio_ulong_t fst_rdev;
+  fio_ulong_t fst_size;
+  fio_ulong_t fst_blksize;
+  fio_ulong_t fst_blocks;
+  fio_ulong_t fst_atime;
+  fio_ulong_t fst_mtime;
+  fio_ulong_t fst_ctime;
 };
 
 struct fio_timeval
@@ -179,24 +204,37 @@ host_to_bigendian (LONGEST num, char *buf, int bytes)
     buf[i] = (num >> (8 * (bytes - i - 1))) & 0xff;
 }
 
-/* Pack a host-format integer into an fio_uint_t.  */
+/* Pack a host-format integer into an fio_uint_t, warning if the value
+   does not fit.  */
 
 static inline void
 host_to_fileio_uint (long num, fio_uint_t fnum)
 {
+  if ((ULONGEST) num > 0xffffffff)
+    warning (_("file-i/o: value %s does not fit in 32 bits and will be "
+	       "truncated"), plongest (num));
   host_to_bigendian ((LONGEST) num, (char *) fnum, 4);
 }
 
-/* Pack a host-format time_t into an fio_time_t.  */
+/* Pack a host-format time_t into an fio_time_t, warning if the value
+   does not fit.  */
 
 static inline void
 host_to_fileio_time (time_t num, fio_time_t fnum)
 {
+  if ((ULONGEST) num > 0xffffffff)
+    warning (_("file-i/o: time value %s does not fit in 32 bits and "
+	       "will be truncated"), plongest (num));
   host_to_bigendian ((LONGEST) num, (char *) fnum, 4);
 }
 
 /* Pack a host-format struct stat into a struct fio_stat.  */
 
 extern void host_to_fileio_stat (struct stat *st, struct fio_stat *fst);
+
+/* Pack a host-format struct stat into a struct fio_stat_wide.  */
+
+extern void host_to_fileio_stat_wide (struct stat *st,
+				      struct fio_stat_wide *fst);
 
 #endif /* GDBSUPPORT_FILEIO_H */

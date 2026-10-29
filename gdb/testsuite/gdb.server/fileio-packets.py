@@ -57,33 +57,48 @@ def decode_stat_reply(buf, byteorder="big"):
 
     buf = unescape_remote_data(buf)
 
-    if (
-        buf[0] != ord("F")
-        or buf[1] != ord("4")
-        or buf[2] != ord("0")
-        or buf[3] != ord(";")
-        or len(buf) != 68
-    ):
+    if buf[0:4] == b"F40;" and len(buf) == 68:
+        wide = False
+    elif buf[0:4] == b"F5c;" and len(buf) == 96:
+        wide = True
+    else:
         print(f"decode_stat_reply failed: {buf}\t(length = {len(buf)})")
         return None
 
-    # Discard the 'F40;' prefix.  The rest is the 64 bytes of data to
-    # be decoded.
+    # Discard the 'FNN;' prefix.
     buf = buf[4:]
 
-    st_dev = int.from_bytes(buf[0:4], byteorder=byteorder)
-    st_ino = int.from_bytes(buf[4:8], byteorder=byteorder)
-    st_mode = int.from_bytes(buf[8:12], byteorder=byteorder)
-    st_nlink = int.from_bytes(buf[12:16], byteorder=byteorder)
-    st_uid = int.from_bytes(buf[16:20], byteorder=byteorder)
-    st_gid = int.from_bytes(buf[20:24], byteorder=byteorder)
-    st_rdev = int.from_bytes(buf[24:28], byteorder=byteorder)
-    st_size = int.from_bytes(buf[28:36], byteorder=byteorder)
-    st_blksize = int.from_bytes(buf[36:44], byteorder=byteorder)
-    st_blocks = int.from_bytes(buf[44:52], byteorder=byteorder)
-    st_atime = int.from_bytes(buf[52:56], byteorder=byteorder)
-    st_mtime = int.from_bytes(buf[56:60], byteorder=byteorder)
-    st_ctime = int.from_bytes(buf[60:64], byteorder=byteorder)
+    def field(off, size):
+        return int.from_bytes(buf[off : off + size], byteorder=byteorder)
+
+    if wide:
+        st_dev = field(0, 8)
+        st_ino = field(8, 8)
+        st_mode = field(16, 4)
+        st_nlink = field(20, 8)
+        st_uid = field(28, 4)
+        st_gid = field(32, 4)
+        st_rdev = field(36, 8)
+        st_size = field(44, 8)
+        st_blksize = field(52, 8)
+        st_blocks = field(60, 8)
+        st_atime = field(68, 8)
+        st_mtime = field(76, 8)
+        st_ctime = field(84, 8)
+    else:
+        st_dev = field(0, 4)
+        st_ino = field(4, 4)
+        st_mode = field(8, 4)
+        st_nlink = field(12, 4)
+        st_uid = field(16, 4)
+        st_gid = field(20, 4)
+        st_rdev = field(24, 4)
+        st_size = field(28, 8)
+        st_blksize = field(36, 8)
+        st_blocks = field(44, 8)
+        st_atime = field(52, 4)
+        st_mtime = field(56, 4)
+        st_ctime = field(60, 4)
 
     return {
         "st_dev": st_dev,

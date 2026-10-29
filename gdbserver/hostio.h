@@ -20,6 +20,7 @@
 #define GDBSERVER_HOSTIO_H
 
 /* Per-connection setup.  */
+
 extern void hostio_handle_new_gdb_connection (void);
 
 extern int handle_vFile (char *, int, int *);

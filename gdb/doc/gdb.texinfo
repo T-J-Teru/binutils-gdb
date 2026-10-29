@@ -46232,6 +46232,11 @@ inspected, if @samp{qIsAddressTagged} (@pxref{qIsAddressTagged}) packet
 is not supported by the stub.  Access to the @file{/proc/@var{pid}/smaps}
 file is done via @samp{vFile} requests.
 
+@item stat64
+The remote stub supports the wider form of the stat structure returned
+by the @samp{vFile:fstat}, @samp{vFile:stat} and @samp{vFile:lstat}
+packets (@pxref{struct stat64}).
+
 @item error-message
 The remote stub supports replying with an error in a
 @samp{E.@var{errtext}} (@xref{textual error reply}) format from the
@@ -47478,6 +47483,9 @@ On success the information is returned as a binary attachment
 and the return value is the size of this attachment in bytes.
 If an error occurs the return value is -1.  The format of the
 returned binary attachment is as described in @ref{struct stat}.
+If both @value{GDBN} and the stub report the @samp{stat64} feature in
+the @samp{qSupported} exchange, the wider format is used instead
+(@pxref{struct stat64}).
 
 @item vFile:stat: @var{filename}
 Get information about the file @var{filename} on the target as if from
@@ -47485,6 +47493,9 @@ a @samp{stat} call.  On success the information is returned as a binary
 attachment and the return value is the size of this attachment in
 bytes.  If an error occurs the return value is -1.  The format of the
 returned binary attachment is as described in @ref{struct stat}.
+If both @value{GDBN} and the stub report the @samp{stat64} feature in
+the @samp{qSupported} exchange, the wider format is used instead
+(@pxref{struct stat64}).
 
 If @var{filename} is a symbolic link, then the information returned is
 about the file the link refers to, this is inline with the @samp{stat}
@@ -47496,6 +47507,9 @@ an @samp{lstat} call.  On success the information is returned as a
 binary attachment and the return value is the size of this attachment
 in bytes.  If an error occurs the return value is -1.  The format of
 the returned binary attachment is as described in @ref{struct stat}.
+If both @value{GDBN} and the stub report the @samp{stat64} feature in
+the @samp{qSupported} exchange, the wider format is used instead
+(@pxref{struct stat64}).
 
 This packet is identical to @samp{vFile:stat}, except if
 @var{filename} is a symbolic link, then this packet returns
@@ -48690,6 +48704,7 @@ protocol.
 * Pointer Values::
 * Memory Transfer::
 * struct stat::
+* struct stat64::
 * struct timeval::
 @end menu
 
@@ -48815,6 +48830,41 @@ continuing.
 Note that due to size differences between the host, target, and protocol
 representations of @code{struct stat} members, these members could eventually
 get truncated on the target.
+
+@node struct stat64
+@unnumberedsubsubsec struct stat64
+@cindex struct stat64, in file-i/o protocol
+
+When the @samp{stat64} feature has been negotiated, the buffer returned
+by the @samp{vFile:fstat}, @samp{vFile:stat} and @samp{vFile:lstat}
+packets uses the following representation instead:
+
+@smallexample
+struct stat64 @{
+    uint64_t      st_dev;      /* device */
+    uint64_t      st_ino;      /* inode */
+    mode_t        st_mode;     /* protection */
+    uint64_t      st_nlink;    /* number of hard links */
+    unsigned int  st_uid;      /* user ID of owner */
+    unsigned int  st_gid;      /* group ID of owner */
+    uint64_t      st_rdev;     /* device type (if inode device) */
+    uint64_t      st_size;     /* total size, in bytes */
+    uint64_t      st_blksize;  /* blocksize for filesystem I/O */
+    uint64_t      st_blocks;   /* number of blocks allocated */
+    uint64_t      st_atime;    /* time of last access */
+    uint64_t      st_mtime;    /* time of last modification */
+    uint64_t      st_ctime;    /* time of last change */
+@};
+@end smallexample
+
+This structure is of size 92 bytes.  The fields have the same meanings
+as in the narrow form (@pxref{struct stat}), but @code{st_dev},
+@code{st_ino}, @code{st_nlink}, @code{st_rdev} and the three timestamps
+are wide enough to hold the values found on a 64-bit host without
+truncation.
+
+This representation is only used by the @samp{vFile} packets; the
+File-I/O protocol always uses the narrow form (@pxref{struct stat}).
 
 @node struct timeval
 @unnumberedsubsubsec struct timeval

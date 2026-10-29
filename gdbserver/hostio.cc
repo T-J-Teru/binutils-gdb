@@ -26,7 +26,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "gdbsupport/fileio.h"
 
 struct fd_list
 {
@@ -459,13 +458,47 @@ handle_pwrite (char *own_buf, int packet_len)
   free (data);
 }
 
+/* Reply to a vFile stat request with the result in ST: in the wide
+   form if GDB has asked for it, otherwise in the narrow form.  */
+
+static void
+hostio_send_stat_reply (char *own_buf, struct stat *st,
+			int *new_packet_len)
+{
+  client_state &cs = get_client_state ();
+  struct fio_stat narrow;
+  struct fio_stat_wide wide;
+  char *data;
+  int len;
+
+  if (cs.stat64_feature)
+    {
+      host_to_fileio_stat_wide (st, &wide);
+      data = (char *) &wide;
+      len = sizeof (wide);
+    }
+  else
+    {
+      host_to_fileio_stat (st, &narrow);
+      data = (char *) &narrow;
+      len = sizeof (narrow);
+    }
+
+  int bytes_sent = hostio_reply_with_data (own_buf, data, len,
+					   new_packet_len);
+
+  /* If the response does not fit into a single packet, do not attempt
+     to return a partial response, but simply fail.  */
+  if (bytes_sent < len)
+    write_enn (own_buf);
+}
+
 static void
 handle_fstat (char *own_buf, int *new_packet_len)
 {
-  int fd, bytes_sent;
+  int fd;
   char *p;
   struct stat st;
-  struct fio_stat fst;
 
   p = own_buf + strlen ("vFile:fstat:");
 
@@ -483,25 +516,14 @@ handle_fstat (char *own_buf, int *new_packet_len)
       return;
     }
 
-  host_to_fileio_stat (&st, &fst);
-
-  bytes_sent = hostio_reply_with_data (own_buf,
-				       (char *) &fst, sizeof (fst),
-				       new_packet_len);
-
-  /* If the response does not fit into a single packet, do not attempt
-     to return a partial response, but simply fail.  */
-  if (bytes_sent < sizeof (fst))
-    write_enn (own_buf);
+  hostio_send_stat_reply (own_buf, &st, new_packet_len);
 }
 
 static void
 handle_stat (char *own_buf, int *new_packet_len)
 {
-  int bytes_sent;
   char *p;
   struct stat st;
-  struct fio_stat fst;
   char filename[HOSTIO_PATH_MAX];
 
   p = own_buf + strlen ("vFile:stat:");
@@ -519,25 +541,15 @@ handle_stat (char *own_buf, int *new_packet_len)
       return;
     }
 
-  host_to_fileio_stat (&st, &fst);
-
-  bytes_sent = hostio_reply_with_data (own_buf,
-				       (char *) &fst, sizeof (fst),
-				       new_packet_len);
-
-  /* If the response does not fit into a single packet, do not attempt
-     to return a partial response, but simply fail.  */
-  if (bytes_sent < sizeof (fst))
-    write_enn (own_buf);
+  hostio_send_stat_reply (own_buf, &st, new_packet_len);
 }
 
 static void
 handle_lstat (char *own_buf, int *new_packet_len)
 {
-  int ret, bytes_sent;
+  int ret;
   char *p;
   struct stat st;
-  struct fio_stat fst;
   char filename[HOSTIO_PATH_MAX];
 
   p = own_buf + strlen ("vFile:lstat:");
@@ -560,16 +572,7 @@ handle_lstat (char *own_buf, int *new_packet_len)
       return;
     }
 
-  host_to_fileio_stat (&st, &fst);
-
-  bytes_sent = hostio_reply_with_data (own_buf,
-				       (char *) &fst, sizeof (fst),
-				       new_packet_len);
-
-  /* If the response does not fit into a single packet, do not attempt
-     to return a partial response, but simply fail.  */
-  if (bytes_sent < sizeof (fst))
-    write_enn (own_buf);
+  hostio_send_stat_reply (own_buf, &st, new_packet_len);
 }
 
 static void

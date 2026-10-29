@@ -2744,6 +2744,8 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
 		cs.single_inferior_argument = true;
 	      else if (feature == "multi-wp-addr+")
 		cs.multiple_wp_addr_feature = true;
+	      else if (feature == "stat64+")
+		cs.stat64_feature = true;
 	      else
 		{
 		  /* Move the unknown features all together.  */
@@ -2760,7 +2762,7 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
 	       "PacketSize=%x;QPassSignals+;QProgramSignals+;"
 	       "QStartupWithShell+;QEnvironmentHexEncoded+;"
 	       "QEnvironmentReset+;QEnvironmentUnset+;"
-	       "QSetWorkingDir+;binary-upload+",
+	       "QSetWorkingDir+;binary-upload+;stat64+",
 	       PBUFSIZ - 1);
 
       if (target_supports_catch_syscall ())
@@ -4630,6 +4632,7 @@ captured_main (int argc, char *argv[])
       cs.memory_tagging_feature = false;
       cs.error_message_supported = false;
       cs.multiple_wp_addr_feature = false;
+      cs.stat64_feature = false;
 
       remote_open (port);
 

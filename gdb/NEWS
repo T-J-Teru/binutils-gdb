@@ -83,6 +83,20 @@ info locals
   The new "-shadowed on|off" option overrides the "set print shadowed"
   setting for a single invocation of the command.
 
+* Changed remote packets
+
+stat64 in qSupported
+
+  The new stat64 feature within the qSupported packet allows GDB and
+  the stub to agree on a wider form of the stat structure returned by
+  the vFile:fstat, vFile:stat and vFile:lstat packets, in which st_dev,
+  st_ino, st_nlink, st_rdev and the three timestamps are 8 bytes rather
+  than 4.  The wider form is used only when both sides report the
+  feature; otherwise the existing format is used, and values which do
+  not fit are truncated with a warning.  Note that the narrow form
+  reads timestamps as unsigned, so it overflows in 2106 rather than
+  2038.
+
 *** Changes in GDB 18
 
 * Support for the Common Trace Format (CTF) has been removed.  GDB now

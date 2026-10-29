@@ -1221,6 +1221,30 @@ remote_fileio_to_host_stat (struct fio_stat *fst, struct stat *st)
   st->st_ctime = remote_fileio_to_host_time (fst->fst_ctime);
 }
 
+/* See remote-fileio.h.  */
+
+void
+remote_fileio_wide_to_host_stat (struct fio_stat_wide *fst, struct stat *st)
+{
+  memset (st, 0, sizeof (struct stat));
+  st->st_dev = remote_fileio_to_host_ulong (fst->fst_dev);
+  st->st_ino = remote_fileio_to_host_ulong (fst->fst_ino);
+  st->st_mode = remote_fileio_to_host_mode (fst->fst_mode);
+  st->st_nlink = remote_fileio_to_host_ulong (fst->fst_nlink);
+  st->st_uid = remote_fileio_to_host_uint (fst->fst_uid);
+  st->st_gid = remote_fileio_to_host_uint (fst->fst_gid);
+  st->st_rdev = remote_fileio_to_host_ulong (fst->fst_rdev);
+  st->st_size = remote_fileio_to_host_ulong (fst->fst_size);
+#ifdef HAVE_STRUCT_STAT_ST_BLKSIZE
+  st->st_blksize = remote_fileio_to_host_ulong (fst->fst_blksize);
+#endif
+#if HAVE_STRUCT_STAT_ST_BLOCKS
+  st->st_blocks = remote_fileio_to_host_ulong (fst->fst_blocks);
+#endif
+  st->st_atime = remote_fileio_to_host_ulong (fst->fst_atime);
+  st->st_mtime = remote_fileio_to_host_ulong (fst->fst_mtime);
+  st->st_ctime = remote_fileio_to_host_ulong (fst->fst_ctime);
+}
 
 static void
 set_system_call_allowed (const char *args, int from_tty)

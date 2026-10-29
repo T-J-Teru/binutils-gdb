@@ -44,4 +44,9 @@ extern void initialize_remote_fileio (
 extern void remote_fileio_to_host_stat (struct fio_stat *fst,
 					struct stat *st);
 
+/* Unpack a struct fio_stat_wide.  */
+
+extern void remote_fileio_wide_to_host_stat (struct fio_stat_wide *fst,
+					     struct stat *st);
+
 #endif /* GDB_REMOTE_FILEIO_H */
