@@ -121,10 +121,10 @@ using fio_long_t = char[FIO_LONG_LEN];
 using fio_ulong_t = char[FIO_ULONG_LEN];
 
 /* Struct stat as used in the protocol.  This is the format used by the
-   F-packet file-i/o protocol, and by the vFile stat packets when the
-   stat64 feature has not been negotiated.  Several fields are too narrow
-   to hold the corresponding struct stat member on a 64-bit host; see
-   struct fio_stat_wide.  */
+   F-packet file-i/o stat and fstat calls, and by the vFile stat packets
+   when the stat64 feature has not been negotiated.  Several fields are
+   too narrow to hold the corresponding struct stat member on a 64-bit
+   host; see struct fio_stat_wide.  */
 
 struct fio_stat
 {
@@ -145,9 +145,9 @@ struct fio_stat
 
 /* Struct stat as used in the wide form of the protocol.  The fields
    which cannot hold the corresponding struct stat member on a 64-bit
-   host are widened to 8 bytes.  This layout is only used by the vFile
-   stat packets, and only when the stat64 feature has been negotiated
-   with the peer.  */
+   host are widened to 8 bytes.  This layout is used by the vFile stat
+   packets when the stat64 feature has been negotiated with the peer,
+   and by the F-packet file-i/o stat64 and fstat64 calls.  */
 
 struct fio_stat_wide
 {

@@ -791,14 +791,39 @@ remote_fileio_func_unlink (remote_target *remote, char *buf)
     remote_fileio_return_success (remote, ret);
 }
 
+/* Write ST into target memory at ADDR, using the struct fio_stat
+   layout or, if WIDE, the struct fio_stat_wide layout.  Return 0 on
+   success, or an errno value.  */
+
+static int
+remote_fileio_write_stat (CORE_ADDR addr, struct stat *st, bool wide)
+{
+  if (wide)
+    {
+      struct fio_stat_wide fst;
+
+      host_to_fileio_stat_wide (st, &fst);
+      return target_write_memory (addr, (gdb_byte *) &fst, sizeof fst);
+    }
+  else
+    {
+      struct fio_stat fst;
+
+      host_to_fileio_stat (st, &fst);
+      return target_write_memory (addr, (gdb_byte *) &fst, sizeof fst);
+    }
+}
+
+/* Handle the stat and stat64 calls.  WIDE selects the struct
+   fio_stat_wide layout.  */
+
 static void
-remote_fileio_func_stat (remote_target *remote, char *buf)
+remote_fileio_do_stat (remote_target *remote, char *buf, bool wide)
 {
   CORE_ADDR statptr, nameptr;
   int ret, namelength;
   LONGEST lnum;
   struct stat st;
-  struct fio_stat fst;
 
   /* 1. Parameter: Ptr to pathname / length incl. trailing zero */
   if (remote_fileio_extract_ptr_w_len (&buf, &nameptr, &namelength))
@@ -839,10 +864,9 @@ remote_fileio_func_stat (remote_target *remote, char *buf)
     }
   if (statptr)
     {
-      host_to_fileio_stat (&st, &fst);
-      host_to_fileio_uint (0, fst.fst_dev);
-
-      errno = target_write_memory (statptr, (gdb_byte *) &fst, sizeof fst);
+      /* The stat call has always reported st_dev as zero.  */
+      st.st_dev = 0;
+      errno = remote_fileio_write_stat (statptr, &st, wide);
       if (errno != 0)
 	{
 	  remote_fileio_return_errno (remote, -1);
@@ -853,14 +877,28 @@ remote_fileio_func_stat (remote_target *remote, char *buf)
 }
 
 static void
-remote_fileio_func_fstat (remote_target *remote, char *buf)
+remote_fileio_func_stat (remote_target *remote, char *buf)
+{
+  remote_fileio_do_stat (remote, buf, false);
+}
+
+static void
+remote_fileio_func_stat64 (remote_target *remote, char *buf)
+{
+  remote_fileio_do_stat (remote, buf, true);
+}
+
+/* Handle the fstat and fstat64 calls.  WIDE selects the struct
+   fio_stat_wide layout.  */
+
+static void
+remote_fileio_do_fstat (remote_target *remote, char *buf, bool wide)
 {
   CORE_ADDR ptrval;
   int fd, ret;
   long target_fd;
   LONGEST lnum;
   struct stat st;
-  struct fio_stat fst;
   struct timeval tv;
 
   /* 1. Parameter: file descriptor */
@@ -885,7 +923,6 @@ remote_fileio_func_fstat (remote_target *remote, char *buf)
 
   if (fd == FIO_FD_CONSOLE_IN || fd == FIO_FD_CONSOLE_OUT)
     {
-      host_to_fileio_uint (1, fst.fst_dev);
       memset (&st, 0, sizeof (st));
       st.st_mode = S_IFCHR | (fd == FIO_FD_CONSOLE_IN ? S_IRUSR : S_IWUSR);
       st.st_nlink = 1;
@@ -917,9 +954,7 @@ remote_fileio_func_fstat (remote_target *remote, char *buf)
     }
   if (ptrval)
     {
-      host_to_fileio_stat (&st, &fst);
-
-      errno = target_write_memory (ptrval, (gdb_byte *) &fst, sizeof fst);
+      errno = remote_fileio_write_stat (ptrval, &st, wide);
       if (errno != 0)
 	{
 	  remote_fileio_return_errno (remote, -1);
@@ -927,6 +962,18 @@ remote_fileio_func_fstat (remote_target *remote, char *buf)
 	}
     }
   remote_fileio_return_success (remote, ret);
+}
+
+static void
+remote_fileio_func_fstat (remote_target *remote, char *buf)
+{
+  remote_fileio_do_fstat (remote, buf, false);
+}
+
+static void
+remote_fileio_func_fstat64 (remote_target *remote, char *buf)
+{
+  remote_fileio_do_fstat (remote, buf, true);
 }
 
 static void
@@ -1062,6 +1109,8 @@ static struct {
   { "unlink", remote_fileio_func_unlink },
   { "stat", remote_fileio_func_stat },
   { "fstat", remote_fileio_func_fstat },
+  { "stat64", remote_fileio_func_stat64 },
+  { "fstat64", remote_fileio_func_fstat64 },
   { "gettimeofday", remote_fileio_func_gettimeofday },
   { "isatty", remote_fileio_func_isatty },
   { "system", remote_fileio_func_system },

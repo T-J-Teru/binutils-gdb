@@ -83,6 +83,15 @@ info locals
   The new "-shadowed on|off" option overrides the "set print shadowed"
   setting for a single invocation of the command.
 
+* New remote packets
+
+Fstat64, Ffstat64
+  New File-I/O calls, identical to Fstat and Ffstat except that they
+  fill in the wider struct stat64 layout, in which st_dev, st_ino,
+  st_nlink, st_rdev and the three timestamps are 8 bytes rather than
+  4.  A GDB without these calls replies with ENOSYS, so a target can
+  fall back to Fstat and Ffstat.
+
 * Changed remote packets
 
 stat64 in qSupported

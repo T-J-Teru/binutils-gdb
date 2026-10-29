@@ -48136,6 +48136,7 @@ is stopped at the user's request.
 * rename::
 * unlink::
 * stat/fstat::
+* stat64/fstat64::
 * gettimeofday::
 * isatty::
 * system::
@@ -48581,6 +48582,49 @@ The call was interrupted by the user.
 
 @end table
 
+The buffer uses the narrow @code{struct stat} layout, in which some
+members may be truncated on a 64-bit host.  @xref{stat64/fstat64}, for
+calls which use a wider layout.
+
+@node stat64/fstat64
+@unnumberedsubsubsec stat64/fstat64
+@cindex fstat64, file-i/o system call
+@cindex stat64, file-i/o system call
+
+@table @asis
+@item Synopsis:
+@smallexample
+int stat64(const char *pathname, struct stat64 *buf);
+int fstat64(int fd, struct stat64 *buf);
+@end smallexample
+
+@item Request:
+@samp{Fstat64,@var{pathnameptr}/@var{len},@var{bufptr}}@*
+@samp{Ffstat64,@var{fd},@var{bufptr}}
+
+These calls are identical to @samp{Fstat} and @samp{Ffstat}
+(@pxref{stat/fstat}), except that the buffer at @var{bufptr} is
+filled in using the wider @code{struct stat64} layout
+(@pxref{struct stat64}), which can hold the values found on a 64-bit
+host without truncation.
+
+A version of @value{GDBN} which does not support these calls replies
+with an @code{ENOSYS} error.  The target can then fall back to
+@samp{Fstat} or @samp{Ffstat}.
+
+@item Return value:
+On success, zero is returned.  On error, -1 is returned.
+
+@item Errors:
+As for @samp{Fstat} and @samp{Ffstat}, and in addition:
+
+@table @code
+@item ENOSYS
+@value{GDBN} does not support this call.
+@end table
+
+@end table
+
 @node gettimeofday
 @unnumberedsubsubsec gettimeofday
 @cindex gettimeofday, file-i/o system call
@@ -48837,7 +48881,9 @@ get truncated on the target.
 
 When the @samp{stat64} feature has been negotiated, the buffer returned
 by the @samp{vFile:fstat}, @samp{vFile:stat} and @samp{vFile:lstat}
-packets uses the following representation instead:
+packets uses the following representation instead.  The
+@samp{Fstat64} and @samp{Ffstat64} File-I/O calls
+(@pxref{stat64/fstat64}) always use it.
 
 @smallexample
 struct stat64 @{
@@ -48863,8 +48909,8 @@ as in the narrow form (@pxref{struct stat}), but @code{st_dev},
 are wide enough to hold the values found on a 64-bit host without
 truncation.
 
-This representation is only used by the @samp{vFile} packets; the
-File-I/O protocol always uses the narrow form (@pxref{struct stat}).
+The @samp{Fstat} and @samp{Ffstat} File-I/O calls always use the narrow
+form (@pxref{struct stat}).
 
 @node struct timeval
 @unnumberedsubsubsec struct timeval
