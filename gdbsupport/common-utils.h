@@ -223,10 +223,11 @@ extern int fromhex (int a);
 
 /* HEX is a string of characters representing hexadecimal digits.
    Convert pairs of hex digits to bytes and store sequentially into
-   BIN.  COUNT is the maximum number of characters to convert.  This
-   will convert fewer characters if the number of hex characters
-   actually seen is odd, or if HEX terminates before COUNT characters.
-   Returns the number of characters actually converted.  */
+   BIN.  COUNT is the maximum number of character pairs (bytes) to
+   convert.  This will convert fewer characters if the number of hex
+   characters actually seen is odd, or if HEX terminates before COUNT
+   character pairs.  Returns the number of character pairs (bytes)
+   actually converted.  */
 extern int hex2bin (const char *hex, gdb_byte *bin, int count);
 
 /* Like the above, but return a gdb::byte_vector.  */
