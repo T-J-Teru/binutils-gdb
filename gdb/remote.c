@@ -9320,6 +9320,7 @@ remote_target::send_g_packet ()
   while ((rs->buf[0] < '0' || rs->buf[0] > '9')
 	 && (rs->buf[0] < 'A' || rs->buf[0] > 'F')
 	 && (rs->buf[0] < 'a' || rs->buf[0] > 'f')
+	 && rs->buf[0] != '\0'
 	 && rs->buf[0] != 'x')	/* New: unavailable register value.  */
     {
       remote_debug_printf ("Bad register packet; fetching a new packet");

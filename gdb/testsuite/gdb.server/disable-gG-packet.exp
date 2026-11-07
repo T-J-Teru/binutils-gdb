@@ -1,0 +1,143 @@
+# This testcase is part of GDB, the GNU debugger.
+
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Basic testing of the gdbserver '--disable-packet=gG' option.  Connect GDB
+# to a gdbserver started with default flags.  Send the 'info registers'
+# command and record the register names that are printed.  Also use 'maint
+# packet' to check that the p/P packets are disabled by default.
+#
+# Connect to a new gdbserver, this one started with '--disable-packet=gG'.
+# Send 'info registers' again and check we see the same set of registers.
+# Use 'maint packet' to send some invalid p/P packets and check we get back
+# an error.
+
+load_lib gdbserver-support.exp
+
+standard_testfile normal.c
+
+require allow_gdbserver_tests
+
+if { [prepare_for_testing "failed to prepare" $testfile $srcfile] } {
+    return
+}
+
+set target_exec [gdbserver_download_current_prog]
+
+# Run 'info registers'.  Build and return an array containing the
+# register names of each register.
+proc register_names_from_info_registers { testname } {
+    set reg_names {}
+    gdb_test_multiple "info registers" $testname -lbl {
+	-re "^info registers(?=\r\n)" {
+	    exp_continue
+	}
+
+	-re "^\r\n$::gdb_prompt $" {
+	    gdb_assert { [llength $reg_names] > 1 } \
+		$gdb_test_name
+	}
+
+	-re "^\r\n(\\S+)\\s+\[^\r\n\]+(?=\r\n)" {
+	    lappend reg_names $expect_out(1,string)
+	    exp_continue
+	}
+    }
+
+    return $reg_names
+}
+
+# Start gdbserver passing it OPTIONS.  Connect to gdbserver and runto
+# the main function.
+proc start_gdbserver_connect_and_runto_main { testname {options ""} } {
+    with_test_prefix $testname {
+	save_vars { ::GDBFLAGS } {
+	    # If GDB and GDBserver are both running locally, set the
+	    # sysroot to avoid reading files via the remote protocol
+	    # (the `is_remote target` check is already done above).
+	    if { ![is_remote host] } {
+		set ::GDBFLAGS "$::GDBFLAGS -ex \"set sysroot\""
+	    }
+
+	    clean_restart $::testfile
+	}
+
+	# Make sure we're disconnected, in case we're testing with an
+	# extended-remote board, therefore already connected.
+	gdb_test "disconnect" ".*"
+
+	set res [gdbserver_start $options $::target_exec]
+
+	set gdbserver_protocol [lindex $res 0]
+	set gdbserver_gdbport [lindex $res 1]
+	gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport
+
+	gdb_breakpoint main
+	gdb_continue_to_breakpoint "break in main"
+    }
+}
+
+start_gdbserver_connect_and_runto_main \
+    "start gdbserver with default flags"
+
+set expected_regnames [register_names_from_info_registers \
+			  "info registers using g packet"]
+
+# Check that the p/P packets are not available by default.
+gdb_test "maint packet p0" \
+    "received: \"\"" \
+    "p packet is disabled"
+gdb_test "maint packet P0=0" \
+    "received: \"\"" \
+    "P packet is disabled"
+
+start_gdbserver_connect_and_runto_main \
+    "start gdbserver without g/G packet" "--disable-packet=gG"
+
+set regnames [register_names_from_info_registers \
+		 "info registers using p packet"]
+
+gdb_assert { $expected_regnames == $regnames } \
+    "saw all the expected registers"
+
+# Check we can write to a register using a 'P' packet.
+gdb_test_no_output "set \$sp = 0x1234"
+gdb_test "maint flush register-cache" \
+    "Register cache flushed\\."
+gdb_test "print/x \$sp" " = 0x0*1234" \
+    "updated stack pointer value seen"
+
+# Test 'p' packet error handling.  Try with a register number that is
+# larger than an int.  Then try with a register number that should fit
+# in an int, but is large enough to be outside the range of valid
+# register numbers.
+gdb_test "maint packet pffffffffffffffffffff" \
+    "received: \"E01\"" \
+    "p-packet, huge regno is an error"
+gdb_test "maint packet pfffffff" \
+    "received: \"E01\"" \
+    "p-packet, large regno is an error"
+gdb_test "maint packet Pffffffffffffffffffff=0" \
+    "received: \"E01\"" \
+    "P-packet, huge regno is an error"
+gdb_test "maint packet Pfffffff=0" \
+    "received: \"E01\"" \
+    "P-packet, large regno is an error"
+
+# Check gdbserver is still running by asking for a valid register.
+gdb_test "maint packet p0" \
+    "received: \"\[0-9a-f\]+\"" \
+    "gdbserver still active"

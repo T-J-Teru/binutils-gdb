@@ -144,6 +144,7 @@ bool disable_packet_Tthread;
 bool disable_packet_qC;
 bool disable_packet_qfThreadInfo;
 bool disable_packet_T;
+bool disable_packet_gG;
 
 static unsigned char *mem_buf;
 
@@ -1111,6 +1112,141 @@ handle_general_set (char *own_buf)
   /* Otherwise we didn't know what packet it was.  Say we didn't
      understand it.  */
   own_buf[0] = 0;
+}
+
+/* Handle the 'p' packet for reading registers.  */
+
+static void
+handle_p_packet (char *own_buf)
+{
+  /* When the 'g' packet is in use, which is the default, all registers are
+     served via the 'g' packet.  If a client tries to use the 'p' packet
+     then gdbserver replies with the empty packet; this function is not
+     called.  */
+  gdb_assert (disable_packet_gG);
+
+  /* This should be checked before we get here.  */
+  gdb_assert (own_buf[0] == 'p');
+
+  /* If target is not running then set an error and return.  */
+  require_running_or_return (own_buf);
+
+  /* The packet format is 'p<regno>' where <regno> is a hex string.  Parse
+     the hex string then check that there is nothing else left in the
+     packet buffer, and that the register number is not out of range.  */
+  ULONGEST hex_value;
+  const char *p = &own_buf[1];
+  const char *end = unpack_varlen_hex (p, &hex_value);
+  if (hex_value > INT_MAX || *end != '\0' || (end - p) > (sizeof (int) * 2))
+    {
+      write_enn (own_buf);
+      return;
+    }
+  int regno = static_cast<int> (hex_value);
+  gdb_assert (regno >= 0);
+
+  if (regno >= static_cast<int> (current_target_desc ()->reg_defs.size ()))
+    {
+      write_enn (own_buf);
+      return;
+    }
+
+  client_state &cs = get_client_state ();
+  if (cs.current_traceframe >= 0)
+    {
+      regcache a_regcache (current_target_desc ());
+
+      if (fetch_traceframe_registers (cs.current_traceframe,
+				      &a_regcache, -1) == 0)
+	collect_register_as_string (&a_regcache, regno, own_buf);
+      else
+	write_enn (own_buf);
+    }
+  else
+    {
+      struct regcache *regcache;
+
+      if (!set_desired_thread ())
+	write_enn (own_buf);
+      else
+	{
+	  regcache = get_thread_regcache (current_thread);
+	  collect_register_as_string (regcache, regno, own_buf);
+	}
+    }
+}
+
+/* Handle the 'P' packet for setting registers.  */
+
+static void
+handle_P_packet (char *own_buf)
+{
+  /* When the 'g' packet is in use, which is the default, all registers are
+     served via the 'g' packet and GDB will then try setting all registers
+     via the 'G' packet.  If however the 'g' packet is disabled then GDB
+     will not use the 'G' packet for setting registers, and instead relies
+     only on the 'P' packet.  */
+  gdb_assert (disable_packet_gG);
+
+  /* This should be checked before we get here.  */
+  gdb_assert (own_buf[0] == 'P');
+
+  /* If target is not running then set an error and return.  */
+  require_running_or_return (own_buf);
+
+  /* Cannot write into a trace frame.  */
+  client_state &cs = get_client_state ();
+  if (cs.current_traceframe >= 0)
+    {
+      write_enn (own_buf);
+      return;
+    }
+
+  /* Set the thread.  */
+  if (!set_desired_thread ())
+    {
+      write_enn (own_buf);
+      return;
+    }
+
+  /* The packet format is 'P<regno>=<value>' where <regno> and <value> are
+     hex strings.  First parse <regno>, check it is in range.  */
+  ULONGEST hex_value;
+  const char *p = &own_buf[1];
+  const char *end = unpack_varlen_hex (p, &hex_value);
+  if (hex_value > INT_MAX || *end != '=' || (end - p) > (sizeof (int) * 2))
+    {
+      write_enn (own_buf);
+      return;
+    }
+  int regno = static_cast<int> (hex_value);
+  gdb_assert (regno >= 0);
+
+  if (regno >= static_cast<int> (current_target_desc ()->reg_defs.size ()))
+    {
+      write_enn (own_buf);
+      return;
+    }
+
+  /* Set P to point to the first character of the <value> hex string.  */
+  p = end + 1;
+
+  /* Parse the <value> hex string.  Ensure that the string is the expected
+     length.  */
+  struct regcache *regcache = get_thread_regcache (current_thread);
+  int reg_size = register_size (regcache->tdesc, regno);
+  gdb_byte *val = (gdb_byte *) alloca (reg_size);
+  int len = strlen (p);
+  int bytes_converted = hex2bin (p, val, reg_size);
+  if (bytes_converted != reg_size || (bytes_converted * 2) != len)
+    {
+      write_enn (own_buf);
+      return;
+    }
+
+  /* Supply the new register value into the register cache.  */
+  supply_register (regcache, regno, val);
+  write_ok (own_buf);
 }
 
 static const char *
@@ -3927,8 +4063,9 @@ gdbserver_usage (FILE *stream)
 	   "  --disable-packet=OPT1[,OPT2,...]\n"
 	   "                        Disable support for RSP packets or features.\n"
 	   "                          Options:\n"
-	   "                            vCont, vConts, T, Tthread, qC, qfThreadInfo and\n"
-	   "                            threads (disable all threading packets).\n"
+	   "                            vCont, vConts, T, Tthread, qC, qfThreadInfo,\n"
+	   "                            threads (disable all threading packets), and\n"
+	   "                            gG.\n"
 	   "\n"
 	   "For more information, consult the GDB manual (available as on-line \n"
 	   "info or a printed manual).\n");
@@ -3946,7 +4083,8 @@ gdbserver_show_disableable (FILE *stream)
 	   "  Tthread     \tPassing the thread specifier in the "
 	   "T stop reply packet\n"
 	   "  threads     \tAll of the above\n"
-	   "  T           \tAll 'T' packets\n");
+	   "  T           \tAll 'T' packets\n"
+	   "  gG          \tThe 'g' and 'G' packets\n");
 }
 
 /* Start up the event loop.  This is the entry point to the event
@@ -4398,6 +4536,8 @@ captured_main (int argc, char *argv[])
 		    disable_packet_qC = true;
 		    disable_packet_qfThreadInfo = true;
 		  }
+		else if (streq ("gG", tok))
+		  disable_packet_gG = true;
 		else
 		  {
 		    fprintf (stderr, "Don't know how to disable \"%s\".\n\n",
@@ -4899,6 +5039,12 @@ process_serial_event (void)
 	}
       break;
     case 'g':
+      if (disable_packet_gG)
+	{
+	  cs.own_buf[0] = '\0';
+	  break;
+	}
+
       require_running_or_break (cs.own_buf);
       if (cs.current_traceframe >= 0)
 	{
@@ -4924,6 +5070,12 @@ process_serial_event (void)
 	}
       break;
     case 'G':
+      if (disable_packet_gG)
+	{
+	  cs.own_buf[0] = '\0';
+	  break;
+	}
+
       require_running_or_break (cs.own_buf);
       if (cs.current_traceframe >= 0)
 	write_enn (cs.own_buf);
@@ -4940,6 +5092,18 @@ process_serial_event (void)
 	      write_ok (cs.own_buf);
 	    }
 	}
+      break;
+    case 'p':
+      if (disable_packet_gG)
+	handle_p_packet (cs.own_buf);
+      else
+	cs.own_buf[0] = '\0';
+      break;
+    case 'P':
+      if (disable_packet_gG)
+	handle_P_packet (cs.own_buf);
+      else
+	cs.own_buf[0] = '\0';
       break;
     case 'm':
       {
