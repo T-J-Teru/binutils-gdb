@@ -1,0 +1,213 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+# Test error handling for the 'p' packet.  Start gdbserver with the g/G
+# packets disabled.  Start GDB, connect to the server, and then run 'info
+# registers', this will make use of the 'p' packet.
+#
+# Update the recorded logfile to replace the reply to the first 'p' packet,
+# the updated reply will be an invalid size.
+#
+# Replay the log and check that the 'info registers' gives a suitable error
+# message.
+
+load_lib gdbserver-support.exp
+load_lib gdbreplay-support.exp
+
+require allow_gdbserver_tests
+require has_gdbreplay
+
+standard_testfile
+
+if { [prepare_for_testing "failed to prepare" $testfile $srcfile] } {
+    return
+}
+
+# Check that remote register 0 is a suitable size.  The test could be
+# updated to handle other register sizes, but for now handle 4 or 8 byte
+# registers.
+set reg_size 0
+gdb_test_multiple "maint print remote-registers" "" -lbl {
+    -re "\r\n\\S+\\s+$::decimal\\s+$::decimal\\s+$::decimal\\s+($::decimal)\\s+\[^\r\n\]+\\s+0\\s+0\\s*(?=\r\n)" {
+	set reg_size $expect_out(1,string)
+	exp_continue
+    }
+
+    -re "\r\n$gdb_prompt $" {
+	pass $gdb_test_name
+    }
+}
+
+if { $reg_size != 4 && $reg_size != 8 } {
+    unsupported "remote register 0 is an unsupported size"
+    return
+}
+
+# Connect to gdbserver and run to a breakpoint in main, then use the 'info
+# registers' command.  Record the remotelogfile into the REMOTELOG log
+# file.
+proc_with_prefix record_initial_logfile { remotelog } {
+    # Make sure we're disconnected, in case we're testing with an
+    # extended-remote board, therefore already connected.
+    gdb_test "disconnect" ".*"
+
+    gdb_test_no_output "set sysroot" \
+	"setting sysroot before starting gdbserver"
+
+    # Start gdbserver like:
+    #   gdbserver :PORT ....
+    set res [gdbserver_start "--disable-packet=gG" $::binfile]
+    set gdbserver_protocol [lindex $res 0]
+    set gdbserver_gdbport [lindex $res 1]
+
+    gdb_test_no_output "set remotelogfile $remotelog" \
+	"setup remotelogfile"
+
+    # Connect to gdbserver.
+    if {![gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport] == 0} {
+	unsupported "couldn't start gdbserver"
+	return
+    }
+
+    # If we're connecting as 'remote' then we can't use 'runto'.
+    gdb_breakpoint main
+    gdb_continue_to_breakpoint "continuing to main"
+
+    gdb_test "info registers" ".*"
+}
+
+# Connect to gdbreplay using the REMOTELOG log file.  Runs to a breakpoint in
+# main and then uses the 'info registers' command.
+proc_with_prefix replay_without_error { remotelog } {
+    clean_restart $::testfile
+
+    # Make sure we're disconnected, in case we're testing with an
+    # extended-remote board, therefore already connected.
+    gdb_test "disconnect" ".*"
+
+    gdb_test_no_output "set sysroot" "setting sysroot"
+
+    set res [gdbreplay_start $remotelog]
+    set gdbserver_protocol [lindex $res 0]
+    set gdbserver_gdbport [lindex $res 1]
+
+    # Connect to gdbreplay.
+    if {![gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport] == 0} {
+	unsupported "couldn't start gdbreplay"
+	return
+    }
+
+    gdb_breakpoint main
+    gdb_continue_to_breakpoint "continue to main"
+
+    gdb_test "info registers" ".*"
+}
+
+# Connect to gdbreplay using the REMOTELOG log file.  Runs to a breakpoint in
+# main and then uses the 'info registers' command.  Expect an error from the
+# 'info registers' command, the error will include the VALUE string.
+proc_with_prefix replay_with_error { remotelog value } {
+    clean_restart $::testfile
+
+    # Make sure we're disconnected, in case we're testing with an
+    # extended-remote board, therefore already connected.
+    gdb_test "disconnect" ".*"
+
+    gdb_test_no_output "set sysroot" "setting sysroot"
+
+    set res [gdbreplay_start $remotelog]
+    set gdbserver_protocol [lindex $res 0]
+    set gdbserver_gdbport [lindex $res 1]
+
+    # Connect to gdbreplay.
+    if {![gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport] == 0} {
+	unsupported "couldn't start gdbreplay"
+	return
+    }
+
+    gdb_breakpoint main
+    gdb_continue_to_breakpoint "continue to main"
+
+    gdb_test "info registers" \
+	"Remote 'p' packet reply for register \[^\r\n\]+ is of unexpected length \\(expected $::decimal bytes\\): $value" \
+	"info registers gives an error"
+}
+
+# Create a copy of file SRC into DST.  While making the copy look for the
+# 'info registers' command.  After the 'info registers' GDB will send a 'p'
+# packet, and the remote will send a reply.
+#
+# Rewrite the reply to the first 'p' packet, replacing the returned register
+# value with NEW_VALUE.
+proc create_modified_remote_logfile { src dst new_value } {
+    set dst_fd [open $dst w]
+    set src_fd [open $src r]
+
+    # State machine: 'init' -> 'info regs' -> 'p pkt' -> 'done'.
+    # 'init' -- before we find the "info registers" command.
+    # 'info regs' -- after seeing the "info registers" command, before
+    #                finding the outbound 'p' packet.
+    # 'p pkt' -- after seeing the outbound 'p' packet, looking for the reply
+    #            line.
+    # 'done' -- after finding and modifying the reply to the first 'p'
+    #           packet.
+    set state "init"
+    while { [gets $src_fd line] != -1 } {
+	if { $state eq "init" } {
+	    if { $line eq "c info registers" } {
+		set state "info regs"
+	    }
+	} elseif { $state eq "info regs" } {
+	    if { [regexp "^w \\\$p\[0-9a-f\]+#" $line] } {
+		set state "p pkt"
+	    } else {
+		set state "done"
+	    }
+	} elseif { $state eq "p pkt" } {
+	    if { [regexp "^r \\\$\[0-9a-f\]+.*#" $line] } {
+		set line "r \$${new_value}"
+	    }
+	    set state "done"
+	}
+
+	puts $dst_fd $line
+    }
+
+    close $src_fd
+    close $dst_fd
+}
+
+# The replay log is placed in 'replay.log'.
+set remotelog [standard_output_file replay.log]
+
+record_initial_logfile $remotelog
+replay_without_error $remotelog
+
+# Create two modified logfiles.  The first replaces a register with a 1 byte
+# value.
+set remotelog_short [standard_output_file replay-short.log]
+set short_value_str 00
+create_modified_remote_logfile $remotelog $remotelog_short $short_value_str
+with_test_prefix "with short register" {
+    replay_with_error $remotelog_short $short_value_str
+}
+
+# The second replaces a register with a 10 byte value.
+set remotelog_long [standard_output_file replay-long.log]
+set long_value_str 00000000000000000000
+create_modified_remote_logfile $remotelog $remotelog_long $long_value_str
+with_test_prefix "with long register" {
+    replay_with_error $remotelog_long $long_value_str
+}
