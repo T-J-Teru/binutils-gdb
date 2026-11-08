@@ -9242,27 +9242,22 @@ int
 remote_target::fetch_register_using_p (struct regcache *regcache,
 				       packet_reg *reg)
 {
-  struct gdbarch *gdbarch = regcache->arch ();
-  struct remote_state *rs = get_remote_state ();
-  char *buf, *p;
-  gdb_byte *regp = (gdb_byte *) alloca (register_size (gdbarch, reg->regnum));
-  int i;
-
   if (m_features.packet_support (PACKET_p) == PACKET_DISABLE)
     return 0;
 
   if (reg->pnum == -1)
     return 0;
 
-  p = rs->buf.data ();
-  *p++ = 'p';
-  p += hexnumstr (p, reg->pnum);
-  *p++ = '\0';
+  /* Send the packet asking for the register.  */
+  struct remote_state *rs = get_remote_state ();
+  xsnprintf (rs->buf.data (), get_remote_packet_size (), "p%s",
+	     phex_nz (reg->pnum, 0));
   putpkt (rs->buf);
+
+  /* Read the reply.  */
   getpkt (&rs->buf);
 
-  buf = rs->buf.data ();
-
+  /* Check the packet status.  */
   packet_result result = m_features.packet_ok (rs->buf, PACKET_p);
   switch (result.status ())
     {
@@ -9277,23 +9272,27 @@ remote_target::fetch_register_using_p (struct regcache *regcache,
     }
 
   /* If this register is unfetchable, tell the regcache.  */
+  char *buf = rs->buf.data ();
   if (buf[0] == 'x')
     {
       regcache->raw_supply (reg->regnum, NULL);
       return 1;
     }
 
-  /* Otherwise, parse and supply the value.  */
-  p = buf;
-  i = 0;
-  while (p[0] != 0)
-    {
-      if (p[1] == 0)
-	error (_("fetch_register_using_p: early buf termination"));
+  /* Otherwise, parse the register value from the hex string.  */
+  struct gdbarch *gdbarch = regcache->arch ();
+  int reg_size = register_size (gdbarch, reg->regnum);
+  gdb_byte *regp = (gdb_byte *) alloca (reg_size);
+  int bytes_converted = hex2bin (buf, regp, reg_size);
 
-      regp[i++] = fromhex (p[0]) * 16 + fromhex (p[1]);
-      p += 2;
-    }
+  /* Check the whole packet was parsed, and that the packet length matches
+     the register size.  */
+  if (buf[bytes_converted * 2] != '\0' || bytes_converted != reg_size)
+    error (_("Remote 'p' packet reply for register %s is of unexpected "
+	     "length (expected %d bytes): %s"),
+	   gdbarch_register_name (gdbarch, reg->regnum), reg_size, buf);
+
+  /* Supply the value to the register cache.  */
   regcache->raw_supply (reg->regnum, regp);
   return 1;
 }
