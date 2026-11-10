@@ -2504,28 +2504,35 @@ cmd_qtdp (char *own_buf)
   write_ok (own_buf);
 }
 
+/* Handle the QTDPsrc packet in OWN_BUF.  */
+
 static void
 cmd_qtdpsrc (char *own_buf)
 {
-  ULONGEST num, addr, start, slen;
-  struct tracepoint *tpoint;
-  const char *packet = own_buf;
-  const char *saved;
-  char *srctype, *src;
-  size_t nbytes;
-  struct source_string *last, *newlast;
+  const char *packet = own_buf + strlen ("QTDPsrc:");
 
-  packet += strlen ("QTDPsrc:");
+#define CHECK_AND_SKIP_COLON_OR_RETURN_WITH_ERROR(MSG)			\
+  do									\
+    {									\
+    if (*packet != ':')							\
+      {									\
+	trace_debug ("Tracepoint error: missing ':' " MSG);		\
+	write_enn (own_buf);						\
+	return;								\
+      }									\
+    ++packet;								\
+    }									\
+  while (false)
 
+  ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
-  ++packet; /* skip a colon */
+  CHECK_AND_SKIP_COLON_OR_RETURN_WITH_ERROR ("after tracepoint number");
   packet = unpack_varlen_hex (packet, &addr);
-  ++packet; /* skip a colon */
+  CHECK_AND_SKIP_COLON_OR_RETURN_WITH_ERROR ("after address");
 
   /* See if we already have this tracepoint.  */
-  tpoint = find_tracepoint (num, addr);
-
-  if (!tpoint)
+  struct tracepoint *tpoint = find_tracepoint (num, addr);
+  if (tpoint == nullptr)
     {
       trace_debug ("Tracepoint error: tracepoint %d at 0x%s not found",
 		   (int) num, paddress (addr));
@@ -2533,30 +2540,67 @@ cmd_qtdpsrc (char *own_buf)
       return;
     }
 
-  saved = packet;
+  /* Record string type from the packet.  */
+  const char *start_of_type = packet;
   packet = strchr (packet, ':');
-  srctype = (char *) xmalloc (packet - saved + 1);
-  memcpy (srctype, saved, packet - saved);
-  srctype[packet - saved] = '\0';
+  if (packet == nullptr)
+    {
+      trace_debug ("Tracepoint error: missing ':' after string type");
+      write_enn (own_buf);
+      return;
+    }
+  gdb::unique_xmalloc_ptr<char> srctype
+    = make_unique_xstrndup (start_of_type, packet - start_of_type);
   ++packet;
-  packet = unpack_varlen_hex (packet, &start);
-  ++packet; /* skip a colon */
-  packet = unpack_varlen_hex (packet, &slen);
-  ++packet; /* skip a colon */
-  src = (char *) xmalloc (slen + 1);
-  nbytes = hex2bin (packet, (gdb_byte *) src, strlen (packet) / 2);
-  src[nbytes] = '\0';
 
-  newlast = XNEW (struct source_string);
-  newlast->type = srctype;
-  newlast->str = src;
-  newlast->next = NULL;
+  /* The QTDPsrc spec says that SLEN can be longer than the delivered string
+     in order to support strings longer than can fit in a single packet.
+     The START indicates where the string from this packet fits into the
+     overall string.
+
+     However, gdbserver has never (yet) supported the strings larger than a
+     single packet, which is why the START field here is ignored, and why we
+     check SLEN against the remaining packet length.
+
+     If we ever want to support the multi-packet string case later then this
+     code will need to be updated.  */
+  ULONGEST start, slen;
+  packet = unpack_varlen_hex (packet, &start);
+  CHECK_AND_SKIP_COLON_OR_RETURN_WITH_ERROR ("after start offset");
+  packet = unpack_varlen_hex (packet, &slen);
+  CHECK_AND_SKIP_COLON_OR_RETURN_WITH_ERROR ("after string length");
+
+  size_t len = strlen (packet);
+  if (slen != len / 2 || len % 2 != 0)
+    {
+      trace_debug ("Tracepoint error: invalid string length");
+      write_enn (own_buf);
+      return;
+    }
+
+  /* Convert at most SLEN bytes from the packet into SRC.  */
+  gdb::unique_xmalloc_ptr<char> src ((char *) xmalloc (slen + 1));
+  size_t nbytes = hex2bin (packet, (gdb_byte *) src.get (), slen);
+  src.get ()[nbytes] = '\0';
+
+  /* Because we check SLEN against the packet length above either the packet
+     is fully parsed, or hex2bin will have thrown an error on seeing a
+     non-hex character.  */
+  gdb_assert (packet[nbytes * 2] == '\0');
+
+  struct source_string *newlast = XNEW (struct source_string);
+  newlast->type = srctype.release ();
+  newlast->str = src.release ();
+  newlast->next = nullptr;
   /* Always add a source string to the end of the list;
      this keeps sequences of actions/commands in the right
      order.  */
-  if (tpoint->source_strings)
+  if (tpoint->source_strings != nullptr)
     {
-      for (last = tpoint->source_strings; last->next; last = last->next)
+      struct source_string *last;
+      for (last = tpoint->source_strings;
+	   last->next != nullptr;
+	   last = last->next)
 	;
       last->next = newlast;
     }
@@ -2564,6 +2608,8 @@ cmd_qtdpsrc (char *own_buf)
     tpoint->source_strings = newlast;
 
   write_ok (own_buf);
+
+#undef CHECK_AND_SKIP_COLON_OR_RETURN_WITH_ERROR
 }
 
 static void
