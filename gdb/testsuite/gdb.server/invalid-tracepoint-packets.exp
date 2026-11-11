@@ -161,7 +161,10 @@ proc_with_prefix test_qtdv {} {
     gdb_test "maint packet QTinit" $::ok_re \
 	"valid QTinit packet accepted"
 
-    gdbserver_exit false
+    # Non-hex characters in the variable string name.
+    gdb_test "maint packet QTDV:3:5:0:zz" $::error_re "QTDV name is non-hex"
+
+    ensure_gdbserver_exited_due_to_non_hex
 }
 
 # Test the QTDPsrc packet.
@@ -432,7 +435,11 @@ proc_with_prefix test_qtnotes {} {
 	"received: \"\[^\r\n\]*username:484950;notes:515253\[^\r\n\]*\"" \
 	"check notes with qTStatus packet"
 
-    gdbserver_exit false
+    # Non-hex characters in the packet.
+    gdb_test "maint packet QTNotes:user:zz;" $::error_re \
+	"QTNotes user field is non-hex"
+
+    ensure_gdbserver_exited_due_to_non_hex
 }
 
 test_qtdv
