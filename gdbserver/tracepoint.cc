@@ -2569,9 +2569,8 @@ cmd_qtdpsrc (char *own_buf)
       write_enn (own_buf);
       return;
     }
-  char *srctype = (char *) xmalloc (packet - start_of_type + 1);
-  memcpy (srctype, start_of_type, packet - start_of_type);
-  srctype[packet - start_of_type] = '\0';
+  gdb::unique_xmalloc_ptr<char> srctype
+    = make_unique_xstrndup (start_of_type, packet - start_of_type);
   ++packet;
 
   /* The QTDPsrc spec says that SLEN can be longer than the delivered string
@@ -2596,14 +2595,13 @@ cmd_qtdpsrc (char *own_buf)
       trace_debug ("Tracepoint error: invalid string length %s in: %s",
 		   pulongest (slen), own_buf);
       write_enn (own_buf);
-      xfree (srctype);
       return;
     }
 
-  char *src = (char *) xmalloc (len / 2 + 1);
-  size_t nbytes = hex2bin (packet, (gdb_byte *) src,
+  gdb::unique_xmalloc_ptr<char> src ((char *) xmalloc (len / 2 + 1));
+  size_t nbytes = hex2bin (packet, (gdb_byte *) src.get (),
 			   static_cast<int> (len / 2));
-  src[nbytes] = '\0';
+  src.get ()[nbytes] = '\0';
 
   /* Because we check SLEN against the packet length above, either the packet
      is fully parsed, or hex2bin will have thrown an error on seeing a
@@ -2611,8 +2609,8 @@ cmd_qtdpsrc (char *own_buf)
   gdb_assert (packet[nbytes * 2] == '\0');
 
   struct source_string *newlast = XNEW (struct source_string);
-  newlast->type = srctype;
-  newlast->str = src;
+  newlast->type = srctype.release ();
+  newlast->str = src.release ();
   newlast->next = nullptr;
   /* Always add a source string to the end of the list;
      this keeps sequences of actions/commands in the right
@@ -2651,9 +2649,9 @@ cmd_qtdv (char *own_buf)
     return;
 
   size_t nbytes = strlen (packet) / 2;
-  char *varname = (char *) xmalloc (nbytes + 1);
-  nbytes = hex2bin (packet, (gdb_byte *) varname, nbytes);
-  varname[nbytes] = '\0';
+  gdb::unique_xmalloc_ptr<char> varname ((char *) xmalloc (nbytes + 1));
+  nbytes = hex2bin (packet, (gdb_byte *) varname.get (), nbytes);
+  varname.get ()[nbytes] = '\0';
 
   struct trace_state_variable *tsv = create_trace_state_variable (num, 1);
   tsv->initial_value = (LONGEST) val;
@@ -2662,7 +2660,7 @@ cmd_qtdv (char *own_buf)
      set.  Free the old name now before assigning our new name.  */
   xfree (tsv->name);
 
-  tsv->name = varname;
+  tsv->name = varname.release ();
 
   set_trace_state_variable_value (num, (LONGEST) val);
 
@@ -3894,13 +3892,13 @@ cmd_qtnotes (char *own_buf)
 	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
 	  size_t nbytes = (packet - start_of_text) / 2;
-	  char *user = (char *) xmalloc (nbytes + 1);
-	  nbytes = hex2bin (start_of_text, (gdb_byte *) user, nbytes);
-	  user[nbytes] = '\0';
+	  gdb::unique_xmalloc_ptr<char> user ((char *) xmalloc (nbytes + 1));
+	  nbytes = hex2bin (start_of_text, (gdb_byte *) user.get (), nbytes);
+	  user.get ()[nbytes] = '\0';
 	  ++packet; /* skip the semicolon */
-	  trace_debug ("User is '%s'", user);
+	  trace_debug ("User is '%s'", user.get ());
 	  xfree (tracing_user_name);
-	  tracing_user_name = user;
+	  tracing_user_name = user.release ();
 	}
       else if (startswith (packet, "notes:"))
 	{
@@ -3908,13 +3906,13 @@ cmd_qtnotes (char *own_buf)
 	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
 	  size_t nbytes = (packet - start_of_text) / 2;
-	  char *notes = (char *) xmalloc (nbytes + 1);
-	  nbytes = hex2bin (start_of_text, (gdb_byte *) notes, nbytes);
-	  notes[nbytes] = '\0';
+	  gdb::unique_xmalloc_ptr<char> notes ((char *) xmalloc (nbytes + 1));
+	  nbytes = hex2bin (start_of_text, (gdb_byte *) notes.get (), nbytes);
+	  notes.get ()[nbytes] = '\0';
 	  ++packet; /* skip the semicolon */
-	  trace_debug ("Notes is '%s'", notes);
+	  trace_debug ("Notes is '%s'", notes.get ());
 	  xfree (tracing_notes);
-	  tracing_notes = notes;
+	  tracing_notes = notes.release ();
 	}
       else if (startswith (packet, "tstop:"))
 	{
@@ -3922,13 +3920,14 @@ cmd_qtnotes (char *own_buf)
 	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
 	  size_t nbytes = (packet - start_of_text) / 2;
-	  char *stopnote = (char *) xmalloc (nbytes + 1);
-	  nbytes = hex2bin (start_of_text, (gdb_byte *) stopnote, nbytes);
-	  stopnote[nbytes] = '\0';
+	  gdb::unique_xmalloc_ptr<char> stopnote
+	    ((char *) xmalloc (nbytes + 1));
+	  nbytes = hex2bin (start_of_text, (gdb_byte *) stopnote.get (), nbytes);
+	  stopnote.get ()[nbytes] = '\0';
 	  ++packet; /* skip the semicolon */
-	  trace_debug ("tstop note is '%s'", stopnote);
+	  trace_debug ("tstop note is '%s'", stopnote.get ());
 	  xfree (tracing_stop_note);
-	  tracing_stop_note = stopnote;
+	  tracing_stop_note = stopnote.release ();
 	}
       else
 	break;

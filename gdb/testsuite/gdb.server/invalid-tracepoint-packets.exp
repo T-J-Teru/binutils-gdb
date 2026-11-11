@@ -122,7 +122,6 @@ proc_with_prefix test_qtdv {} {
         return
     }
 
-    # Test the valid QTDV packet case.  Create a trace variable 'abc'.
     # This is assigned to number 1, which is already in use.  Our new
     # variable replaces the existing one.
     gdb_test "maint packet QTDV:1:5:0:616263" $::ok_re \
@@ -152,7 +151,27 @@ proc_with_prefix test_qtdv {} {
     gdb_test "maint packet QTDV:2:7:0:616263" $::ok_re \
         "valid QTDV packet is accepted"
 
-    gdbserver_exit false
+    # Non-hex characters in the variable string name.
+    gdb_test "maint packet QTDV:1:5:0:zz" $::error_re "QTDV name is non-hex"
+
+    ensure_gdbserver_exited_due_to_non_hex
+}
+
+# Test the QTNotes packet.
+proc_with_prefix test_qtnotes {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    # Test the valid QTNotes packet case.
+    gdb_test "maint packet QTNotes:user:414243;notes:444546;tstop:47;" \
+	$::ok_re "valid QTNotes packet accepted"
+
+    # Non-hex characters in the notes.
+    gdb_test "maint packet QTNotes:user:zz;" $::error_re \
+	"QTNotes user field is non-hex"
+
+    ensure_gdbserver_exited_due_to_non_hex
 }
 
 # Test the QTDPsrc packet.
@@ -387,3 +406,4 @@ test_qtenable_qtdisable
 test_qtro
 test_qtp
 test_qtbuffer
+test_qtnotes
