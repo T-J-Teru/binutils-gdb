@@ -2293,16 +2293,16 @@ cmd_qtinit (char *packet)
 static void
 clear_installed_tracepoints (void)
 {
-  struct tracepoint *tpoint;
-
   target_pause_all (true);
 
   /* Restore any bytes overwritten by tracepoints.  */
-  for (tpoint = tracepoints; tpoint; tpoint = tpoint->next)
+  for (struct tracepoint *tpoint = tracepoints;
+       tpoint != nullptr;
+       tpoint = tpoint->next)
     {
       /* Catch the case where we might try to remove a tracepoint that
 	 was never actually installed.  */
-      if (tpoint->handle == NULL)
+      if (tpoint->handle == nullptr)
 	{
 	  trace_debug ("Tracepoint %d at 0x%s was "
 		       "never installed, nothing to clear",
@@ -2330,7 +2330,7 @@ clear_installed_tracepoints (void)
 	  break;
 	}
 
-      tpoint->handle = NULL;
+      tpoint->handle = nullptr;
     }
 
   target_unpause_all (true);
@@ -2341,37 +2341,33 @@ clear_installed_tracepoints (void)
 static void
 cmd_qtdp (char *own_buf)
 {
-  int tppacket;
-  /* Whether there is a trailing hyphen at the end of the QTDP packet.  */
-  int trail_hyphen = 0;
-  ULONGEST num;
-  ULONGEST addr;
-  ULONGEST count;
-  struct tracepoint *tpoint;
-  const char *packet = own_buf;
-
-  packet += strlen ("QTDP:");
+  const char *packet = own_buf + strlen ("QTDP:");
 
   /* A hyphen at the beginning marks a packet specifying actions for a
      tracepoint already supplied.  */
-  tppacket = 1;
+  bool defining_tracepoint = true;
   if (*packet == '-')
     {
-      tppacket = 0;
+      defining_tracepoint = false;
       ++packet;
     }
+
+  ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
   ++packet; /* skip a colon */
   packet = unpack_varlen_hex (packet, &addr);
   ++packet; /* skip a colon */
 
   /* See if we already have this tracepoint.  */
-  tpoint = find_tracepoint (num, addr);
+  struct tracepoint *tpoint = find_tracepoint (num, addr);
 
-  if (tppacket)
+  /* Whether there is a trailing hyphen at the end of the QTDP packet.  */
+  bool trail_hyphen = false;
+
+  if (defining_tracepoint)
     {
       /* Duplicate tracepoints are never allowed.  */
-      if (tpoint)
+      if (tpoint != nullptr)
 	{
 	  trace_debug ("Tracepoint error: tracepoint %d"
 		       " at 0x%s already exists",
@@ -2385,6 +2381,8 @@ cmd_qtdp (char *own_buf)
       tpoint->enabled = (*packet == 'E');
       ++packet; /* skip 'E' */
       ++packet; /* skip a colon */
+
+      ULONGEST count;
       packet = unpack_varlen_hex (packet, &count);
       tpoint->step_count = count;
       ++packet; /* skip a colon */
@@ -2414,7 +2412,7 @@ cmd_qtdp (char *own_buf)
 	}
       if (*packet == '-')
 	{
-	  trail_hyphen = 1;
+	  trail_hyphen = true;
 	  trace_debug ("Also has actions\n");
 	}
 
@@ -2424,7 +2422,7 @@ cmd_qtdp (char *own_buf)
 		   tpoint->number, paddress (tpoint->address), tpoint->enabled,
 		   tpoint->step_count, tpoint->pass_count);
     }
-  else if (tpoint)
+  else if (tpoint != nullptr)
     add_tracepoint_action (tpoint, packet);
   else
     {
@@ -2440,7 +2438,7 @@ cmd_qtdp (char *own_buf)
      trailing hyphen in QTDP packet.  */
   if (tracing && !trail_hyphen)
     {
-      struct tracepoint *tp = NULL;
+      struct tracepoint *tp = nullptr;
 
       /* Pause all threads temporarily while we patch tracepoints.  */
       target_pause_all (false);
@@ -2456,7 +2454,7 @@ cmd_qtdp (char *own_buf)
       if (tpoint->type != trap_tracepoint)
 	{
 	  /* Find another fast tracepoint at the same address.  */
-	  for (tp = tracepoints; tp; tp = tp->next)
+	  for (tp = tracepoints; tp != nullptr; tp = tp->next)
 	    {
 	      if (tp->address == tpoint->address && tp->type == tpoint->type
 		  && tp->number != tpoint->number)
@@ -2464,7 +2462,7 @@ cmd_qtdp (char *own_buf)
 	    }
 
 	  /* TPOINT is installed at the same address as TP.  */
-	  if (tp)
+	  if (tp != nullptr)
 	    {
 	      if (tpoint->type == fast_tracepoint)
 		clone_fast_tracepoint (tpoint, tp);
@@ -2487,7 +2485,7 @@ cmd_qtdp (char *own_buf)
 	{
 	  download_tracepoint (tpoint);
 
-	  if (tpoint->type == trap_tracepoint || tp == NULL)
+	  if (tpoint->type == trap_tracepoint || tp == nullptr)
 	    {
 	      install_tracepoint (tpoint, own_buf);
 	      if (!streq (own_buf, "OK"))
@@ -2504,28 +2502,22 @@ cmd_qtdp (char *own_buf)
   write_ok (own_buf);
 }
 
+/* Handle the QTDPsrc packet in OWN_BUF.  */
+
 static void
 cmd_qtdpsrc (char *own_buf)
 {
-  ULONGEST num, addr, start, slen;
-  struct tracepoint *tpoint;
-  const char *packet = own_buf;
-  const char *saved;
-  char *srctype, *src;
-  size_t nbytes;
-  struct source_string *last, *newlast;
+  const char *packet = own_buf + strlen ("QTDPsrc:");
 
-  packet += strlen ("QTDPsrc:");
-
+  ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
   ++packet; /* skip a colon */
   packet = unpack_varlen_hex (packet, &addr);
   ++packet; /* skip a colon */
 
   /* See if we already have this tracepoint.  */
-  tpoint = find_tracepoint (num, addr);
-
-  if (!tpoint)
+  struct tracepoint *tpoint = find_tracepoint (num, addr);
+  if (tpoint == nullptr)
     {
       trace_debug ("Tracepoint error: tracepoint %d at 0x%s not found",
 		   (int) num, paddress (addr));
@@ -2533,30 +2525,36 @@ cmd_qtdpsrc (char *own_buf)
       return;
     }
 
-  saved = packet;
+  /* The start of the string type field within PACKET.  */
+  const char *start_of_type = packet;
   packet = strchr (packet, ':');
-  srctype = (char *) xmalloc (packet - saved + 1);
-  memcpy (srctype, saved, packet - saved);
-  srctype[packet - saved] = '\0';
+  char *srctype = (char *) xmalloc (packet - start_of_type + 1);
+  memcpy (srctype, start_of_type, packet - start_of_type);
+  srctype[packet - start_of_type] = '\0';
   ++packet;
+
+  ULONGEST start, slen;
   packet = unpack_varlen_hex (packet, &start);
   ++packet; /* skip a colon */
   packet = unpack_varlen_hex (packet, &slen);
   ++packet; /* skip a colon */
-  src = (char *) xmalloc (slen + 1);
-  nbytes = hex2bin (packet, (gdb_byte *) src, strlen (packet) / 2);
+  char *src = (char *) xmalloc (slen + 1);
+  size_t nbytes = hex2bin (packet, (gdb_byte *) src, strlen (packet) / 2);
   src[nbytes] = '\0';
 
-  newlast = XNEW (struct source_string);
+  struct source_string *newlast = XNEW (struct source_string);
   newlast->type = srctype;
   newlast->str = src;
-  newlast->next = NULL;
+  newlast->next = nullptr;
   /* Always add a source string to the end of the list;
      this keeps sequences of actions/commands in the right
      order.  */
-  if (tpoint->source_strings)
+  if (tpoint->source_strings != nullptr)
     {
-      for (last = tpoint->source_strings; last->next; last = last->next)
+      struct source_string *last;
+      for (last = tpoint->source_strings;
+	   last->next != nullptr;
+	   last = last->next)
 	;
       last->next = newlast;
     }
@@ -2566,17 +2564,14 @@ cmd_qtdpsrc (char *own_buf)
   write_ok (own_buf);
 }
 
+/* Handle the QTDV packet in OWN_BUF.  */
+
 static void
 cmd_qtdv (char *own_buf)
 {
+  const char *packet = own_buf + strlen ("QTDV:");
+
   ULONGEST num, val, builtin;
-  char *varname;
-  size_t nbytes;
-  struct trace_state_variable *tsv;
-  const char *packet = own_buf;
-
-  packet += strlen ("QTDV:");
-
   packet = unpack_varlen_hex (packet, &num);
   ++packet; /* skip a colon */
   packet = unpack_varlen_hex (packet, &val);
@@ -2584,12 +2579,12 @@ cmd_qtdv (char *own_buf)
   packet = unpack_varlen_hex (packet, &builtin);
   ++packet; /* skip a colon */
 
-  nbytes = strlen (packet) / 2;
-  varname = (char *) xmalloc (nbytes + 1);
+  size_t nbytes = strlen (packet) / 2;
+  char *varname = (char *) xmalloc (nbytes + 1);
   nbytes = hex2bin (packet, (gdb_byte *) varname, nbytes);
   varname[nbytes] = '\0';
 
-  tsv = create_trace_state_variable (num, 1);
+  struct trace_state_variable *tsv = create_trace_state_variable (num, 1);
   tsv->initial_value = (LONGEST) val;
   tsv->name = varname;
 
@@ -2598,21 +2593,22 @@ cmd_qtdv (char *own_buf)
   write_ok (own_buf);
 }
 
-static void
-cmd_qtenable_disable (char *own_buf, int enable)
-{
-  const char *packet = own_buf;
-  ULONGEST num, addr;
-  struct tracepoint *tp;
+/* Handle a QTEnable or QTDisable packet in OWN_BUF.  When ENABLE is
+   true it's a QTEnable packet, otherwise it's a QTDisable packet.  */
 
-  packet += strlen (enable ? "QTEnable:" : "QTDisable:");
+static void
+cmd_qtenable_disable (char *own_buf, bool enable)
+{
+  const char *packet = own_buf + strlen (enable ? "QTEnable:" : "QTDisable:");
+
+  ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
   ++packet; /* skip a colon */
   packet = unpack_varlen_hex (packet, &addr);
 
-  tp = find_tracepoint (num, addr);
+  struct tracepoint *tp = find_tracepoint (num, addr);
 
-  if (tp)
+  if (tp != nullptr)
     {
       if ((enable && tp->enabled) || (!enable && !tp->enabled))
 	{
@@ -2635,7 +2631,7 @@ cmd_qtenable_disable (char *own_buf, int enable)
 	  CORE_ADDR obj_addr = tp->obj_addr_on_target + offset;
 
 	  int ret = write_inferior_int8 (obj_addr, enable);
-	  if (ret)
+	  if (ret != 0)
 	    {
 	      trace_debug ("Cannot write enabled flag into "
 			   "inferior process memory");
@@ -2711,24 +2707,22 @@ clear_readonly_regions (void)
 static void
 cmd_qtro (char *own_buf)
 {
-  ULONGEST start, end;
-  struct readonly_region *roreg;
-  const char *packet = own_buf;
-
   trace_debug ("Want to mark readonly regions");
 
   clear_readonly_regions ();
 
-  packet += strlen ("QTro");
+  const char *packet = own_buf + strlen ("QTro");
 
   while (*packet == ':')
     {
       ++packet;  /* skip a colon */
+
+      ULONGEST start, end;
       packet = unpack_varlen_hex (packet, &start);
       ++packet;  /* skip a comma */
       packet = unpack_varlen_hex (packet, &end);
 
-      roreg = XNEW (struct readonly_region);
+      struct readonly_region *roreg = XNEW (struct readonly_region);
       roreg->start = start;
       roreg->end = end;
       roreg->next = readonly_regions;
@@ -3458,23 +3452,21 @@ cmd_qtstatus (char *packet)
 	   buf1, buf2);
 }
 
+/* Handle the qTP packet in OWN_BUF.  */
+
 static void
 cmd_qtp (char *own_buf)
 {
+  const char *packet = own_buf + strlen ("qTP:");
+
   ULONGEST num, addr;
-  struct tracepoint *tpoint;
-  const char *packet = own_buf;
-
-  packet += strlen ("qTP:");
-
   packet = unpack_varlen_hex (packet, &num);
   ++packet; /* skip a colon */
   packet = unpack_varlen_hex (packet, &addr);
 
   /* See if we already have this tracepoint.  */
-  tpoint = find_tracepoint (num, addr);
-
-  if (!tpoint)
+  struct tracepoint *tpoint = find_tracepoint (num, addr);
+  if (tpoint == nullptr)
     {
       trace_debug ("Tracepoint error: tracepoint %d at 0x%s not found",
 		   (int) num, paddress (addr));
@@ -3718,12 +3710,9 @@ cmd_qtminftpilen (char *packet)
 static void
 cmd_qtbuffer (char *own_buf)
 {
-  ULONGEST offset, num, tot;
-  unsigned char *tbp;
-  const char *packet = own_buf;
+  const char *packet = own_buf + strlen ("qTBuffer:");
 
-  packet += strlen ("qTBuffer:");
-
+  ULONGEST offset, num;
   packet = unpack_varlen_hex (packet, &offset);
   ++packet; /* skip a comma */
   unpack_varlen_hex (packet, &num);
@@ -3731,7 +3720,7 @@ cmd_qtbuffer (char *own_buf)
   trace_debug ("Want to get trace buffer, %d bytes at offset 0x%s",
 	       (int) num, phex_nz (offset, 0));
 
-  tot = (trace_buffer_hi - trace_buffer_lo) - free_space ();
+  ULONGEST tot = (trace_buffer_hi - trace_buffer_lo) - free_space ();
 
   /* If we're right at the end, reply specially that we're done.  */
   if (offset == tot)
@@ -3749,7 +3738,7 @@ cmd_qtbuffer (char *own_buf)
 
   /* Compute the pointer corresponding to the given offset, accounting
      for wraparound.  */
-  tbp = trace_buffer_start + offset;
+  unsigned char *tbp = trace_buffer_start + offset;
   if (tbp >= trace_buffer_wrap)
     tbp -= (trace_buffer_wrap - trace_buffer_lo);
 
@@ -3810,25 +3799,23 @@ cmd_bigqtbuffer_size (char *own_buf)
   write_ok (own_buf);
 }
 
+/* Handle the QTNotes packet in OWN_BUF.  */
+
 static void
 cmd_qtnotes (char *own_buf)
 {
-  size_t nbytes;
-  char *saved, *user, *notes, *stopnote;
-  char *packet = own_buf;
+  const char *packet = own_buf + strlen ("QTNotes:");
 
-  packet += strlen ("QTNotes:");
-
-  while (*packet)
+  while (*packet != '\0')
     {
       if (startswith (packet, "user:"))
 	{
 	  packet += strlen ("user:");
-	  saved = packet;
+	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
-	  nbytes = (packet - saved) / 2;
-	  user = (char *) xmalloc (nbytes + 1);
-	  nbytes = hex2bin (saved, (gdb_byte *) user, nbytes);
+	  size_t nbytes = (packet - start_of_text) / 2;
+	  char *user = (char *) xmalloc (nbytes + 1);
+	  nbytes = hex2bin (start_of_text, (gdb_byte *) user, nbytes);
 	  user[nbytes] = '\0';
 	  ++packet; /* skip the semicolon */
 	  trace_debug ("User is '%s'", user);
@@ -3838,11 +3825,11 @@ cmd_qtnotes (char *own_buf)
       else if (startswith (packet, "notes:"))
 	{
 	  packet += strlen ("notes:");
-	  saved = packet;
+	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
-	  nbytes = (packet - saved) / 2;
-	  notes = (char *) xmalloc (nbytes + 1);
-	  nbytes = hex2bin (saved, (gdb_byte *) notes, nbytes);
+	  size_t nbytes = (packet - start_of_text) / 2;
+	  char *notes = (char *) xmalloc (nbytes + 1);
+	  nbytes = hex2bin (start_of_text, (gdb_byte *) notes, nbytes);
 	  notes[nbytes] = '\0';
 	  ++packet; /* skip the semicolon */
 	  trace_debug ("Notes is '%s'", notes);
@@ -3852,11 +3839,11 @@ cmd_qtnotes (char *own_buf)
       else if (startswith (packet, "tstop:"))
 	{
 	  packet += strlen ("tstop:");
-	  saved = packet;
+	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
-	  nbytes = (packet - saved) / 2;
-	  stopnote = (char *) xmalloc (nbytes + 1);
-	  nbytes = hex2bin (saved, (gdb_byte *) stopnote, nbytes);
+	  size_t nbytes = (packet - start_of_text) / 2;
+	  char *stopnote = (char *) xmalloc (nbytes + 1);
+	  nbytes = hex2bin (start_of_text, (gdb_byte *) stopnote, nbytes);
 	  stopnote[nbytes] = '\0';
 	  ++packet; /* skip the semicolon */
 	  trace_debug ("tstop note is '%s'", stopnote);
@@ -3890,12 +3877,12 @@ handle_tracepoint_general_set (char *packet)
     }
   else if (startswith (packet, "QTEnable:"))
     {
-      cmd_qtenable_disable (packet, 1);
+      cmd_qtenable_disable (packet, true);
       return 1;
     }
   else if (startswith (packet, "QTDisable:"))
     {
-      cmd_qtenable_disable (packet, 0);
+      cmd_qtenable_disable (packet, false);
       return 1;
     }
   else if (startswith (packet, "QTDV:"))
