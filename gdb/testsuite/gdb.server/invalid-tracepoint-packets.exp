@@ -122,6 +122,21 @@ proc_with_prefix test_qtdv {} {
         return
     }
 
+    # Test the valid QTDV packet case.  Create a trace variable 'abc'.
+    # This is assigned to number 1, which is already in use.  Our new
+    # variable replaces the existing one.
+    gdb_test "maint packet QTDV:1:5:0:616263" $::ok_re \
+	"valid QTDV packet accepted for number 1"
+
+    # There's no pre-existing variable 2.  This is a brand new
+    # variable.
+    gdb_test "maint packet QTDV:2:6:0:646566" $::ok_re \
+	"valid QTDV packet accepted for number 2"
+
+    # Immediately replace our variable 2 with a new one.
+    gdb_test "maint packet QTDV:2:7:0:676869" $::ok_re \
+	"valid QTDV packet accepted to replace variable number 2"
+
     # Tests with missing fields of the packet.
     gdb_test "maint packet QTDV:2" \
 	$::error_re "missing colon after number"
