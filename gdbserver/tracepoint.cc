@@ -2533,14 +2533,39 @@ cmd_qtdpsrc (char *own_buf)
   srctype[packet - start_of_type] = '\0';
   ++packet;
 
+  /* The QTDPsrc spec says that SLEN can be longer than the delivered string
+     in order to support strings longer than can fit in a single packet.
+     The START indicates where the string from this packet fits into the
+     overall string.
+
+     However, gdbserver has never (yet) supported strings larger than a
+     single packet, which is why the START field here is ignored, and why we
+     check SLEN against the remaining packet length.  */
   ULONGEST start, slen;
   packet = unpack_varlen_hex (packet, &start);
   ++packet; /* skip a colon */
   packet = unpack_varlen_hex (packet, &slen);
   ++packet; /* skip a colon */
-  char *src = (char *) xmalloc (slen + 1);
-  size_t nbytes = hex2bin (packet, (gdb_byte *) src, strlen (packet) / 2);
+
+  size_t len = strlen (packet);
+  if (slen != len / 2 || len % 2 != 0)
+    {
+      trace_debug ("Tracepoint error: invalid string length %s in: %s",
+		   pulongest (slen), own_buf);
+      write_enn (own_buf);
+      xfree (srctype);
+      return;
+    }
+
+  char *src = (char *) xmalloc (len / 2 + 1);
+  size_t nbytes = hex2bin (packet, (gdb_byte *) src,
+			   static_cast<int> (len / 2));
   src[nbytes] = '\0';
+
+  /* Because we check SLEN against the packet length above, either the packet
+     is fully parsed, or hex2bin will have thrown an error on seeing a
+     non-hex character.  */
+  gdb_assert (packet[nbytes * 2] == '\0');
 
   struct source_string *newlast = XNEW (struct source_string);
   newlast->type = srctype;
