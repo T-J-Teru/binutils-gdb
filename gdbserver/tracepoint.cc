@@ -2269,6 +2269,11 @@ cmd_qtinit (char *packet)
 	  else
 	    trace_state_variables = next;
 	  trace_debug ("Deleting var %d", tsv->number);
+
+	  /* Trace state variables without a getter originated from the
+	     debugger client; the name is heap allocated, and should be
+	     freed now.  */
+	  free (tsv->name);
 	  free (tsv);
 	  tsv = next;
 	}
@@ -2673,6 +2678,37 @@ cmd_qtdv (char *own_buf)
   varname[nbytes] = '\0';
 
   struct trace_state_variable *tsv = create_trace_state_variable (num, 1);
+
+  /* If the getter is set then this is a builtin trace state variable, and
+     should not be overridden by the debug client.  However, GDB will upload
+     the target's builtin variables at connection time, and then send them
+     back to the target when starting a trace run.  Accept the debug client
+     redeclaring a builtin unchanged, but reject any attempt to change
+     it.  */
+  if (tsv->getter != nullptr)
+    {
+      if (builtin != 0 && strcmp (varname, tsv->name) == 0)
+	{
+	  /* The client is re-sending the definition of this builtin trace
+	     state variable unchanged.  There's nothing to do.  */
+	  write_ok (own_buf);
+	  xfree (varname);
+	  return;
+	}
+
+      /* The client tried to change this builtin state variable.  As the
+	 getter function is not being updated this will not do what the
+	 client expects, so reject it.  */
+      write_enn (own_buf);
+      xfree (varname);
+      return;
+    }
+
+  /* If NUM is a pre-existing variable then tsv->name will already be set.
+     Additionally, as the getter is NULL, the name is heap allocated and
+     should be freed now to avoid leaking.  */
+  xfree (tsv->name);
+
   tsv->initial_value = (LONGEST) val;
   tsv->name = varname;
 

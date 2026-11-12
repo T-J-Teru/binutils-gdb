@@ -121,6 +121,28 @@ proc_with_prefix test_qtdv {} {
 	return
     }
 
+    # Try to assign a new trace state variable to number 1.  Number 1
+    # is already in use by the builtin 'trace_timestamp' variable, so
+    # this will be rejected.
+    gdb_test "maint packet QTDV:1:5:0:616263" $::error_re \
+	"QTDV packet rejected for number 1"
+
+    # However, if we echo back the builtin trace_timestamp definition,
+    # then gdbserver will accept this.  The hex-encoded string here is
+    # 'trace_timestamp', the name of the builtin variable.
+    gdb_test \
+	"maint packet QTDV:1:0:1:74726163655f74696d657374616d70" \
+	$::ok_re "QTDV packet accepted for built-in definition"
+
+    # There's no pre-existing variable 2.  Create a new trace state
+    # variable.
+    gdb_test "maint packet QTDV:2:6:0:646566" $::ok_re \
+	"valid QTDV packet accepted for number 2"
+
+    # Immediately replace our variable 2 with a new one.
+    gdb_test "maint packet QTDV:2:7:0:676869" $::ok_re \
+	"valid QTDV packet accepted to replace variable number 2"
+
     # Tests with missing fields of the packet.
     gdb_test "maint packet QTDV:2" \
 	$::error_re "missing colon after number"
@@ -134,6 +156,10 @@ proc_with_prefix test_qtdv {} {
     # Send a valid QTDV packet to ensure valid packets are accepted.
     gdb_test "maint packet QTDV:2:7:0:616263" $::ok_re \
 	"valid QTDV packet is accepted"
+
+    # Send a QTinit packet which frees all the trace state variables.
+    gdb_test "maint packet QTinit" $::ok_re \
+	"valid QTinit packet accepted"
 
     gdbserver_exit false
 }
