@@ -2335,6 +2335,29 @@ clear_installed_tracepoints (void)
   target_unpause_all (true);
 }
 
+/* OWN_BUF is the complete packet buffer.  *PTR is a pointer to a character
+   within the buffer.  Check that **PTR points at character CH.  If it does
+   then increment *PTR to skip the character and return true.
+
+   Otherwise, if **PTR is not character CH, write an error into OWN_BUF and
+   return false.  */
+
+static bool
+check_char_and_skip_or_write_error (char *own_buf, const char **ptr, char ch)
+{
+  if (**ptr != ch)
+    {
+      trace_debug ("Tracepoint error: missing '%c' at offset %s in: %s",
+		   ch, pulongest (*ptr - own_buf), own_buf);
+      write_enn (own_buf);
+      return false;
+    }
+
+  /* Skip the CH character.  */
+  (*ptr)++;
+  return true;
+}
+
 /* Parse a packet that defines a tracepoint.  */
 
 static void
@@ -2353,9 +2376,11 @@ cmd_qtdp (char *own_buf)
 
   ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
   packet = unpack_varlen_hex (packet, &addr);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
 
   /* See if we already have this tracepoint.  */
   struct tracepoint *tpoint = find_tracepoint (num, addr);
@@ -2377,14 +2402,34 @@ cmd_qtdp (char *own_buf)
 
       tpoint = add_tracepoint (num, addr);
 
+      /* Check the ENA field is either 'E' or 'D'.  */
+      if (*packet != 'E' && *packet != 'D')
+	{
+	  trace_debug ("Tracepoint error: missing 'E' or 'D' at offset %s in: %s",
+		       pulongest (packet - own_buf), own_buf);
+	  write_enn (own_buf);
+	  remove_tracepoint (tpoint);
+	  return;
+	}
+
       tpoint->enabled = (*packet == 'E');
-      ++packet; /* skip 'E' */
-      ++packet; /* skip a colon */
+      /* Skip the 'E' or 'D'.  */
+      ++packet;
+
+      if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+	{
+	  remove_tracepoint (tpoint);
+	  return;
+	}
 
       ULONGEST count;
       packet = unpack_varlen_hex (packet, &count);
       tpoint->step_count = count;
-      ++packet; /* skip a colon */
+      if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+	{
+	  remove_tracepoint (tpoint);
+	  return;
+	}
       packet = unpack_varlen_hex (packet, &count);
       tpoint->pass_count = count;
       /* See if we have any of the additional optional fields.  */
@@ -2510,9 +2555,11 @@ cmd_qtdpsrc (char *own_buf)
 
   ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
   packet = unpack_varlen_hex (packet, &addr);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
 
   /* See if we already have this tracepoint.  */
   struct tracepoint *tpoint = find_tracepoint (num, addr);
@@ -2527,6 +2574,12 @@ cmd_qtdpsrc (char *own_buf)
   /* The start of the string type field within PACKET.  */
   const char *start_of_type = packet;
   packet = strchr (packet, ':');
+  if (packet == nullptr)
+    {
+      trace_debug ("Tracepoint error: missing ':' in: %s", own_buf);
+      write_enn (own_buf);
+      return;
+    }
   char *srctype = (char *) xmalloc (packet - start_of_type + 1);
   memcpy (srctype, start_of_type, packet - start_of_type);
   srctype[packet - start_of_type] = '\0';
@@ -2542,9 +2595,17 @@ cmd_qtdpsrc (char *own_buf)
      check SLEN against the remaining packet length.  */
   ULONGEST start, slen;
   packet = unpack_varlen_hex (packet, &start);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    {
+      xfree (srctype);
+      return;
+    }
   packet = unpack_varlen_hex (packet, &slen);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    {
+      xfree (srctype);
+      return;
+    }
 
   size_t len = strlen (packet);
   if (slen != len / 2 || len % 2 != 0)
@@ -2597,11 +2658,14 @@ cmd_qtdv (char *own_buf)
 
   ULONGEST num, val, builtin;
   packet = unpack_varlen_hex (packet, &num);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
   packet = unpack_varlen_hex (packet, &val);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
   packet = unpack_varlen_hex (packet, &builtin);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
 
   size_t nbytes = strlen (packet) / 2;
   char *varname = (char *) xmalloc (nbytes + 1);
@@ -2627,7 +2691,8 @@ cmd_qtenable_disable (char *own_buf, bool enable)
 
   ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
   packet = unpack_varlen_hex (packet, &addr);
 
   struct tracepoint *tp = find_tracepoint (num, addr);
@@ -2739,11 +2804,17 @@ cmd_qtro (char *own_buf)
 
   while (*packet == ':')
     {
-      ++packet;  /* skip a colon */
+      ++packet;
 
       ULONGEST start, end;
       packet = unpack_varlen_hex (packet, &start);
-      ++packet;  /* skip a comma */
+
+      /* The character *PACKET should be a comma.  If it is not then write
+	 an error into OWN_BUF and return.  If there were multiple regions
+	 in this packet then some might already have been set by this
+	 point.  The next QTro packet will clear the region list.  */
+      if (!check_char_and_skip_or_write_error (own_buf, &packet, ','))
+	return;
       packet = unpack_varlen_hex (packet, &end);
 
       struct readonly_region *roreg = XNEW (struct readonly_region);
@@ -3485,7 +3556,8 @@ cmd_qtp (char *own_buf)
 
   ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
-  ++packet; /* skip a colon */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ':'))
+    return;
   packet = unpack_varlen_hex (packet, &addr);
 
   /* See if we already have this tracepoint.  */
@@ -3738,7 +3810,8 @@ cmd_qtbuffer (char *own_buf)
 
   ULONGEST offset, num;
   packet = unpack_varlen_hex (packet, &offset);
-  ++packet; /* skip a comma */
+  if (!check_char_and_skip_or_write_error (own_buf, &packet, ','))
+    return;
   unpack_varlen_hex (packet, &num);
 
   trace_debug ("Want to get trace buffer, %d bytes at offset 0x%s",
@@ -3837,6 +3910,12 @@ cmd_qtnotes (char *own_buf)
 	  packet += strlen ("user:");
 	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
+	  if (packet == nullptr)
+	    {
+	      trace_debug ("Tracepoint error: missing ';' in: %s", own_buf);
+	      write_enn (own_buf);
+	      return;
+	    }
 	  size_t nbytes = (packet - start_of_text) / 2;
 	  char *user = (char *) xmalloc (nbytes + 1);
 	  nbytes = hex2bin (start_of_text, (gdb_byte *) user, nbytes);
@@ -3851,6 +3930,12 @@ cmd_qtnotes (char *own_buf)
 	  packet += strlen ("notes:");
 	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
+	  if (packet == nullptr)
+	    {
+	      trace_debug ("Tracepoint error: missing ';' in: %s", own_buf);
+	      write_enn (own_buf);
+	      return;
+	    }
 	  size_t nbytes = (packet - start_of_text) / 2;
 	  char *notes = (char *) xmalloc (nbytes + 1);
 	  nbytes = hex2bin (start_of_text, (gdb_byte *) notes, nbytes);
@@ -3865,6 +3950,12 @@ cmd_qtnotes (char *own_buf)
 	  packet += strlen ("tstop:");
 	  const char *start_of_text = packet;
 	  packet = strchr (packet, ';');
+	  if (packet == nullptr)
+	    {
+	      trace_debug ("Tracepoint error: missing ';' in: %s", own_buf);
+	      write_enn (own_buf);
+	      return;
+	    }
 	  size_t nbytes = (packet - start_of_text) / 2;
 	  char *stopnote = (char *) xmalloc (nbytes + 1);
 	  nbytes = hex2bin (start_of_text, (gdb_byte *) stopnote, nbytes);
