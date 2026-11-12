@@ -2570,6 +2570,17 @@ cmd_qtdpsrc (char *own_buf)
     = make_unique_xstrndup (start_of_type, packet - start_of_type);
   ++packet;
 
+  /* The QTDPsrc spec says that SLEN can be longer than the delivered string
+     in order to support strings longer than can fit in a single packet.
+     The START indicates where the string from this packet fits into the
+     overall string.
+
+     However, gdbserver has never (yet) supported the strings larger than a
+     single packet, which is why the START field here is ignored, and why we
+     check SLEN against the remaining packet length.
+
+     If we ever want to support the multi-packet string case later then this
+     code will need to be updated.  */
   ULONGEST start, slen;
   packet = unpack_varlen_hex (packet, &start);
   if (!check_colon_and_skip_or_write_error (own_buf, &packet))
@@ -2577,9 +2588,24 @@ cmd_qtdpsrc (char *own_buf)
   packet = unpack_varlen_hex (packet, &slen);
   if (!check_colon_and_skip_or_write_error (own_buf, &packet))
     return;
+
+  size_t len = strlen (packet);
+  if (slen != len / 2 || len % 2 != 0)
+    {
+      trace_debug ("Tracepoint error: invalid string length in: %s", own_buf);
+      write_enn (own_buf);
+      return;
+    }
+
+  /* Convert at most SLEN bytes from the packet into SRC.  */
   gdb::unique_xmalloc_ptr<char> src ((char *) xmalloc (slen + 1));
-  size_t nbytes = hex2bin (packet, (gdb_byte *) src.get (), strlen (packet) / 2);
+  size_t nbytes = hex2bin (packet, (gdb_byte *) src.get (), slen);
   src.get ()[nbytes] = '\0';
+
+  /* Because we check SLEN against the packet length above either the packet
+     is fully parsed, or hex2bin will have thrown an error on seeing a
+     non-hex character.  */
+  gdb_assert (packet[nbytes * 2] == '\0');
 
   struct source_string *newlast = XNEW (struct source_string);
   newlast->type = srctype.release ();

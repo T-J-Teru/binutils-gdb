@@ -188,6 +188,30 @@ proc_with_prefix test_qtdpsrc {} {
     # rejected.
     set prefix "QTDPsrc:1:$addr:cond:0"
 
+    # Undersized strings.  The packet declares that it has a string
+    # containing 2 bytes, but COUNT is the actual number of nibbles
+    # supplied.
+    foreach count {0 1 2 3} {
+	gdb_test "maint packet ${prefix}:2:[string repeat 1 $count]" \
+	    $::error_re "string of $count nibbles and declared length 2 bytes"
+    }
+
+    # Packets with oversized strings of various sizes.  The packet
+    # declares that it has a string containing 1 byte, but COUNT is the
+    # actual number of nibbles supplied.
+    foreach count {3 100 500 1000 2000 4000} {
+	gdb_test "maint packet ${prefix}:1:[string repeat 1 $count]" \
+	    $::error_re "string of $count nibbles and declared length 1 byte"
+    }
+
+    # Test with an extra field after the string.
+    gdb_test "maint packet ${prefix}:1:41:x" \
+	$::error_re "extra field after the string"
+
+    # Tests with missing fields of the packet.
+    gdb_test "maint packet QTDPsrc:1234" \
+	$::error_re "missing colon after number"
+
     # Tests with missing fields of the packet.
     gdb_test "maint packet QTDPsrc:1234" \
 	$::error_re "missing colon after number"
