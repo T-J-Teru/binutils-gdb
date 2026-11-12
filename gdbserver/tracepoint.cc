@@ -2502,6 +2502,30 @@ cmd_qtdp (char *own_buf)
   write_ok (own_buf);
 }
 
+/* OWN_BUF is the complete packet buffer.  *PTR is a pointer to a
+   character within the buffer.  Check that **PTR is a colon
+   character.  If it is then increment *PTR to skip the colon and
+   return true.
+
+   Otherwise, if **PTR is not a colon, write an error into OWN_BUF and
+   return false.  */
+
+static bool
+check_colon_and_skip_or_write_error (char *own_buf, const char **ptr)
+{
+  if (**ptr != ':')
+    {
+      trace_debug ("Tracepoint error: missing ':' at offset %s in: %s",
+		   pulongest (*ptr - own_buf), own_buf);
+      write_enn (own_buf);
+      return false;
+    }
+
+  /* Skip the colon.  */
+  (*ptr)++;
+  return true;
+}
+
 /* Handle the QTDPsrc packet in OWN_BUF.  */
 
 static void
@@ -2511,9 +2535,11 @@ cmd_qtdpsrc (char *own_buf)
 
   ULONGEST num, addr;
   packet = unpack_varlen_hex (packet, &num);
-  ++packet; /* skip a colon */
+  if (!check_colon_and_skip_or_write_error (own_buf, &packet))
+    return;
   packet = unpack_varlen_hex (packet, &addr);
-  ++packet; /* skip a colon */
+  if (!check_colon_and_skip_or_write_error (own_buf, &packet))
+    return;
 
   /* See if we already have this tracepoint.  */
   struct tracepoint *tpoint = find_tracepoint (num, addr);
@@ -2528,6 +2554,13 @@ cmd_qtdpsrc (char *own_buf)
   /* Record string type from the packet.  */
   const char *start_of_type = packet;
   packet = strchr (packet, ':');
+  if (packet == nullptr)
+    {
+      trace_debug ("Tracepoint error: missing ':' after string type in: %s",
+		   own_buf);
+      write_enn (own_buf);
+      return;
+    }
   char *srctype = (char *) xmalloc (packet - start_of_type + 1);
   memcpy (srctype, start_of_type, packet - start_of_type);
   srctype[packet - start_of_type] = '\0';
@@ -2535,9 +2568,11 @@ cmd_qtdpsrc (char *own_buf)
 
   ULONGEST start, slen;
   packet = unpack_varlen_hex (packet, &start);
-  ++packet; /* skip a colon */
+  if (!check_colon_and_skip_or_write_error (own_buf, &packet))
+    return;
   packet = unpack_varlen_hex (packet, &slen);
-  ++packet; /* skip a colon */
+  if (!check_colon_and_skip_or_write_error (own_buf, &packet))
+    return;
   char *src = (char *) xmalloc (slen + 1);
   size_t nbytes = hex2bin (packet, (gdb_byte *) src, strlen (packet) / 2);
   src[nbytes] = '\0';

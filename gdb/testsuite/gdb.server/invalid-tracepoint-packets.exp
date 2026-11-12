@@ -1,0 +1,188 @@
+# This testcase is part of GDB, the GNU debugger.
+#
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test some tracepoint related packets, focusing mostly on error
+# handling within gdbserver.  This does not test every tracepoint
+# related packet.  This test was written while fixing some bugs in
+# various packets and the tests were only added for packets being
+# fixed.
+#
+# Start gdbserver and connect.  Use 'maint packet ...' to send
+# tracepoint related packets to gdbserver.  Some of these packets are
+# valid, others are invalid.
+#
+# This manual packet sending is used in order to be able to send the
+# invalid packets.
+
+load_lib gdbserver-support.exp
+
+require allow_gdbserver_tests
+
+standard_testfile normal.c
+
+if {[prepare_for_testing "failed to prepare" $testfile $srcfile]} {
+    return
+}
+
+# Put the executable onto the target if needed.
+set target_exec [gdbserver_download_current_prog]
+
+# Some global regexp used in the tests below.
+set error_re "\r\nreceived: \"E01\""
+set ok_re "\r\nreceived: \"OK\""
+
+# Start GDB and gdbserver ready for the test.  Return false if
+# anything goes wrong, otherwise, return true.
+proc start_gdbserver_for_test {} {
+    clean_restart $::testfile
+
+    # Make sure we're disconnected, in case we're testing with an
+    # extended-remote board, therefore already connected.
+    gdb_test "disconnect" ".*"
+
+    # Start gdbserver and connect.
+    set res [gdbserver_start "" $::target_exec]
+    set gdbserver_protocol [lindex $res 0]
+    set gdbserver_gdbport [lindex $res 1]
+    set res [gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport]
+    if { ![gdb_assert {$res == 0} "connect"] } {
+	return false
+    }
+
+    return true
+}
+
+# Having sent gdbserver a tracepoint related packet that contains
+# non-hex character in a place where only hex characters are allowed,
+# we currently expect to see gdbserver exit after printing an error
+# about invalid hex digits.  Check for the error message and check
+# gdbserver exits.
+#
+# Before returning, cleanup the gdbserver state now that it is no
+# longer running.
+proc ensure_gdbserver_exited_due_to_non_hex {} {
+    # Check the gdbserver exited as we expect.
+    with_spawn_id $::server_spawn_id {
+	set saw_invalid_hex_msg false
+	gdb_test_multiple "" "gdbserver exited" -lbl {
+	    -re "\r\ngdbserver: Invalid hex digit \[^\r\n\]+(?=\r\n)" {
+		set saw_invalid_hex_msg true
+		exp_continue
+	    }
+	    eof {
+		gdb_assert { $saw_invalid_hex_msg } $gdb_test_name
+	    }
+	    timeout {
+		fail $gdb_test_name
+	    }
+	}
+    }
+
+    # Cleanup gdbserver state.
+    close_gdbserver
+}
+
+# Test the QTDPsrc packet.
+proc_with_prefix test_qtdpsrc {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    # Disassemble main and find an address at which we could place a
+    # tracepoint.
+    set addresses {}
+    gdb_test_multiple "disassemble main" "" -lbl {
+	-re "\r\n\\s+0x0*(\[0-9a-f\]+)\\s+\[^\r\n\]+(?=\r\n)" {
+	    set addr $expect_out(1,string)
+	    lappend addresses $addr
+	    exp_continue
+	}
+
+	-re "^\r\n$::gdb_prompt $" {
+	    gdb_assert { [llength $addresses] > 0 } \
+		"found instruction addresses"
+	}
+    }
+
+    # We need at least 2 different addresses in main for this test.
+    if { [llength $addresses] < 2 } {
+	unsupported "not enough instructions in main"
+	return
+    }
+
+    # Record the addresses we'll use in this test.
+    set addr [lindex $addresses 0]
+    set other_addr [lindex $addresses 1]
+
+    # Create a tracepoint at ADDR.  Do this manually as the rest of this
+    # test also does manual packet manipulation.
+    gdb_test_multiple "maint packet QTDP:1:$addr:D:1:1" "create tracepoint" {
+	-re -wrap "\r\nreceived: \"OK\"" {
+	    pass $gdb_test_name
+	}
+
+	-re -wrap "" {
+	    unsupported $gdb_test_name
+	    return
+	}
+    }
+
+    # Now send invalid QTDPsrc packets at gdbserver and check they are all
+    # rejected.
+    set prefix "QTDPsrc:1:$addr:cond:0"
+
+    # Tests with missing fields of the packet.
+    gdb_test "maint packet QTDPsrc:1234" \
+	$::error_re "missing colon after number"
+
+    gdb_test "maint packet QTDPsrc:1:$addr" \
+	$::error_re "missing colon after address"
+
+    gdb_test "maint packet QTDPsrc:1:$addr:cond" \
+	$::error_re "missing colon after type"
+
+    gdb_test "maint packet QTDPsrc:1:$addr:cond:0" \
+	$::error_re "missing colon after start"
+
+    gdb_test "maint packet QTDPsrc:1:$addr:cond:0:1" \
+	$::error_re "missing colon after length"
+
+    # Test with an invalid tracepoint number.
+    gdb_test "maint packet QTDPsrc:2:$addr:cond:0:1:41" \
+	$::error_re "invalid tracepoint number"
+
+    # Test with a valid tracepoint number, but the wrong address.
+    gdb_test "maint packet QTDPsrc:1:$other_addr:cond:0:1:41" \
+	$::error_re "invalid tracepoint address"
+
+    # Test some valid packets.
+    gdb_test "maint packet ${prefix}:1:41" $::ok_re "valid string accepted"
+    gdb_test "maint packet ${prefix}:3:414243" $::ok_re \
+	"valid multi-byte string accepted"
+
+    # Test a packet containing a string encoding with non-hex characters.
+    # Currently this will cause gdbserver to exit as we start with --once.
+    # This behaviour could probably be changed in the future as exiting
+    # gdbserver is a pretty extreme reaction to bad packet data.  But for
+    # now this test ensures that the packet is handled as we expect.
+    gdb_test "maint packet ${prefix}:1:zz" \
+	$::error_re "string encoding is non-hex"
+
+    ensure_gdbserver_exited_due_to_non_hex
+}
+
+test_qtdpsrc
