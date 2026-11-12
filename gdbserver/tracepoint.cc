@@ -2036,8 +2036,13 @@ agent_set_trace_state_variable_value (int num, LONGEST val)
   set_trace_state_variable_value (num, val);
 }
 
+/* Set the name of tracevariable NUM to NAME.  If there is no
+   tracevariable NUM then nothing just return.
+
+   After this call NAME is owned by the tracevariable.  */
+
 static void
-set_trace_state_variable_name (int num, const char *name)
+set_trace_state_variable_name (int num, char *name)
 {
   struct trace_state_variable *tsv;
 
@@ -2049,7 +2054,7 @@ set_trace_state_variable_name (int num, const char *name)
       return;
     }
 
-  tsv->name = (char *) name;
+  tsv->name = name;
 }
 
 static void
@@ -2621,6 +2626,11 @@ cmd_qtdv (char *own_buf)
 
   struct trace_state_variable *tsv = create_trace_state_variable (num, 1);
   tsv->initial_value = (LONGEST) val;
+
+  /* If NUM is a pre-existing variable then tsv->name will already be
+     set.  Free the old name now before assigning our new name.  */
+  xfree (tsv->name);
+
   tsv->name = varname;
 
   set_trace_state_variable_value (num, (LONGEST) val);
@@ -6493,7 +6503,7 @@ initialize_tracepoint (void)
      variables.  (In case you're wondering, if GDB already has a trace
      variable numbered 1, it will be renumbered.)  */
   create_trace_state_variable (1, 0);
-  set_trace_state_variable_name (1, "trace_timestamp");
+  set_trace_state_variable_name (1, xstrdup ("trace_timestamp"));
   set_trace_state_variable_getter (1, get_timestamp);
 
 #ifdef IN_PROCESS_AGENT
