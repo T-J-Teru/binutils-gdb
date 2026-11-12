@@ -63,12 +63,10 @@ proc start_gdbserver_for_test {} {
     return true
 }
 
-# Test the QTDPsrc packet.
-proc_with_prefix test_qtdpsrc {} {
-    if { ![start_gdbserver_for_test] } {
-	return
-    }
-
+# Disassemble the main function and return a list containing the
+# addresses of each function.  The returned addresses have the leading
+# 0x and any leading 0s stripped off.
+proc disassemble_main_for_addresses {} {
     # Disassemble main and find an address at which we could place a
     # tracepoint.
     set addresses {}
@@ -85,14 +83,82 @@ proc_with_prefix test_qtdpsrc {} {
 	}
     }
 
-    # We need at least one address in main for this test.
-    if { [llength $addresses] < 1 } {
+    return $addresses
+}
+
+# Having sent gdbserver a tracepoint related packet that contains
+# non-hex character in a place where only hex characters are allowed,
+# we currently expect to see gdbserver exit after printing an error
+# about invalid hex digits.  Check for the error message and check
+# gdbserver exits.
+#
+# Before returning, cleanup the gdbserver state now that it is no
+# longer running.
+proc ensure_gdbserver_exited_due_to_non_hex {} {
+    # Check the gdbserver exited as we expect.
+    with_spawn_id $::server_spawn_id {
+	set saw_invalid_hex_msg false
+	gdb_test_multiple "" "gdbserver exited" -lbl {
+	    -re "\r\ngdbserver: Invalid hex digit \[^\r\n\]+(?=\r\n)" {
+		set saw_invalid_hex_msg true
+		exp_continue
+	    }
+	    eof {
+		gdb_assert { $saw_invalid_hex_msg } $gdb_test_name
+	    }
+	    timeout {
+		fail $gdb_test_name
+	    }
+	}
+    }
+
+    # Cleanup gdbserver state.
+    close_gdbserver
+}
+
+# Test the QTDV packet.
+proc_with_prefix test_qtdv {} {
+    if { ![start_gdbserver_for_test] } {
+        return
+    }
+
+    # Tests with missing fields of the packet.
+    gdb_test "maint packet QTDV:2" \
+	$::error_re "missing colon after number"
+
+    gdb_test "maint packet QTDV:2:5" \
+	$::error_re "missing colon after value"
+
+    gdb_test "maint packet QTDV:2:0" \
+	$::error_re "missing colon after builtin flag"
+
+    # Send a valid QTDV packet to ensure valid packets are accepted.
+    # Immediately replace our variable 2 with a new one.
+    gdb_test "maint packet QTDV:2:7:0:616263" $::ok_re \
+        "valid QTDV packet is accepted"
+
+    gdbserver_exit false
+}
+
+# Test the QTDPsrc packet.
+proc_with_prefix test_qtdpsrc {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    # Disassemble main and find an address at which we could place a
+    # tracepoint.
+    set addresses [disassemble_main_for_addresses]
+
+    # We need at least 2 different addresses in main for this test.
+    if { [llength $addresses] < 2 } {
 	unsupported "not enough instructions in main"
 	return
     }
 
     # Record the address we'll use in this test.
     set addr [lindex $addresses 0]
+    set other_addr [lindex $addresses 1]
 
     # Create a tracepoint at ADDR.  Do this manually as the rest of this
     # test also does manual packet manipulation.
@@ -127,11 +193,182 @@ proc_with_prefix test_qtdpsrc {} {
 	    $::error_re "string of $count nibbles and declared length 1 byte"
     }
 
+    # Tests with missing fields of the packet.
+    gdb_test "maint packet QTDPsrc:1234" \
+	$::error_re "missing colon after number"
+
+    gdb_test "maint packet QTDPsrc:1:$addr" \
+	$::error_re "missing colon after address"
+
+    gdb_test "maint packet QTDPsrc:1:$addr:cond" \
+	$::error_re "missing colon after type"
+
+    gdb_test "maint packet QTDPsrc:1:$addr:cond:0" \
+	$::error_re "missing colon after start"
+
+    gdb_test "maint packet QTDPsrc:1:$addr:cond:0:1" \
+	$::error_re "missing colon after length"
+
+    # Test with an invalid tracepoint number.
+    gdb_test "maint packet QTDPsrc:2:$addr:cond:0:1:41" \
+	$::error_re "invalid tracepoint number"
+
+    # Test with a valid tracepoint number, but the wrong address.
+    gdb_test "maint packet QTDPsrc:1:$other_addr:cond:0:1:41" \
+	$::error_re "invalid tracepoint address"
+
     # Test some valid packets.
     gdb_test "maint packet ${prefix}:1:41" $::ok_re "valid string accepted"
     gdb_test "maint packet ${prefix}:3:414243" $::ok_re \
 	"valid multi-byte string accepted"
     gdb_test "maint packet ${prefix}:0:" $::ok_re "empty string accepted"
+
+    # Test a packet containing a string encoding with non-hex characters.
+    # Currently this will cause gdbserver to exit as we start with --once.
+    # This behaviour could probably be changed in the future as exiting
+    # gdbserver is a pretty extreme reaction to bad packet data.  But for
+    # now this test ensures that the packet is handled as we expect.
+    gdb_test "maint packet ${prefix}:1:zz" \
+	$::error_re "string encoding is non-hex"
+
+    ensure_gdbserver_exited_due_to_non_hex
 }
 
+# Test QTDP packet.
+proc_with_prefix test_qtdp {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    set addresses [disassemble_main_for_addresses]
+    if {[llength $addresses] < 1} {
+	unsupported "not enough instruction addresses in main"
+	return
+    }
+
+    set addr [lindex $addresses 0]
+
+    # Send packets with missing fields.
+    gdb_test "maint packet QTDP:1" $::error_re "no colon after number"
+    gdb_test "maint packet QTDP:2:$addr" $::error_re "no colon after address"
+    gdb_test "maint packet QTDP:3:$addr:D" $::error_re "no colon after enable/disable field"
+    gdb_test "maint packet QTDP:4:$addr:D:1" $::error_re "no colon after step count"
+
+    # Send a valid packet to ensure valid packets are accepted.
+    gdb_test "maint packet QTDP:5:$addr:D:1:1" $::ok_re "create tracepoint"
+
+    gdbserver_exit false
+}
+
+# Test QTEnable and QTDisable packets.
+proc_with_prefix test_qtenable_qtdisable {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    set addresses [disassemble_main_for_addresses]
+    if {[llength $addresses] < 1} {
+	unsupported "not enough instruction addresses in main"
+	return
+    }
+    set addr [lindex $addresses 0]
+
+    # Create a tracepoint.
+    gdb_test "maint packet QTDP:2:$addr:D:1:1" $::ok_re "create tracepoint"
+
+    # Send enable/disable packets with fields missing.
+    gdb_test "maint packet QTEnable:2" $::error_re \
+	"missing colon after number for enable"
+    gdb_test "maint packet QTDisable:2" $::error_re \
+	"missing colon after number for disable"
+
+    # Send a valid packet to ensue these work.
+    gdb_test "maint packet QTEnable:2:$addr" $::ok_re \
+	"enable tracepoint"
+    gdb_test "maint packet QTDisable:2:$addr" $::ok_re \
+	"disable tracepoint"
+
+    gdbserver_exit false
+}
+
+# Test QTro packet.
+proc_with_prefix test_qtro {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    set addresses [disassemble_main_for_addresses]
+    if {[llength $addresses] < 2} {
+	unsupported "not enough instruction addresses in main"
+	return
+    }
+
+    set start [lindex $addresses 0]
+    set end [lindex $addresses 0]
+
+    # Send packets with missing fields.
+    gdb_test "maint packet QTro:$start" $::error_re "no comma after start"
+    gdb_test "maint packet QTro:$start,$end:$start" $::error_re \
+	"no comma after second start"
+
+    # Send a valid packet to ensure valid packets are accepted.
+    gdb_test "maint packet QTro:$start,$end" $::ok_re "valid packet, single range"
+    gdb_test "maint packet QTro:$start,$end:$start,$end" $::ok_re "valid packet, two ranges"
+
+    gdbserver_exit false
+}
+
+# Test qTP packet.
+proc_with_prefix test_qtp {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    set addresses [disassemble_main_for_addresses]
+    if {[llength $addresses] < 1} {
+	unsupported "not enough instruction addresses in main"
+	return
+    }
+    set addr [lindex $addresses 0]
+
+    # Create a tracepoint.
+    gdb_test "maint packet QTDP:2:$addr:D:1:1" $::ok_re "create tracepoint"
+
+    # Send qTP packet with fields missing.
+    gdb_test "maint packet qTP:2" $::error_re "missing colon after number"
+
+    # Send a valid packet to check this can work.
+    gdb_test "maint packet qTP:2:$addr" \
+	"\r\nreceived: \"V${::decimal}:${::decimal}\"" \
+	"valid packet"
+
+    gdbserver_exit false
+}
+
+# Test QTBuffer packet.
+proc_with_prefix test_qtbuffer {} {
+    if { ![start_gdbserver_for_test] } {
+	return
+    }
+
+    # Send qTBuffer packets with missing fields.
+    gdb_test "maint packet qTBuffer:2" $::error_re \
+	"missing comma after offset"
+
+    # Send a valid qTBuffer packet.  Request content at offset 0.  As
+    # we have not collected any trace data by this point we should get
+    # back an 'l' indicating that we are at the end of the trace buffer.
+    gdb_test "maint packet qTBuffer:0,10" \
+	"\r\nreceived: \"l\"" \
+	"valid qTBuffer"
+
+    gdbserver_exit false
+}
+
+test_qtdv
 test_qtdpsrc
+test_qtdp
+test_qtenable_qtdisable
+test_qtro
+test_qtp
+test_qtbuffer
