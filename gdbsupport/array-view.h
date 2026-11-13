@@ -183,6 +183,22 @@ public:
   constexpr size_type size () const noexcept { return m_size; }
   constexpr bool empty () const noexcept { return m_size == 0; }
 
+  constexpr reference back () const
+  {
+#if defined(_GLIBCXX_DEBUG)
+    gdb_assert (m_size > 0);
+#endif
+    return m_array[m_size - 1];
+  }
+
+  constexpr reference front () const
+  {
+#if defined(_GLIBCXX_DEBUG)
+    gdb_assert (m_size > 0);
+#endif
+    return m_array[0];
+  }
+
   /* Slice an array view.  */
 
   /* Return a new array view over SIZE elements starting at START.  */

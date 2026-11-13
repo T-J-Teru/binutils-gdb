@@ -588,6 +588,24 @@ run_tests ()
       SELF_CHECK (slc[0] == data[2]);
     }
   }
+
+  /* Test front and back.  */
+  {
+    gdb_byte data[] = {0xaa, 0xbb, 0xcc};
+    gdb::array_view<gdb_byte> view = data;
+
+    SELF_CHECK (view.front () == 0xaa);
+    SELF_CHECK (view.back () == 0xcc);
+
+    SELF_CHECK (&view.front () == &data[0]);
+    SELF_CHECK (&view.back () == &data[2]);
+
+    view.front () = 0x11;
+    SELF_CHECK (data[0] == 0x11);
+
+    view.back () = 0x22;
+    SELF_CHECK (data[2] == 0x22);
+  }
 }
 
 template <typename T>
