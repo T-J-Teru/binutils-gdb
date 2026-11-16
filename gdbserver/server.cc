@@ -4959,6 +4959,15 @@ process_serial_event (void)
       {
 	require_running_or_break (cs.own_buf);
 	decode_m_packet (&cs.own_buf[1], &mem_addr, &len);
+	/* The bin2hex call converts each byte in MEM_BUF into two hex
+	   characters, doubling the number of bytes required.  We can
+	   therefore only read half a packet's worth of bytes from the
+	   inferior memory.  */
+	if (len > PBUFSIZ / 2)
+	  {
+	    write_enn (cs.own_buf);
+	    break;
+	  }
 	int res = gdb_read_memory (mem_addr, mem_buf, len);
 	if (res < 0)
 	  write_enn (cs.own_buf);
@@ -4978,6 +4987,12 @@ process_serial_event (void)
       {
 	require_running_or_break (cs.own_buf);
 	decode_x_packet (&cs.own_buf[1], &mem_addr, &len);
+	/* Ensure we don't overflow MEM_BUF.  */
+	if (len > PBUFSIZ)
+	  {
+	    write_enn (cs.own_buf);
+	    break;
+	  }
 	int res = gdb_read_memory (mem_addr, mem_buf, len);
 	if (res < 0)
 	  write_enn (cs.own_buf);

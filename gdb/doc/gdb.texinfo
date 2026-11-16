@@ -43946,6 +43946,13 @@ server was reading from a trace frame memory and was able to read only part
 of the region of memory.
 @end table
 
+The maximum requestable @var{length} is limited by the maximum
+supported packet size (@pxref{remote packet size}).  Each byte read is
+returned as two hex characters, so any @var{length} over half the
+maximum packet size will fail because the reply would exceed the
+maximum packet size.  The maximum packet size could change in future
+releases of @command{gdbserver} and should not be relied on.
+
 Unlike most packets, this packet does not support
 @samp{E.@var{errtext}}-style textual error replies (@pxref{textual
 error reply}) by default.  Stubs should be careful to only send such a
@@ -44331,6 +44338,15 @@ of the region of memory.
 @item E @var{NN}
 for an error
 @end table
+
+The maximum requestable @var{length} is limited by the maximum
+supported packet size (@pxref{remote packet size}).  Any read over
+this length will return an error.  Shorter reads can also fail due to
+added escape bytes (@pxref{Binary Data}).  Worst case is that every
+byte read needs an additional escape byte, which halves the number of
+data bytes that can be returned; any read over half the maximum packet
+size might return an error.  The maximum packet size could change in
+future releases of @command{gdbserver} and should not be relied on.
 
 @item X @var{addr},@var{length}:@var{XX@dots{}}
 @anchor{X packet}
@@ -46024,6 +46040,7 @@ These are the currently defined stub features, in more detail:
 
 @table @samp
 @cindex packet size, remote protocol
+@anchor{remote packet size}
 @item PacketSize=@var{bytes}
 The remote stub can accept packets up to at least @var{bytes} in
 length.  @value{GDBN} will send packets up to this size for bulk

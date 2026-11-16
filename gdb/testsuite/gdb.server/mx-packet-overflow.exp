@@ -1,0 +1,179 @@
+# This testcase is part of GDB, the GNU debugger.
+#
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that the 'm' and 'x' packets protect against buffer overflow.
+
+load_lib gdbserver-support.exp
+
+require allow_gdbserver_tests
+
+standard_testfile
+
+save_vars { GDBFLAGS } {
+    # If GDB and GDBserver are both running locally, set the sysroot to avoid
+    # reading files via the remote protocol (the `is_remote target` check is
+    # already done above).
+    if { ![is_remote host] } {
+	set GDBFLAGS "$GDBFLAGS -ex \"set sysroot\""
+    }
+    if {[prepare_for_testing "failed to prepare" $testfile $srcfile]} {
+	return
+    }
+}
+
+# Make sure we're disconnected, in case we're testing with an
+# extended-remote board, therefore already connected.
+gdb_test "disconnect" ".*"
+
+# Start gdbserver and connect.
+set res [gdbserver_spawn ""]
+set gdbserver_protocol [lindex $res 0]
+set gdbserver_gdbport [lindex $res 1]
+set res [gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport]
+if {![gdb_assert {$res == 0} "connect"]} {
+    return
+}
+
+# Get into position for the test.
+gdb_breakpoint [gdb_get_line_number "/* Break here.  */"]
+gdb_continue_to_breakpoint "test position"
+
+# Send PACKET, a full 'm' or 'x' packet, to the server using 'maint
+# packet ...'.  EXPECTED is one of 'hex', 'binary', or 'error', and
+# indicates the type of reply that gdbserver should send.
+#
+#   'hex' -- the result should be a hex encoded data packet, as
+#            returned by a successful 'm' packet.
+#
+#   'binary' -- the result should be a binary encoded data packet, as
+#               returned by a successful 'x' packet.
+#
+#   'error' -- the result should be an error packet, the 'm' or 'x'
+#              packet failed.
+#
+# TESTNAME is used as the name for this test.
+proc send_mx_packet { packet expected testname } {
+    set result ""
+    set drain_buffer false
+
+    # Send the initial packet.  Detect full error reply here, or the
+    # start of a hex or binary encoded result.  Do not parse the GDB
+    # prompt pattern here.
+    gdb_test_multiple "maint packet ${packet}" $testname {
+	-re "\r\nreceived: \"E01\"" {
+	    set result "error"
+	}
+
+	-re "\r\nreceived: \"b\[^\r\n\]*" {
+	    set drain_buffer true
+	    set result "binary"
+	}
+
+	-re "\r\nreceived: \"00\[^\r\n\]*" {
+	    set drain_buffer true
+	    set result "hex"
+	}
+    }
+
+    # If the previous gdb_test_multiple found the start of a data
+    # packet then consume the input now.  This avoids having to read
+    # the entire result into the expect buffer; there could be a lot
+    # of output.  Again, we don't parse the GDB prompt here.
+    if { $drain_buffer } {
+	gdb_test_multiple "" "" {
+	    -re "^\[^\r\n\]+" {
+		exp_continue
+	    }
+
+	    -re "^(?=\r\n)" {
+	    }
+	}
+    }
+
+    # Finally, consume the GDB prompt.  Check that the RESULT matches
+    # EXPECTED.
+    gdb_test_multiple "" "" {
+	-re "\r\n$::gdb_prompt $" {
+	    gdb_assert { $result eq $expected } $testname
+	}
+    }
+
+    return $result
+}
+
+# Send 'm' and 'x' packets to gdbserver with various requested
+# lengths, check that gdbserver handles the packets as we expect,
+# rejecting those that are too long.
+proc run_mx_packet_tests {} {
+    # The size of the buffer allocated within gdbserver.  See PBUFSIZ in
+    # gdbserver/server.h.
+    set pbufsiz 0x20020
+
+    # The address of 'buffer' within the inferior, without the leading '0x'.
+    set addr [get_hexadecimal_valueof buffer 0x0 "get buffer address"]
+    set addr [string range $addr 2 end]
+
+    # The size of buffer.  Leave this as hex with 0x prefix for now.
+    set buffer_len [get_hexadecimal_valueof buffer_length 0x0 "get buffer length"]
+
+    # If we ask GDB to read the entire buffer from the inferior, GDB will
+    # perform many 4-byte reads.  This does a good job of protecting
+    # gdbserver from buffer overflows, but it hides the bug that this test
+    # is trying to expose.
+    #
+    # Manually send 'm' or 'x' packets so we can control the contents.
+    #
+    # Try different sizes, BUFFER_LEN is huge, far bigger than the
+    # allocated buffer.  PBUFSIZ is the exact size of the buffer within
+    # gdbserver used to build the result packet.  Test various sizes based
+    # on PBUFSIZ as well as the full BUFFER_LEN.
+    #
+    # This test works best when gdbserver is built with the address
+    # sanitizers, as out-of-bounds writes will trigger the sanitizer.
+    set test_lengths [list $pbufsiz \
+			  [expr { $pbufsiz + 1 }] \
+			  [expr { $pbufsiz / 2 }] \
+			  [expr { $pbufsiz / 2 + 1 }] \
+			  $buffer_len]
+    foreach_with_prefix req_len $test_lengths {
+	# Make LEN be REQ_LEN in hex, without the '0x' prefix.
+	set len [string range [format "0x%x" $req_len] 2 end]
+
+	# Set M_RESULT and X_RESULT to 'hex', 'binary', or 'error'
+	# depending on what the packet result should be.  See
+	# send_mx_packet for more details.
+	set m_result "hex"
+	set x_result "binary"
+
+	if { $req_len > $pbufsiz } {
+	    set x_result "error"
+	}
+
+	if { $req_len > $pbufsiz / 2 } {
+	    set m_result "error"
+	}
+
+	# Send the packets.
+	send_mx_packet "m${addr},${len}" $m_result \
+	    "test 'm' packet, expect $m_result"
+	send_mx_packet "x${addr},${len}" $x_result \
+	    "test 'x' packet, expect $x_result"
+    }
+}
+
+# Run the m/x packet tests.
+run_mx_packet_tests
