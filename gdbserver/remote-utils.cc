@@ -1417,6 +1417,199 @@ clear_symbol_cache (struct sym_cache **symcache_p)
   *symcache_p = NULL;
 }
 
+/* In some cases a packet from the debug client triggers a prolonged packet
+   exchange between gdbserver and the client.  For example, gdbserver can
+   send a qRelocInsn request in response to some packets.  When the debug
+   client receives the qRelocInsn request it will perform a series of memory
+   accesses using x, X, m, or M packets before finally sending its own
+   qRelocInsn reply.
+
+   Similarly, the debug client can send 'qSymbol::'; gdbserver will then
+   request symbol values, which the debug client provides with another
+   qSymbol packet.  Before sending the final qSymbol packet, the debug
+   client might access memory or send 'v' packets (for vFile transfers).
+
+   This function takes care of handling the limited set of packets that
+   might arrive while waiting for the final response packet.
+
+   EXPECTED_PACKET_PREFIX is the first part of the final response packet
+   that we are waiting for.  This code fetches packets from the debug
+   client and then:
+
+   + If it is one of the packets this function handles, the packet is
+     handled, and then loops around to fetch and handle another packet.
+
+   + If the packet is empty, is an error (starts with 'E'), or is not one
+     this function can handle and doesn't start with EXPECTED_PACKET_PREFIX,
+     then this function returns false, and the unexpected, unhandled packet
+     is left in the client_state's OWN_BUF.
+
+   + If the packet is not one this function can handle and does start with
+     EXPECTED_PACKET_PREFIX, then this is the final packet we were waiting
+     for.  This function returns true and the unhandled final packet is left
+     in the client_state's OWN_BUF.
+
+   If this function returns with either true or false, then no response will
+   have been sent to the debug client.  Returning from this function will
+   result in a reply being sent, so if we send a reply before returning then
+   this would result in multiple reply packets.  The debug client is not
+   expecting this and will get out of sync.
+
+   We ought to handle pretty much any packet at this point while we wait for
+   the final response, but that requires re-entering the main loop.  For
+   now, this is an adequate approximation.  */
+
+static bool
+handle_limited_packets_while_waiting (const char *expected_packet_prefix)
+{
+  client_state &cs = get_client_state ();
+
+  bool leave_packet_handling_loop = false;
+  while (!leave_packet_handling_loop)
+    {
+      int len = getpkt (cs.own_buf);
+      if (len < 0)
+	return false;
+
+      CORE_ADDR mem_addr;
+      unsigned char *mem_buf = nullptr;
+      unsigned int mem_len;
+      int new_len = -1;
+
+      switch (cs.own_buf[0])
+	{
+	case 'm':
+	  {
+	    decode_m_packet (&cs.own_buf[1], &mem_addr, &mem_len);
+	    mem_buf = (unsigned char *) xmalloc (mem_len);
+	    if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
+	      bin2hex (mem_buf, cs.own_buf, mem_len);
+	    else
+	      write_enn (cs.own_buf);
+	  }
+	  break;
+	case 'x':
+	  {
+	    decode_x_packet (&cs.own_buf[1], &mem_addr, &mem_len);
+	    mem_buf = (unsigned char *) xmalloc (mem_len);
+	    if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
+	      {
+		gdb_byte *buffer = (gdb_byte *) cs.own_buf;
+		*buffer++ = 'b';
+
+		int out_len_units;
+		new_len = remote_escape_output (mem_buf, mem_len, 1,
+						buffer,
+						&out_len_units,
+						PBUFSIZ);
+		new_len++; /* For the 'b' marker.  */
+
+		if (out_len_units != mem_len)
+		  {
+		    write_enn (cs.own_buf);
+		    new_len = -1;
+		  }
+		else
+		  suppress_next_putpkt_log ();
+	      }
+	    else
+	      write_enn (cs.own_buf);
+	  }
+	  break;
+	case 'X':
+	  {
+	    if (decode_X_packet (&cs.own_buf[1], len - 1, &mem_addr,
+				 &mem_len, &mem_buf) < 0
+		|| target_write_memory (mem_addr, mem_buf, mem_len) != 0)
+	      write_enn (cs.own_buf);
+	    else
+	      write_ok (cs.own_buf);
+	  }
+	  break;
+	case 'M':
+	  {
+	    decode_M_packet (&cs.own_buf[1], &mem_addr, &mem_len, &mem_buf);
+	    if (target_write_memory (mem_addr, mem_buf, mem_len) == 0)
+	      write_ok (cs.own_buf);
+	    else
+	      write_enn (cs.own_buf);
+	  }
+	  break;
+	case 'v':
+	  /* Don't service packets that change which process we are
+	     debugging, or its execution state, while we are in the middle
+	     of another operation.  Handling these here could leave the
+	     caller operating on freed, or stale, state.  Any other 'v'
+	     packets, e.g. vFile, are fine to handle.  */
+	  if (startswith (cs.own_buf, "vCont;")
+	      || startswith (cs.own_buf, "vAttach;")
+	      || startswith (cs.own_buf, "vRun;")
+	      || startswith (cs.own_buf, "vKill;"))
+	    leave_packet_handling_loop = true;
+	  else
+	    handle_v_requests (cs.own_buf, len, &new_len);
+	  break;
+	default:
+	  leave_packet_handling_loop = true;
+	  break;
+	}
+      free (mem_buf);
+
+      if (!leave_packet_handling_loop)
+	{
+	  int res = ((new_len == -1)
+		     ? putpkt (cs.own_buf)
+		     : putpkt_binary (cs.own_buf, new_len));
+	  if (res < 0)
+	    return false;
+	}
+    }
+
+  if (cs.own_buf[0] == '\0')
+    {
+      warning (_("an unexpected empty packet occurred while waiting for '%s'"),
+	       expected_packet_prefix);
+      return false;
+    }
+  else if (cs.own_buf[0] == 'E')
+    {
+      /* Don't describe an error as unexpected.  For both qSymbol and
+	 qRelocInsn, if the debug client needs to read inferior memory to
+	 service the request then the read could fail and the debug client
+	 might return an error.  There's still not much we can do beyond
+	 returning false here; we cannot continue handling the qSymbol or
+	 qRelocInsn, but the warning message should not indicate that this
+	 is necessarily a bug.  */
+      warning (_("an error occurred while waiting for '%s': %s"),
+	       expected_packet_prefix, cs.own_buf);
+      return false;
+    }
+  else if (!startswith (cs.own_buf, expected_packet_prefix))
+    {
+      /* We got an unexpected packet from the debug client.  Do not send an
+	 error packet back at this point.  If we send back an error at this
+	 point then we also need to fetch another packet from the debug
+	 client, which means we need another go around this packet handling
+	 loop again.  There is risk that a debug client could get stuck in
+	 this loop.
+
+	 By instead just returning false we let our caller know that
+	 something went wrong, they can choose to handle this how they want.
+	 But at least gdbserver is making progress towards returning to the
+	 main packet handling loop.
+
+	 In the future it might be better if we threw an exception at this
+	 point, but that will require a suitable catch in our call stack.
+	 If the exception is allowed to propagate all the way back to
+	 captured_main then this will reset the connection.  */
+      warning (_("unexpected packet while waiting for '%s', ignoring: %s"),
+	       expected_packet_prefix, cs.own_buf);
+      return false;
+    }
+
+  return true;
+}
+
 /* Get the address of NAME, and return it in ADDRP if found.  if
    MAY_ASK_GDB is false, assume symbol cache misses are failures.
    Returns 1 if the symbol is found, 0 if it is not, -1 on error.  */
@@ -1426,7 +1619,6 @@ look_up_one_symbol (const char *name, CORE_ADDR *addrp, int may_ask_gdb)
 {
   client_state &cs = get_client_state ();
   char *p, *q;
-  int len;
   struct sym_cache *sym;
   struct process_info *proc;
 
@@ -1452,88 +1644,10 @@ look_up_one_symbol (const char *name, CORE_ADDR *addrp, int may_ask_gdb)
   if (putpkt (cs.own_buf) < 0)
     return -1;
 
-  len = getpkt (cs.own_buf);
-  if (len < 0)
+  if (!handle_limited_packets_while_waiting ("qSymbol:"))
     return -1;
 
-  /* We ought to handle pretty much any packet at this point while we
-     wait for the qSymbol "response".  That requires re-entering the
-     main loop.  For now, this is an adequate approximation; allow
-     GDB to read from memory and handle 'v' packets (for vFile transfers)
-     while it figures out the address of the symbol.  */
-  while (1)
-    {
-      CORE_ADDR mem_addr;
-      unsigned char *mem_buf;
-      unsigned int mem_len;
-      int new_len = -1;
-
-      if (cs.own_buf[0] == 'm')
-	{
-	  decode_m_packet (&cs.own_buf[1], &mem_addr, &mem_len);
-	  mem_buf = (unsigned char *) xmalloc (mem_len);
-	  if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
-	    bin2hex (mem_buf, cs.own_buf, mem_len);
-	  else
-	    write_enn (cs.own_buf);
-	  free (mem_buf);
-	  if (putpkt (cs.own_buf) < 0)
-	    return -1;
-	}
-      else if (cs.own_buf[0] == 'x')
-	{
-	  decode_x_packet (&cs.own_buf[1], &mem_addr, &mem_len);
-	  mem_buf = (unsigned char *) xmalloc (mem_len);
-	  if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
-	    {
-	      gdb_byte *buffer = (gdb_byte *) cs.own_buf;
-	      *buffer++ = 'b';
-
-	      int out_len_units;
-	      new_len = remote_escape_output (mem_buf, mem_len, 1,
-					      buffer,
-					      &out_len_units,
-					      PBUFSIZ);
-	      new_len++; /* For the 'b' marker.  */
-
-	      if (out_len_units != mem_len)
-		{
-		  write_enn (cs.own_buf);
-		  new_len = -1;
-		}
-	      else
-		suppress_next_putpkt_log ();
-	    }
-	  else
-	    write_enn (cs.own_buf);
-
-	  free (mem_buf);
-	  int res = ((new_len == -1)
-		     ? putpkt (cs.own_buf)
-		     : putpkt_binary (cs.own_buf, new_len));
-	  if (res < 0)
-	    return -1;
-	}
-      else if (cs.own_buf[0] == 'v')
-	{
-	  handle_v_requests (cs.own_buf, len, &new_len);
-	  if (new_len != -1)
-	    putpkt_binary (cs.own_buf, new_len);
-	  else
-	    putpkt (cs.own_buf);
-	}
-      else
-	break;
-      len = getpkt (cs.own_buf);
-      if (len < 0)
-	return -1;
-    }
-
-  if (!startswith (cs.own_buf, "qSymbol:"))
-    {
-      warning (_("Malformed response to qSymbol, ignoring: %s"), cs.own_buf);
-      return -1;
-    }
+  gdb_assert (startswith (cs.own_buf, "qSymbol:"));
 
   p = cs.own_buf + strlen ("qSymbol:");
   q = p;
@@ -1572,7 +1686,6 @@ int
 relocate_instruction (CORE_ADDR *to, CORE_ADDR oldloc)
 {
   client_state &cs = get_client_state ();
-  int len;
   ULONGEST written = 0;
 
   /* Send the request.  */
@@ -1581,100 +1694,10 @@ relocate_instruction (CORE_ADDR *to, CORE_ADDR oldloc)
   if (putpkt (cs.own_buf) < 0)
     return -1;
 
-  len = getpkt (cs.own_buf);
-  if (len < 0)
+  if (!handle_limited_packets_while_waiting ("qRelocInsn:"))
     return -1;
 
-  /* We ought to handle pretty much any packet at this point while we
-     wait for the qRelocInsn "response".  That requires re-entering
-     the main loop.  For now, this is an adequate approximation; allow
-     GDB to access memory.  */
-  while (cs.own_buf[0] == 'm' || cs.own_buf[0] == 'M'
-	 || cs.own_buf[0] == 'X' || cs.own_buf[0] == 'x')
-    {
-      CORE_ADDR mem_addr;
-      unsigned char *mem_buf = NULL;
-      unsigned int mem_len;
-      int new_len = -1;
-
-      if (cs.own_buf[0] == 'm')
-	{
-	  decode_m_packet (&cs.own_buf[1], &mem_addr, &mem_len);
-	  mem_buf = (unsigned char *) xmalloc (mem_len);
-	  if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
-	    bin2hex (mem_buf, cs.own_buf, mem_len);
-	  else
-	    write_enn (cs.own_buf);
-	}
-      else if (cs.own_buf[0] == 'x')
-	{
-	  decode_x_packet (&cs.own_buf[1], &mem_addr, &mem_len);
-	  mem_buf = (unsigned char *) xmalloc (mem_len);
-	  if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
-	    {
-	      gdb_byte *buffer = (gdb_byte *) cs.own_buf;
-	      *buffer++ = 'b';
-
-	      int out_len_units;
-	      new_len = remote_escape_output (mem_buf, mem_len, 1,
-					      buffer,
-					      &out_len_units,
-					      PBUFSIZ);
-	      new_len++; /* For the 'b' marker.  */
-
-	      if (out_len_units != mem_len)
-		{
-		  write_enn (cs.own_buf);
-		  new_len = -1;
-		}
-	      else
-		suppress_next_putpkt_log ();
-	    }
-	  else
-	    write_enn (cs.own_buf);
-	}
-      else if (cs.own_buf[0] == 'X')
-	{
-	  if (decode_X_packet (&cs.own_buf[1], len - 1, &mem_addr,
-			       &mem_len, &mem_buf) < 0
-	      || target_write_memory (mem_addr, mem_buf, mem_len) != 0)
-	    write_enn (cs.own_buf);
-	  else
-	    write_ok (cs.own_buf);
-	}
-      else
-	{
-	  decode_M_packet (&cs.own_buf[1], &mem_addr, &mem_len, &mem_buf);
-	  if (target_write_memory (mem_addr, mem_buf, mem_len) == 0)
-	    write_ok (cs.own_buf);
-	  else
-	    write_enn (cs.own_buf);
-	}
-      free (mem_buf);
-
-      int res = ((new_len == -1)
-		 ? putpkt (cs.own_buf)
-		 : putpkt_binary (cs.own_buf, new_len));
-      if (res < 0)
-	return -1;
-      len = getpkt (cs.own_buf);
-      if (len < 0)
-	return -1;
-    }
-
-  if (cs.own_buf[0] == 'E')
-    {
-      warning (_("An error occurred while relocating an instruction: %s"),
-	       cs.own_buf);
-      return -1;
-    }
-
-  if (!startswith (cs.own_buf, "qRelocInsn:"))
-    {
-      warning (_("Malformed response to qRelocInsn, ignoring: %s"),
-	       cs.own_buf);
-      return -1;
-    }
+  gdb_assert (startswith (cs.own_buf, "qRelocInsn:"));
 
   unpack_varlen_hex (cs.own_buf + strlen ("qRelocInsn:"), &written);
 

@@ -1,0 +1,142 @@
+# This testcase is part of GDB, the GNU debugger.
+#
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# The qSymbol and qRelocInsn handling includes a mini packet loop which only
+# handles a small subset of packets while gdbserver and GDB are finalising the
+# qSymbol or qRelocInsn conversation.  The gdbserver code that handles this
+# packet subset is shared between qSymbol and qRelocInsn, but qSymbol is far
+# easier to trigger, so we use that here for testing,
+#
+# This test was added when the packet handling for qSymbol and qRelocInsn was
+# merged together into a single function, and this captures the current
+# behaviour at that time.  However, this behaviour is probably not the ideal
+# behaviour, and hopefully will be improved in the future.  When that happens
+# this test will need to be updated and/or rewritten.  That's OK.
+#
+# To understand what's wrong with the current code, consider the case where the
+# debug client first sends 'qSymbol::'.  gdbserver then replies with a qSymbol
+# packet asking for a particular symbol.  If the debug client at this point
+# sends back a 'g' packet, which is not one the qSymbol loop can handle, then
+# currently gdbserver breaks from the secondary packet handling loop and
+# returns.  gdbserver will then send the next qSymbol request.  This is bad
+# because qSymbol is not a documented reply to a 'g' packet.
+#
+# However, fixing this will require some bigger changes to how qSymbol and
+# qRelocInsn are handled, especially the error cases, within gdbserver.
+#
+# This test uses 'maint packet ...' to trigger a qSymbol packet exchange with
+# gdbserver.  Then sends unexpected packets to gdbserver and check how the
+# server handles them.
+
+load_lib gdbserver-support.exp
+
+require allow_gdbserver_tests
+
+standard_testfile
+
+save_vars { GDBFLAGS } {
+    # If GDB and GDBserver are both running locally, set the sysroot to avoid
+    # reading files via the remote protocol (the `is_remote target` check is
+    # already done above).
+    if { ![is_remote host] && ![is_remote target] } {
+	set GDBFLAGS "$GDBFLAGS -ex \"set sysroot\""
+    }
+    if {[prepare_for_testing "failed to prepare" $testfile $srcfile]} {
+	return
+    }
+}
+
+# Make sure we're disconnected, in case we're testing with an
+# extended-remote board, therefore already connected.
+gdb_test "disconnect" ".*"
+
+# Start gdbserver and connect.
+set res [gdbserver_spawn ""]
+lassign $res gdbserver_protocol gdbserver_gdbport
+set res [gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport]
+if {![gdb_assert {$res == 0} "connect"]} {
+    return
+}
+
+# Get into position for the test.
+gdb_breakpoint [gdb_get_line_number "/* Break here.  */"]
+gdb_continue_to_breakpoint "test position"
+
+# Run BODY within a qSymbol packet processing loop.  Send 'qSymbol::' to
+# gdbserver .  It should either reply with 'qSymbol:<name>' or 'OK'.
+#
+# If we get OK then gdbserver doesn't want to know any symbols from GDB, so we
+# cannot get access to its inner packet processing loop.  Issue an UNSUPPORTED
+# and return without running BODY.
+#
+# If we get back a symbol request then we can execute BODY which will send some
+# unexpected packets to gdbserver.
+proc within_qSymbol_loop { body } {
+    set first_symbol_requested ""
+    gdb_test_multiple "maint packet qSymbol::" "start qSymbol loop" {
+	-re -wrap "\r\nreceived: \"OK\"" {
+	    unsupported "$gdb_test_name (no symbols requested)"
+	}
+
+	-re -wrap "\r\nreceived: \"qSymbol:(\[^\"\]+)\"" {
+	    set first_symbol_requested $expect_out(1,string)
+	    pass $gdb_test_name
+	}
+    }
+
+    # We got a symbol request from gdbserver then run BODY.  Each BODY will run
+    # until gdbserver exits the qSymbol packet processing loop.
+    if { $first_symbol_requested ne "" } {
+	with_test_prefix "in qSymbol loop" {
+	    transparent_uplevel $body
+	}
+    }
+}
+
+# After gdbserver sends a qSymbol request, send back an unexpected packet.  See
+# the comments at the top of this file for the limitations of this test.
+#
+# Place a limit of 100 symbol requests.  This is more than gdbserver currently
+# asks for on GNU/Linux, but should stop thi test getting stuck in a loop if
+# something unexpected goes wrong.
+foreach_with_prefix packet { E01 g vKill; } {
+    within_qSymbol_loop {
+	set limit 100
+	gdb_test_multiple "maint packet $packet" "reply with error" {
+	    -i $server_spawn_id
+	    -re "gdbserver: unexpected \[^\r\n\]+\r\n" {
+		exp_continue
+	    }
+
+	    -i $gdb_spawn_id
+	    -re -wrap "received: \"qSymbol:\[^\r\n\]+\"" {
+		incr limit -1
+		if { $limit == 0 } {
+		    fail $gdb_test_name
+		} else {
+		    send_gdb "maint packet $packet\n"
+		    exp_continue
+		}
+	    }
+
+	    -i $gdb_spawn_id
+	    -re -wrap "received: \"OK\"" {
+		pass $gdb_test_name
+	    }
+	}
+    }
+}
