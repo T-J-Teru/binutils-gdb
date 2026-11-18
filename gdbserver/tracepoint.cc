@@ -3399,27 +3399,22 @@ cmd_qtframe (char *own_buf)
 static void
 cmd_qtstatus (char *packet)
 {
-  char *stop_reason_rsp = NULL;
-  char *buf1, *buf2, *buf3;
-  const char *str;
-  int slen;
-
   /* Translate the plain text of the notes back into hex for
      transmission.  */
 
-  str = (tracing_user_name ? tracing_user_name : "");
-  slen = strlen (str);
-  buf1 = (char *) alloca (slen * 2 + 1);
+  const char *str = (tracing_user_name ? tracing_user_name : "");
+  int slen = strlen (str);
+  char *buf1 = (char *) alloca (slen * 2 + 1);
   bin2hex ((gdb_byte *) str, buf1, slen);
 
   str = (tracing_notes ? tracing_notes : "");
   slen = strlen (str);
-  buf2 = (char *) alloca (slen * 2 + 1);
+  char *buf2 = (char *) alloca (slen * 2 + 1);
   bin2hex ((gdb_byte *) str, buf2, slen);
 
   str = (tracing_stop_note ? tracing_stop_note : "");
   slen = strlen (str);
-  buf3 = (char *) alloca (slen * 2 + 1);
+  char *buf3 = (char *) alloca (slen * 2 + 1);
   bin2hex ((gdb_byte *) str, buf3, slen);
 
   trace_debug ("Returning trace status as %d, stop reason %s",
@@ -3432,22 +3427,18 @@ cmd_qtstatus (char *packet)
       upload_fast_traceframes ();
 
       target_unpause_all (true);
-   }
+    }
 
-  stop_reason_rsp = (char *) tracing_stop_reason;
+  char *stop_reason_rsp = (char *) tracing_stop_reason;
 
   /* The user visible error string in terror needs to be hex encoded.
      We leave it as plain string in `tracing_stop_reason' to ease
      debugging.  */
   if (startswith (stop_reason_rsp, "terror:"))
     {
-      const char *result_name;
-      int hexstr_len;
-      char *p;
-
-      result_name = stop_reason_rsp + strlen ("terror:");
-      hexstr_len = strlen (result_name) * 2;
-      p = stop_reason_rsp
+      const char *result_name = stop_reason_rsp + strlen ("terror:");
+      size_t hexstr_len = strlen (result_name) * 2;
+      char *p = stop_reason_rsp
 	= (char *) alloca (strlen ("terror:") + hexstr_len + 1);
       strcpy (p, "terror:");
       p += strlen (p);
