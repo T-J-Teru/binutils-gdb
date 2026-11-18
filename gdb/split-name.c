@@ -38,12 +38,29 @@ split_name (const char *name, split_style style)
 	   current_len += cp_find_first_component (name + current_len))
 	{
 	  gdb_assert (name[current_len] == ':');
+
+	  /* An empty component is not valid in C++ except for the very
+	     first component, where something like "::foo::bar" means 'foo'
+	     in the global scope.  However, this function is not (currently)
+	     passed strings where we expect to see an empty first component,
+	     so if we do see an empty component anywhere in the string then
+	     this is an invalid C++ symbol name, just return the entire
+	     string unsplit.  */
+	  if (current_len - previous_len == 0)
+	    return { name };
+
 	  result.emplace_back (&name[previous_len],
 			       current_len - previous_len);
 	  /* Skip the '::'.  */
 	  current_len += 2;
 	  previous_len = current_len;
 	}
+
+      /* If the final component is empty, e.g. "foo::bar::" then this is not
+	 a valid C++ symbol name, just return the whole string unsplit.  */
+      if (name[previous_len] == '\0')
+	return { name };
+
       break;
 
     case split_style::DOT_STYLE:

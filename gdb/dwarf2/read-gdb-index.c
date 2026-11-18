@@ -219,6 +219,14 @@ mapped_gdb_index::build_name_components (dwarf2_per_objfile *per_objfile)
 	continue;
 
       const char *name = this->symbol_name_at (idx, per_objfile);
+      gdb_assert (name != nullptr);
+
+      /* Symbols that are empty, or just whitespace, have no value in the
+	 index, and they just make the GDB output confusing; we don't always
+	 quote symbols names, so an empty or whitespace symbol name just
+	 appears to be missing.  */
+      if (*skip_spaces (name) == '\0')
+	continue;
 
       /* This code only knows how to break apart components of C++
 	 symbol names (and other languages that use '::' as

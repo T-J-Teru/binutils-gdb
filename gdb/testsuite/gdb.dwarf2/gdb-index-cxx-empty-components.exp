@@ -1,0 +1,161 @@
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test that GDB handles a .gdb_index containing badly formatted C++ symbols.
+# Specifically, symbols with empty components within their name.
+
+load_lib dwarf.exp
+
+require dwarf2_support
+
+# This test installs its own hand-crafted .gdb_index into the
+# executable.  The 'readnow' board forces GDB to ignore the index and
+# read the full debug info, making this test irrelevant.
+require !readnow
+
+standard_testfile _start.c
+
+if {[prepare_for_testing "failed to prepare" ${testfile} \
+	 ${srcfile} {debug ldflags=-nostartfiles}]} {
+    return
+}
+
+with_test_prefix "initial index check" {
+    set index [have_index $binfile]
+    if { ![string eq $index ""] } {
+	unsupported "cache created at compile time"
+	return
+    }
+}
+
+set func_info_vars \
+    [get_func_info _start [list debug ldflags=-nostartfiles]]
+
+# Build a test executable with an index that includes C++ symbols with
+# incorrect use of '::', specifically, the use of '::' creates empty
+# components within the symbol names.
+#
+# Load the executable into GDB and check all the symbols show up in the
+# index.  As none of the names are "correct" C++ symbol names GDB will have
+# given up on processing them and will leave them as-is in the symbol table.
+proc run_test { } {
+    set bad_symbols {::m1 ::ns2::m2 ns3::::m3 ns4a::ns4b:: "" "  "}
+
+    set asm_file [standard_output_file ${::testfile}.S]
+    Dwarf::assemble {
+	filename $asm_file
+	add_dummy_cus 0
+    } {
+	upvar bad_symbols bad_symbols
+	global func_info_vars
+	foreach var $func_info_vars {
+	    global $var
+	}
+
+	cu { label cu_label } {
+	    compile_unit {
+		DW_AT_language @DW_LANG_C_plus_plus
+	    } {
+		subprogram {
+		    DW_AT_name _start
+		    DW_AT_low_pc $_start_start DW_FORM_addr
+		    DW_AT_high_pc $_start_end DW_FORM_addr
+		    DW_AT_external 1 DW_FORM_flag
+		}
+	    }
+	}
+
+	aranges {} cu_label {
+	    arange {} $_start_start $_start_len
+	}
+
+	set body {
+	    cu cu_label
+	    name _start {{cu_label function global}}
+	}
+
+	# Build up the code to create the .gdb_index.  Include all
+	# BAD_SYMBOLS.
+	set body ""
+	append body "\n	cu cu_label"
+	foreach sym $bad_symbols {
+	    append body "\n	name \"$sym\" {{cu_label function global}}"
+	}
+	append body "\n	name _start {{cu_label function global}}"
+
+	# Now actually create the index.
+	gdb_index {} $body
+    }
+
+    if {[build_executable "build executable" \
+	     $::testfile "$asm_file $::srcfile" \
+	     [list ldflags=-nostartfiles]]} {
+	return
+    }
+
+    clean_restart
+
+    gdb_test_no_output "maint set dwarf synchronous on"
+    gdb_test_no_output "set complaints 100"
+
+    # Loading the binary should not crash despite whatever weird
+    # things are in the .gdb_index.
+    gdb_load $::binfile
+
+    # If we're using the cc-with-gnu-debuglink board then the debug
+    # information will have been moved to a separate file.
+    if { [section_get $::binfile ".gnu_debuglink"] eq "" } {
+	set suffix ""
+    } else {
+	# If we are using a debuglink then assume the debug is moved
+	# into a file with a .debug suffix.
+	set suffix ".debug"
+    }
+
+    # Check that GDB used the .gdb_index as expected.
+    set index [get_index_type [file tail $::binfile]$suffix]
+    gdb_assert { [string equal $index "gdb"] } ".gdb_index used"
+
+    # Take a look at the details of the loaded .gdb_index and check
+    # that they match the expected results.
+    set symbol_names {}
+    gdb_test_multiple "maint print objfiles" "" -lbl {
+	-re "^\r\n\\s+name:       (\[^\r\n\]*)(?=\r\n)" {
+	    incr name_count
+	    set name $expect_out(1,string)
+	    lappend symbol_names $name
+	    exp_continue
+	}
+	-re "^\r\n$::gdb_prompt $" {
+	    pass $gdb_test_name
+	}
+    }
+
+    foreach sym $bad_symbols {
+	if {[regexp "^\\s*$" $sym]} {
+	    gdb_assert {![lsearch -exact $symbol_names $sym] != -1} \
+		"symbol '$sym' does not appear in the index"
+	} else {
+	    gdb_assert {[lsearch -exact $symbol_names $sym] != -1} \
+		"symbol '$sym' appears in the index"
+	}
+    }
+
+    # Ensure that an attempt to expand all symtabs doesn't crash GDB,
+    # even when the index is corrupted as it is in this test.
+    gdb_test_no_output "maint expand-symtabs" "expand all symtabs"
+}
+
+run_test
