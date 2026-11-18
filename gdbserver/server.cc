@@ -4977,8 +4977,8 @@ process_serial_event (void)
       break;
     case 'M':
       require_running_or_break (cs.own_buf);
-      decode_M_packet (&cs.own_buf[1], &mem_addr, &len, &mem_buf);
-      if (gdb_write_memory (mem_addr, mem_buf, len) == 0)
+      if (decode_M_packet (&cs.own_buf[1], &mem_addr, &len, &mem_buf)
+	  && gdb_write_memory (mem_addr, mem_buf, len) == 0)
 	write_ok (cs.own_buf);
       else
 	write_enn (cs.own_buf);

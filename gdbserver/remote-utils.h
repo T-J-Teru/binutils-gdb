@@ -55,8 +55,20 @@ const char *decode_m_packet_params (const char *from, CORE_ADDR *mem_addr_ptr,
 				    const char end_marker);
 void decode_m_packet (const char *from, CORE_ADDR * mem_addr_ptr,
 		      unsigned int *len_ptr);
-void decode_M_packet (const char *from, CORE_ADDR * mem_addr_ptr,
+
+/* Decode an 'M' packet in FROM.  An M packet is "M<addr>,<length>:<data>".  The
+   <addr> is decoded and written to *MEM_ADDR_PTR.  The length is decoded and
+   written to *LEN_PTR.  If *TO_P is nullptr then allocate a suitably sized
+   buffer using xmalloc, and *TO_P is updated.  The <data> is decoded and
+   written to the buffer *TO_P.  The *TO_P buffer can be allocted even if this
+   function fails to successfully decode <data>.  It is the callers
+   responsibility to deallocate *TO_P if necessary.
+
+   This function can throw an exception if <data> contains non-hex characters.  */
+
+bool decode_M_packet (const char *from, CORE_ADDR * mem_addr_ptr,
 		      unsigned int *len_ptr, unsigned char **to_p);
+
 void decode_x_packet (const char *from, CORE_ADDR *mem_addr_ptr,
 		      unsigned int *len_ptr);
 

@@ -1301,16 +1301,33 @@ decode_m_packet (const char *from, CORE_ADDR *mem_addr_ptr,
   decode_m_packet_params (from, mem_addr_ptr, len_ptr, '\0');
 }
 
-void
+/* See remote-utils.h.  */
+
+bool
 decode_M_packet (const char *from, CORE_ADDR *mem_addr_ptr,
 		 unsigned int *len_ptr, unsigned char **to_p)
 {
   from = decode_m_packet_params (from, mem_addr_ptr, len_ptr, ':');
 
+  /* Each byte of data is encoded as 2 characters in the remaining packet
+     length.  If there are an odd number of characters remaining, or if the
+     declared length isn't half the remaining packet length, then this is
+     not a valid M packet.  */
+  size_t remaining_packet_len = strlen (from);
+  if (remaining_packet_len % 2 != 0 || *len_ptr != remaining_packet_len / 2)
+    return false;
+
   if (*to_p == NULL)
     *to_p = (unsigned char *) xmalloc (*len_ptr);
 
-  hex2bin (from, *to_p, *len_ptr);
+  int converted = hex2bin (from, *to_p, *len_ptr);
+
+  /* We already sanity checked *LEN_PTR above so we should always convert
+     the expected number of bytes, or hex2bin will throw an exception if it
+     encounters a non-hex character.  */
+  gdb_assert (converted == *len_ptr);
+
+  return true;
 }
 
 void
@@ -1578,8 +1595,8 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	  {
 	    unsigned char *mem_buf = nullptr;
 	    SCOPE_EXIT { free (mem_buf); };
-	    decode_M_packet (&cs.own_buf[1], &mem_addr, &mem_len, &mem_buf);
-	    if (target_write_memory (mem_addr, mem_buf, mem_len) == 0)
+	    if (decode_M_packet (&cs.own_buf[1], &mem_addr, &mem_len, &mem_buf)
+		&& target_write_memory (mem_addr, mem_buf, mem_len) == 0)
 	      write_ok (cs.own_buf);
 	    else
 	      write_enn (cs.own_buf);

@@ -16,8 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # Test that the 'm' and 'x' packets protect against buffer overflow,
-# and that the 'X' packet rejects packets where the declared length
-# doesn't match the amount of data actually sent.
+# and that the 'M' and 'X' packets reject packets where the declared
+# length doesn't match the amount of data actually sent.
 
 load_lib gdbserver-support.exp
 
@@ -181,13 +181,12 @@ proc run_mx_packet_tests {} {
     }
 }
 
-# Send 'X' packets to gdbserver with various different declared
-# lengths and payloads, check that gdbserver handles the packets as we
-# expect; rejecting those where the declared length doesn't match the
-# amount of data actually sent.
-proc run_X_packet_tests {} {
-
-    # The 'X' packet tests write into the inferior.  Use BUFFER2 as the
+# Send 'M' and 'X' packets to gdbserver with various different
+# declared lengths and payloads, check that gdbserver handles the
+# packets as we expect; rejecting those where the declared length
+# doesn't match the amount of data actually sent.
+proc run_MX_packet_tests {} {
+    # The 'M' and 'X' packet tests write into the inferior.  Use BUFFER2 as the
     # write target.  This buffer has a known size of 16 bytes.
     set x_addr $::buffer2_addr
 
@@ -225,18 +224,55 @@ proc run_X_packet_tests {} {
     # declared data, and run out of memory.
     gdb_test "maint packet X${x_addr},ffffffff:a" "\r\nreceived: \"E01\"" \
 	"test 'X' packet, huge declared length"
+
+    # Send a couple of valid 'M' packets, and, for each one, read the
+    # memory back to check that the correct bytes were written.
+    gdb_test "maint packet M${x_addr},4:0a0b0c0d" "\r\nreceived: \"OK\"" \
+	"test 'M' packet, 4 declared, 4 sent"
+    gdb_test "maint packet m${x_addr},4" "\r\nreceived: \"0a0b0c0d\"" \
+	"check 'M' packet, 4 declared, wrote correct bytes"
+
+    gdb_test "maint packet M${x_addr},2:0e0f" "\r\nreceived: \"OK\"" \
+	"test 'M' packet, 2 declared, 2 sent"
+    gdb_test "maint packet m${x_addr},2" "\r\nreceived: \"0e0f\"" \
+	"check 'M' packet, 2 declared, wrote correct bytes"
+
+    # Claim to be sending more data than is actually sent.
+    gdb_test "maint packet M${x_addr},8:0a0b0c0d" "\r\nreceived: \"E01\"" \
+	"test 'M' packet, 8 declared, 4 sent"
+
+    # Send fewer bytes than are declared.
+    gdb_test "maint packet M${x_addr},2:0a" "\r\nreceived: \"E01\"" \
+	"test 'M' packet, 2 declared, 1 sent"
+
+    # Send more bytes than are declared.
+    gdb_test "maint packet M${x_addr},2:0a0b0c0d" \
+	"\r\nreceived: \"E01\"" "test 'M' packet, 2 declared, 4 sent"
+
+    # Send partial bytes: half a byte too many, and half a byte too
+    # few.
+    gdb_test "maint packet M${x_addr},2:0a0b0" "\r\nreceived: \"E01\"" \
+	"test 'M' packet, 2 declared, 2.5 sent"
+    gdb_test "maint packet M${x_addr},2:0a0" "\r\nreceived: \"E01\"" \
+	"test 'M' packet, 2 declared, 1.5 sent"
+
+    # Claim a huge payload is being sent.  Without some sanity checks
+    # gdbserver would try to allocate a buffer to hold all the
+    # declared data, and run out of memory.
+    gdb_test "maint packet M${x_addr},ffffffff:0a0b0c0d" \
+	"\r\nreceived: \"E01\"" "test 'M' packet, huge declared length"
 }
 
-# Run the m/x packet tests, then the 'X' packet tests.
+# Run the m/x packet tests, then the 'M' and 'X' packet tests.
 run_mx_packet_tests
-run_X_packet_tests
+run_MX_packet_tests
 
 # Test within a qSymbol loop.  Send a 'qSymbol::' packet to gdbserver.
 # It should either reply with 'qSymbol:<name>' or 'OK'.  If we get OK
 # then gdbserver doesn't want to know any symbols from GDB, so we
 # cannot get access to its inner packet processing loop.  If we get
-# back a symbol request though, then we can send some m/x/X packets to
-# test the inner packet processing loop.
+# back a symbol request though, then we can send some m/x/M/X packets
+# to test the inner packet processing loop.
 set first_symbol_requested ""
 gdb_test_multiple "maint packet qSymbol::" "start qSymbol loop" {
     -re -wrap "\r\nreceived: \"OK\"" {
@@ -249,12 +285,12 @@ gdb_test_multiple "maint packet qSymbol::" "start qSymbol loop" {
     }
 }
 
-# We got a symbol request from gdbserver; run the m/x and 'X' packet
-# tests, then complete the qSymbol loop.
+# We got a symbol request from gdbserver; run the m/x, 'M' and 'X'
+# packet tests, then complete the qSymbol loop.
 if { $first_symbol_requested ne "" } {
     with_test_prefix "in qSymbol loop" {
 	run_mx_packet_tests
-	run_X_packet_tests
+	run_MX_packet_tests
     }
 
     set symbol_name $first_symbol_requested
