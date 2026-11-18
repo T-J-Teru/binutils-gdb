@@ -5020,8 +5020,8 @@ process_serial_event (void)
       break;
     case 'X':
       require_running_or_break (cs.own_buf);
-      if (decode_X_packet (&cs.own_buf[1], packet_len - 1,
-			   &mem_addr, &len, &mem_buf) < 0
+      if (!decode_X_packet (&cs.own_buf[1], packet_len - 1,
+			    &mem_addr, &len, &mem_buf)
 	  || gdb_write_memory (mem_addr, mem_buf, len) != 0)
 	write_enn (cs.own_buf);
       else

@@ -59,8 +59,21 @@ void decode_M_packet (const char *from, CORE_ADDR * mem_addr_ptr,
 		      unsigned int *len_ptr, unsigned char **to_p);
 void decode_x_packet (const char *from, CORE_ADDR *mem_addr_ptr,
 		      unsigned int *len_ptr);
-int decode_X_packet (char *from, int packet_len, CORE_ADDR * mem_addr_ptr,
-		     unsigned int *len_ptr, unsigned char **to_p);
+
+/* Decode an 'X' packet in FROM.  An X packet is "X<addr>,<length>:<data>".  The
+   <addr> is decoded and written to *MEM_ADDR_PTR.  The length is decoded and
+   written to *LEN_PTR.  If *TO_P is nullptr then allocate a suitably sized
+   buffer using xmalloc, and *TO_P is updated.  The <data> is decoded and
+   written to the buffer *TO_P.  It is the callers responsibility to deallocate
+   *TO_P if necessary.
+
+   Return true if the X packet was decoded successfully; otherwise return false.
+   The *TO_P buffer may have benn allocated even if this function returns false,
+   so *TO_P must be checked to see if the buffer needs to be freed.  */
+
+bool decode_X_packet (char *from, int packet_len, CORE_ADDR *mem_addr_ptr,
+		      unsigned int *len_ptr, unsigned char **to_p);
+
 int decode_xfer_write (char *buf, int packet_len,
 		       CORE_ADDR *offset, unsigned int *len,
 		       unsigned char *data);

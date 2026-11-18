@@ -21,6 +21,8 @@
 
 unsigned char *buffer = NULL;
 size_t buffer_length = 1024 * 1024 * 100;
+unsigned char *buffer2 = NULL;
+size_t buffer2_length = 16;
 volatile int global_var = 0;
 
 /* Is C a byte that must be escaped in a reply from gdbserver to
@@ -46,6 +48,9 @@ main ()
   buffer = malloc (buffer_length);
   assert (buffer != NULL);
 
+  buffer2 = malloc (buffer2_length);
+  assert (buffer2 != NULL);
+
   unsigned char val = 0;
   for (size_t i = 0; i < buffer_length; ++i)
     {
@@ -56,6 +61,11 @@ main ()
 	}
       while (is_escapable_byte (val));
     }
+
+  /* BUFFER2 is written to by GDB.  Just make sure it starts in a known
+     state.  */
+  for (size_t i = 0; i < buffer2_length; ++i)
+    buffer2[i] = 0;
 
   global_var = 42;	/* Break here.  */
 

@@ -1320,7 +1320,9 @@ decode_x_packet (const char *from, CORE_ADDR *mem_addr_ptr,
   decode_m_packet_params (from, mem_addr_ptr, len_ptr, '\0');
 }
 
-int
+/* See remote-utils.h.  */
+
+bool
 decode_X_packet (char *from, int packet_len, CORE_ADDR *mem_addr_ptr,
 		 unsigned int *len_ptr, unsigned char **to_p)
 {
@@ -1340,14 +1342,23 @@ decode_X_packet (char *from, int packet_len, CORE_ADDR *mem_addr_ptr,
       *len_ptr |= fromhex (ch) & 0x0f;
     }
 
+  /* Adjust PACKET_LEN to account for the bytes already read.  */
+  packet_len -= i;
+
+  /* If the declared length is greater than the number of bytes remaining in
+     the packet, then the packet is malformed and cannot possibly carry
+     enough data; reject it.  */
+  if (*len_ptr > packet_len)
+    return false;
+
   if (*to_p == NULL)
     *to_p = (unsigned char *) xmalloc (*len_ptr);
 
-  if (remote_unescape_input ((const gdb_byte *) &from[i], packet_len - i,
+  if (remote_unescape_input ((const gdb_byte *) &from[i], packet_len,
 			     *to_p, *len_ptr) != *len_ptr)
-    return -1;
+    return false;
 
-  return 0;
+  return true;
 }
 
 /* Decode a qXfer write request.  */
@@ -1555,8 +1566,8 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	  {
 	    unsigned char *mem_buf = nullptr;
 	    SCOPE_EXIT { free (mem_buf); };
-	    if (decode_X_packet (&cs.own_buf[1], len - 1, &mem_addr,
-				 &mem_len, &mem_buf) < 0
+	    if (!decode_X_packet (&cs.own_buf[1], len - 1, &mem_addr,
+				  &mem_len, &mem_buf)
 		|| target_write_memory (mem_addr, mem_buf, mem_len) != 0)
 	      write_enn (cs.own_buf);
 	    else
