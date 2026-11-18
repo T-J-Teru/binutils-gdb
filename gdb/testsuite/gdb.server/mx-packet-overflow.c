@@ -43,7 +43,7 @@ is_escapable_byte (unsigned char c)
 int
 main ()
 {
-  buffer = malloc ( buffer_length );
+  buffer = malloc (buffer_length);
   assert (buffer != NULL);
 
   unsigned char val = 0;

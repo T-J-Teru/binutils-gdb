@@ -52,6 +52,13 @@ if {![gdb_assert {$res == 0} "connect"]} {
 gdb_breakpoint [gdb_get_line_number "/* Break here.  */"]
 gdb_continue_to_breakpoint "test position"
 
+# The address of 'buffer' within the inferior, without the leading '0x'.
+set buffer_addr [get_hexadecimal_valueof buffer 0x0 "get buffer address"]
+set buffer_addr [string range $buffer_addr 2 end]
+
+# The size of buffer.  Leave this as hex with 0x prefix for now.
+set buffer_len [get_hexadecimal_valueof buffer_length 0x0 "get buffer length"]
+
 # Send PACKET, a full 'm' or 'x' packet, to the server using 'maint
 # packet ...'.  EXPECTED is one of 'hex', 'binary', or 'error', and
 # indicates the type of reply that gdbserver should send.
@@ -115,20 +122,13 @@ proc send_mx_packet { packet expected testname } {
     return $result
 }
 
-# Send 'm' and 'x' packets to gdbserver with various requested
-# lengths, check that gdbserver handles the packets as we expect,
-# rejecting those that are too long.
+# Send 'm' and 'x' packets to gdbserver with various requested lengths, check
+# that gdbserver handles the packets as we expect, rejecting those that are too
+# long.  Use globals BUFFER_ADDR and BUFFER_LEN for testing these packets.
 proc run_mx_packet_tests {} {
     # The size of the buffer allocated within gdbserver.  See PBUFSIZ in
     # gdbserver/server.h.
     set pbufsiz 0x20020
-
-    # The address of 'buffer' within the inferior, without the leading '0x'.
-    set addr [get_hexadecimal_valueof buffer 0x0 "get buffer address"]
-    set addr [string range $addr 2 end]
-
-    # The size of buffer.  Leave this as hex with 0x prefix for now.
-    set buffer_len [get_hexadecimal_valueof buffer_length 0x0 "get buffer length"]
 
     # If we ask GDB to read the entire buffer from the inferior, GDB will
     # perform many 4-byte reads.  This does a good job of protecting
@@ -148,7 +148,7 @@ proc run_mx_packet_tests {} {
 			  [expr { $pbufsiz + 1 }] \
 			  [expr { $pbufsiz / 2 }] \
 			  [expr { $pbufsiz / 2 + 1 }] \
-			  $buffer_len]
+			  $::buffer_len]
     foreach_with_prefix req_len $test_lengths {
 	# Make LEN be REQ_LEN in hex, without the '0x' prefix.
 	set len [string range [format "0x%x" $req_len] 2 end]
@@ -168,12 +168,52 @@ proc run_mx_packet_tests {} {
 	}
 
 	# Send the packets.
-	send_mx_packet "m${addr},${len}" $m_result \
+	send_mx_packet "m${::buffer_addr},${len}" $m_result \
 	    "test 'm' packet, expect $m_result"
-	send_mx_packet "x${addr},${len}" $x_result \
+	send_mx_packet "x${::buffer_addr},${len}" $x_result \
 	    "test 'x' packet, expect $x_result"
     }
 }
 
 # Run the m/x packet tests.
 run_mx_packet_tests
+
+# Test within a qSymbol loop.  Send a 'qSymbol::' packet to gdbserver.
+# It should either reply with 'qSymbol:<name>' or 'OK'.  If we get OK
+# then gdbserver doesn't want to know any symbols from GDB, so we
+# cannot get access to its inner packet processing loop.  If we get
+# back a symbol request though, then we can send some m/x packets to
+# test the inner packet processing loop.
+set first_symbol_requested ""
+gdb_test_multiple "maint packet qSymbol::" "start qSymbol loop" {
+    -re -wrap "\r\nreceived: \"OK\"" {
+	unsupported "$gdb_test_name (no symbols requested)"
+    }
+
+    -re -wrap "\r\nreceived: \"qSymbol:(\[^\"\]+)\"" {
+	set first_symbol_requested $expect_out(1,string)
+	pass $gdb_test_name
+    }
+}
+
+# We got a symbol request from gdbserver; run the m/x packet tests
+# then, complete the qSymbol loop.
+if { $first_symbol_requested ne "" } {
+    with_test_prefix "in qSymbol loop" {
+	run_mx_packet_tests
+    }
+
+    set symbol_name $first_symbol_requested
+    gdb_test_multiple "maint packet qSymbol::$symbol_name" \
+	"qSymbol loop completed" {
+	    -re -wrap "\r\nreceived: \"OK\"" {
+		pass $gdb_test_name
+	    }
+
+	    -re -wrap "\r\nreceived: \"qSymbol:(\[^\"\]+)\"" {
+		set symbol_name $expect_out(1,string)
+		send_gdb "maint packet qSymbol::$symbol_name\n"
+		exp_continue
+	    }
+	}
+}

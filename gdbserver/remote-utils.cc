@@ -1472,7 +1472,6 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	return false;
 
       CORE_ADDR mem_addr;
-      unsigned char *mem_buf = nullptr;
       unsigned int mem_len;
       int new_len = -1;
 
@@ -1481,9 +1480,24 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	case 'm':
 	  {
 	    decode_m_packet (&cs.own_buf[1], &mem_addr, &mem_len);
-	    mem_buf = (unsigned char *) xmalloc (mem_len);
-	    if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
-	      bin2hex (mem_buf, cs.own_buf, mem_len);
+	    /* MEM_LEN will be used to allocate a buffer, MEM_BUF, which is
+	       filled from inferior memory.  The bin2hex call converts each
+	       byte in MEM_BUF into two hex characters, doubling the number
+	       of bytes required.  This result is written to the
+	       client_state's OWN_BUF, which is PBUFSIZ in length (+1 for a
+	       trailing null).  We can therefore only read half a packet's
+	       worth of bytes from the inferior memory; otherwise we will
+	       overflow OWN_BUF.  */
+	    if (mem_len > PBUFSIZ / 2)
+	      {
+		write_enn (cs.own_buf);
+		break;
+	      }
+
+	    gdb::unique_xmalloc_ptr<unsigned char> mem_buf
+	      ((unsigned char *) xmalloc (mem_len));
+	    if (read_inferior_memory (mem_addr, mem_buf.get (), mem_len) == 0)
+	      bin2hex (mem_buf.get (), cs.own_buf, mem_len);
 	    else
 	      write_enn (cs.own_buf);
 	  }
@@ -1491,14 +1505,35 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	case 'x':
 	  {
 	    decode_x_packet (&cs.own_buf[1], &mem_addr, &mem_len);
-	    mem_buf = (unsigned char *) xmalloc (mem_len);
-	    if (read_inferior_memory (mem_addr, mem_buf, mem_len) == 0)
+
+	    /* MEM_LEN will be used to allocate a buffer, MEM_BUF, which is
+	       filled from inferior memory.  This buffer is then escaped
+	       (see remote_escape_output) into the client_state's OWN_BUF,
+	       which is PBUFSIZ in length (+1 for the leading 'b').  The
+	       escaping never reduces the number of bytes needed, so a
+	       request for more than PBUFSIZ bytes could never produce a
+	       complete reply.
+
+	       GDB usually only requests small reads, a few bytes at a time.
+	       So, limiting MEM_LEN to PBUFSIZ will easily handle everything
+	       GDB sends us, and allows other debug clients space to ask for
+	       larger reads if they need it, but still places a sane limit
+	       on the size of buffer we are about to allocate.  */
+	    if (mem_len > PBUFSIZ)
+	      {
+		write_enn (cs.own_buf);
+		break;
+	      }
+
+	    gdb::unique_xmalloc_ptr<unsigned char> mem_buf
+	      ((unsigned char *) xmalloc (mem_len));
+	    if (read_inferior_memory (mem_addr, mem_buf.get (), mem_len) == 0)
 	      {
 		gdb_byte *buffer = (gdb_byte *) cs.own_buf;
 		*buffer++ = 'b';
 
 		int out_len_units;
-		new_len = remote_escape_output (mem_buf, mem_len, 1,
+		new_len = remote_escape_output (mem_buf.get (), mem_len, 1,
 						buffer,
 						&out_len_units,
 						PBUFSIZ);
@@ -1518,6 +1553,8 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	  break;
 	case 'X':
 	  {
+	    unsigned char *mem_buf = nullptr;
+	    SCOPE_EXIT { free (mem_buf); };
 	    if (decode_X_packet (&cs.own_buf[1], len - 1, &mem_addr,
 				 &mem_len, &mem_buf) < 0
 		|| target_write_memory (mem_addr, mem_buf, mem_len) != 0)
@@ -1528,6 +1565,8 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	  break;
 	case 'M':
 	  {
+	    unsigned char *mem_buf = nullptr;
+	    SCOPE_EXIT { free (mem_buf); };
 	    decode_M_packet (&cs.own_buf[1], &mem_addr, &mem_len, &mem_buf);
 	    if (target_write_memory (mem_addr, mem_buf, mem_len) == 0)
 	      write_ok (cs.own_buf);
@@ -1553,7 +1592,6 @@ handle_limited_packets_while_waiting (const char *expected_packet_prefix)
 	  leave_packet_handling_loop = true;
 	  break;
 	}
-      free (mem_buf);
 
       if (!leave_packet_handling_loop)
 	{
