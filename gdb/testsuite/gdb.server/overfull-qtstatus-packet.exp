@@ -1,0 +1,195 @@
+# This testcase is part of GDB, the GNU debugger.
+#
+# Copyright 2026 Free Software Foundation, Inc.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test what happens when we cause the qTStatus packet to grow so large
+# it can no longer fit in the gdbserver allocated buffer.  We expect
+# that gdbserver should start sending back errors.
+
+load_lib gdbserver-support.exp
+
+require allow_gdbserver_tests
+
+# For the local remote host boards GDB is started with the 'set editing off'
+# command.  This leaves its controlling PTY in canonical mode, which means there
+# is a limit to the line length that can be sent to GDB.  This limit is 4096
+# bytes on recent Linux kernels (including the final \n).  This limit is far
+# smaller than the long lines that are needed to trigger the bugs this test.
+require {!is_remote host}
+
+standard_testfile normal.c
+
+if {[build_executable "failed to build" $testfile $srcfile]} {
+    return
+}
+
+# Start GDB and gdbserver ready for the test.  Return false if
+# anything goes wrong, otherwise, return true.
+proc start_gdbserver_for_test {} {
+    clean_restart $::testfile
+
+    # Make sure we're disconnected, in case we're testing with an
+    # extended-remote board, therefore already connected.
+    gdb_test "disconnect" ".*"
+
+    # Start gdbserver and connect.
+    set res [gdbserver_spawn ""]
+    set gdbserver_protocol [lindex $res 0]
+    set gdbserver_gdbport [lindex $res 1]
+    set res [gdb_target_cmd $gdbserver_protocol $gdbserver_gdbport]
+    if {![gdb_assert {$res == 0} "connect"]} {
+	return false
+    }
+
+    return true
+}
+
+# Test for overfull qTStatus packet.
+proc_with_prefix test_qtstatus {} {
+    if {![start_gdbserver_for_test]} {
+	return
+    }
+
+    # Set 'user' and 'notes' text using separate QTNotes packets.  The
+    # payload in each case is a hex-encoded data block of
+    # PAYLOAD_SIZE.  As the payload is hex-encoded PAYLOAD_SIZE must
+    # be even for the payload to be valid.
+    #
+    # Once set, use qTStatus to read the fields back.  The reply will
+    # include both 'user' and 'notes' text.
+    #
+    # However, the maximum buffer size within gdbserver is ~131104
+    # bytes, so when the payload size is 66000 bytes, the two fields
+    # combined (plus the other qTStatus fields) will exceed the
+    # maximum packet size.  In this case qTStatus should return an
+    # error.
+    #
+    # We finish with a small size to show that the error state isn't
+    # "locked in", reduce the user/notes fields sizes and the qTStatus
+    # will start working again.
+    #
+    # The floating point 65491.5 is not a mistake here, see the payload creation
+    # below for why.
+    foreach_with_prefix payload_size { 0 2 100 1000 10000 50000 65491 65491.5 65492 66000 4 } {
+	# The qTStatus reply contains both the user and notes fields.  If we
+	# always create these fields the same size then our reply packet size
+	# increases in steps of 2 characters, which means we cannot accurately
+	# test the boundary case.
+	#
+	# Fix this by allowing PAYLOAD_SIZE to be a float, we round the user
+	# payload down and the notes payload up, thus the notes payload can be 1
+	# character longer than the user payload.  This allows for accurate
+	# testing of the boundary case.
+	set user_payload \
+	    [string repeat a [expr { int (floor ($payload_size)) }]]
+	set notes_payload \
+	    [string repeat b [expr { int (ceil ($payload_size)) }]]
+
+	set spec_list [list \
+			   [list user $user_payload] \
+			   [list notes $notes_payload]]
+
+	foreach spec $spec_list {
+	    lassign $spec name payload
+	    # When the payload size is its largest the command line and the
+	    # sending line are bigger than expect's match buffer.  When the
+	    # match buffer fills up expect triggers the 'full_buffer' event,
+	    # which gdb_test_multiple, by default, sets to raise an error.
+	    #
+	    # When the buffer fills up, the full_buffer event fires. By
+	    # calling exp_continue we tell expect to keep accumulating
+	    # data. The buffer grows beyond match_max, but since the
+	    # 'received: OK' line is the very last output it will eventually
+	    # land in the buffer and be matched.
+	    gdb_test_multiple "maint packet QTNotes:${name}:${payload};" "set '$name' text via QTNotes" {
+		full_buffer {
+		    exp_continue
+		}
+		-re -wrap "\r\nreceived: \"OK\"" {
+		    pass $gdb_test_name
+		}
+	    }
+	}
+
+	# Send qTStatus and check the result.  The value 65492 is the point
+	# where the qTStatus reply goes from fitting in the output buffer to
+	# not fitting.  The gdbserver output buffer is 131105 bytes, one of
+	# which is reserved for the null terminator.  The qTStatus reply is
+	# 121 bytes plus the user and notes payloads.  So:
+	#
+	#     (131105 - 121) / 2 = 65492
+	#
+	# but that would exactly fill the buffer, with no space for the null
+	# byte, so a payload of 65492 will trigger an error reply.
+	if { $payload_size >= 65492 } {
+	    # In this case the payload is such that the reply exceeds the
+	    # maximum packet size, we should get back an error.
+	    gdb_test "maint packet qTStatus" "\r\nreceived: \"E01\"" \
+		"over sized qTStatus reply becomes an error"
+	} elseif { $payload_size > 5000 } {
+	    # These mid-sized packets are so long we start to run into issues
+	    # with expect's buffers getting filled.  Avoid this by not checking
+	    # if the user and notes fields match, just check we got a T0 line.
+	    #
+	    # The first gdb_test_multiple sends the command and matches the
+	    # start of the received line.
+	    #
+	    # The second gdb_test_multiple matches the remainder of the line and
+	    # the GDB prompt.
+	    gdb_test_multiple "maint packet qTStatus" "match start of received line" {
+		-re "\r\nreceived: \"T0;" {
+		    pass $gdb_test_name
+		}
+	    }
+	    # Ignore full_buffer events here for the same reason we ignore them above.
+	    gdb_test_multiple "" "match rest of long received line" {
+		full_buffer {
+		    exp_continue
+		}
+		-re "^\[^\r\n\]+" {
+		    exp_continue
+		}
+		-re "^\r\n$::gdb_prompt $" {
+		    pass $gdb_test_name
+		}
+	    }
+	} else {
+	    # In this case the payload is small enough that we should get back a
+	    # valid reply, and we can capture the user and notes values from the
+	    # reply and check they are as we expect.
+	    gdb_test_multiple "maint packet qTStatus" \
+		"got expected qTStatus reply" {
+		-re -wrap "\r\nreceived: \"T0;.*username:(a*);notes:(b*):\"" {
+		    set user_string $expect_out(1,string)
+		    set notes_string $expect_out(2,string)
+
+		    gdb_assert { $user_string eq $user_payload \
+				     && $notes_string eq $notes_payload } \
+			$gdb_test_name
+		}
+	    }
+	}
+    }
+
+    gdbserver_exit false
+}
+
+# This test receives some large packets from the remote, which are then
+# displayed by GDB and processed by expect.  Doing this character at a time
+# make this test quite slow.  Increase the timeout to compensate.
+with_read1_timeout_factor 25 {
+    test_qtstatus
+}

@@ -3396,8 +3396,10 @@ cmd_qtframe (char *own_buf)
     sprintf (own_buf, "F-1");
 }
 
+/* Respond to a qTStatus packet, writing the result into PACKET.  */
+
 static void
-cmd_qtstatus (char *packet)
+cmd_qtstatus (gdb::span<char> packet)
 {
   /* Translate the plain text of the notes back into hex for
      transmission.  */
@@ -3453,24 +3455,31 @@ cmd_qtstatus (char *packet)
       strcat (stop_reason_rsp, buf3);
     }
 
-  sprintf (packet,
-	   "T%d;"
-	   "%s:%x;"
-	   "tframes:%x;tcreated:%x;"
-	   "tfree:%x;tsize:%s;"
-	   "circular:%d;"
-	   "disconn:%d;"
-	   "starttime:%s;stoptime:%s;"
-	   "username:%s;notes:%s:",
-	   tracing ? 1 : 0,
-	   stop_reason_rsp, tracing_stop_tpnum,
-	   traceframe_count, traceframes_created,
-	   free_space (), phex_nz (trace_buffer_hi - trace_buffer_lo, 0),
-	   circular_trace_buffer,
-	   disconnected_tracing,
-	   phex_nz (tracing_start_time),
-	   phex_nz (tracing_stop_time),
-	   buf1, buf2);
+  int res = snprintf (packet.data (), packet.size (),
+		      "T%d;"
+		      "%s:%x;"
+		      "tframes:%x;tcreated:%x;"
+		      "tfree:%x;tsize:%s;"
+		      "circular:%d;"
+		      "disconn:%d;"
+		      "starttime:%s;stoptime:%s;"
+		      "username:%s;notes:%s:",
+		      tracing ? 1 : 0,
+		      stop_reason_rsp, tracing_stop_tpnum,
+		      traceframe_count, traceframes_created,
+		      free_space (),
+		      phex_nz (trace_buffer_hi - trace_buffer_lo, 0),
+		      circular_trace_buffer,
+		      disconnected_tracing,
+		      phex_nz (tracing_start_time),
+		      phex_nz (tracing_stop_time),
+		      buf1, buf2);
+
+  /* Don't send back a partial packet.  We cannot know which field in the
+     reply was truncated, so a partial reply cannot be safely interpreted by
+     the debug client.  */
+  if (res < 0 || res >= packet.size ())
+    write_enn (packet.data ());
 }
 
 static void
@@ -3967,7 +3976,11 @@ handle_tracepoint_query (char *packet)
 {
   if (streq ("qTStatus", packet))
     {
-      cmd_qtstatus (packet);
+      /* This assumes the size of PACKET.  Currently PACKET is always
+	 client_state::own_buf.  This was true at the time this comment was
+	 added.  A better solution would be to pass a gdb::span<char> into
+	 this function.  */
+      cmd_qtstatus ({packet, PBUFSIZ + 1});
       return 1;
     }
   else if (startswith (packet, "qTP:"))
